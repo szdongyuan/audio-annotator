@@ -1,0 +1,12 @@
+[
+  {
+    "Algorithm": "SHA256",
+    "Hash": "D66E369055A21ACA04C7FD9A39C54FCC2D109C5E70729779115646321D5AC1C3",
+    "Path": "D:\\Work\\annotator\\.worktrees\\audio-annotator-v1\\.test-output\\delivery-0.1.0-20261023\\annotator-desktop.exe"
+  },
+  {
+    "Algorithm": "SHA256",
+    "Hash": "0B822A8F5921FC7440A067079FF9BA1038818C75AF2FC12A6439B81F3594E84B",
+    "Path": "D:\\Work\\annotator\\.worktrees\\audio-annotator-v1\\.test-output\\delivery-0.1.0-20261023\\Audio Annotator_0.1.0_x64-setup.exe"
+  }
+]

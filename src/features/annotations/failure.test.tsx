@@ -1,0 +1,41 @@
+import { expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import fixture from '../../../tests/fixtures/document-v1.json';
+import { parseProjectDocument } from '../../bridge/types';
+import { ProjectStore } from '../../app/store';
+import { CommandQueue } from '../../app/commands';
+import { ProjectLifecycle } from '../project/lifecycle';
+import { AnnotationFailure } from './AnnotationFailure';
+import { AnnotationDrafts } from './drafts';
+it.each(['importMedia', 'relinkMedia'] as const)('never offers annotation discard for failed %s publication retaining native prepared resources', async type => {
+  const store = new ProjectStore({ document: parseProjectDocument(fixture), canUndo: false, canRedo: false });
+  // The native media owner retains this preparation until publication retry or project close.
+  let prepared = true, first = true;
+  const applyChange = vi.fn(async () => { if (first) { first = false; throw { code: 'RevisionConflict', message: 'publish conflict', retryable: true }; } prepared = false; return { ...store.snapshot, document: { ...store.snapshot.document, revision: 1 } }; });
+  const queue = new CommandQueue(store, { applyChange, getSnapshot: async () => store.snapshot, undo: vi.fn(), redo: vi.fn() });
+  const lifecycle = new ProjectLifecycle(store, queue, { save: async (_, r) => r, close: async () => {} });
+  const active = { store, queue, lifecycle, path: '' }, drafts = new AnnotationDrafts(active);
+  await expect(queue.enqueue({ type, media: fixture.media[0] })).rejects.toMatchObject({ code: 'RevisionConflict' });
+  render(<AnnotationFailure ui={{ active, drafts } as never} />);
+  expect(screen.queryByRole('button', { name: '放弃此次更改' })).not.toBeInTheDocument();
+  expect(queue.unresolvedFailures).toHaveLength(1);
+  expect(prepared).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: /重试更改/ }));
+  await vi.waitFor(() => expect(queue.unresolvedFailures).toHaveLength(0));
+  expect(applyChange).toHaveBeenCalledTimes(2); expect(prepared).toBe(false); lifecycle.dispose();
+});
+it('only discards an explicitly owned category action and keeps unrelated media failure retryable', async () => {
+  const store = new ProjectStore({ document: parseProjectDocument(fixture), canUndo: false, canRedo: false });
+  const queue = new CommandQueue(store, { applyChange: async () => { throw { code: 'InvalidInput', message: 'rejected', retryable: true }; }, getSnapshot: async () => store.snapshot, undo: vi.fn(), redo: vi.fn() });
+  const lifecycle = new ProjectLifecycle(store, queue, { save: async (_, r) => r, close: async () => {} });
+  const active = { store, queue, lifecycle, path: '' }, drafts = new AnnotationDrafts(active);
+  await expect(queue.enqueue({ type: 'importMedia', media: fixture.media[0] })).rejects.toBeTruthy();
+  await expect(queue.enqueue({ type: 'addCategory', category: fixture.categories[0] }, { owner: 'annotations' })).rejects.toBeTruthy();
+  const failures = queue.unresolvedFailures;
+  render(<AnnotationFailure ui={{ active, drafts } as never} />);
+  expect(screen.getAllByRole('button', { name: '放弃此次更改' })).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: '放弃此次更改' }));
+  expect(queue.unresolvedFailures.map(f => f.id)).toEqual([failures[0].id]);
+  expect(failures[1].draftKey).toBeUndefined(); expect(failures[1].owner).toBe('annotations');
+  lifecycle.dispose();
+});

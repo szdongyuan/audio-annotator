@@ -1,0 +1,16 @@
+{
+  "formatVersion": 1,
+  "projectId": "00000000-0000-4000-8000-000000000001",
+  "name": "契约样例",
+  "revision": 0,
+  "createdAt": "2026-10-22T00:00:00Z",
+  "updatedAt": "2026-10-22T00:00:00Z",
+  "media": [{"id":"00000000-0000-4000-8000-000000000002","displayName":"stereo.wav","sourceRef":"media/stereo.wav","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","byteLength":384044,"sampleRate":48000,"frameCount":96000,"channelCount":2,"channelLayout":["left","right"],"note":"音频备注","channelNotes":["左声道","右声道"]}],
+  "categories": [{"id":"00000000-0000-4000-8000-000000000003","name":"鸟声","color":"#eaa64e"}],
+  "annotations": [{"id":"00000000-0000-4000-8000-000000000004","region":{"mediaId":"00000000-0000-4000-8000-000000000002","channelIndex":1,"startSeconds":0.25,"endSeconds":1.5,"lowHz":100,"highHz":2000},"categoryId":"00000000-0000-4000-8000-000000000003","note":"区域备注","createdAt":"2026-10-22T00:00:00Z","updatedAt":"2026-10-22T00:00:00Z"}],
+  "edits": [{"id":"00000000-0000-4000-8000-000000000005","region":{"mediaId":"00000000-0000-4000-8000-000000000002","channelIndex":0,"startSeconds":0,"endSeconds":2,"lowHz":0,"highHz":24000},"enabled":true,"processingVersion":1}],
+  "analysis": {"00000000-0000-4000-8000-000000000002":{"window":"hann","windowSize":2048,"hopSize":512,"fftSize":2048,"melBands":128}},
+  "playbackMix": {"00000000-0000-4000-8000-000000000002":{"soloChannels":[1],"mutedChannels":[0]}},
+  "viewState": {"media":{},"activeMediaId":"00000000-0000-4000-8000-000000000002","compareMediaId":null,"linkedTime":false},
+  "algorithmVersions":{"analysis":1,"dsp":1}
+}

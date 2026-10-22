@@ -1,0 +1,10 @@
+{
+  "app": {
+    "windows": [{
+      "label": "main", "title": "音频标注 · Audio Annotator · E2E",
+      "width": 1280, "height": 800, "minWidth": 1000, "minHeight": 680,
+      "backgroundColor": "#141518", "theme": "Dark",
+      "additionalBrowserArgs": "--remote-debugging-port=9235"
+    }]
+  }
+}

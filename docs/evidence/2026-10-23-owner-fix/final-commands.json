@@ -1,0 +1,65 @@
+[
+  {
+    "started": "2026-10-23T00:43:38.6469849+08:00",
+    "log": "0.log",
+    "exitCode": 0,
+    "command": "npm.cmd run typecheck",
+    "elapsedSeconds": 5.9344339
+  },
+  {
+    "started": "2026-10-23T00:43:44.6099798+08:00",
+    "log": "1.log",
+    "exitCode": 0,
+    "command": "npm.cmd test",
+    "elapsedSeconds": 8.108308
+  },
+  {
+    "started": "2026-10-23T00:43:52.7229674+08:00",
+    "log": "2.log",
+    "exitCode": 0,
+    "command": "npm.cmd run build",
+    "elapsedSeconds": 9.840667
+  },
+  {
+    "started": "2026-10-23T00:44:02.5659203+08:00",
+    "log": "3.log",
+    "exitCode": 0,
+    "command": "cargo fmt --all -- --check",
+    "elapsedSeconds": 0.4905252
+  },
+  {
+    "started": "2026-10-23T00:44:03.0585799+08:00",
+    "log": "4.log",
+    "exitCode": 0,
+    "command": "cargo clippy --workspace --all-targets -- -D warnings",
+    "elapsedSeconds": 2.5066433
+  },
+  {
+    "started": "2026-10-23T00:44:05.5674755+08:00",
+    "log": "5.log",
+    "exitCode": 0,
+    "command": "cargo test --workspace",
+    "elapsedSeconds": 20.8081272
+  },
+  {
+    "started": "2026-10-23T00:44:26.3774954+08:00",
+    "log": "6.log",
+    "exitCode": 0,
+    "command": "npm.cmd run test:desktop",
+    "elapsedSeconds": 88.1727471
+  },
+  {
+    "started": "2026-10-23T00:45:54.5521219+08:00",
+    "log": "7.log",
+    "exitCode": 0,
+    "command": "npm.cmd run perf",
+    "elapsedSeconds": 182.0463759
+  },
+  {
+    "started": "2026-10-23T00:48:56.6002546+08:00",
+    "log": "8.log",
+    "exitCode": 0,
+    "command": "npm.cmd run tauri -- build --bundles nsis",
+    "elapsedSeconds": 155.2269731
+  }
+]

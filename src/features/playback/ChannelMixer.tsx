@@ -1,0 +1,6 @@
+import type { MediaDescriptor,PlaybackMix } from '../../bridge/types';
+export function ChannelMixer({media,mix,disabled,onChange}:{media:MediaDescriptor;mix:PlaybackMix;disabled:boolean;onChange:(mix:PlaybackMix)=>void}){
+ const toggle=(field:keyof PlaybackMix,c:number)=>onChange({...mix,[field]:mix[field].includes(c)?mix[field].filter(v=>v!==c):[...mix[field],c].sort((a,b)=>a-b)});
+ const audible=Array.from({length:media.channelCount},(_,i)=>i).filter(i=>(!mix.soloChannels.length||mix.soloChannels.includes(i))&&!mix.mutedChannels.includes(i));
+ return <div className="channel-mixer"><p className="object-caption">{media.displayName}</p>{Array.from({length:media.channelCount},(_,i)=><div className="mix-channel" key={i}><span>通道 {i+1}</span><button disabled={disabled} aria-label={`独听通道 ${i+1}`} aria-pressed={mix.soloChannels.includes(i)} onClick={()=>toggle('soloChannels',i)}>S · 独听</button><button disabled={disabled} aria-label={`静音通道 ${i+1}`} aria-pressed={mix.mutedChannels.includes(i)} onClick={()=>toggle('mutedChannels',i)}>M · 静音</button></div>)}<p className="settings-note">{!audible.length?'当前混合：静音':media.channelCount>2?'3–6 通道等权归一化居中试听混合':media.channelCount===1||mix.soloChannels.length===1?'单通道居中试听':'立体声保留左右关系'}。选区试听独立使用选中通道。</p></div>;
+}

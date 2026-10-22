@@ -1,0 +1,115 @@
+/// <reference types="node" />
+import { afterEach, it, expect, vi } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { webcrypto } from 'node:crypto';
+import fixture from '../../../tests/fixtures/document-v1.json';
+import { ProjectStore } from '../../app/store';
+import { mediaClient } from '../../bridge/media';
+import { parseProjectDocument } from '../../bridge/types';
+import type { ActiveProject } from '../project/useProjectLifecycle';
+import { nativeTileTransport, type TileRequest } from './tileClient';
+import { defaultSettings, defaultView } from './workspace';
+import { useTiles } from './useTiles';
+import { tileCache } from './tileScheduler';
+const media = fixture.media[0];
+function packet(r: TileRequest) {
+  const sourceFrames = Math.min(Math.ceil(media.frameCount / r.settings.hopSize) - r.startFrame, r.frameCount * 2 ** r.timeLod);
+  const rows = Math.ceil(sourceFrames / 2 ** r.timeLod), columns = Math.ceil(r.frequencyCount / 2 ** r.frequencyLod);
+  const metadata = new TextEncoder().encode(JSON.stringify({ protocol: 1, request: r, encoding: 'f32le-db-row-major', valueCount: rows * columns, tile: { rows, columns, sourceFrames, sampleRate: media.sampleRate, totalSamples: media.frameCount, startSeconds: r.startFrame * r.settings.hopSize / media.sampleRate, endSeconds: Math.min((r.startFrame + sourceFrames) * r.settings.hopSize, media.frameCount) / media.sampleRate, frameStepSamples: r.settings.hopSize * 2 ** r.timeLod, melPointsHz: [] } }));
+  const offset = Math.ceil((8 + metadata.length) / 4) * 4, bytes = new ArrayBuffer(offset + rows * columns * 4);
+  new Uint8Array(bytes).set([65, 84, 48, 49]); new DataView(bytes).setUint32(4, metadata.length, true); new Uint8Array(bytes, 8, metadata.length).set(metadata);
+  return bytes;
+}
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); tileCache.clear(); });
+it('separates channel owners, ignores style/notes and retires a replaced runtime with the same project id', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  vi.spyOn(mediaClient, 'status').mockResolvedValue([{ mediaId: media.id, status: 'ready' }]);
+  const request = vi.spyOn(nativeTileTransport, 'request').mockImplementation(async r => packet(r));
+  vi.spyOn(nativeTileTransport, 'cancel').mockResolvedValue();
+  vi.spyOn(nativeTileTransport, 'register').mockImplementation(async () => crypto.randomUUID());
+  vi.spyOn(nativeTileTransport, 'retire').mockResolvedValue();
+  const active = { store: new ProjectStore({ document: parseProjectDocument(fixture), canUndo: false, canRedo: false }) } as ActiveProject;
+  const view = defaultView(media);
+  const hook = renderHook(({ owner, v }) => [useTiles(owner, media, defaultSettings, v, 0, 800, 'ready'), useTiles(owner, media, defaultSettings, v, 1, 800, 'ready')], { initialProps: { owner: active, v: view } });
+  await waitFor(() => expect(hook.result.current.every(s => s.completed === 1)).toBe(true));
+  expect(new Set(request.mock.calls.map(c => c[0].viewId)).size).toBe(2);
+  const count = request.mock.calls.length;
+  act(() => { active.store.accept({ ...active.store.snapshot, document: { ...active.store.snapshot.document, revision: 1, name: 'unrelated text' } }); });
+  hook.rerender({ owner: active, v: { ...view, gainDb: 10, frequencyMix: .2, palette: 'ocean' } });
+  await new Promise(resolve => setTimeout(resolve, 150)); expect(request).toHaveBeenCalledTimes(count);
+  const previousViews = request.mock.calls.map(c => c[0].viewId);
+  hook.rerender({ owner: { ...active }, v: view });
+  await waitFor(() => expect(request.mock.calls.length).toBeGreaterThan(count));
+  expect(previousViews.every(id => vi.mocked(nativeTileTransport.retire).mock.calls.some(c => c[1] === id))).toBe(true);
+  expect(request.mock.calls.slice(count).every(c => !previousViews.includes(c[0].viewId))).toBe(true);
+  hook.unmount();
+});
+it('checks source status before warm cache reuse and clears pixels on external source change', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  const status = vi.spyOn(mediaClient, 'status').mockResolvedValue([{ mediaId: media.id, status: 'ready' }]);
+  const request = vi.spyOn(nativeTileTransport, 'request').mockImplementation(async r => packet(r));
+  vi.spyOn(nativeTileTransport, 'cancel').mockResolvedValue();
+  vi.spyOn(nativeTileTransport, 'register').mockImplementation(async () => crypto.randomUUID());
+  vi.spyOn(nativeTileTransport, 'retire').mockResolvedValue();
+  const active = { store: new ProjectStore({ document: parseProjectDocument(fixture), canUndo: false, canRedo: false }) } as ActiveProject;
+  const hook = renderHook(({ v }) => useTiles(active, media, defaultSettings, v, 0, 800, 'ready'), { initialProps: { v: defaultView(media) } });
+  await waitFor(() => expect(hook.result.current.completed).toBe(1));
+  const retained = hook.result.current.keys;
+  status.mockResolvedValue([{ mediaId: media.id, status: 'changed' }]);
+  hook.rerender({ v: { ...defaultView(media), endSeconds: 1.5 } });
+  expect(hook.result.current.keys).toEqual(retained);
+  await waitFor(() => expect(hook.result.current.error).toBeTruthy());
+  expect(hook.result.current.error).toBe('源文件已改变，请重新校验关联');
+  expect(hook.result.current.keys).toEqual([]); expect(tileCache.bytes).toBe(0); expect(request).toHaveBeenCalledTimes(1);
+});
+it('reuses sufficient-resolution default frequency tiles across zoom and pan', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  vi.spyOn(mediaClient, 'status').mockResolvedValue([{ mediaId: media.id, status: 'ready' }]);
+  const request = vi.spyOn(nativeTileTransport, 'request').mockImplementation(async r => packet(r));
+  vi.spyOn(nativeTileTransport, 'cancel').mockResolvedValue();
+  vi.spyOn(nativeTileTransport, 'register').mockImplementation(async () => crypto.randomUUID());
+  vi.spyOn(nativeTileTransport, 'retire').mockResolvedValue();
+  const active = { store: new ProjectStore({ document: parseProjectDocument(fixture), canUndo: false, canRedo: false }) } as ActiveProject;
+  const hook = renderHook(({ v }) => useTiles(active, media, defaultSettings, v, 0, 800, 'ready'), { initialProps: { v: defaultView(media) } });
+  await waitFor(() => expect(hook.result.current.completed).toBe(1));
+  for (const [lowHz, highHz] of [[100, 8000], [1000, 3000], [15000, 20000]]) {
+    hook.rerender({ v: { ...defaultView(media), lowHz, highHz } });
+    await waitFor(() => expect(hook.result.current.completed).toBe(1));
+    expect(request).toHaveBeenCalledTimes(1);
+  }
+});
+it('requests missing high-FFT detail once, then reuses its stable fine partition', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  vi.spyOn(mediaClient, 'status').mockResolvedValue([{ mediaId: media.id, status: 'ready' }]);
+  const request = vi.spyOn(nativeTileTransport, 'request').mockImplementation(async r => packet(r));
+  vi.spyOn(nativeTileTransport, 'cancel').mockResolvedValue();
+  vi.spyOn(nativeTileTransport, 'register').mockImplementation(async () => crypto.randomUUID());
+  vi.spyOn(nativeTileTransport, 'retire').mockResolvedValue();
+  const active = { store: new ProjectStore({ document: parseProjectDocument(fixture), canUndo: false, canRedo: false }) } as ActiveProject;
+  const settings = { ...defaultSettings, fftSize: 65536 };
+  const hook = renderHook(({ v }) => useTiles(active, media, settings, v, 0, 800, 'ready'), { initialProps: { v: defaultView(media) } });
+  await waitFor(() => expect(hook.result.current.completed).toBe(1));
+  expect(request.mock.calls[0][0].frequencyLod).toBe(5);
+  hook.rerender({ v: { ...defaultView(media), lowHz: 100, highHz: 400 } });
+  await waitFor(() => expect(hook.result.current.completed).toBe(1));
+  expect(request).toHaveBeenCalledTimes(2); expect(request.mock.calls[1][0].frequencyLod).toBe(0);
+  hook.rerender({ v: { ...defaultView(media), lowHz: 120, highHz: 410 } });
+  await waitFor(() => expect(hook.result.current.completed).toBe(1));
+  expect(request).toHaveBeenCalledTimes(2); expect(tileCache.bytes).toBeLessThanOrEqual(tileCache.limit);
+});
+it('reuses fine partitions across a coarser partition boundary when they cover the visible band', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  vi.spyOn(mediaClient, 'status').mockResolvedValue([{ mediaId: media.id, status: 'ready' }]);
+  const request = vi.spyOn(nativeTileTransport, 'request').mockImplementation(async r => packet(r));
+  vi.spyOn(nativeTileTransport, 'cancel').mockResolvedValue();
+  vi.spyOn(nativeTileTransport, 'register').mockImplementation(async () => crypto.randomUUID());
+  vi.spyOn(nativeTileTransport, 'retire').mockResolvedValue();
+  const active = { store: new ProjectStore({ document: parseProjectDocument(fixture), canUndo: false, canRedo: false }) } as ActiveProject;
+  const settings = { ...defaultSettings, fftSize: 65536 }, hz = (bin: number) => bin * media.sampleRate / settings.fftSize;
+  const hook = renderHook(({ v }) => useTiles(active, media, settings, v, 0, 800, 'ready'), { initialProps: { v: { ...defaultView(media), lowHz: hz(2030), highHz: hz(2070) } } });
+  await waitFor(() => expect(hook.result.current.completed).toBe(2));
+  expect(request).toHaveBeenCalledTimes(2);
+  hook.rerender({ v: { ...defaultView(media), lowHz: hz(1100), highHz: hz(2200) } });
+  await waitFor(() => expect(hook.result.current.completed).toBe(2));
+  expect(request).toHaveBeenCalledTimes(2); expect(hook.result.current.keys).toHaveLength(2);
+});

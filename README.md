@@ -1,0 +1,20 @@
+# 音频标注 · Audio Annotator
+
+Windows x64 本地音频频谱标注工作区。支持 WAV、FLAC、MP3、1–6 通道、双文件对比、STFT/梅尔频谱、区域与类别、三层备注、非破坏性频段试听和屏蔽、自动保存及 JSON/ZIP 分享。原始音频保持只读。
+
+- [使用说明](docs/user-guide.md)：从新建项目到交接文件。
+- [开发说明](docs/development.md)：构建、自动测试和性能复现。
+- [验收记录](docs/verification.md)：实际结果、环境与验证限制。
+- [第三方依赖](docs/third-party.md)：随安装包分发的许可及 MPL 源代码。
+
+安装包位于 `target/release/bundle/nsis/`。本版没有代码签名证书；安装包未签名。NSIS 包内含 WebView2 离线安装程序，标注、保存、播放和分享文件不需要网络。没有声称在全新 Windows 系统或 exFAT 实体设备上完成验证。
+
+开发环境需要 Windows x64、Node.js 22.12+、Rust 1.91+ MSVC、Visual Studio C++ Build Tools 与 Windows SDK。首次准备依赖/驱动和打包 WebView2 时需要联网。
+
+```powershell
+npm.cmd ci
+npm.cmd run fixtures
+npm.cmd run tauri -- dev
+```
+
+项目自身的授权条款尚未指定；第三方许可证不等于给本项目指定许可证。

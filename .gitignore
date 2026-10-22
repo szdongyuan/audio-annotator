@@ -1,0 +1,8 @@
+node_modules/
+dist/
+target/
+src-tauri/gen/
+.test-output/
+*.local
+.worktrees/
+.tools/

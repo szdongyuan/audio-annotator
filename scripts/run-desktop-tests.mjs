@@ -1,0 +1,32 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { start } from '../tests/desktop/harness.mjs';
+import { projectFlow, restartFlow, recoveryFlow } from '../tests/desktop/project-flow.test.mjs';
+import { spectralFlow } from '../tests/desktop/spectral-flow.test.mjs';
+import { sharingFlow } from '../tests/desktop/sharing-flow.test.mjs';
+import { viewChurn } from '../tests/desktop/view-churn.test.mjs';
+function command(cmd, args) { const r = spawnSync(cmd, args, { stdio: 'inherit', shell: cmd.endsWith('.cmd'), windowsHide: true }); if (r.status !== 0) throw new Error(`${cmd} failed: ${r.status}`); }
+command('pwsh', ['-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/setup-webdriver.ps1']);
+if (!process.argv.includes('--skip-build')) command('npm.cmd', ['run','tauri','--','build','--debug','--no-bundle','--features','e2e','--config','src-tauri/tauri.e2e.conf.json']);
+const output = await fs.mkdtemp(path.resolve('.test-output/desktop-'));
+const project = path.join(output, 'project'); await fs.mkdir(project);
+const context = { output, project };
+const paths = {
+  '新建项目 · 选择空文件夹': [project],
+  '打开项目 · 选择 project.json': [path.join(project,'project.json'), path.join(project,'project.json'),path.join(output,'recovery-project','project.json'),path.join(output,'recovery-project','project.json')],
+  '': [['six.flac','mono16.wav','stereo.mp3'].map(n=>path.resolve('tests/fixtures/audio',n))],
+  '分享 · 保存到本机': [path.join(output,'share.json'),path.join(output,'share.zip')],
+  '导入标注文件或完整项目包': [path.join(output,'share.json'),path.join(output,'share.zip')],
+  '选择新项目的存放位置 · 将创建独立子文件夹': [output,output],
+};
+const report = { method: 'Selenium → official tauri-driver → matching Microsoft EdgeDriver → actual Tauri executable. Only native picker return paths are preselected in the e2e feature; all edits use WebDriver pointer/keyboard actions. Native listening and physical picker interaction remain manual.', checks: [], output };
+let h;
+try {
+  h = await start(paths, output);
+  for (const [name, run] of [['project',projectFlow],['view-churn',viewChurn],['spectral',spectralFlow]]) { console.log(`Running ${name}`); await run(h,context); report.checks.push({name,passed:true,...(name==='view-churn'?context.churn:{})}); console.log(`PASS ${name}`); }
+  await h.quit(); h = await start(paths, output);
+  for (const [name, run] of [['restart',restartFlow],['sharing',sharingFlow],['recovery',recoveryFlow]]) { console.log(`Running ${name}`); await run(h,context); report.checks.push({name,passed:true}); console.log(`PASS ${name}`); }
+} catch(error) { report.error = error.stack; await h?.screenshot('failure').catch(()=>{}); console.error(error); process.exitCode=1; }
+finally { await h?.quit().catch(()=>{}); await fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2)); console.log(JSON.stringify(report,null,2)); }
+

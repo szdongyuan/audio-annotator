@@ -1,0 +1,13 @@
+
+> audio-annotator@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.12 D:/Work/annotator
+
+
+ Test Files  23 passed (23)
+      Tests  128 passed (128)
+   Start at  01:01:51
+   Duration  8.72s (transform 5.82s, setup 9.54s, import 8.85s, tests 12.68s, environment 35.12s)
+

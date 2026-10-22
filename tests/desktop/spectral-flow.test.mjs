@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import { Key } from './harness.mjs';
+export async function spectralFlow(h, context) {
+  await h.clickText('标注A');
+  await h.drag('.annotation-overlay', [.2,.25], [.6,.7]);
+  await h.until(`document.querySelector('.annotation-inspector')`);
+  assert.equal((await h.snapshot(context.id)).document.annotations.length, 1);
+  await h.input('区域备注', '区域独立备注');
+  await h.clickText('类别'); await h.input('类别名称', '测试类别'); await h.clickText('添加类别');
+  await h.until(`document.querySelector('.category-row')`);
+  await h.clickText('区域'); await h.select('区域类别', '测试类别');
+  await h.label('撤销 · Ctrl Z'); await h.label('重做 · Ctrl Y');
+  await h.clickText('备注'); await h.input('音频备注', '文件独立备注'); await h.select('备注通道', '通道 2'); await h.input('通道 2 备注', '通道独立备注');
+  const axis = await h.element('input[aria-label$="线性对数混合"]');
+  await axis.sendKeys('\uE014', '\uE014');
+  await h.clickText('全部'); await h.until(`document.querySelectorAll('.channel-pane').length===6 && !document.querySelector('.tile-status')`);
+  await h.screenshot('six-channels-1280x800');
+  // Explicit no-channel state, then restore all six.
+  for (let i=1;i<=6;i++) await h.label(`显示通道 ${i}`);
+  await h.until(`document.querySelector('.no-channels')`);
+  await h.screenshot('no-channels'); await h.clickText('全部');
+  await h.clickText('双文件对比');
+  await h.until(`document.querySelectorAll('.file-pane').length===2 && !document.querySelector('.tile-status')`);
+  await h.label('联动时间轴');
+  await h.screenshot('dual-1280x800');
+  assert.equal(await h.evaluate('return document.documentElement.scrollWidth <= innerWidth'), true, 'no horizontal page overflow');
+  await (await h.element('input[aria-label="播放音量"]')).sendKeys(Key.HOME,...Array(5).fill(Key.ARROW_RIGHT));
+  await h.label('循环播放'); await h.label('播放 · 空格');
+  await h.until(`document.querySelector('.playback-counters')?.textContent.match(/已提交 [1-9]/)`, 'actual native output');
+  assert.match(await h.evaluate('return document.querySelector(".playback-counters").textContent'), /欠载 0/);
+  await h.label('停止');
+  await h.click('.project-actions > button:nth-of-type(2)');
+  await h.until(`document.querySelector('.project-identity')?.innerText.includes('已保存')`);
+  context.saved = (await h.snapshot(context.id)).document;
+  assert.equal(context.saved.media[0].note, '文件独立备注');
+  assert.equal(context.saved.media[0].channelNotes[1], '通道独立备注');
+  assert.equal(context.saved.annotations[0].note, '区域独立备注');
+  assert.equal(context.saved.categories.length, 1);
+  await h.menu('关闭项目'); await h.until(`document.querySelector('.project-identity').textContent.includes('尚未打开项目')`);
+}

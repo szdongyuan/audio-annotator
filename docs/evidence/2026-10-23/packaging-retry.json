@@ -1,0 +1,6 @@
+{
+  "completed": "2026-10-23T00:20:49.2411023+08:00",
+  "reason": "Original packaging sharing violation: owned release executable was running; closed before retry",
+  "command": "npm.cmd run tauri -- build --bundles nsis",
+  "exitCode": 0
+}

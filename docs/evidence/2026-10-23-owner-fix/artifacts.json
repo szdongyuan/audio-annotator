@@ -1,0 +1,16 @@
+[
+  {
+    "path": "D:\\Work\\annotator\\.worktrees\\audio-annotator-v1\\target\\release\\annotator-desktop.exe",
+    "bytes": 13956096,
+    "sha256": "C974F0C75B40DAFE279E9DE94DC2791D58A07C2864E2B7D8DE92C8C2DFB0D711",
+    "signature": "NotSigned",
+    "modifiedUtc": "2026-10-22T16:51:31.7774931Z"
+  },
+  {
+    "path": "D:\\Work\\annotator\\.worktrees\\audio-annotator-v1\\target\\release\\bundle\\nsis\\Audio Annotator_0.1.0_x64-setup.exe",
+    "bytes": 220631950,
+    "sha256": "CA138E085B0618E5022717BDA22A148F2900DCFFC6FAE07B039A4E75E2E14C35",
+    "signature": "NotSigned",
+    "modifiedUtc": "2026-10-22T16:51:31.7166225Z"
+  }
+]

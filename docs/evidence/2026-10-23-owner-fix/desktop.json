@@ -1,0 +1,33 @@
+{
+  "method": "Selenium → official tauri-driver → matching Microsoft EdgeDriver → actual Tauri executable. Only native picker return paths are preselected in the e2e feature; all edits use WebDriver pointer/keyboard actions. Native listening and physical picker interaction remain manual.",
+  "checks": [
+    {
+      "name": "project",
+      "passed": true
+    },
+    {
+      "name": "view-churn",
+      "passed": true,
+      "switches": 300,
+      "mountedChannelOwners": 450,
+      "freshNativeAnalysis": true
+    },
+    {
+      "name": "spectral",
+      "passed": true
+    },
+    {
+      "name": "restart",
+      "passed": true
+    },
+    {
+      "name": "sharing",
+      "passed": true
+    },
+    {
+      "name": "recovery",
+      "passed": true
+    }
+  ],
+  "output": "D:\\Work\\annotator\\.worktrees\\audio-annotator-v1\\.test-output\\desktop-tDCWAO"
+}

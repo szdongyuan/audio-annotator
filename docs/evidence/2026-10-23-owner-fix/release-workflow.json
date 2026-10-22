@@ -1,0 +1,21 @@
+{
+  "method": "Normal packaged release executable after successful NSIS build; Windows UIAutomation locators + Win32 actual pointer events. Real native folder/open/save dialog edit controls set with WM_SETTEXT, then real dialog buttons clicked. No e2e feature, no remote debugging, no store/native command injection.",
+  "executableSha256": "c974f0c75b40dafe279e9de94dc2791d58a07c2864e2b7d8de92c8c2dfb0d711",
+  "sourceSha256": "c86df72d326661226fb759cd92a6886cb07ef84fb3e8f332a5cbbaa68341fbe1",
+  "projectRevision": 2,
+  "annotationCount": 1,
+  "shareBytes": 1846,
+  "appVolume": 0.06,
+  "counters": "48000 Hz · 已提交 184416 帧 · 欠载 0",
+  "checks": {
+    "realPickerCreateImportSave": true,
+    "pointerAnnotation": true,
+    "nativeOutput": true,
+    "saveShareSemanticMatch": true,
+    "originalAudioUnchanged": true
+  },
+  "limitations": [
+    "Subjective human listening not performed",
+    "Direct release executable tested; installer UI and clean-machine installation not tested"
+  ]
+}

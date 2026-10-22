@@ -1,0 +1,94 @@
+[
+  {
+    "name": "corrupt.wav",
+    "bytes": 14,
+    "sha256": "de3e6abe97787675d20d2326165d87f281bb1f69a0f47712bae6f110d3c945c2"
+  },
+  {
+    "name": "dual.wav",
+    "bytes": 9644,
+    "sha256": "e4fd39dd1321602d4d99d39b9305374b6053fddcab5aab1d073c3b22dcd31482"
+  },
+  {
+    "name": "float32.wav",
+    "bytes": 38444,
+    "sha256": "42fa1e6bb3fb8cfc2ee58de607c2915bf0a56e102ca384f1e234d979f3ecdade"
+  },
+  {
+    "name": "mono.flac",
+    "bytes": 9685,
+    "sha256": "d3306579acb231d872f44c161a519aaf323677c3f01b2889444a4cbb0029ac9d"
+  },
+  {
+    "name": "mono16.wav",
+    "bytes": 9644,
+    "sha256": "192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e"
+  },
+  {
+    "name": "nonfinite.wav",
+    "bytes": 172,
+    "sha256": "479143242f5679fcc1fd1d8c5d96ce976bb497c434b963186e8590ad0898d416"
+  },
+  {
+    "name": "seven.wav",
+    "bytes": 67244,
+    "sha256": "797bec3f33bc5ed816e7b5be4413129a5f0747087ebbe98fdd6421920a34b78e"
+  },
+  {
+    "name": "short.wav",
+    "bytes": 118,
+    "sha256": "2e93dbe73d9d33ba72d5a5b8f898c073b5719c07ae9a23012a02cbb49773998a"
+  },
+  {
+    "name": "silence.wav",
+    "bytes": 9644,
+    "sha256": "639dad0ac2923f5fe9e9ccfb99aa9b3084048e2e53317d1903e6e899a4f6296a"
+  },
+  {
+    "name": "six.flac",
+    "bytes": 47007,
+    "sha256": "c86df72d326661226fb759cd92a6886cb07ef84fb3e8f332a5cbbaa68341fbe1"
+  },
+  {
+    "name": "six32.wav",
+    "bytes": 115244,
+    "sha256": "10db09c087cdd3d29601b8b9252ef9e591a1ab975cc96b174acf12ef07438980"
+  },
+  {
+    "name": "stereo.mp3",
+    "bytes": 2541,
+    "sha256": "a0499c96aeff59c686c320d496c68be8bcdca981753ed943c1cbefcb1868691c",
+    "decodedFrames": 4800
+  },
+  {
+    "name": "stereo24.wav",
+    "bytes": 28844,
+    "sha256": "2d9cdc990d6e3276b4745af5fd40648fd1d0d79cbcc80c5685fe14b5f84b6420"
+  },
+  {
+    "name": "truncated-no-xing.mp3",
+    "bytes": 1987,
+    "sha256": "2924fcdb503b13af6dcf790ea22323850a3114c62fdf5ff06e50a93ca0e2f5bb"
+  },
+  {
+    "name": "truncated.mp3",
+    "bytes": 2491,
+    "sha256": "32cff41fcf76acd0ae413436ded87a4ab91d485e0a364e0596092d9727c6e0f1"
+  },
+  {
+    "name": "truncated.wav",
+    "bytes": 9593,
+    "sha256": "0f8e9b07ed1c50e8ce9f4c401cba11eb458c63a7c6cfd0ca59645db15da81bfa"
+  },
+  {
+    "name": "vbr-no-xing.mp3",
+    "bytes": 2037,
+    "sha256": "fb7f0f55d4e790d64c1e52ef6a8b7813428519d2cc66a15a4cf3b6ff2687f963",
+    "decodedFrames": 6912
+  },
+  {
+    "name": "zero.wav",
+    "bytes": 44,
+    "sha256": "531cd597b25052b4845ef2f3887dec2183240802a93b6e044960de8ba017caa0"
+  }
+]
