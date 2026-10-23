@@ -1,0 +1,50 @@
+{
+  "method": "Fresh debug/e2e Tauri application; owned Selenium pointer/keyboard controls and native picker queues; IPC is read-only assertion only",
+  "output": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\.test-output\\nas-task4\\ui-rk7een",
+  "checks": [
+    "create copy through File menu, credentials form, native copy and captured media/analysis adapters",
+    "logout saves private preferences and guest restores defaults",
+    "failed login preserves guest identity and personal categories",
+    "registered actor starts isolated; native guest copy is explicit, same runtime, one undoable change",
+    "compact author filters and explicit personal-only export scope",
+    "Alice private preferences restore after guest/Bob transitions",
+    "shared collaboration.json opens guest; reopen/login restores private preferences and working analysis",
+    "shared-version load requires explicit confirmation, retires history and preserves private preferences",
+    "personal Save As exits collaboration with only current identity document"
+  ],
+  "frames": [
+    {
+      "name": "identity-1280x800",
+      "outer": {
+        "width": 1280,
+        "pid": 43436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "header": 32,
+      "height": 761,
+      "overflow": false,
+      "toolbar": 40,
+      "width": 1264
+    },
+    {
+      "name": "identity-1920x1080",
+      "outer": {
+        "width": 1920,
+        "pid": 43436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "header": 32,
+      "height": 1041,
+      "overflow": false,
+      "toolbar": 40,
+      "width": 1904
+    }
+  ],
+  "originalSha256": "192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e"
+}

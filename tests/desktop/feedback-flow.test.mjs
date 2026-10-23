@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { start, wait } from './harness.mjs';
-const output=path.resolve('.test-output/task4-compact');await fs.mkdir(output,{recursive:true});
+const output=path.resolve(process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/task4-compact', process.env.ANNOTATOR_SUITE_OUTPUT ? '' : `run-${Date.now()}-${process.pid}`);await fs.mkdir(output,{recursive:true});
 const project=await fs.mkdtemp(path.join(output,'feedback-project-'));
 const tag=process.argv.includes('--red')?'feedback-red':'feedback';
 const report={method:'Owned native Tauri with actual bundled styles and Win32 outer sizing. Real native import/Channel delivery; inject one apply_change transport failure and hold later ready/finished events to make the concurrent processing state deterministic. Cancel/release/retry forward to native.',checks:[],frames:[]};let h;

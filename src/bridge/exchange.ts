@@ -3,7 +3,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { parseOpened, type OpenedProject } from './projects';
 import { parseAppError, type AppError } from './types';
 export type ExchangeKind = 'annotations' | 'bundle' | 'import';
-export interface ExpectedProject { projectId: string; expectedRevision: number }
+export interface ExpectedProject { projectId: string; expectedRevision: number; runtimeNonce?: string }
 export type ExchangeEvent =
   | { type: 'progress'; taskId: string; phase: string; completed: number }
   | { type: 'completed'; taskId: string; path: string; opened: OpenedProject | null }

@@ -43,8 +43,9 @@ pub enum MediaEvent {
     },
 }
 
-async fn start(
+pub(crate) async fn start(
     state: &AppState,
+    runtime_nonce: Option<String>,
     project_id: String,
     paths: Vec<String>,
     relink: Option<String>,
@@ -53,6 +54,7 @@ async fn start(
     if paths.is_empty() || paths.len() > 256 {
         return Err(AppError::invalid("请选择 1–256 个音频文件"));
     }
+    let service = state.6.clone();
     let tasks = state.1.clone();
     let task_id = uuid::Uuid::new_v4().to_string();
     let id = task_id.clone();
@@ -61,9 +63,17 @@ async fn start(
             let project = s
                 .as_ref()
                 .ok_or_else(|| AppError::invalid("尚未打开项目"))?;
+            super::collaboration::runtime::check_mutation(
+                project,
+                &service,
+                runtime_nonce.as_deref(),
+            )?;
             let snapshot = project.snapshot()?;
             if snapshot.document.project_id != project_id {
                 return Err(AppError::invalid("项目身份不匹配"));
+            }
+            if project.is_shared() && relink.is_none() {
+                return Err(AppError::invalid("Shared media catalog is immutable"));
             }
             let expected = relink
                 .map(|id| {
@@ -167,21 +177,31 @@ async fn start(
 #[tauri::command]
 pub async fn import_media(
     state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
     project_id: String,
     paths: Vec<String>,
     on_event: Channel<MediaEvent>,
 ) -> Result<String> {
-    start(&state, project_id, paths, None, on_event).await
+    start(&state, runtime_nonce, project_id, paths, None, on_event).await
 }
 #[tauri::command]
 pub async fn relink_media(
     state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
     project_id: String,
     media_id: String,
     path: String,
     on_event: Channel<MediaEvent>,
 ) -> Result<String> {
-    start(&state, project_id, vec![path], Some(media_id), on_event).await
+    start(
+        &state,
+        runtime_nonce,
+        project_id,
+        vec![path],
+        Some(media_id),
+        on_event,
+    )
+    .await
 }
 #[tauri::command]
 pub fn cancel_media_import(state: State<'_, AppState>, task_id: String) -> Result<()> {
@@ -214,47 +234,71 @@ pub struct MediaStatus {
 #[tauri::command]
 pub async fn media_status(
     state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
     project_id: String,
 ) -> Result<Vec<MediaStatus>> {
     let tasks = state.1.clone();
-    state
+    let service = state.6.clone();
+    let capture = state
         .run(move |s| {
             let p = s
                 .as_ref()
-                .ok_or_else(|| AppError::invalid("尚未打开项目"))?;
-            let snapshot = p.snapshot()?;
-            if snapshot.document.project_id != project_id {
-                return Err(AppError::invalid("项目身份不匹配"));
+                .ok_or_else(|| AppError::invalid("No active project"))?;
+            super::collaboration::runtime::check_mutation(p, &service, runtime_nonce.as_deref())?;
+            let d = p.snapshot()?.document;
+            if d.project_id != project_id {
+                return Err(AppError::invalid("Project identity mismatch"));
             }
             let tasks = tasks
                 .lock()
-                .map_err(|_| AppError::invalid("媒体服务不可用"))?;
-            Ok(snapshot
-                .document
+                .map_err(|_| AppError::invalid("Media unavailable"))?;
+            let entries = d
                 .media
                 .iter()
-                .map(|m| {
-                    let path = PathBuf::from(&m.source_ref);
-                    let path = if path.is_absolute() {
-                        path
-                    } else {
-                        p.root().join(path)
-                    };
-                    let status = match SourceStamp::read(&path) {
-                        Err(_) => "missing",
-                        Ok(stamp) if stamp.bytes != m.byte_length => "changed",
-                        Ok(_) => match tasks.registry.get_checked(m) {
-                            Ok(_) => "ready",
-                            Err(e) if e.code == ErrorCode::IdentityMismatch => "changed",
-                            Err(_) => "unverified",
-                        },
-                    };
-                    MediaStatus {
-                        media_id: m.id.clone(),
-                        status,
-                    }
-                })
-                .collect())
+                .map(|m| tasks.registry.get_unverified(m))
+                .collect::<Vec<_>>();
+            Ok((d.media, p.root().to_path_buf(), entries, tasks.generation()))
         })
-        .await
+        .await?;
+    let generation = capture.3;
+    let statuses = tauri::async_runtime::spawn_blocking(move || {
+        capture
+            .0
+            .iter()
+            .zip(capture.2)
+            .map(|(m, entry)| {
+                let source = PathBuf::from(&m.source_ref);
+                let source = if source.is_absolute() {
+                    source
+                } else {
+                    capture.1.join(source)
+                };
+                let status = match SourceStamp::read(&source) {
+                    Err(_) => "missing",
+                    Ok(stamp) if stamp.bytes != m.byte_length => "changed",
+                    Ok(_) => match entry.and_then(|e| e.verify_source()) {
+                        Ok(()) => "ready",
+                        Err(e) if e.code == ErrorCode::IdentityMismatch => "changed",
+                        Err(_) => "unverified",
+                    },
+                };
+                MediaStatus {
+                    media_id: m.id.clone(),
+                    status,
+                }
+            })
+            .collect()
+    })
+    .await
+    .map_err(|_| AppError::invalid("Media task interrupted"))?;
+    if state
+        .1
+        .lock()
+        .map_err(|_| AppError::invalid("Media unavailable"))?
+        .generation()
+        != generation
+    {
+        return Err(super::collaboration::runtime::stale());
+    }
+    Ok(statuses)
 }

@@ -1,4 +1,5 @@
-import { Channel, invoke } from '@tauri-apps/api/core';
+import { runtimeInvoke } from './runtimeInvoke';
+import { Channel } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { parseAppError, parseChange, type AppError, type MediaDescriptor } from './types';
 
@@ -17,7 +18,9 @@ export interface MediaCommands {
   release(taskId: string, mediaId: string): Promise<void>;
   status(projectId: string): Promise<MediaStatus[]>;
 }
-export const mediaClient: MediaCommands = {
+export function createMediaClient(runtimeNonce?: string) {
+ const invoke = runtimeInvoke(runtimeNonce);
+return {
   start: async (projectId, paths, receive, relinkId) => {
     const onEvent = new Channel<MediaEvent>();
     onEvent.onmessage = event => {
@@ -33,4 +36,7 @@ export const mediaClient: MediaCommands = {
   cancel: taskId => invoke('cancel_media_import', { taskId }),
   release: (taskId, mediaId) => invoke('release_media_import', { taskId, mediaId }),
   status: projectId => invoke('media_status', { projectId }),
-};
+} satisfies MediaCommands;
+
+}
+export const mediaClient = createMediaClient();

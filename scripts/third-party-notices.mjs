@@ -11,7 +11,7 @@ for(const [location,p] of Object.entries(lock.packages).filter(([k,p])=>k&&!p.de
   const json=JSON.parse(await fs.readFile(path.join(location,'package.json'),'utf8'));
   entries.push({name:json.name,version:json.version,license:json.license,repository:json.repository?.url??json.repository,root:location,kind:'npm runtime'});
 }
-const notices=['THIRD-PARTY NOTICES — Audio Annotator 0.1.0','This file does not assign a license to Audio Annotator itself. See the project owner for distribution terms.','Unmodified Symphonia MPL-2.0 sources are distributed alongside this notice in sources/*.crate. Cargo .crate files are gzip-compressed tar archives.','Inventory is conservative: Rust build-time and procedural macro dependencies are included even when they do not ship executable code. FFmpeg, Selenium, and all other npm devDependencies are development-only and are not included in the application.',''];
+const notices=[`THIRD-PARTY NOTICES — Audio Annotator ${lock.version}`,'This file does not assign a license to Audio Annotator itself. See the project owner for distribution terms.','Unmodified Symphonia MPL-2.0 sources are distributed alongside this notice in sources/*.crate. Cargo .crate files are gzip-compressed tar archives.','Inventory is conservative: Rust build-time and procedural macro dependencies are included even when they do not ship executable code. FFmpeg, Selenium, and all other npm devDependencies are development-only and are not included in the application.',''];
 const missing=[];
 for(const p of entries.sort((a,b)=>a.name.localeCompare(b.name))) {
   const files=(await fs.readdir(p.root)).filter(f=>/^(licen[sc]e|copying|notice|copyright)([.\-_]|$)/i.test(f));

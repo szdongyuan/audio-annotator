@@ -5,7 +5,7 @@ import path from 'node:path';
 import { start, Key, wait } from './harness.mjs';
 import { coordinates } from '../../src/features/spectrogram/coordinates.ts';
 
-const output = path.resolve('.test-output/task3-rulers');
+const output = path.resolve(process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/task3-rulers', process.env.ANNOTATOR_SUITE_OUTPUT ? '' : `run-${Date.now()}-${process.pid}`);
 await fs.mkdir(output, { recursive: true });
 // Reject occupied native-driver as well as application/driver ports before spawning anything.
 for (const port of [4445, 4446, 9235]) {

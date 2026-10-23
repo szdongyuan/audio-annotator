@@ -463,12 +463,49 @@ pub async fn playback_devices() -> Result<Vec<OutputDevice>> {
         .map_err(|_| device_error("设备枚举中断"))?
 }
 #[tauri::command]
-pub fn playback_status(state: State<'_, AppState>) -> Result<PlaybackStatus> {
+pub fn playback_status(
+    state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
+) -> Result<PlaybackStatus> {
+    let project = state
+        .0
+        .lock()
+        .map_err(|_| device_error("Project unavailable"))?;
+    check_owner(&state, project.as_ref(), runtime_nonce.as_deref())?;
     state.3.status()
 }
+fn check_owner(
+    state: &AppState,
+    project: Option<&annotator_core::project::LocalProject>,
+    nonce: Option<&str>,
+) -> Result<()> {
+    if let Some(p) = project {
+        super::collaboration::runtime::check_mutation(p, &state.6, nonce)
+    } else if nonce.is_some() {
+        Err(super::collaboration::runtime::stale())
+    } else {
+        Ok(())
+    }
+}
 #[tauri::command]
-pub fn playback_control(state: State<'_, AppState>, action: String) -> Result<PlaybackStatus> {
-    match action.as_str() {
+pub fn playback_control(
+    state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
+    action: String,
+) -> Result<PlaybackStatus> {
+    control_owned(&state, runtime_nonce.as_deref(), &action)
+}
+pub(crate) fn control_owned(
+    state: &AppState,
+    nonce: Option<&str>,
+    action: &str,
+) -> Result<PlaybackStatus> {
+    let project = state
+        .0
+        .lock()
+        .map_err(|_| device_error("Project unavailable"))?;
+    check_owner(state, project.as_ref(), nonce)?;
+    match action {
         "pause" => state.3.pause(),
         "stop" => state.3.stop(),
         "reset" => {
@@ -478,9 +515,32 @@ pub fn playback_control(state: State<'_, AppState>, action: String) -> Result<Pl
         _ => Err(AppError::invalid("未知播放操作")),
     }
 }
+pub(crate) fn capture_playback(
+    state: &AppState,
+    nonce: Option<&str>,
+) -> Result<(ProjectDocument, std::path::PathBuf, u64)> {
+    let lock = state
+        .0
+        .lock()
+        .map_err(|_| device_error("Project unavailable"))?;
+    let project = lock
+        .as_ref()
+        .ok_or_else(|| AppError::invalid("No active project"))?;
+    check_owner(state, Some(project), nonce)?;
+    Ok((
+        project.snapshot()?.document,
+        project.root().to_path_buf(),
+        state
+            .1
+            .lock()
+            .map_err(|_| device_error("Media unavailable"))?
+            .generation(),
+    ))
+}
 #[tauri::command]
 pub async fn playback_configure(
     state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
     app: tauri::AppHandle,
     request: PlaybackRequest,
 ) -> Result<PlaybackStatus> {
@@ -494,21 +554,7 @@ pub async fn playback_configure(
     }
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let (doc, root, media_generation) = {
-            let lock = state.0.lock().map_err(|_| device_error("项目服务不可用"))?;
-            let project = lock
-                .as_ref()
-                .ok_or_else(|| AppError::invalid("尚未打开项目"))?;
-            (
-                project.snapshot()?.document,
-                project.root().to_path_buf(),
-                state
-                    .1
-                    .lock()
-                    .map_err(|_| device_error("媒体服务不可用"))?
-                    .generation(),
-            )
-        };
+        let (doc, root, media_generation) = capture_playback(&state, runtime_nonce.as_deref())?;
         if doc.project_id != request.project_id {
             return Err(AppError::new(ErrorCode::Cancelled, "项目已切换"));
         }
@@ -535,6 +581,7 @@ pub async fn playback_configure(
         let rate = descriptor.sample_rate as f64;
         // Revalidate runtime identity after the lock-free DSP setup; serialize publication with project transitions.
         let project_guard = state.0.lock().map_err(|_| device_error("项目服务不可用"))?;
+        check_owner(&state, project_guard.as_ref(), runtime_nonce.as_deref())?;
         let current = project_guard
             .as_ref()
             .ok_or_else(|| AppError::new(ErrorCode::Cancelled, "项目已切换"))?

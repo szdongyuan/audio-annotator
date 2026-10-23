@@ -1,5 +1,13 @@
 # 开发与验证
 
+## 0.3.0 NAS 协作
+
+用户操作见 [使用说明](user-guide.md#nas-共享标注)：普通项目创建空目录协作副本，打开 collaboration.json 后访客查看或登录项目账号；作者筛选与只读检查独立于本人编辑。共享目录只保存固定媒体清单、账号验证值及按作者发布的不可变标注版本。本机缓存按共享根、项目、作者隔离，包含私人文档及原子同步检查点。保存先落本机，网络失败保留 pending；自己的基线分歧必须显式加载共享版本。个人导出清理屏蔽与他人数据，Save As 保留本人私人操作并生成普通项目。无需服务器，无格式迁移；实际文件权限仍由 NAS ACL 管理。
+
+验证命令仍为 npm ci / fixtures / typecheck / test / build、cargo fmt / clippy / test --workspace。`npm.cmd run test:desktop` 按顺序保留原 18 个阶段并追加 collaboration-native（实际 IPC 合同）、collaboration-controls 和 collaboration-layers（实际 UI 两实例）。harness 默认 4445/4446/9235，第二实例可用 4455/4456/9245 和独立 localDataEnv；启动拒绝未知监听者，退出只回收自己创建的 PID。ANNOTATOR_E2E_LOCAL_DATA、ANNOTATOR_E2E_DEBUG_PORT 和预设选择器仅编译进 e2e 构建。
+
+`npm.cmd run perf` 先构建 release + e2e，在实际 1920 外窗运行八通道十分钟音频并验证原音/处理后真实设备输出，保留每项及合并 P95≤100ms、零欠载和原有内存预算。两作者刷新另外统计图像写入与分析/播放请求，不把这些合同检查当成物理 NAS 认证。最后必须执行正常 `npm.cmd run tauri -- build --bundles nsis`，无测试 feature/config，再用归属核验的 release-ui.ps1 和真实系统选择器验收同一 EXE。发布保留精确 as-built 输入字节清单，不能用未来提交号代替构建来源。结果与限制见 [0.3.0 验收](verification-0.3.0.md)。
+
 ## 当前阶段
 
 0.1.0 已接入音频导入、项目保存与恢复、STFT/梅尔频谱、多通道和双文件对比、区域标注、备注、原生播放、频段试听与屏蔽、JSON/ZIP 分享。两个侧栏可分别折叠和展开。本文后续 Task 1–10 记录保留各阶段的历史验证结果；当前交付结果及未验证项以 [验收记录](verification.md) 为准。

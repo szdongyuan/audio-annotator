@@ -1,0 +1,2144 @@
+{
+  "output": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\.test-output\\fidelity-release\\perf-y6YQ7M",
+  "environment": {
+    "platform": "Windows 11 Enterprise",
+    "cpu": "AMD Ryzen 5 5600GT with Radeon Graphics        ",
+    "memory": 33596846080,
+    "build": "release + e2e picker feature"
+  },
+  "fixtures": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\.test-output\\performance-fixtures\\ten-minute-six.wav",
+      "channels": 6,
+      "seconds": 600,
+      "rate": 48000,
+      "size": 345600044,
+      "sha256": "c1c63cc3788f47124314a251de43c9cc15071b98a9889242a58d2b7c7eb5f5e4"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\.test-output\\performance-fixtures\\comparison-stereo.wav",
+      "channels": 2,
+      "seconds": 600,
+      "rate": 48000,
+      "size": 115200044,
+      "sha256": "722ff4d5ccb92119cf1421ed42349f272c793f4f8efb1fe23819b09ccc493375"
+    }
+  ],
+  "backend": {
+    "analysisPcmBytes": 100294656,
+    "channels": 6,
+    "combinedPcmBytes": 133840896,
+    "decodeMs": 1819.7238,
+    "firstTilesMs": 43.9403,
+    "fixture": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\.test-output\\performance-fixtures\\ten-minute-six.wav",
+    "note": "backend throughput, not native device or UI latency",
+    "pcmBudgetBytes": 134217728,
+    "playbackPcmBytes": 33546240,
+    "processedFrames": 1441792,
+    "processedSeconds": 30.037333333333333,
+    "renderMs": 473.3803,
+    "sampleRate": 48000,
+    "sourceSeconds": 600
+  },
+  "method": "Cold app analysis cache and fresh project/PCM; OS cache not purged. Warm feedback measures input event timestamp → terminal dirty strip of full-resolution canvas draw, waits until all tile statuses clear, invalidates superseded draw callbacks → two animation frames (paint opportunity). No first-strip/preview sample. Distinct ten-minute 48kHz 6ch and 2ch sources; real native device output. Memory queries only retain the owned native/WebView2 tree; one-second wait follows each process query, with actual intervals reported.",
+  "coldImportAndDualFirstScreenMs": 3398.186799999996,
+  "window": {
+    "densityMethod": "Actual Windows display density; no CDP override in performance run",
+    "outer": {
+      "width": 1920,
+      "pid": 27084,
+      "y": 20,
+      "method": "Win32 GetWindowRect on owned native PID",
+      "x": 20,
+      "height": 1080
+    },
+    "dpr": 1,
+    "scale": 1,
+    "viewport": [
+      1904,
+      1041
+    ]
+  },
+  "firstReady": {
+    "originalMs": 3398.186799999996,
+    "processedWithAcceptedMaskMs": 404.9383999999991
+  },
+  "originalCanvases": [
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 558758744,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 731666642,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2687396592,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 285893881,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2166136261,
+      "height": 0,
+      "rgbaBytes": 0,
+      "width": 0
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2166136261,
+      "height": 0,
+      "rgbaBytes": 0,
+      "width": 0
+    },
+    {
+      "cssHeight": 376.5,
+      "cssWidth": 572,
+      "hash": 3949678254,
+      "height": 377,
+      "rgbaBytes": 862576,
+      "width": 572
+    },
+    {
+      "cssHeight": 376.5,
+      "cssWidth": 572,
+      "hash": 4072890266,
+      "height": 377,
+      "rgbaBytes": 862576,
+      "width": 572
+    }
+  ],
+  "mask": {
+    "enabled": true,
+    "id": "6d81d7e9-814d-490d-b20c-c841c7955925",
+    "processingVersion": 1,
+    "region": {
+      "channelIndex": 0,
+      "endSeconds": 5.996503496503497,
+      "highHz": 1264.5787082636052,
+      "lowHz": 2.5680649448434067,
+      "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+      "startSeconds": 1.993006993006993
+    }
+  },
+  "processedCanvases": [
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2603195972,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 3654445643,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 997365826,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 3625723528,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2166136261,
+      "height": 0,
+      "rgbaBytes": 0,
+      "width": 0
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2166136261,
+      "height": 0,
+      "rgbaBytes": 0,
+      "width": 0
+    },
+    {
+      "cssHeight": 376.5,
+      "cssWidth": 572,
+      "hash": 3949678254,
+      "height": 377,
+      "rgbaBytes": 862576,
+      "width": 572
+    },
+    {
+      "cssHeight": 376.5,
+      "cssWidth": 572,
+      "hash": 4072890266,
+      "height": 377,
+      "rgbaBytes": 862576,
+      "width": 572
+    }
+  ],
+  "budgets": {
+    "rasterRetainedPlusScratchBytes": 3469024,
+    "rasterLimitBytes": 33554432,
+    "numericLimitBytes": 67108864,
+    "pcmLimitBytes": 134217728,
+    "analysisPcmLimitBytes": 100663296
+  },
+  "energyDb": {
+    "original": -11.448796629447074,
+    "processed": -158.10930062539032,
+    "attenuation": -146.66050399594326
+  },
+  "feedbackSamplesMs": [
+    82.79999995231628,
+    65.80000007152557,
+    71,
+    82.5,
+    65.89999997615814,
+    65.79999995231628,
+    65.79999995231628,
+    82.40000009536743,
+    65.80000007152557,
+    81.70000004768372,
+    66,
+    110.39999997615814,
+    82.5,
+    119.5,
+    64.5,
+    65.79999995231628,
+    73,
+    82.19999992847443,
+    66.30000007152557,
+    82.5,
+    65.80000007152557,
+    65.70000004768372,
+    62,
+    63.60000002384186,
+    61.39999997615814,
+    82.69999992847443,
+    82.39999997615814,
+    82.40000009536743,
+    82.5,
+    82.09999990463257,
+    65.70000004768372,
+    74.89999997615814,
+    82.70000004768372,
+    65.80000007152557,
+    65.89999997615814,
+    66.20000004768372,
+    90.5,
+    65.5,
+    72.89999997615814,
+    65.89999997615814
+  ],
+  "panFeedbackSamplesMs": [
+    87.60000002384186,
+    74.89999997615814,
+    75.80000007152557,
+    78.5,
+    76.39999997615814,
+    75.10000002384186,
+    75.89999997615814,
+    84,
+    77.09999990463257,
+    80.60000002384186,
+    77.39999997615814,
+    74.29999995231628,
+    83,
+    79,
+    74.20000004768372,
+    79.60000002384186,
+    82.39999997615814,
+    77.90000009536743,
+    73.79999995231628,
+    83.19999992847443
+  ],
+  "mixFeedbackSamplesMs": [
+    65.79999995231628,
+    65.89999997615814,
+    65.69999992847443,
+    65.89999997615814,
+    65.89999997615814,
+    65.89999997615814,
+    65.90000009536743,
+    69.60000002384186,
+    65.89999997615814,
+    65.89999997615814,
+    65.90000009536743,
+    65.89999997615814,
+    65.80000007152557,
+    65.80000007152557,
+    74.60000002384186,
+    65.40000009536743,
+    65.79999995231628,
+    65.80000007152557,
+    75,
+    65.5
+  ],
+  "warmByActionP95Ms": {
+    "zoom": 90.5,
+    "pan": 84,
+    "mix": 74.60000002384186
+  },
+  "warmFeedbackP95Ms": 84,
+  "cancelVisibleMs": 24,
+  "cancelCompletionMs": 70.46710000000894,
+  "device": "Headphones (High Definition Audio Device)",
+  "appVolume": 0.05,
+  "playback": [
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 53376 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 53856,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 1.122,
+        "presentation": {
+          "callbackNanos": 1099113500,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 53856,
+          "tailNanos": 1121113500,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 102336 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 102816,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 2.142,
+        "presentation": {
+          "callbackNanos": 2119154900,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 102816,
+          "tailNanos": 2141154900,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 150816 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 152256,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 3.172,
+        "presentation": {
+          "callbackNanos": 3149233300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 152256,
+          "tailNanos": 3171233300,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 199296 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 200736,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 4.182,
+        "presentation": {
+          "callbackNanos": 4159181000,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 200736,
+          "tailNanos": 4181181000,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 249696 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 250656,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 5.222,
+        "presentation": {
+          "callbackNanos": 5199210900,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 250656,
+          "tailNanos": 5221210900,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 298176 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 299616,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 6.242,
+        "presentation": {
+          "callbackNanos": 6219238600,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 299616,
+          "tailNanos": 6241238600,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 348576 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 349056,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 7.272,
+        "presentation": {
+          "callbackNanos": 7249261700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 349056,
+          "tailNanos": 7271261700,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 397056 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 398016,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 8.292,
+        "presentation": {
+          "callbackNanos": 8269292100,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 398016,
+          "tailNanos": 8291292100,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 446016 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 446976,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 9.312,
+        "presentation": {
+          "callbackNanos": 9289317400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 446976,
+          "tailNanos": 9311317400,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 494496 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 495456,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 10.322,
+        "presentation": {
+          "callbackNanos": 10299382600,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 495456,
+          "tailNanos": 10321382600,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 543456 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 543936,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 11.332,
+        "presentation": {
+          "callbackNanos": 11309373500,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 543936,
+          "tailNanos": 11331373500,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 591936 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 592896,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 12.352,
+        "presentation": {
+          "callbackNanos": 12329411100,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 592896,
+          "tailNanos": 12351411100,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 639936 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 641376,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 13.362,
+        "presentation": {
+          "callbackNanos": 13339422200,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 641376,
+          "tailNanos": 13361422200,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 688896 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 690336,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 14.382,
+        "presentation": {
+          "callbackNanos": 14359434300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 690336,
+          "tailNanos": 14381434300,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 737856 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 738816,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 15.392,
+        "presentation": {
+          "callbackNanos": 15369450300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 738816,
+          "tailNanos": 15391450300,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 787296 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 788256,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 16.422,
+        "presentation": {
+          "callbackNanos": 16399491700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 788256,
+          "tailNanos": 16421491700,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 836256 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 837216,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 17.442,
+        "presentation": {
+          "callbackNanos": 17419513100,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 837216,
+          "tailNanos": 17441513100,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 884736 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 885696,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 18.452,
+        "presentation": {
+          "callbackNanos": 18429534900,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 885696,
+          "tailNanos": 18451534900,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 932736 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 935136,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 19.482,
+        "presentation": {
+          "callbackNanos": 19459556400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 935136,
+          "tailNanos": 19481556400,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 983616 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 984096,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 20.502,
+        "presentation": {
+          "callbackNanos": 20479579800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 984096,
+          "tailNanos": 20501579800,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1032096 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1033056,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 21.522,
+        "presentation": {
+          "callbackNanos": 21499597400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1033056,
+          "tailNanos": 21521597400,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1081056 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1082016,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 22.542,
+        "presentation": {
+          "callbackNanos": 22519625100,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1082016,
+          "tailNanos": 22541625100,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1129536 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1130976,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 23.562,
+        "presentation": {
+          "callbackNanos": 23539656100,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1130976,
+          "tailNanos": 23561656100,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1178016 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1180416,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 24.592,
+        "presentation": {
+          "callbackNanos": 24569674500,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1180416,
+          "tailNanos": 24591674500,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1228416 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1229376,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 25.612,
+        "presentation": {
+          "callbackNanos": 25589726200,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1229376,
+          "tailNanos": 25611726200,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1277376 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1278336,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 26.632,
+        "presentation": {
+          "callbackNanos": 26609733300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1278336,
+          "tailNanos": 26631733300,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1326336 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1327296,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 27.652,
+        "presentation": {
+          "callbackNanos": 27629759400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1327296,
+          "tailNanos": 27651759400,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1375296 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1375776,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 28.662,
+        "presentation": {
+          "callbackNanos": 28639756700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1375776,
+          "tailNanos": 28661756700,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1423776 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1424736,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 29.682,
+        "presentation": {
+          "callbackNanos": 29659811300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1424736,
+          "tailNanos": 29681811300,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1472736 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1473696,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 8,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 30.702,
+        "presentation": {
+          "callbackNanos": 30679816800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1473696,
+          "tailNanos": 30701816800,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 45696 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 46656,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 0.972,
+        "presentation": {
+          "callbackNanos": 948662300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 46656,
+          "tailNanos": 970662300,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 94176 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 95616,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 1.992,
+        "presentation": {
+          "callbackNanos": 1968662700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 95616,
+          "tailNanos": 1990662700,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 142656 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 145056,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 3.022,
+        "presentation": {
+          "callbackNanos": 2998697200,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 145056,
+          "tailNanos": 3020697200,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 193056 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 194016,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 4.042,
+        "presentation": {
+          "callbackNanos": 4018739500,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 194016,
+          "tailNanos": 4040739500,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 241536 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 242976,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 5.062,
+        "presentation": {
+          "callbackNanos": 5038751800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 242976,
+          "tailNanos": 5060751800,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 290496 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 291936,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 6.082,
+        "presentation": {
+          "callbackNanos": 6058769700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 291936,
+          "tailNanos": 6080769700,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 338976 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 340416,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 7.092,
+        "presentation": {
+          "callbackNanos": 7068798100,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 340416,
+          "tailNanos": 7090798100,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 388896 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 389376,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 8.112,
+        "presentation": {
+          "callbackNanos": 8088818300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 389376,
+          "tailNanos": 8110818300,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 437376 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 438336,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 9.132,
+        "presentation": {
+          "callbackNanos": 9108848100,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 438336,
+          "tailNanos": 9130848100,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 485856 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 486816,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 10.142,
+        "presentation": {
+          "callbackNanos": 10118867800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 486816,
+          "tailNanos": 10140867800,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 533856 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 535776,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 11.162,
+        "presentation": {
+          "callbackNanos": 11138902200,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 535776,
+          "tailNanos": 11160902200,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 583776 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 584736,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 12.182,
+        "presentation": {
+          "callbackNanos": 12158918400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 584736,
+          "tailNanos": 12180918400,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 632736 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 633696,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 13.202,
+        "presentation": {
+          "callbackNanos": 13178940800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 633696,
+          "tailNanos": 13200940800,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 680736 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 682176,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 14.212,
+        "presentation": {
+          "callbackNanos": 14188963800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 682176,
+          "tailNanos": 14210963800,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 731136 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 732096,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 15.252,
+        "presentation": {
+          "callbackNanos": 15228998000,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 732096,
+          "tailNanos": 15250998000,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 779136 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 781056,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 16.272,
+        "presentation": {
+          "callbackNanos": 16249016400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 781056,
+          "tailNanos": 16271016400,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 829056 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 830016,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 17.292,
+        "presentation": {
+          "callbackNanos": 17269048800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 830016,
+          "tailNanos": 17291048800,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 877056 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 879456,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 18.322,
+        "presentation": {
+          "callbackNanos": 18299070000,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 879456,
+          "tailNanos": 18321070000,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 927456 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 927936,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 19.332,
+        "presentation": {
+          "callbackNanos": 19309094000,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 927936,
+          "tailNanos": 19331094000,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 975456 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 976896,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 20.352,
+        "presentation": {
+          "callbackNanos": 20329105000,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 976896,
+          "tailNanos": 20351105000,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1023936 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1025376,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 21.362,
+        "presentation": {
+          "callbackNanos": 21339138400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1025376,
+          "tailNanos": 21361138400,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1072896 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1074336,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 22.382,
+        "presentation": {
+          "callbackNanos": 22359161700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1074336,
+          "tailNanos": 22381161700,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1122816 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1123776,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 23.412,
+        "presentation": {
+          "callbackNanos": 23389198800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1123776,
+          "tailNanos": 23411198800,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1171296 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1172256,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 24.422,
+        "presentation": {
+          "callbackNanos": 24399209900,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1172256,
+          "tailNanos": 24421209900,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1219776 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1221216,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 25.442,
+        "presentation": {
+          "callbackNanos": 25419240500,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1221216,
+          "tailNanos": 25441240500,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1267776 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1269696,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 26.452,
+        "presentation": {
+          "callbackNanos": 26429265600,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1269696,
+          "tailNanos": 26451265600,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1317696 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1318656,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 27.472,
+        "presentation": {
+          "callbackNanos": 27449284400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1318656,
+          "tailNanos": 27471284400,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1366176 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1367136,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 28.482,
+        "presentation": {
+          "callbackNanos": 28459302500,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1367136,
+          "tailNanos": 28481302500,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1414656 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1416096,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 29.502,
+        "presentation": {
+          "callbackNanos": 29479337800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1416096,
+          "tailNanos": 29501337800,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "mode": "暂存编辑",
+      "counter": "48000 Hz · 已提交 1463136 帧 · 欠载 0",
+      "status": {
+        "consumedFrames": 1464576,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 600,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 11,
+        "mediaId": "f867f7d3-e958-4f21-b55d-6a76a640d6b0",
+        "positionSeconds": 30.512,
+        "presentation": {
+          "callbackNanos": 30489355400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 1464576,
+          "tailNanos": 30511355400,
+          "tailNonSilent": true
+        },
+        "projectId": "74d1da90-22f2-4b00-b7e2-dfccebeb4f3d",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    }
+  ],
+  "playbackDurationsMs": {
+    "原音": 30595.741100000014,
+    "暂存编辑": 30553.40029999998
+  },
+  "playbackObservationSeconds": 60,
+  "completedTerminalStrips": 380,
+  "passed": {
+    "warm": true,
+    "cancel": true,
+    "underruns": true
+  },
+  "memory": {
+    "actualIntervalMs": {
+      "min": 1201,
+      "median": 1231,
+      "max": 1352
+    },
+    "intervalMs": 1000,
+    "samples": 76,
+    "nativePeakSampledBytes": 134873088,
+    "processTreePeakSampledBytes": 795848704,
+    "monitorExitCode": 0
+  }
+}

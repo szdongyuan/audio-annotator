@@ -1,0 +1,45 @@
+// Task 4 acceptance: actual UI actions, with read-only IPC assertions.
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { start, Key, wait } from './harness.mjs';
+const parent=path.resolve('.test-output/nas-task4');await fs.mkdir(parent,{recursive:true});
+const output=await fs.mkdtemp(path.join(parent,'ui-')),source=path.join(output,'source'),shared=path.join(output,'shared'),local=path.join(output,'local');
+for(const p of [source,shared,local])await fs.mkdir(p);
+process.env.ANNOTATOR_E2E_LOCAL_DATA=local;
+const personal=path.join(output,'personal');await fs.mkdir(personal);
+const paths={'新建项目 · 选择空文件夹':[source],'创建协作副本 · 选择空文件夹':[shared],'打开项目 · 选择 project.json':[path.join(shared,'collaboration.json')],'另存项目副本 · 选择空文件夹':[personal],'':[[path.resolve('tests/fixtures/audio/mono16.wav')]]};
+const report={method:'Fresh debug/e2e Tauri application; owned Selenium pointer/keyboard controls and native picker queues; IPC is read-only assertion only',output,checks:[],frames:[]};let h;
+const check=name=>{report.checks.push(name);console.log('PASS '+name);};
+try{
+ h=await start(paths,output,undefined,{exactOuter:true});
+ const read=(command,args={})=>h.driver.executeAsyncScript('const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke(arguments[0],arguments[1]).then(done,e=>done({error:e}));',command,args);
+ const status=()=>read('collaboration_status');
+ const snapshot=async()=>{const s=await status();return read('get_project_snapshot',{projectId:s.projectId,...(s.shared?{runtimeNonce:s.runtimeNonce}:{})});};
+ const form=async(login,name,password)=>{await h.input('协作账号名',login);if(name)await h.input('协作显示名称',name);await h.input('协作密码',password);};
+ const actor=async(name)=>{await h.until(`document.querySelector('.collaboration-status')?.textContent.includes(${JSON.stringify(name)})&&!document.querySelector('.collaboration-dialog')`,'identity '+name);assert.equal((await status()).actor?.displayName??'访客',name);};
+ const frame=async(name,width,height)=>{h.nativeRect({width,height});await wait(300);const rect=h.nativeRect(),size=await h.evaluate('return {width:innerWidth,height:innerHeight,overflow:document.documentElement.scrollWidth>innerWidth,header:document.querySelector(".project-header").getBoundingClientRect().height,toolbar:document.querySelector(".workspace-toolbar").getBoundingClientRect().height}');assert.equal(rect.width,width);assert.equal(rect.height,height);assert.equal(size.overflow,false);assert.ok(size.header+size.toolbar<=76);report.frames.push({name,outer:rect,...size});await h.screenshot(name);};
+ await h.menu('新建项目');await h.until(`document.querySelector('.project-identity')?.textContent.includes('已保存')`);
+ await h.clickText('导入音频');await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);await h.clickText('关闭导入结果');await h.until(`document.querySelector('canvas')&&!document.querySelector('.tile-status')`);
+ await h.menu('创建协作副本…');await h.until(`document.querySelector('[aria-label="创建协作副本"]')`);await form('alice','Alice','password123');await h.clickText('创建副本');await actor('Alice');await h.until(`document.querySelector('canvas')&&!document.querySelector('.tile-status')`);
+ const manifest=JSON.parse(await fs.readFile(path.join(shared,'collaboration.json'))),hash=crypto.createHash('sha256').update(await fs.readFile(path.join(shared,manifest.media[0].sourceRef))).digest('hex');assert.equal(hash,manifest.media[0].sha256);assert.equal(await h.evaluate(`return document.querySelector('[aria-label="添加音频"]').disabled`),true);check('create copy through File menu, credentials form, native copy and captured media/analysis adapters');
+ await frame('identity-1280x800',1280,800);
+ const volume=await h.element('[aria-label="播放音量"]');await volume.sendKeys(Key.HOME,Key.ARROW_RIGHT,Key.ARROW_RIGHT,Key.ARROW_RIGHT);await h.label('循环播放');await h.select('声音版本','原音');await h.clickText('保存');await h.until(`document.querySelector('.project-identity')?.textContent.includes('已存本机')`);assert.equal((await status()).preferences.volume,.03);assert.equal((await status()).preferences.source,'original');
+ await h.menu('退出登录','协作');await actor('访客');assert.equal(await h.evaluate(`return document.querySelector('[aria-label="播放音量"]').value`),'0.75');assert.equal(await h.evaluate(`return document.querySelector('[aria-label="循环播放"]').getAttribute('aria-pressed')`),'false');check('logout saves private preferences and guest restores defaults');
+ await h.menu('类别管理','标注');await h.input('类别名称','guest-local');await h.clickText('添加类别');await h.clickText('保存');await h.until(`document.querySelector('.project-identity')?.textContent.includes('已存本机')`);
+ await h.menu('登录…','协作');await form('alice',null,'wrongpass');await h.clickText('登录');await h.until(`document.querySelector('.collaboration-dialog [role="alert"]')`);assert.equal((await status()).actor,null);await h.clickText('关闭');check('failed login preserves guest identity and personal categories');
+ await h.menu('注册项目账号…','协作');await form('bob','Bob','password123');await h.clickText('注册并登录');await actor('Bob');assert.equal((await snapshot()).document.categories.length,0);
+ const before=(await status()).runtimeNonce;await h.menu('发布本机访客标注到我的图层…','协作');await h.clickText('确认复制访客标注');await actor('Bob');assert.equal((await status()).runtimeNonce,before);assert.equal((await snapshot()).document.categories[0].name,'guest-local');await h.menu('撤销','编辑');assert.equal((await snapshot()).document.categories.length,0);await h.menu('重做','编辑');assert.equal((await snapshot()).document.categories[0].name,'guest-local');check('registered actor starts isolated; native guest copy is explicit, same runtime, one undoable change');
+ await h.menu('保存并同步','协作');await h.until(`document.querySelector('.collaboration-status')?.textContent.includes('已同步')`);
+ await h.menu('作者显示与同步状态…','协作');const mine=await h.driver.findElement({xpath:'//label[normalize-space(.)="仅我的"]/input'});await mine.click();assert.equal(await mine.isSelected(),true);await h.screenshot('author-filter');await h.clickText('关闭');
+ await frame('identity-1920x1080',1920,1080);
+ await h.menu('导出我的标注 / 项目包…');await h.until(`document.querySelector('[aria-label="导出我的标注 / 项目包"]')`);assert.ok(await h.evaluate(`return document.querySelector('.exchange-dialog').textContent.includes('不包含其他作者')`));await h.clickText('关闭');check('compact author filters and explicit personal-only export scope');
+ await h.menu('退出登录','协作');await actor('访客');await h.menu('登录…','协作');await form('alice',null,'password123');await h.clickText('登录');await actor('Alice');assert.equal(await h.evaluate(`return document.querySelector('[aria-label="播放音量"]').value`),'0.03');assert.equal(await h.evaluate(`return document.querySelector('[aria-label="循环播放"]').getAttribute('aria-pressed')`),'true');assert.equal(await h.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`),'original');check('Alice private preferences restore after guest/Bob transitions');
+ await h.menu('关闭项目');await h.until(`!document.querySelector('.collaboration-status')`);await h.menu('打开项目…');await actor('访客');await h.menu('登录…','协作');await form('alice',null,'password123');await h.clickText('登录');await actor('Alice');assert.equal((await status()).preferences.volume,.03);await h.until(`document.querySelector('canvas')&&!document.querySelector('.tile-status')`);check('shared collaboration.json opens guest; reopen/login restores private preferences and working analysis');
+ const priorNonce=(await status()).runtimeNonce;await h.menu('加载共享版本…','协作');await h.until(`document.querySelector('[aria-label="加载共享版本"]')`);assert.equal((await status()).runtimeNonce,priorNonce);await h.clickText('确认加载共享版本');await actor('Alice');assert.notEqual((await status()).runtimeNonce,priorNonce);assert.equal((await snapshot()).canUndo,false);assert.equal((await status()).preferences.volume,.03);check('shared-version load requires explicit confirmation, retires history and preserves private preferences');
+ await h.menu('另存我的本机副本…','协作');await h.until(`!document.querySelector('.collaboration-status')&&document.querySelector('.project-identity')?.textContent.includes('已保存')`);const personalDocument=JSON.parse(await fs.readFile(path.join(personal,'project.json')));assert.equal(personalDocument.formatVersion,2);assert.ok(!JSON.stringify(personalDocument).includes('guest-local'));assert.equal((await status()).shared,false);check('personal Save As exits collaboration with only current identity document');
+ assert.equal(crypto.createHash('sha256').update(await fs.readFile(path.join(shared,manifest.media[0].sourceRef))).digest('hex'),hash);report.originalSha256=hash;
+ await h.menu('关闭项目');
+}catch(e){report.error=e.stack;console.error(e);await h?.screenshot('failure').catch(()=>{});process.exitCode=1;}
+finally{await h?.quit().catch(()=>{});await fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));}

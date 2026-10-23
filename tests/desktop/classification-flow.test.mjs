@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { start, Key, wait } from './harness.mjs';
-const output = path.resolve('.test-output/task5-classification'); await fs.mkdir(output, { recursive: true });
+const output = path.resolve(process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/task5-classification', process.env.ANNOTATOR_SUITE_OUTPUT ? '' : `run-${Date.now()}-${process.pid}`); await fs.mkdir(output, { recursive: true });
 const project = await fs.mkdtemp(path.join(output, 'project-'));
 const run = path.basename(project);
 const longName = 'very-long-stereo-filename-for-compact-classification-and-truncation-check.wav';

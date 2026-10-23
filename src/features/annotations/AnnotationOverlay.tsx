@@ -7,10 +7,14 @@ import { exceedsThreshold, gestureKind } from '../selection/gestures';
 import { resolveSelection, sameRegion, type Selection } from '../selection/state';
 import { usePlaybackContext } from '../playback/usePlayback';
 import { menuIsOpen } from '../../components/menu/menuModel';
-type Drag = { pointerId: number; start: Point; css: { x: number; y: number }; target: Selection | null; kind: 'draw' | 'move' | 'resize' | 'deactivate'; handle?: Handle; region: Region | null; box: DOMRect; view: MediaView };
+import { useCollaborationContext } from '../collaboration/useCollaboration';
+import { foreignAuthors, useRemoteContext, type RemoteTarget } from '../collaboration/remote';
+import { RemoteAnnotations } from '../collaboration/RemoteAnnotations';
+type Drag = { pointerId: number; start: Point; css: { x: number; y: number }; target: Selection | null; remote?: RemoteTarget; kind: 'draw' | 'move' | 'resize' | 'deactivate'; handle?: Handle; region: Region | null; box: DOMRect; view: MediaView };
 const handles: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 export function AnnotationOverlay({ media, channel, view }: { media: MediaDescriptor; channel: number; view: MediaView }) {
   const playback = usePlaybackContext();
+  const collaboration = useCollaborationContext(), remote = useRemoteContext(), authors = foreignAuthors(collaboration);
   const ui = useSelectionContext(), host = useRef<HTMLDivElement>(null), drag = useRef<Drag | null>(null), [preview, setPreview] = useState<Region | null>(null), [height, setHeight] = useState(0);
   useEffect(() => { const el = host.current; if (!el) return; const observer = new ResizeObserver(entries => setHeight(entries[0].contentRect.height)); observer.observe(el); return () => observer.disconnect(); }, []);
   useEffect(() => { drag.current = null; setPreview(null); }, [ui?.cancelVersion]);
@@ -18,10 +22,18 @@ export function AnnotationOverlay({ media, channel, view }: { media: MediaDescri
   useEffect(() => () => { if (drag.current) { drag.current = null; ui?.state.cancel(); } }, [ui?.state]);
   if (!ui?.active) return null;
   const doc = ui.active.store.snapshot.document, duration = media.frameCount / media.sampleRate, nyquist = media.sampleRate / 2;
-  const items = doc.annotations.filter(a => a.region.mediaId === media.id && a.region.channelIndex === channel);
+  const ownVisible = !collaboration?.controller || collaboration.controller.visible(ui.active.collaboration?.actor?.authorId ?? null);
+  const items = ownVisible ? doc.annotations.filter(a => a.region.mediaId === media.id && a.region.channelIndex === channel) : [];
   const edits = doc.edits.filter(e => e.region.mediaId === media.id && e.region.channelIndex === channel);
-  const current = ui.selection?.region.mediaId === media.id && ui.selection.region.channelIndex === channel ? ui.selection : null;
-  const candidate = ui.candidate?.region.mediaId === media.id && ui.candidate.region.channelIndex === channel ? ui.candidate : null;
+  const current = ui.selection?.region.mediaId === media.id && ui.selection.region.channelIndex === channel && (ownVisible || ui.selection.object?.kind !== 'annotation') ? ui.selection : null;
+  const candidate = ui.candidate?.region.mediaId === media.id && ui.candidate.region.channelIndex === channel && (ownVisible || ui.candidate.object?.kind !== 'annotation') ? ui.candidate : null;
+  const remoteHit = (p: Point): RemoteTarget | undefined => {
+    for (const author of authors) for (const a of author.layer?.payload.annotations ?? []) {
+      const r = a.region;
+      if (r.mediaId === media.id && r.channelIndex === channel && p.seconds >= r.startSeconds && p.seconds <= r.endSeconds && p.hz >= r.lowHz && p.hz <= r.highHz)
+        return { owner: ui.active!, authorId: author.identity.authorId, scope: 'region', annotationId: a.id };
+    }
+  };
   const contains = (s: Selection | null, p: Point) => !!s && p.seconds >= s.region.startSeconds && p.seconds <= s.region.endSeconds && p.hz >= s.region.lowHz && p.hz <= s.region.highHz;
   const point = (e: { clientX: number; clientY: number }, box = host.current!.getBoundingClientRect(), mapping = view) => eventPoint(e, box, mapping, nyquist);
   const hits = (p: Point): Selection[] => {
@@ -65,13 +77,16 @@ export function AnnotationOverlay({ media, channel, view }: { media: MediaDescri
     const activeHit = contains(current, p) || border(current, e);
     const handle = current ? (e.target as HTMLElement).dataset.handle as Handle | undefined : undefined;
     const target = resolveSelection(ui.active!.store.snapshot.document, activeHit || handle ? current : contains(candidate, p) ? candidate : hit);
-    const kind = gestureKind(e.button, e.altKey, handle, activeHit, !!ui.state.getActiveSelection() && !hit && !contains(candidate, p));
+    const foreign = !target ? remoteHit(p) : undefined;
+    const active = ui.state.getActiveSelection();
+    const visibleActive = active && (ownVisible || active.object?.kind !== 'annotation');
+    const kind = gestureKind(e.button, e.altKey, handle, activeHit, !!visibleActive && !hit && !contains(candidate, p) && !foreign);
     if (kind === 'pan' || !kind) return;
     if (!target && (activeHit || handle)) { ui.state.reconcile(ui.active!.store.snapshot.document); return; }
     e.preventDefault(); e.stopPropagation(); e.currentTarget.closest<HTMLElement>('.spectrogram-surface')?.focus(); e.currentTarget.setPointerCapture(e.pointerId);
     if (kind === 'deactivate') ui.state.deactivate();
     else ui.state.beginGesture();
-    drag.current = { pointerId: e.pointerId, start: p, css: { x: e.clientX, y: e.clientY }, target, kind, handle, region: null, box: e.currentTarget.getBoundingClientRect(), view };
+    drag.current = { pointerId: e.pointerId, start: p, css: { x: e.clientX, y: e.clientY }, target, remote: foreign, kind, handle, region: null, box: e.currentTarget.getBoundingClientRect(), view };
   }} onPointerMove={e => {
     if (!drag.current || drag.current.pointerId !== e.pointerId) return; e.stopPropagation();
     if (drag.current.kind !== 'deactivate' && exceedsThreshold(drag.current.css, { x: e.clientX, y: e.clientY })) setPreview(update(e));
@@ -84,7 +99,8 @@ export function AnnotationOverlay({ media, channel, view }: { media: MediaDescri
     ui.state.reconcile(latest);
     if (ui.active!.store.editingDisabled) { ui.state.cancel(); return; }
     ui.state.endGesture();
-    if (!moved) ui.state.select(resolveSelection(latest, d.target));
+    if (!moved && d.remote) remote?.inspect(d.remote);
+    else if (!moved) ui.state.select(resolveSelection(latest, d.target));
     else if (region && d.kind === 'draw') ui.state.select(resolveSelection(latest, { region, object: null }));
     else if (region && d.target && !sameRegion(region, d.target.region)) {
       if (d.target.object) void ui.actions!.move(d.target, region);
@@ -94,12 +110,15 @@ export function AnnotationOverlay({ media, channel, view }: { media: MediaDescri
     e.preventDefault(); e.stopPropagation(); if (ui.active!.store.editingDisabled || menuIsOpen()) return;
     cancel(); const overlaps = hits(point(e)), p = point(e);
     const inside = current && p.seconds >= current.region.startSeconds && p.seconds <= current.region.endSeconds && p.hz >= current.region.lowHz && p.hz <= current.region.highHz;
+    const foreign = !inside && !overlaps.length ? remoteHit(p) : undefined;
+    if (foreign) { remote?.inspect(foreign); return; }
     const target = resolveSelection(ui.active!.store.snapshot.document, inside ? current : overlaps[0] ?? ui.state.getActiveSelection());
     playback?.setCue(ui.active!, media.id, p.seconds);
     ui.state.interact({ mediaId: media.id, channelIndex: channel });
     ui.openMenu({ x: e.clientX, y: e.clientY, target, overlaps, mediaId: media.id, channelIndex: channel, seconds: p.seconds });
   }}>
-    {items.map(a => frame({ region: a.region, object: { kind: 'annotation', id: a.id } }, doc.categories.find(c => c.id === a.categoryId)?.name ?? '未分类', doc.categories.find(c => c.id === a.categoryId)?.color ?? '#e6a65d'))}
+    <RemoteAnnotations authors={authors} media={media} channel={channel} view={view} />
+    {items.map(a => frame({ region: a.region, object: { kind: 'annotation', id: a.id } }, `${ui.active!.collaboration ? `${ui.active!.collaboration.actor?.displayName ?? '访客'} · ` : ''}${doc.categories.find(c => c.id === a.categoryId)?.name ?? '未分类'}`, doc.categories.find(c => c.id === a.categoryId)?.color ?? '#e6a65d'))}
     {edits.map(e => frame({ region: e.region, object: { kind: 'mask', id: e.id } }, `屏蔽 · ${e.enabled ? '启用' : '禁用'}`, '#eab16e', e.enabled))}
     {candidate && !candidate.object && frame(candidate, '选区', '#f6e8b9')}
     {preview && drag.current?.kind === 'draw' && <div className="annotation-rect is-preview" style={rectStyle(preview)} />}

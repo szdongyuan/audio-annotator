@@ -41,7 +41,7 @@ export class FolderImportController {
   get failedCount() { return this.counts.failed + this.items.filter(i => i.state === 'failed').length; }
   private valid(generation: number) { return !this.disposed && generation === this.generation && !this.owner.store.editingDisabled && this.busy; }
   begin() {
-    if (this.disposed || this.busy || this.failures.length || !this.imports.reserve(this)) return false;
+    if (this.owner.collaboration || this.disposed || this.busy || this.failures.length || !this.imports.reserve(this)) return false;
     this.generation++; this.state = 'choosing'; this.counts = emptyCounts(); this.items = []; this.issues = []; this.error = null; this.root = ''; this.result = null; this.acknowledged = false; this.offset = 0; this.notify(); return true;
   }
   async choose(picker: () => Promise<string | string[] | null>, recursive = false) {

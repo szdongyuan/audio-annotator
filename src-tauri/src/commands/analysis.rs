@@ -97,14 +97,16 @@ fn current(
 }
 /// Capture authority and enqueue under the short project lock. All decode/FFT/cache I/O
 /// runs on the two scheduler workers after that lock has been released.
-fn enqueue(
+fn enqueue_owned(
     state: AppState,
+    runtime_nonce: Option<String>,
     request: TileRequest,
     send: impl Fn(TileProgress) -> bool + Send + 'static,
 ) -> Result<mpsc::Receiver<Result<Vec<u8>>>> {
     request.validate()?;
     let lock = state.0.lock().map_err(|_| failure())?;
     let project = lock.as_ref().ok_or_else(failure)?;
+    super::collaboration::runtime::check_mutation(project, &state.6, runtime_nonce.as_deref())?;
     let snapshot = project.snapshot()?;
     if snapshot.document.project_id != request.project_id {
         return Err(failure());
@@ -286,6 +288,7 @@ fn enqueue(
 #[tauri::command]
 pub async fn request_tile(
     state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
     request: TileRequest,
     on_event: Channel<TileProgress>,
 ) -> Result<Response> {
@@ -294,6 +297,11 @@ pub async fn request_tile(
     let publish_request = request.clone();
     let (expected, generation) = {
         let lock = state.0.lock().map_err(|_| failure())?;
+        super::collaboration::runtime::check_mutation(
+            lock.as_ref().ok_or_else(failure)?,
+            &state.6,
+            runtime_nonce.as_deref(),
+        )?;
         let snapshot = lock.as_ref().ok_or_else(failure)?.snapshot()?;
         let expected = snapshot
             .document
@@ -308,9 +316,11 @@ pub async fn request_tile(
         )
     };
     let bytes = tauri::async_runtime::spawn_blocking(move || {
-        enqueue(state, request, move |event| on_event.send(event).is_ok())?
-            .recv()
-            .map_err(|_| AppError::new(ErrorCode::AnalysisFailed, "分析任务中断"))?
+        enqueue_owned(state, runtime_nonce, request, move |event| {
+            on_event.send(event).is_ok()
+        })?
+        .recv()
+        .map_err(|_| AppError::new(ErrorCode::AnalysisFailed, "分析任务中断"))?
     })
     .await
     .map_err(|_| AppError::new(ErrorCode::AnalysisFailed, "分析服务中断"))??;
@@ -320,11 +330,18 @@ pub async fn request_tile(
 #[tauri::command]
 pub async fn register_analysis_view(
     state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
     project_id: String,
 ) -> Result<String> {
+    let service = state.6.clone();
     let runtime = state.2.clone();
     state
         .run(move |s| {
+            super::collaboration::runtime::check_mutation(
+                s.as_ref().ok_or_else(failure)?,
+                &service,
+                runtime_nonce.as_deref(),
+            )?;
             if s.as_ref()
                 .ok_or_else(failure)?
                 .snapshot()?
@@ -341,15 +358,22 @@ pub async fn register_analysis_view(
 #[tauri::command]
 pub async fn retire_analysis_view(
     state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
     project_id: String,
     view_id: String,
 ) -> Result<()> {
     if view_id.is_empty() || view_id.len() > 128 {
         return Err(AppError::invalid("无效分析视图"));
     }
+    let service = state.6.clone();
     let runtime = state.2.clone();
     state
         .run(move |s| {
+            super::collaboration::runtime::check_mutation(
+                s.as_ref().ok_or_else(failure)?,
+                &service,
+                runtime_nonce.as_deref(),
+            )?;
             if s.as_ref()
                 .ok_or_else(failure)?
                 .snapshot()?
@@ -366,6 +390,7 @@ pub async fn retire_analysis_view(
 #[tauri::command]
 pub async fn cancel_generation(
     state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
     project_id: String,
     view_id: String,
     generation: u64,
@@ -373,9 +398,15 @@ pub async fn cancel_generation(
     if view_id.is_empty() || view_id.len() > 128 || generation > 9_007_199_254_740_991 {
         return Err(AppError::invalid("无效分析视图"));
     }
+    let service = state.6.clone();
     let runtime = state.2.clone();
     state
         .run(move |s| {
+            super::collaboration::runtime::check_mutation(
+                s.as_ref().ok_or_else(failure)?,
+                &service,
+                runtime_nonce.as_deref(),
+            )?;
             let snapshot = s.as_ref().ok_or_else(failure)?.snapshot()?;
             if snapshot.document.project_id != project_id {
                 return Err(failure());
@@ -383,6 +414,15 @@ pub async fn cancel_generation(
             runtime.scheduler.cancel_generation(&view_id, generation)
         })
         .await
+}
+
+#[cfg(test)]
+fn enqueue(
+    state: AppState,
+    request: TileRequest,
+    send: impl Fn(TileProgress) -> bool + Send + 'static,
+) -> Result<mpsc::Receiver<Result<Vec<u8>>>> {
+    enqueue_owned(state, None, request, send)
 }
 
 #[cfg(test)]

@@ -6,6 +6,24 @@ use std::{
 };
 use tauri::Manager;
 struct Paths(Mutex<BTreeMap<String, VecDeque<Value>>>);
+// Applied before Tauri creates the window. WebView2's environment-only browser
+// arguments are not reliable on every runtime; never accept arbitrary flags.
+pub fn configure_debug_port(
+    config: &mut tauri::utils::config::Config,
+    value: Option<&str>,
+) -> Result<(), String> {
+    let port = value
+        .unwrap_or("9235")
+        .parse::<u16>()
+        .map_err(|_| "Invalid e2e debug port".to_string())?;
+    if port < 1024 {
+        return Err("Invalid e2e debug port".into());
+    }
+    for window in &mut config.app.windows {
+        window.additional_browser_args = Some(format!("--remote-debugging-port={port}"));
+    }
+    Ok(())
+}
 fn next(options: Value, paths: tauri::State<'_, Paths>) -> Result<Value, String> {
     let title = options.get("title").and_then(Value::as_str).unwrap_or("");
     paths
@@ -47,4 +65,30 @@ pub fn plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
         })
         .invoke_handler(tauri::generate_handler![open, save])
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn debug_port_uses_default_or_validated_instance_override() {
+        let mut config = tauri::utils::config::Config::default();
+        config.app.windows.push(Default::default());
+        super::configure_debug_port(&mut config, None).unwrap();
+        assert_eq!(
+            config.app.windows[0].additional_browser_args.as_deref(),
+            Some("--remote-debugging-port=9235")
+        );
+        super::configure_debug_port(&mut config, Some("9245")).unwrap();
+        assert_eq!(
+            config.app.windows[0].additional_browser_args.as_deref(),
+            Some("--remote-debugging-port=9245")
+        );
+        for value in ["0", "1023", "65536", "12.5", "9245 --other-flag", ""] {
+            assert!(super::configure_debug_port(&mut config, Some(value)).is_err());
+            assert_eq!(
+                config.app.windows[0].additional_browser_args.as_deref(),
+                Some("--remote-debugging-port=9245")
+            );
+        }
+    }
 }

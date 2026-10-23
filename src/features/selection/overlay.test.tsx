@@ -12,6 +12,8 @@ import { SelectionContext, useSelection, type SelectionUI } from './useSelection
 import { useAnnotations } from '../annotations/useAnnotations';
 import { useMasks } from '../playback/useMasks';
 import { coordinates } from '../spectrogram/coordinates';
+import { CollaborationContext, type CollaborationUI } from '../collaboration/useCollaboration';
+import { RemoteContext } from '../collaboration/remote';
 function setup() {
   const doc = parseProjectDocument(structuredClone(fixture)), store = new ProjectStore({ document: doc, canUndo: true, canRedo: false });
   const applyChange = vi.fn(async (_id: string, revision: number, c: Change) => {
@@ -29,15 +31,43 @@ beforeEach(() => {
   vi.stubGlobal('PointerEvent', MouseEvent);
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
 });
-function mounted() {
+function mounted(shared = false) {
   const s = setup(), media = s.doc.media[0]; let ui!: SelectionUI;
-  function Workspace() { ui = useSelection(s.active, media.id); useAnnotations(s.active, ui); useMasks(s.active, ui); return <SelectionContext.Provider value={ui}><AnnotationOverlay media={media} channel={1} view={defaultView(media)} /></SelectionContext.Provider>; }
+  const inspect=vi.fn(),remote=structuredClone(s.doc.annotations[0]);
+  const collaboration=shared?{active:s.active,controller:{owner:s.active,visible:()=>true,status:{snapshot:{authors:[{identity:{authorId:'bob',displayName:'Bob'},layer:{payload:{annotations:[remote],categories:s.doc.categories}},error:null}]}}}} as unknown as CollaborationUI:null;
+  if(shared)Object.assign(s.active,{collaboration:{actor:null,runtimeNonce:'nonce'}});
+  function Workspace() { ui = useSelection(s.active, media.id); useAnnotations(s.active, ui); useMasks(s.active, ui); return <CollaborationContext.Provider value={collaboration}><RemoteContext.Provider value={{inspect} as never}><SelectionContext.Provider value={ui}><AnnotationOverlay media={media} channel={1} view={defaultView(media)} /></SelectionContext.Provider></RemoteContext.Provider></CollaborationContext.Provider>; }
   const component = render(<Workspace />), surface = screen.getByLabelText('通道 2 标注图层');
   surface.setPointerCapture = vi.fn();
   vi.spyOn(surface, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100, width: 800, height: 400 } as DOMRect);
   const pointer = (kind: 'pointerDown' | 'pointerMove' | 'pointerUp', x: number, y: number, target = surface) => fireEvent[kind](target, { button: 0, pointerId: 1, clientX: x, clientY: y });
-  return { ...s, component, surface, pointer, ui: () => ui, finish: () => { component.unmount(); s.active.lifecycle.dispose(); } };
+  return { ...s, component, surface, pointer, inspect,remote,collaboration, refresh:()=>component.rerender(<Workspace/>), ui: () => ui, finish: () => { component.unmount(); s.active.lifecycle.dispose(); } };
 }
+it.each([false, true])('first blank gesture in another channel deactivates global selection (shared=%s)', shared => {
+ const s=mounted(shared), selected={region:{...s.doc.annotations[0].region,channelIndex:0},object:null};
+ act(()=>s.ui().state.select(selected));
+ s.pointer('pointerDown',740,140);s.pointer('pointerUp',800,170);
+ expect(s.ui().selection).toBeNull();expect(s.ui().candidate).toBe(selected);
+ expect(s.applyChange).not.toHaveBeenCalled();
+ s.pointer('pointerDown',740,140);s.pointer('pointerUp',800,170);
+ expect(s.ui().selection?.region.channelIndex).toBe(1);s.finish();
+});
+it('foreign click and context open qualified details without selecting or mutating; dragging still draws privately',()=>{
+ const s=mounted(true);s.remote.region={...s.remote.region,startSeconds:1.2,endSeconds:1.7,lowHz:5000,highHz:10000};s.refresh();
+ const c=coordinates(defaultView(s.doc.media[0]),s.doc.media[0].sampleRate/2,800,400),x=100+c.secondsToX(1.4),y=100+c.hzToY(7500);
+ s.pointer('pointerDown',x,y);s.pointer('pointerUp',x,y);expect(s.inspect).toHaveBeenCalledWith({owner:s.active,authorId:'bob',scope:'region',annotationId:s.remote.id});expect(s.ui().selection).toBeNull();expect(s.applyChange).not.toHaveBeenCalled();
+ fireEvent.contextMenu(s.surface,{clientX:x,clientY:y});expect(s.inspect).toHaveBeenCalledTimes(2);expect(s.ui().menu).toBeNull();
+ s.pointer('pointerDown',x,y);s.pointer('pointerUp',x+30,y+20);expect(s.ui().selection?.object).toBeNull();expect(s.ui().selection?.region).toBeTruthy();expect(s.inspect).toHaveBeenCalledTimes(2);expect(s.applyChange).not.toHaveBeenCalled();s.finish();
+});
+it('own selected overlapping frame keeps drag/handle priority, and unselected own clicks win over foreign geometry',async()=>{
+ const s=mounted(true),p=objectPoint(s);expect(document.querySelectorAll('[data-remote-key]')).toHaveLength(1);
+ s.pointer('pointerDown',p.x,p.y);s.pointer('pointerUp',p.x,p.y);expect(s.ui().selection?.object?.id).toBe(s.doc.annotations[0].id);expect(s.inspect).not.toHaveBeenCalled();
+ s.pointer('pointerDown',p.x,p.y);s.pointer('pointerUp',p.x+20,p.y);await waitFor(()=>expect(s.applyChange).toHaveBeenCalledOnce());expect(s.inspect).not.toHaveBeenCalled();expect(document.querySelectorAll('.region-handle')).toHaveLength(8);s.finish();
+});
+it('author filter hides own and foreign frames without clearing own selection or editable data',()=>{
+ const s=mounted(true),p=objectPoint(s);s.pointer('pointerDown',p.x,p.y);s.pointer('pointerUp',p.x,p.y);const before=s.active.store.snapshot,selected=s.ui().selection;
+ s.collaboration!.controller!.visible=()=>false;s.refresh();expect(document.querySelectorAll('[data-remote-key],[data-annotation-id]')).toHaveLength(0);expect(s.ui().selection).toBe(selected);expect(s.active.store.snapshot).toBe(before);s.finish();
+});
 function pendingAuthority(s: ReturnType<typeof mounted>, change: Change) {
   let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
   const work = s.active.lifecycle.enqueueEdit(async () => { await gate; await s.active.queue.enqueue(change, { owner: 'annotations' }); });

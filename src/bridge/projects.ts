@@ -1,14 +1,16 @@
-import { invoke } from '@tauri-apps/api/core';
+import { runtimeInvoke } from './runtimeInvoke';
+
 import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { normalizeError } from './client';
 import { parseProjectDocument, parseProjectSnapshot, type ProjectDocument, type ProjectSnapshot } from './types';
 import type { PersistenceCommands } from '../features/project/lifecycle';
+import { parseSharedContext, type SharedContext } from './collaboration';
 
 export type RecoverySource = 'recovery' | 'backup';
 export interface RecoveryReport { primary: ProjectDocument | null; candidates: { source: RecoverySource; document: ProjectDocument }[] }
-export interface OpenedProject { snapshot: ProjectSnapshot | null; persistedRevision: number; path: string; recovery: RecoveryReport | null }
+export interface OpenedProject { snapshot: ProjectSnapshot | null; persistedRevision: number; path: string; recovery: RecoveryReport | null; collaboration?: SharedContext }
 export interface LocalProjectCommands extends PersistenceCommands {
   choose(kind: 'create' | 'open' | 'saveAs'): Promise<string | null>;
   create(path: string): Promise<OpenedProject>;
@@ -33,12 +35,15 @@ export function parseOpened(value: unknown): OpenedProject {
       return { source: c.source as RecoverySource, document: parseProjectDocument(c.document) };
     }) };
   }
-  return { path: v.path, persistedRevision: v.persistedRevision, snapshot: v.snapshot === null ? null : parseProjectSnapshot(v.snapshot), recovery };
+  if (Object.keys(v).some(k => !['path','persistedRevision','snapshot','recovery','collaboration'].includes(k))) throw new Error('Unknown opened project field');
+  return { path: v.path, persistedRevision: v.persistedRevision, snapshot: v.snapshot === null ? null : parseProjectSnapshot(v.snapshot), recovery, ...(v.collaboration === undefined ? {} : { collaboration: parseSharedContext(v.collaboration) }) };
 }
+export function createLocalProjects(runtimeNonce?: string) {
+ const invoke = runtimeInvoke(runtimeNonce);
 async function call<T>(command: string, args: Record<string, unknown>, parse: (value: unknown) => T): Promise<T> {
   try { return parse(await invoke(command, args)); } catch (error) { throw normalizeError(error); }
 }
-export const localProjects: LocalProjectCommands = {
+return {
   choose: async kind => {
     const result = await open({ directory: kind !== 'open', multiple: false,
       title: kind === 'open' ? '打开项目 · 选择 project.json' : kind === 'create' ? '新建项目 · 选择空文件夹' : '另存项目副本 · 选择空文件夹',
@@ -55,4 +60,7 @@ export const localProjects: LocalProjectCommands = {
   cancelRecovery: () => call('close_project', { projectId: null, expectedRevision: null, discard: false }, () => undefined),
   onCloseRequested: callback => listen('project-close-requested', callback),
   destroyWindow: () => getCurrentWindow().destroy(),
-};
+} satisfies LocalProjectCommands;
+
+}
+export const localProjects = createLocalProjects();

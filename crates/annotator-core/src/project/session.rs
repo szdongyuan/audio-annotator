@@ -18,6 +18,15 @@ pub struct ProjectSession {
     history: History,
 }
 impl ProjectSession {
+    pub(super) fn replace_content(
+        &mut self,
+        mut document: ProjectDocument,
+    ) -> Result<ProjectSnapshot> {
+        self.advance(&mut document)?;
+        self.history.record(self.document.clone(), None);
+        self.document = document;
+        Ok(self.snapshot())
+    }
     pub(super) fn rebase_sources(&mut self, root: &std::path::Path) {
         for document in std::iter::once(&mut self.document)
             .chain(&mut self.history.undo)

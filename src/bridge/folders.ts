@@ -1,4 +1,5 @@
-import { Channel, invoke } from '@tauri-apps/api/core';
+import { runtimeInvoke } from './runtimeInvoke';
+import { Channel } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { parseAppError, type AppError } from './types';
 
@@ -67,7 +68,9 @@ export interface FolderCommands {
 }
 /** Events may arrive before start resolves. Keep the token until all candidate pages are consumed,
  * then release it on acceptance/discard. cancel clears unpublished results; release also frees the slot. */
-export const folderClient: FolderCommands = {
+export function createFolderClient(runtimeNonce?: string) {
+ const invoke = runtimeInvoke(runtimeNonce);
+return {
   start: async (projectId, path, receive, recursive = false) => {
     uuid(projectId); absolute(path); check(typeof recursive === 'boolean');
     const onEvent = new Channel<unknown>();
@@ -83,4 +86,7 @@ export const folderClient: FolderCommands = {
   },
   cancel: token => { parseScanToken(token); return invoke('cancel_folder_scan', { token }); },
   release: token => { parseScanToken(token); return invoke('release_folder_scan', { token }); },
-};
+} satisfies FolderCommands;
+
+}
+export const folderClient = createFolderClient();

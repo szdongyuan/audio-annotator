@@ -5,6 +5,17 @@ mod state;
 use tauri::{Emitter, Manager};
 
 pub fn run() {
+    let context = tauri::generate_context!();
+    #[cfg(feature = "e2e")]
+    let context = {
+        let mut context = context;
+        e2e::configure_debug_port(
+            context.config_mut(),
+            std::env::var("ANNOTATOR_E2E_DEBUG_PORT").ok().as_deref(),
+        )
+        .expect("Invalid e2e debug port");
+        context
+    };
     let builder = tauri::Builder::default();
     #[cfg(feature = "e2e")]
     let builder = builder.plugin(e2e::plugin());
@@ -12,6 +23,18 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_dialog::init());
     builder
         .manage(state::AppState::default())
+        .setup(|app| {
+            let local = app.path().app_local_data_dir()?;
+            #[cfg(feature = "e2e")]
+            let local = std::env::var_os("ANNOTATOR_E2E_LOCAL_DATA")
+                .map(std::path::PathBuf::from)
+                .unwrap_or(local);
+            app.state::<state::AppState>()
+                .6
+                .set_local(local)
+                .map_err(|e| std::io::Error::other(e.message))?;
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.state::<state::AppState>();
@@ -24,6 +47,15 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::collaboration::collaboration_status,
+            commands::collaboration::collaboration_create,
+            commands::collaboration::collaboration_refresh,
+            commands::collaboration::collaboration_sync,
+            commands::collaboration::collaboration_identity,
+            commands::collaboration::collaboration_cancel,
+            commands::collaboration::collaboration_preferences,
+            commands::collaboration::collaboration_publish_guest,
+            commands::collaboration::collaboration_load_shared,
             commands::project::create_project,
             commands::project::open_project,
             commands::project::resolve_recovery,
@@ -56,6 +88,6 @@ pub fn run() {
             commands::playback::playback_control,
             commands::playback::playback_status,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("启动音频标注桌面应用失败");
 }

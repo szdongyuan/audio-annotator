@@ -63,6 +63,23 @@ fn primary(root: &Path) -> Result<ProjectDocument> {
     )
 }
 impl FileStore {
+    /// Read-only native admission check; unknown directories must not acquire a writer lock.
+    pub fn preflight_open(root: &Path) -> Result<()> {
+        match primary(root) {
+            Ok(_) => return Ok(()),
+            Err(e) if e.code == ErrorCode::UnsupportedVersion => return Err(e),
+            Err(_) => (),
+        }
+        for name in ["recovery.json", "project.json.bak"] {
+            if read(&root.join(name))
+                .and_then(|b| recovery::decode(&b))
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+        Err(AppError::invalid("No valid project or recovery file"))
+    }
     pub fn create(root: &Path, document: &ProjectDocument) -> Result<Self> {
         document.validate()?;
         let root = root.canonicalize().map_err(io_error)?;
@@ -270,7 +287,7 @@ impl FileStore {
     }
 }
 #[cfg(windows)]
-fn atomic_replace(source: &Path, target: &Path) -> std::io::Result<()> {
+pub(crate) fn atomic_replace(source: &Path, target: &Path) -> std::io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
         MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
@@ -292,7 +309,7 @@ fn atomic_replace(source: &Path, target: &Path) -> std::io::Result<()> {
     }
 }
 #[cfg(not(windows))]
-fn atomic_replace(source: &Path, target: &Path) -> std::io::Result<()> {
+pub(crate) fn atomic_replace(source: &Path, target: &Path) -> std::io::Result<()> {
     fs::rename(source, target)?;
     fs::File::open(target.parent().unwrap())?.sync_all()
 }

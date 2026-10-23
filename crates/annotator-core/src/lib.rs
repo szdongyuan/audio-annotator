@@ -2,6 +2,7 @@
 //!
 pub mod analysis;
 pub mod audio;
+pub mod collaboration;
 pub mod error;
 pub mod exchange;
 pub mod media;

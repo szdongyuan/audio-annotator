@@ -1,0 +1,68 @@
+{
+  "method": "Same normal production EXE, owned PID and real Win32/UIAutomation inputs/native pickers via scripts/release-ui.ps1; no test IPC or preset picker",
+  "checks": [
+    {
+      "name": "normal EXE actual native create/import/shared-directory pickers create Alice account and publish own UI annotation; ordinary source preserved",
+      "passed": true,
+      "utc": "2026-10-23T14:44:53.836Z"
+    },
+    {
+      "name": "logout enters guest and actual author list displays Alice read-only annotation",
+      "passed": true,
+      "utc": "2026-10-23T14:45:11.252Z"
+    },
+    {
+      "name": "production UI registers Bob independently, publishes Bob note, logs Alice in and displays foreign author/filter controls",
+      "passed": true,
+      "utc": "2026-10-23T14:46:47.354Z"
+    },
+    {
+      "name": "second independently owned normal production EXE opens through real picker, logs Bob in and publishes UI note; live Alice client sees the foreign update",
+      "passed": true,
+      "utc": "2026-10-23T14:48:39.083Z",
+      "primaryPid": 24972,
+      "peerPid": 37088
+    },
+    {
+      "name": "actual Delete creates private mask; real open picker/login restores it; real Save As picker proves one own annotation and private mask while shared original hash stays exact",
+      "passed": true,
+      "utc": "2026-10-23T14:51:45.622Z"
+    },
+    {
+      "name": "same production executable reports version 0.3.0 and owned native/WebView command lines have no debug arguments",
+      "passed": true,
+      "utc": "2026-10-23T14:51:54.323Z"
+    }
+  ],
+  "runtime": {
+    "pid": 24972,
+    "fileVersion": "0.3.0",
+    "productVersion": "0.3.0",
+    "debugArgumentCount": 0
+  },
+  "artifacts": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\target\\release\\annotator-desktop.exe",
+      "bytes": 15840768,
+      "sha256": "ac4b4d84a46360af7c43a49774969160418ac89310e763ffc7fafdd7fd881f24",
+      "productVersion": "0.3.0",
+      "fileVersion": "0.3.0",
+      "signature": "NotSigned"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\target\\release\\bundle\\nsis\\Audio Annotator_0.3.0_x64-setup.exe",
+      "bytes": 221767821,
+      "sha256": "aac18ad0667a00906147f6c06a4c234222698abe528b0256f6090f3c51608cd1",
+      "signature": "NotSigned",
+      "productVersion": "0.3.0",
+      "fileVersion": "0.3.0"
+    }
+  ],
+  "absentTestMarkers": [
+    "ANNOTATOR_E2E_PATHS",
+    "ANNOTATOR_E2E_LOCAL_DATA",
+    "ANNOTATOR_E2E_DEBUG_PORT",
+    "No preselected e2e picker path",
+    "--remote-debugging-port=9235"
+  ]
+}

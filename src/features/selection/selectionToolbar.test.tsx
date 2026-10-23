@@ -14,6 +14,7 @@ import type { Selection } from './state';
 import { defaultView } from '../spectrogram/workspace';
 import { FilePane } from '../spectrogram/FilePane';
 import { SpectrogramCanvas } from '../spectrogram/SpectrogramCanvas';
+import { CollaborationContext, type CollaborationUI } from '../collaboration/useCollaboration';
 vi.mock('../spectrogram/useTiles', () => ({ useTiles: () => ({ keys: [], completed: 0, total: 0, version: 0 }) }));
 
 let plot = new DOMRect(100, 100, 400, 240), clip = new DOMRect(100, 100, 400, 240);
@@ -28,7 +29,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-function setup(kind: 'temporary' | 'annotation' | 'mask' = 'temporary', actualPane = false) {
+function setup(kind: 'temporary' | 'annotation' | 'mask' = 'temporary', actualPane = false, collaboration: CollaborationUI | null = null) {
   const doc = parseProjectDocument(structuredClone(fixture)), media = doc.media[0];
   const region = { mediaId: media.id, channelIndex: 1, startSeconds: .5, endSeconds: 1, lowHz: 6000, highHz: 12000 };
   doc.annotations[0].region = region; doc.edits[0].region = region;
@@ -49,14 +50,14 @@ function setup(kind: 'temporary' | 'annotation' | 'mask' = 'temporary', actualPa
   let status: MediaStatus['status'] = 'ready', active = owner;
   function App() {
     ui = useSelection(active, media.id);
-    return <SelectionContext.Provider value={ui}><PlaybackContext.Provider value={{ playSelection, selectSource, cues: {}, options: {} } as unknown as PlaybackUI}>
+    return <CollaborationContext.Provider value={collaboration}><SelectionContext.Provider value={ui}><PlaybackContext.Provider value={{ playSelection, selectSource, cues: {}, options: {} } as unknown as PlaybackUI}>
       {actualPane ? <FilePane active={active} media={media} settings={doc.analysis[media.id]} view={view} status={status} timeLimit={2} onView={() => {}} onSettings={() => {}} onRelink={() => {}} pane="primary" choices={[media]} duplicate={false} onSelect={() => {}} /> : <div onPointerDownCapture={e => { if (!(e.target as Element).closest('[data-pane-control]')) selectSource(); }}>
         <div className="channel-scroll" onPointerDown={penetrate}><SpectrogramCanvas active={active} media={media} channel={1} view={view} status={status} settings={doc.analysis[media.id]} timeLimit={2} onView={patch => { view = { ...view, ...patch }; rerender(); }}>
           <AnnotationOverlay media={media} channel={1} view={view} />
           <SelectionToolbar media={media} channel={1} view={view} status={status} />
         </SpectrogramCanvas></div>
       </div>}
-    </PlaybackContext.Provider></SelectionContext.Provider>;
+    </PlaybackContext.Provider></SelectionContext.Provider></CollaborationContext.Provider>;
   }
   const rendered = render(<App />); act(() => ui.state.select(target));
   const rerender = () => rendered.rerender(<App />);
@@ -70,6 +71,10 @@ function setup(kind: 'temporary' | 'annotation' | 'mask' = 'temporary', actualPa
 }
 const toolbar = () => screen.queryByRole('toolbar', { name: '选区操作' });
 const category = (name = '未分类') => { fireEvent.click(screen.getByRole('button', { name: '标注' })); fireEvent.click(screen.getByRole('menuitem', { name })); };
+it('hidden own annotation has no floating toolbar but keeps its writable selection and restores with the filter',()=>{
+ let visible=true;const collaboration={controller:{visible:()=>visible}} as unknown as CollaborationUI,s=setup('annotation',false,collaboration),selected=s.ui().selection;
+ expect(toolbar()).toBeTruthy();visible=false;s.view({});expect(toolbar()).toBeNull();expect(s.ui().selection).toBe(selected);visible=true;s.view({});expect(toolbar()).toBeTruthy();s.dispose();
+});
 
 it.each(['temporary', 'annotation', 'mask'] as const)('shows one always-visible toolbar for active %s and none for inactive candidate', kind => {
   const s = setup(kind); expect(toolbar()).toBeInTheDocument(); expect(screen.getAllByRole('toolbar')).toHaveLength(1);

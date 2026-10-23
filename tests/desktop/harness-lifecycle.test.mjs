@@ -4,6 +4,15 @@ import { test } from 'node:test';
 import * as harness from './harness.mjs';
 async function listener() { const server=net.createServer(socket=>socket.end());await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));return {server,port:server.address().port}; }
 const close=server=>new Promise(resolve=>server.close(resolve));
+test('independent instances explicitly bind distinct validated ports and local roots without changing defaults',()=>{
+ assert.deepEqual(harness.instanceOptions({}).ports,{driver:4445,native:4446,debug:9235});
+ const options=harness.instanceOptions({ports:{driver:4455,native:4456,debug:9245},localDataEnv:'D:/owned/client-b'});
+ assert.deepEqual(options.ports,{driver:4455,native:4456,debug:9245});assert.equal(options.localDataEnv,'D:/owned/client-b');
+ for(const ports of [{driver:4455,native:4455,debug:9245},{driver:0,native:4456,debug:9245},{driver:4455.5,native:4456,debug:9245},{driver:4455,native:4456,debug:65536}])assert.throws(()=>harness.instanceOptions({ports}),/port/i);
+});
+test('custom occupied ports are refused without attaching to or terminating their listener',async()=>{
+ const {server,port}=await listener();try{await assert.rejects(harness.assertTestPortsAvailable([port]),/refusing to attach/);assert.equal(server.listening,true);}finally{await close(server);}
+});
 test('teardown waits for an owned listener to retire before reusing its port',async()=>{
  const {server,port}=await listener();const timer=setTimeout(()=>server.close(),50);
  try {await harness.waitForTestPortsReleased([port],1000);assert.equal(server.listening,false);}finally{clearTimeout(timer);await close(server);}

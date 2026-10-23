@@ -7,7 +7,7 @@ import { spectralFlow } from '../tests/desktop/spectral-flow.test.mjs';
 import { sharingFlow } from '../tests/desktop/sharing-flow.test.mjs';
 import { viewChurn } from '../tests/desktop/view-churn.test.mjs';
 function command(cmd, args) { const r = spawnSync(cmd, args, { stdio: 'inherit', shell: cmd.endsWith('.cmd'), windowsHide: true }); if (r.status !== 0) throw new Error(`${cmd} failed: ${r.status}`); }
-command(process.execPath, ['--test','tests/desktop/harness-lifecycle.test.mjs','tests/desktop/harness-output-init.test.mjs']);
+command(process.execPath, ['--test','tests/desktop/harness-lifecycle.test.mjs','tests/desktop/harness-output-init.test.mjs','tests/desktop/release-suite-registration.test.mjs']);
 command('pwsh', ['-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/setup-webdriver.ps1']);
 if (!process.argv.includes('--skip-build')) command('npm.cmd', ['run','tauri','--','build','--debug','--no-bundle','--features','e2e','--config','src-tauri/tauri.e2e.conf.json']);
 await fs.mkdir(path.resolve('.test-output/fidelity-release'), { recursive: true });
@@ -23,6 +23,7 @@ const paths = {
   '选择新项目的存放位置 · 将创建独立子文件夹': [output,output],
 };
 process.env.ANNOTATOR_FIDELITY_OUTPUT=path.join(output,'fidelity');
+process.env.ANNOTATOR_SELECTION_OUTPUT=path.join(output,'selection');
 process.env.ANNOTATOR_PROCESSED_OUTPUT=path.join(output,'processed');
 process.env.ANNOTATOR_INTERACTION_OUTPUT=path.join(output,'interaction');
 process.env.ANNOTATOR_SHARING_OUTPUT=path.join(output,'sharing');
@@ -38,9 +39,9 @@ finally { await h?.quit().catch(()=>{}); await fs.writeFile(path.join(output,'re
 // Each suite owns a fresh process and retires it before the next acquires the ports.
 // Keep the six original phases above, including a full process restart and 300-view churn.
 if (!process.exitCode) {
-  for (const suite of ['selection-flow', 'rulers-flow', 'compact-layout', 'classification-flow', 'folder-scan', 'folder-flow', 'feedback-flow', 'format-flow', 'fidelity-flow', 'processed-flow', 'interaction-flow', 'sharing-flow']) {
+  for (const suite of ['selection-flow', 'rulers-flow', 'compact-layout', 'classification-flow', 'folder-scan', 'folder-flow', 'feedback-flow', 'format-flow', 'fidelity-flow', 'processed-flow', 'interaction-flow', 'sharing-flow', 'collaboration-native', 'collaboration-controls', 'collaboration-layers']) {
     console.log(`Running ${suite}`);
-    const result = spawnSync(process.execPath, [`tests/desktop/${suite}.test.mjs`], { stdio: 'inherit', windowsHide: true });
+    const result = spawnSync(process.execPath, [`tests/desktop/${suite}.test.mjs`], { stdio: 'inherit', windowsHide: true, env: { ...process.env, ANNOTATOR_SUITE_OUTPUT: path.join(output, suite) } });
     report.checks.push({ name: suite, passed: result.status === 0 });
     await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
     if (result.status !== 0) { process.exitCode = 1; break; }

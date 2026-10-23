@@ -4,7 +4,7 @@
 
 `npm.cmd run notices` 从 Windows x64 Cargo 元数据及 npm 非开发依赖生成 `licenses/inventory.json` 和 `licenses/THIRD-PARTY-NOTICES.txt`。保守清单包含 Rust 构建与过程宏依赖，因此条目数大于最终二进制实际运行依赖数。缺少独立许可文件的 crate，读取其发布包声明和精确 Git 修订的上游许可；realfft 和 selectors 使用其声明的标准 MIT/MPL 文本，并记录发布包缺失单独许可文件的事实。
 
-主要运行依赖：React/React DOM、Tauri API、dialog 插件和 Lucide（MIT/ISC，以清单为准）；Rust Tauri、CPAL、Rubato、RustFFT、Serde、SHA-2、UUID、Chrono、ZIP 及其依赖（具体 SPDX 表达式与完整通知见清单）。包含 BSD、MIT、Apache、Zlib、Unicode、MPL 等许可，不能笼统称为“全是 MIT”。
+主要运行依赖：React/React DOM、Tauri API、dialog 插件和 Lucide（MIT/ISC，以清单为准）；Rust Tauri、CPAL、Rubato、RustFFT、Serde、SHA-2、UUID、Chrono、ZIP，以及 0.3.0 新增的固定 Argon2 0.5.3 和必要传递依赖（具体 SPDX 表达式与完整通知见清单）。包含 BSD、MIT、Apache、Zlib、Unicode、MPL 等许可，不能笼统称为“全是 MIT”。
 
 Symphonia 0.5.5 及其相关解码 crate 使用 MPL-2.0；selectors、cssparser、cssparser-macros、dtoa-short、option-ext 也声明 MPL-2.0。我们没有修改这些第三方 crate。安装目录 `licenses/sources/` 随包提供所有这些 crate 的精确版本 Cargo 源码归档（`.crate` 是 gzip tar），并保留全部文件级通知。完整 MPL 文本随通知分发，可据此获取、修改和重新分发所覆盖源文件。上游包括 [Symphonia](https://github.com/pdeljanov/Symphonia) 与 [Stylo selectors](https://github.com/servo/stylo)，其他仓库记录在 inventory.json。
 

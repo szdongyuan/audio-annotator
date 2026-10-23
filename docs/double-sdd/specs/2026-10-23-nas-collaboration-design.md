@@ -61,7 +61,7 @@ annotations/<author-uuid>/<20-digit-revision>.json
 
 ## 6. 本机保存、同步与断线
 
-每个客户端在 app-local-data 下使用 `collaboration/<hash-of-canonical-shared-root>/<project-id>/<author-id-or-guest>/`。不得把个人缓存、恢复文件或锁写进 NAS；唯一例外是共享作者写锁和共享图层临时文件。缓存 envelope 原子包含个人 document、共享基线 revision/hash、最后已确认作者 payload、待发布 payload，具备损坏/中断恢复。恢复不能自动将旧本机数据覆盖较新共享版本。
+每个客户端在 app-local-data 下使用 `collaboration/<hash-of-canonical-shared-root>/<project-id>/<author-id-or-guest>/`。不得把个人缓存、恢复文件或锁写进 NAS；共享协议需要的账号注册短锁、作者写锁和共享发布临时文件除外；账号注册锁不参与作者标注的发布。缓存 envelope 原子包含个人 document、共享基线 revision/hash、最后已确认作者 payload、待发布 payload，具备损坏/中断恢复。恢复不能自动将旧本机数据覆盖较新共享版本。
 
 保存先完整持久化本机 envelope，再异步发布标注差异。音量/屏蔽/视图等单独变更不产生共享 revision。共享失败不否认本机保存成功：显示“已存本机 · 待同步”或具体冲突/错误；不要沿用一个“已保存”让用户误以为 NAS 已更新。网络可达后重试自己的 pending，只有基线未变化才发布。
 

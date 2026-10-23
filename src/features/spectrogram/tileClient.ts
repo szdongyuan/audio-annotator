@@ -1,4 +1,5 @@
-import { Channel, invoke } from '@tauri-apps/api/core';
+import { runtimeInvoke } from '../../bridge/runtimeInvoke';
+import { Channel } from '@tauri-apps/api/core';
 import type { AnalysisSettings, AppError } from '../../bridge/types';
 import { normalizeError } from '../../bridge/client';
 import type { AnalysisIdentity } from './analysisSource';
@@ -23,7 +24,9 @@ export interface TileTransport {
   request: (request: TileRequest, onProgress?: (progress: TileProgress) => void) => Promise<ArrayBuffer>;
   cancel: (projectId: string, viewId: string, generation: number) => Promise<void>;
 }
-export const nativeTileTransport: TileTransport = {
+export function createTileTransport(runtimeNonce?: string) {
+ const invoke = runtimeInvoke(runtimeNonce);
+return {
   async register(projectId) {
     try {
       const view = await invoke<string>('register_analysis_view', { projectId });
@@ -42,7 +45,10 @@ export const nativeTileTransport: TileTransport = {
     catch (error) { throw normalizeError(error); }
   },
   async cancel(projectId, viewId, generation) { await invoke('cancel_generation', { projectId, viewId, generation }); },
-};
+} satisfies TileTransport;
+
+}
+export const nativeTileTransport = createTileTransport();
 export async function analysisConfigHash(settings: AnalysisSettings, subtle: SubtleCrypto = crypto.subtle): Promise<string> {
   const text = `analysis-v1|${settings.window}|${settings.windowSize}|${settings.hopSize}|${settings.fftSize}|${settings.melBands}`;
   return Array.from(new Uint8Array(await subtle.digest('SHA-256', new TextEncoder().encode(text))), byte => byte.toString(16).padStart(2, '0')).join('');

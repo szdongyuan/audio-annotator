@@ -13,26 +13,37 @@ use tauri::{ipc::Channel, State};
 #[tauri::command]
 pub async fn scan_folder(
     state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
     project_id: String,
     path: String,
     recursive: bool,
     on_event: Channel<FolderEvent>,
 ) -> Result<ScanToken> {
-    start(&state, project_id, path, recursive, on_event).await
+    start(&state, runtime_nonce, project_id, path, recursive, on_event).await
 }
-async fn start(
+pub(crate) async fn start(
     state: &AppState,
+    runtime_nonce: Option<String>,
     project_id: String,
     path: String,
     recursive: bool,
     on_event: Channel<FolderEvent>,
 ) -> Result<ScanToken> {
+    let service = state.6.clone();
     let tasks = state.5.clone();
     let (token, cancel, root, existing) = state
         .run(move |s| {
             let project = s
                 .as_ref()
                 .ok_or_else(|| AppError::invalid("尚未打开项目"))?;
+            super::collaboration::runtime::check_mutation(
+                project,
+                &service,
+                runtime_nonce.as_deref(),
+            )?;
+            if project.is_shared() {
+                return Err(AppError::invalid("Shared media catalog is immutable"));
+            }
             let snapshot = project.snapshot()?;
             if snapshot.document.project_id != project_id {
                 return Err(AppError::invalid("项目身份不匹配"));
@@ -164,6 +175,7 @@ mod tests {
         });
         let token = tauri::async_runtime::block_on(start(
             &state,
+            None,
             id,
             audio.to_string_lossy().into_owned(),
             false,

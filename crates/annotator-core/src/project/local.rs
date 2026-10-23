@@ -1,21 +1,155 @@
 use super::{FileStore, LoadReport, ProjectSession, ProjectSnapshot, RecoverySource};
 use crate::{
+    collaboration::{AuthorSession, CollaborationRepository, PrivateWorkspace},
     error::{AppError, ErrorCode, Result},
-    model::ProjectDocument,
+    model::{Change, ProjectDocument},
 };
 use std::path::Path;
 
+enum Storage {
+    Local(FileStore),
+    Shared(Box<PrivateWorkspace>),
+}
+
 /// Session and its OS write lock have exactly the same owner and lifetime.
 pub struct LocalProject {
-    store: FileStore,
+    store: Storage,
     session: Option<ProjectSession>,
     recovery: Option<LoadReport>,
 }
 impl LocalProject {
+    /// Native creator-only seed: validation keeps the immutable catalog and actor binding.
+    /// The full private document never enters the shared repository.
+    pub fn initialize_shared_private(&mut self, document: ProjectDocument) -> Result<()> {
+        if self.workspace()?.actor().is_none() {
+            return Err(AppError::invalid("Creator authentication required"));
+        }
+        self.workspace_mut()?.save(&document)?;
+        self.session = Some(ProjectSession::new(document)?);
+        Ok(())
+    }
+    pub fn publish_guest(
+        &mut self,
+        id: &str,
+        revision: u64,
+        payload: &crate::collaboration::LayerPayload,
+    ) -> Result<ProjectSnapshot> {
+        let current = self.check(id, revision)?.document;
+        let workspace = self.workspace()?;
+        if workspace.actor().is_none() {
+            return Err(AppError::invalid(
+                "Sign in before publishing guest annotations",
+            ));
+        }
+        let next = crate::collaboration::merge_guest(&current, payload, workspace.manifest())?;
+        self.active_session()?.replace_content(next)
+    }
+    pub fn load_shared_version(
+        &mut self,
+        remote: Option<&crate::collaboration::AuthorLayer>,
+    ) -> Result<ProjectSnapshot> {
+        let current = self.snapshot()?.document;
+        if current != self.workspace()?.envelope().document {
+            self.workspace_mut()?.save(&current)?;
+        }
+        let document = self.workspace_mut()?.load_remote(remote)?;
+        self.session = Some(ProjectSession::new(document)?);
+        self.snapshot()
+    }
+    pub fn reconcile_shared_version(
+        &mut self,
+        remote: Option<&crate::collaboration::AuthorLayer>,
+    ) -> Result<ProjectSnapshot> {
+        let current = self.snapshot()?.document;
+        if current != self.workspace()?.envelope().document {
+            self.workspace_mut()?.save(&current)?;
+        }
+        self.workspace_mut()?.reconcile_remote(remote)?;
+        let document = self.workspace()?.envelope().document.clone();
+        if document != current {
+            self.session = Some(ProjectSession::new(document)?);
+        }
+        self.snapshot()
+    }
+    pub fn open_shared(
+        repo: std::sync::Arc<CollaborationRepository>,
+        actor: Option<std::sync::Arc<AuthorSession>>,
+        local: &Path,
+    ) -> Result<Self> {
+        let workspace = PrivateWorkspace::open(repo, actor, local)?;
+        let recovery = workspace.recovery_report();
+        let session = if recovery.is_some() {
+            None
+        } else {
+            Some(ProjectSession::new(workspace.envelope().document.clone())?)
+        };
+        Ok(Self {
+            store: Storage::Shared(Box::new(workspace)),
+            session,
+            recovery,
+        })
+    }
+    pub fn is_shared(&self) -> bool {
+        matches!(self.store, Storage::Shared(_))
+    }
+    pub fn storage_root(&self) -> &Path {
+        match &self.store {
+            Storage::Local(s) => s.root(),
+            Storage::Shared(s) => s.root(),
+        }
+    }
+    pub fn workspace(&self) -> Result<&PrivateWorkspace> {
+        match &self.store {
+            Storage::Shared(s) => Ok(s),
+            _ => Err(AppError::invalid("Not a collaborative project")),
+        }
+    }
+    pub fn workspace_mut(&mut self) -> Result<&mut PrivateWorkspace> {
+        match &mut self.store {
+            Storage::Shared(s) => Ok(s),
+            _ => Err(AppError::invalid("Not a collaborative project")),
+        }
+    }
+    fn active_session(&mut self) -> Result<&mut ProjectSession> {
+        self.session
+            .as_mut()
+            .ok_or_else(|| AppError::invalid("请先选择恢复版本"))
+    }
+    pub fn apply_change(
+        &mut self,
+        id: &str,
+        revision: u64,
+        change: Change,
+    ) -> Result<ProjectSnapshot> {
+        if self.is_shared()
+            && matches!(
+                change,
+                Change::ImportMedia { .. } | Change::RemoveMedia { .. }
+            )
+        {
+            return Err(AppError::invalid("Shared media catalog is immutable"));
+        }
+        self.active_session()?.apply_change(id, revision, change)
+    }
+    pub fn undo(&mut self, id: &str, revision: u64) -> Result<ProjectSnapshot> {
+        self.active_session()?.undo(id, revision)
+    }
+    pub fn redo(&mut self, id: &str, revision: u64) -> Result<ProjectSnapshot> {
+        self.active_session()?.redo(id, revision)
+    }
+    pub fn export_document(&self) -> Result<ProjectDocument> {
+        let document = self.snapshot()?.document;
+        match &self.store {
+            Storage::Local(_) => Ok(document),
+            Storage::Shared(s) => {
+                crate::collaboration::LayerPayload::from_document(&document)?.project(s.manifest())
+            }
+        }
+    }
     pub fn create(root: &Path, name: String) -> Result<Self> {
         let document = ProjectDocument::create(name)?;
         Ok(Self {
-            store: FileStore::create(root, &document)?,
+            store: Storage::Local(FileStore::create(root, &document)?),
             session: Some(ProjectSession::new(document)?),
             recovery: None,
         })
@@ -24,31 +158,47 @@ impl LocalProject {
         let (store, report) = FileStore::open(root)?;
         if report.primary.is_none() || !report.candidates.is_empty() {
             Ok(Self {
-                store,
+                store: Storage::Local(store),
                 session: None,
                 recovery: Some(report),
             })
         } else {
             Ok(Self {
-                store,
+                store: Storage::Local(store),
                 session: Some(ProjectSession::new(report.primary.unwrap())?),
                 recovery: None,
             })
         }
     }
     pub fn root(&self) -> &Path {
-        self.store.root()
+        match &self.store {
+            Storage::Local(s) => s.root(),
+            Storage::Shared(s) => s.shared_root(),
+        }
     }
     pub fn persisted_revision(&self) -> u64 {
-        self.store.persisted_revision()
+        match &self.store {
+            Storage::Local(s) => s.persisted_revision(),
+            Storage::Shared(s) => s.persisted_revision(),
+        }
     }
     pub fn recovery(&self) -> Option<&LoadReport> {
         self.recovery.as_ref()
     }
-    pub fn store_mut(&mut self) -> &mut FileStore {
-        &mut self.store
+    pub fn store_mut(&mut self) -> Result<&mut FileStore> {
+        match &mut self.store {
+            Storage::Local(s) => Ok(s),
+            _ => Err(AppError::invalid(
+                "Collaborative projects use a private workspace",
+            )),
+        }
     }
     pub fn session_mut(&mut self) -> Result<&mut ProjectSession> {
+        if self.is_shared() {
+            return Err(AppError::invalid(
+                "Use guarded collaborative project operations",
+            ));
+        }
         self.session
             .as_mut()
             .ok_or_else(|| AppError::invalid("请先选择恢复版本"))
@@ -60,6 +210,12 @@ impl LocalProject {
             .ok_or_else(|| AppError::invalid("请先选择恢复版本"))
     }
     pub fn resolve_recovery(&mut self, source: Option<RecoverySource>) -> Result<()> {
+        if let Storage::Shared(workspace) = &mut self.store {
+            let document = workspace.resolve_recovery(source)?;
+            self.session = Some(ProjectSession::new(document)?);
+            self.recovery = None;
+            return Ok(());
+        }
         let report = self
             .recovery
             .as_ref()
@@ -74,9 +230,9 @@ impl LocalProject {
         }
         .ok_or_else(|| AppError::invalid("所选恢复版本不可用"))?;
         if source.is_some() {
-            self.store.save(&document)?;
+            self.store_mut()?.save(&document)?;
         } else {
-            self.store.keep_primary(&document)?;
+            self.store_mut()?.keep_primary(&document)?;
         }
         self.session = Some(ProjectSession::new(document)?);
         self.recovery = None;
@@ -94,11 +250,23 @@ impl LocalProject {
     }
     pub fn save(&mut self, id: &str, revision: u64) -> Result<u64> {
         let snapshot = self.check(id, revision)?;
-        self.store.save(&snapshot.document)?;
+        match &mut self.store {
+            Storage::Local(s) => s.save(&snapshot.document)?,
+            Storage::Shared(s) => s.save(&snapshot.document)?,
+        };
         Ok(revision)
     }
     pub fn save_as(&mut self, root: &Path, id: &str, revision: u64) -> Result<()> {
         let mut document = self.check(id, revision)?.document;
+        if self.is_shared() {
+            // Resolve aliases before FileStore can create even its lock file.
+            let destination = root.canonicalize().map_err(super::store::io_error)?;
+            if destination.starts_with(self.root()) {
+                return Err(AppError::invalid(
+                    "Personal copies must be saved outside the shared project directory",
+                ));
+            }
+        }
         // Relative media continue pointing to their original source, even if unavailable.
         for media in &mut document.media {
             if Path::new(&media.source_ref).is_relative() {
@@ -112,8 +280,8 @@ impl LocalProject {
         // Acquire and publish the new project first. Any failure leaves this session intact.
         let store = FileStore::create(root, &document)?;
         let old_root = self.root().to_path_buf();
-        self.session_mut()?.rebase_sources(&old_root);
-        self.store = store;
+        self.active_session()?.rebase_sources(&old_root);
+        self.store = Storage::Local(store);
         Ok(())
     }
     pub fn prepare_close(&mut self, id: &str, revision: u64, discard: bool) -> Result<()> {
@@ -122,12 +290,18 @@ impl LocalProject {
             // Explicit discard must remain available when storage is unwritable.
             // Suppress recovery when possible; a leftover candidate still requires
             // an explicit choice on next open and is never loaded silently.
+            if self.is_shared() {
+                // If suppression cannot be persisted, open presents an explicit recovery
+                // choice for the unaccepted candidate rather than silently publishing it.
+                let _ = self.workspace_mut()?.suppress_recovery();
+                return Ok(());
+            }
             let path = self.root().join("project.json");
             let primary = std::fs::read_to_string(path)
                 .ok()
                 .and_then(|s| ProjectDocument::from_json(&s).ok());
             if let Some(doc) = primary {
-                let _ = self.store.keep_primary(&doc);
+                let _ = self.store_mut()?.keep_primary(&doc);
             }
         } else if self.persisted_revision() != snapshot.document.revision {
             return Err(AppError::new(ErrorCode::SaveFailed, "项目仍有未保存内容"));

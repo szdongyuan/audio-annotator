@@ -11,6 +11,24 @@ import { ProjectStore } from '../../app/store';
 import { CommandQueue } from '../../app/commands';
 import { ProjectLifecycle } from '../project/lifecycle';
 import { useMasks } from './useMasks';
+import type { ActiveProject } from '../project/useProjectLifecycle';
+it('restores private options only when adopting a runtime and clears ephemeral cues',()=>{
+ const a:ActiveProject=activeProject().active,b:ActiveProject=activeProject().active;
+ Object.assign(a,{collaboration:{runtimeNonce:'a',actor:null,preferences:{volume:.2,deviceId:'speaker-a',loopEnabled:true,source:'original'}}});
+ Object.assign(b,{collaboration:{runtimeNonce:'b',actor:null,preferences:{volume:.75,deviceId:null,loopEnabled:false,source:'processed'}}});
+ const api={available:()=>false,devices:async()=>[],listen:async()=>()=>{},control:async()=>emptyPlayback,configure:async()=>emptyPlayback};
+ const hook=renderHook(({owner})=>usePlayback(owner,fixture.media[0].id,undefined,api),{initialProps:{owner:a}});
+ expect(hook.result.current.options).toMatchObject({volume:.2,deviceId:'speaker-a',looping:true});expect(hook.result.current.workspaceSource).toBe('original');
+ act(()=>{hook.result.current.update({volume:.4});hook.result.current.setCue(a,fixture.media[0].id,1);});hook.rerender({owner:a});expect(hook.result.current.options.volume).toBe(.4);
+ hook.rerender({owner:b});expect(hook.result.current.options).toMatchObject({volume:.75,deviceId:null,looping:false});expect(hook.result.current.cues).toEqual({});expect(hook.result.current.workspaceSource).toBe('processed');hook.unmount();a.lifecycle.dispose();b.lifecycle.dispose();
+});
+it('retired playback callbacks cannot issue commands or clear the new owner intent',async()=>{
+ const a=activeProject().active,b=activeProject().active;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
+ const hook=renderHook(({owner})=>usePlayback(owner,fixture.media[0].id,undefined,api),{initialProps:{owner:a}}),old=hook.result.current;
+ hook.rerender({owner:b});act(()=>hook.result.current.toggle());await waitFor(()=>expect(hook.result.current.playing).toBe(true));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(1));const controls=api.control.mock.calls.length;
+ act(()=>{old.stop();old.seek(.01);});await act(async()=>{});expect(api.control).toHaveBeenCalledTimes(controls);expect(api.configure).toHaveBeenCalledTimes(1);expect(hook.result.current.playing).toBe(true);hook.unmount();a.lifecycle.dispose();b.lifecycle.dispose();
+});
 it('audio signature ignores notes, categories, analysis, saves and revisions, but includes edits and persistent mix',()=>{
  const doc=parseProjectDocument(structuredClone(fixture)),id=doc.media[0].id, original=audioSignature(doc,id);
  doc.revision++;doc.media[0].note='new';doc.categories[0].name='other';doc.analysis[id].fftSize=4096;

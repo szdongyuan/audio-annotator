@@ -1,0 +1,40 @@
+{
+  "version": "0.3.0",
+  "mainBase": "bb9ff6a5428fad531507738a99eb6a3f82f76fdd",
+  "taskBase": "796acbc91158b6ec1fe9c35737ae396b7c9e6bd1",
+  "sourceDescription": "Reviewed Tasks1–5 plus Task6 cross-pane regression fix, release versions/help/docs; exact as-built input bytes listed in product-source-manifest.json, captured before normal build. No future commit is claimed as binary input.",
+  "productSourceFiles": 292,
+  "productSourceManifestSha256": "a142be00f89337068cdc9293cb1537bb8d42850e855741cbaf2162dbe9a29052",
+  "normalBuildCommand": "npm.cmd run tauri -- build --bundles nsis",
+  "normalBuildExitCode": 0,
+  "buildLogSha256": "c92d46201f6084edf8bf74a7d4447bb05e0b4dcb9a001098ae4e8cf25cf34bc3",
+  "e2eFeature": false,
+  "extraTauriConfig": null,
+  "artifacts": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\target\\release\\annotator-desktop.exe",
+      "bytes": 15840768,
+      "sha256": "ac4b4d84a46360af7c43a49774969160418ac89310e763ffc7fafdd7fd881f24",
+      "productVersion": "0.3.0",
+      "fileVersion": "0.3.0",
+      "signature": "NotSigned"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\target\\release\\bundle\\nsis\\Audio Annotator_0.3.0_x64-setup.exe",
+      "bytes": 221767821,
+      "sha256": "aac18ad0667a00906147f6c06a4c234222698abe528b0256f6090f3c51608cd1",
+      "signature": "NotSigned",
+      "productVersion": "0.3.0",
+      "fileVersion": "0.3.0"
+    }
+  ],
+  "node": "v22.23.3",
+  "rustc": "rustc 1.91.0 (f8297e351 2025-10-28)",
+  "licenseFiles": 31,
+  "mplArchives": 13,
+  "limitations": [
+    "Unsigned",
+    "Physical SMB/NAS not tested; local multiprocess and owned fault simulation only",
+    "No manual hearing, physical DPI change, new-machine offline install/uninstall, or physical exFAT validation"
+  ]
+}

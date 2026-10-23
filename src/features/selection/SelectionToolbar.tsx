@@ -8,6 +8,7 @@ import { coordinates } from '../spectrogram/coordinates';
 import { resolveSelection, type Selection } from './state';
 import { useSelectionContext } from './useSelection';
 import { targetCommands } from './targetCommands';
+import { useCollaborationContext } from '../collaboration/useCollaboration';
 
 type Box = { left: number; top: number; right: number; bottom: number };
 const intersect = (a: Box, b: Box): Box => ({ left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom) });
@@ -15,12 +16,14 @@ const sameTarget = (a: Selection | null, b: Selection) => a === b || !!a?.object
 
 export function SelectionToolbar({ media, channel, view, status }: { media: MediaDescriptor; channel: number; view: MediaView; status: MediaStatus['status'] }) {
   const ui = useSelectionContext(), playback = usePlaybackContext();
+  const collaboration = useCollaborationContext();
   const host = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ left: number; top: number; maxWidth: number } | null>(null);
   const [menu, setMenu] = useState<{ owner: NonNullable<typeof ui>['active']; target: Selection; kind: 'category' | 'audition'; x: number; y: number; trigger: HTMLElement } | null>(null);
   const latest = useRef({ ui, status }); latest.current = { ui, status };
   const target = ui?.active ? resolveSelection(ui.active.store.snapshot.document, ui.selection) : null;
-  const eligible = !!target && target.region.mediaId === media.id && target.region.channelIndex === channel && view.visibleChannels.includes(channel) && !ui?.gesturing;
+  const ownVisible = !collaboration?.controller || collaboration.controller.visible(ui?.active?.collaboration?.actor?.authorId ?? null);
+  const eligible = !!target && (target.object?.kind !== 'annotation' || ownVisible) && target.region.mediaId === media.id && target.region.channelIndex === channel && view.visibleChannels.includes(channel) && !ui?.gesturing;
   useLayoutEffect(() => {
     const element = host.current;
     if (!element) return;

@@ -30,7 +30,7 @@ export function useTiles(active: ActiveProject, media: MediaDescriptor, settings
   const owner = useRef<{ active: ActiveProject; client: TileClient; cacheOwner: string } | null>(null);
   useEffect(() => {
     const cacheOwner = crypto.randomUUID();
-    const client = new TileClient(active.store.snapshot.document.projectId);
+    const client = new TileClient(active.store.snapshot.document.projectId, active.commands?.tiles);
     owner.current = { active, client, cacheOwner };
     return () => { client.dispose(); tileCache.setPins(cacheOwner, []); owner.current = null; };
   }, [active]);
@@ -70,7 +70,7 @@ export function useTiles(active: ActiveProject, media: MediaDescriptor, settings
       void (async () => {
         // Validate source even on a frontend cache hit. Unverified sources must go
         // through native lazy rehydration before any retained numeric data is used.
-        const statuses = await mediaClient.status(active.store.snapshot.document.projectId);
+        const statuses = await (active.commands?.media ?? mediaClient).status(active.store.snapshot.document.projectId);
         if (!valid()) return;
         const current = statuses.find(s => s.mediaId === media.id)?.status;
         if (current === 'missing' || current === 'changed') { tileCache.setPins(cacheOwner, []); invalidateSource(); throw { code: current === 'missing' ? 'MissingMedia' : 'IdentityMismatch', retryable: true, message: current === 'missing' ? '音频缺失，请重新关联' : '源文件已改变，请重新校验关联' }; }

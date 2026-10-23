@@ -1,3 +1,5 @@
+import { collaborationMenu } from '../features/collaboration/CollaborationMenu';
+import type { CollaborationUI } from '../features/collaboration/useCollaboration';
 import { classificationMenu } from '../features/annotations/classification';
 import type { WorkspaceMenu } from './AppMenu';
 import type { ProjectLifecycleUI } from '../features/project/useProjectLifecycle';
@@ -12,8 +14,8 @@ import { duration } from '../features/spectrogram/workspace';
 import { zoomViewport } from '../features/spectrogram/viewport';
 import { resolveRegion } from '../features/selection/actions';
 import type { HelpTopic } from './HelpDialog';
-export function workspaceMenus({project,mediaUI,exchange,annotations,selection,workspace,playback,mediaOpen,propertiesOpen,toggleMedia,toggleProperties,settings,inspector,help,focusNote}: {
- project?:ProjectLifecycleUI;mediaUI?:MediaUI;exchange?:ExchangeUI;annotations:AnnotationUI;selection:SelectionUI;workspace:WorkspaceUI;playback:PlaybackUI;mediaOpen:boolean;propertiesOpen:boolean;toggleMedia:()=>void;toggleProperties:()=>void;settings:(id:string)=>void;inspector:(tab:string)=>void;help:(topic:HelpTopic)=>void;focusNote:(id:string)=>void;
+export function workspaceMenus({collaboration,project,mediaUI,exchange,annotations,selection,workspace,playback,mediaOpen,propertiesOpen,toggleMedia,toggleProperties,settings,inspector,help,focusNote}: {
+ collaboration?:CollaborationUI;project?:ProjectLifecycleUI;mediaUI?:MediaUI;exchange?:ExchangeUI;annotations:AnnotationUI;selection:SelectionUI;workspace:WorkspaceUI;playback:PlaybackUI;mediaOpen:boolean;propertiesOpen:boolean;toggleMedia:()=>void;toggleProperties:()=>void;settings:(id:string)=>void;inspector:(tab:string)=>void;help:(topic:HelpTopic)=>void;focusNote:(id:string)=>void;
 }):WorkspaceMenu[]{
  const owner=project?.active,doc=owner?.store.snapshot.document,disabled=!owner||owner.store.editingDisabled;
  const target=selection.selection,region=owner&&target?resolveRegion(owner,target):null;
@@ -26,7 +28,7 @@ export function workspaceMenus({project,mediaUI,exchange,annotations,selection,w
  const reset=()=>{if(media)patch({startSeconds:0,endSeconds:Math.min(10,timeLimit),lowHz:0,highHz:media.sampleRate/2});};
  const ready=!!region&&mediaUI?.statuses.some(s=>s.mediaId===region.mediaId&&s.status==='ready');
  return [
-  {id:'file',label:'文件',items:project?projectMenuItems({project,onImport:mediaUI?.choose,onImportFolder:mediaUI?.chooseFolder,importDisabled:mediaUI?.disabled,exchange}):[{id:'new',label:'新建项目',disabled:true}]},
+  {id:'file',label:'文件',items:project?projectMenuItems({project,onImport:mediaUI?.choose,onImportFolder:mediaUI?.chooseFolder,importDisabled:mediaUI?.disabled,exchange,onCreateCollaboration:collaboration?()=>void collaboration.show('create'):undefined}):[{id:'new',label:'新建项目',disabled:true}]},
   {id:'edit',label:'编辑',items:[
    {id:'undo',label:'撤销',disabled:disabled||!owner?.store.snapshot.canUndo,action:()=>annotations.history('undo')},
    {id:'redo',label:'重做',disabled:disabled||!owner?.store.snapshot.canRedo,action:()=>annotations.history('redo')},
@@ -56,6 +58,7 @@ export function workspaceMenus({project,mediaUI,exchange,annotations,selection,w
    ...(['original','processed'] as const).map(source=>({id:'audition-'+source,label:source==='original'?'试听选区原音':'试听选区（应用屏蔽）',disabled:regionDisabled||!ready,action:()=>selection.withTarget(target,r=>playback.playSelection(r,source))})),
    {id:'mask',label:'屏蔽选区',disabled:regionDisabled,action:()=>{if(target)void selection.actions?.mask(target);}},
    {id:'devices',label:'输出设备…',disabled,action:()=>inspector('devices')}, {id:'mix',label:'通道混音',disabled:disabled||!playback.media,action:()=>inspector('mix')}]},
+  ...(collaboration?[collaborationMenu(collaboration)]:[]),
   {id:'help',label:'帮助',items:([{id:'shortcuts',label:'快捷键'},{id:'guide',label:'使用说明'},{id:'about',label:'版本与第三方声明'}] as const).map(t=>({...t,action:()=>help(t.id)}))},
  ];
 }

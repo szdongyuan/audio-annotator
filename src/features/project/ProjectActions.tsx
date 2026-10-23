@@ -2,18 +2,19 @@ import { Plus, Save } from 'lucide-react';
 import type { ProjectLifecycleUI } from './useProjectLifecycle';
 import type { ExchangeUI } from '../exchange/useExchange';
 import type { MenuItem } from '../../components/menu/menuModel';
-type Props = { project: ProjectLifecycleUI; onImport?: () => void; onImportFolder?: () => void; importDisabled?: boolean; exchange?: ExchangeUI };
-export function projectMenuItems({project,onImport,onImportFolder,importDisabled=true,exchange}:Props):MenuItem[]{
+type Props = { onCreateCollaboration?: () => void; project: ProjectLifecycleUI; onImport?: () => void; onImportFolder?: () => void; importDisabled?: boolean; exchange?: ExchangeUI };
+export function projectMenuItems({project,onImport,onImportFolder,importDisabled=true,exchange,onCreateCollaboration}:Props):MenuItem[]{
  const busy=project.busy||!!project.recovery||!!project.active?.store.editingDisabled;
  return [
   {id:'new',label:'新建项目',disabled:busy,action:()=>{void project.open('create');}},
   {id:'open',label:'打开项目…',disabled:busy,action:()=>{void project.open('open');}},
   {id:'save',label:'保存',disabled:busy||!project.active,action:()=>{void project.save();}},
-  {id:'save-as',label:'另存项目副本…',disabled:busy||!project.active,action:()=>{void project.saveAs();}},
-  {id:'import',label:'导入音频',disabled:busy||importDisabled,action:onImport},
-  {id:'import-folder',label:'导入文件夹…',disabled:busy||importDisabled||!onImportFolder,action:onImportFolder},
+  {id:'save-as',label:project.active?.collaboration?'另存我的本机副本…':'另存项目副本…',disabled:busy||!project.active,action:()=>{void project.saveAs();}},
+  {id:'import',label:'导入音频',disabled:busy||!!project.active?.collaboration||importDisabled,action:onImport},
+  {id:'import-folder',label:'导入文件夹…',disabled:busy||!!project.active?.collaboration||importDisabled||!onImportFolder,action:onImportFolder},
   {id:'import-share',label:'导入分享文件…',disabled:busy||!exchange,action:()=>exchange?.show('import')},
-  {id:'export',label:'分享项目…',disabled:busy||!project.active||!exchange,action:()=>exchange?.show('export')},
+  {id:'export',label:project.active?.collaboration?'导出我的标注 / 项目包…':'分享项目…',disabled:busy||!project.active||!exchange,action:()=>exchange?.show('export')},
+  ...(onCreateCollaboration?[{id:'collaboration-create',label:'创建协作副本…',disabled:busy||!project.active||!!project.active.collaboration,action:onCreateCollaboration}]:[]),
   {id:'close',label:'关闭项目',disabled:busy||!project.active,action:()=>{void project.close();}},
  ];
 }

@@ -91,6 +91,12 @@ impl MediaTasks {
         Ok(descriptor)
     }
     pub fn prepared(&self, descriptor: &MediaDescriptor) -> Result<Arc<DecodedMedia>> {
+        let media = self.prepared_unverified(descriptor)?;
+        media.verify_source()?;
+        Ok(media)
+    }
+    /// Native captures under authority, verifies source outside it, then checks this binding again.
+    pub fn prepared_unverified(&self, descriptor: &MediaDescriptor) -> Result<Arc<DecodedMedia>> {
         let (_, media) = self
             .pending
             .get(&descriptor.id)
@@ -101,7 +107,6 @@ impl MediaTasks {
                 "导入描述与已校验音频不一致",
             ));
         }
-        media.verify_source()?;
         Ok(media.clone())
     }
     pub fn commit(&mut self, media: Arc<DecodedMedia>) {

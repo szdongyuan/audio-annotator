@@ -130,7 +130,7 @@ export async function selectionFlow(h, context) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  const output = path.resolve(process.env.ANNOTATOR_SELECTION_OUTPUT ?? '.test-output/fidelity-release/selection'); await fs.mkdir(output, { recursive: true });
+  const output = path.resolve(process.env.ANNOTATOR_SELECTION_OUTPUT ?? '.test-output/fidelity-release/selection', process.env.ANNOTATOR_SELECTION_OUTPUT ? '' : `run-${Date.now()}-${process.pid}`); await fs.mkdir(output, { recursive: true });
   const project = await fs.mkdtemp(path.join(output, 'project-'));
   const paths = { '新建项目 · 选择空文件夹': [project], '': [[path.resolve('tests/fixtures/audio/stereo.mp3'), path.resolve('tests/fixtures/audio/mono16.wav')]] };
   const report = { method: 'Owned native Tauri process, official tauri-driver and EdgeDriver; native picker paths only use the e2e feature. Edits use WebDriver pointer/keyboard.', output };

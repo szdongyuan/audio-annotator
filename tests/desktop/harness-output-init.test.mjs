@@ -34,3 +34,21 @@ for (const [script, prefix] of [['run-desktop-tests.mjs', 'desktop-'], ['measure
     }
   });
 }
+
+for (const suite of ['rulers-flow', 'compact-layout', 'classification-flow', 'feedback-flow']) {
+  test(`${suite} uses a release-run-specific output directory`, async () => {
+    const source = await fs.readFile(new URL(`./${suite}.test.mjs`, import.meta.url), 'utf8');
+    const declaration = source.match(/const output\s*=\s*path\.resolve\([^;]+\);/)?.[0];
+    assert.ok(declaration);
+    const output = path.join(os.tmpdir(), 'annotator-release-output', suite);
+    const actual = execFileSync(process.execPath, ['--input-type=module', '-e',
+      `import path from 'node:path';${declaration}console.log(output);`],
+    { encoding: 'utf8', windowsHide: true, env: { ...process.env, ANNOTATOR_SUITE_OUTPUT: output } }).trim();
+    assert.equal(actual, output);
+    const env = { ...process.env }; delete env.ANNOTATOR_SUITE_OUTPUT;
+    const standalone = () => execFileSync(process.execPath, ['--input-type=module', '-e',
+      `import path from 'node:path';${declaration}console.log(output);`],
+    { encoding: 'utf8', windowsHide: true, env }).trim();
+    assert.notEqual(standalone(), standalone(), 'standalone runs must preserve prior reports too');
+  });
+}

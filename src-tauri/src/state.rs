@@ -13,6 +13,7 @@ pub struct AppState(
     pub Arc<crate::commands::playback::PlaybackRuntime>,
     pub Arc<Mutex<crate::commands::exchange::ExchangeTasks>>,
     pub Arc<Mutex<annotator_core::media::folder_scan::FolderTasks>>,
+    pub Arc<crate::commands::collaboration::runtime::Service>,
 );
 impl AppState {
     /// File I/O stays off the webview thread; the mutex serializes authority changes.

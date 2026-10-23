@@ -1,0 +1,5 @@
+import type { CollaborationController } from './controller';
+export function AuthorFilter({controller}:{controller:CollaborationController}){
+ const filter=controller.filter;
+ return <fieldset className="author-filter"><legend>显示作者</legend><div className="author-filter-modes">{(['all','mine','custom'] as const).map(mode=><label key={mode}><input type="radio" name="author-filter" checked={filter.mode===mode} onChange={()=>controller.setFilter(mode==='custom'?{mode,authorIds:controller.status?.snapshot?.authors.map(a=>a.identity.authorId)??[]}:{mode})}/>{mode==='all'?'全部':mode==='mine'?'仅我的':'勾选作者'}</label>)}</div>{filter.mode==='custom'&&controller.status?.snapshot?.authors.map(a=><label key={a.identity.authorId}><input type="checkbox" checked={filter.authorIds.includes(a.identity.authorId)} onChange={e=>controller.setFilter({mode:'custom',authorIds:e.target.checked?[...filter.authorIds,a.identity.authorId]:filter.authorIds.filter(id=>id!==a.identity.authorId)})}/>{a.identity.displayName}{a.error?' · 读取失败':''}</label>)}</fieldset>;
+}

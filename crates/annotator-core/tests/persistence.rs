@@ -201,11 +201,13 @@ fn local_session_save_failure_keeps_memory_and_close_requires_saved_revision() {
             },
         )
         .unwrap();
-    p.store_mut().inject_fault(Some(FaultPoint::MainReplace));
+    p.store_mut()
+        .unwrap()
+        .inject_fault(Some(FaultPoint::MainReplace));
     assert!(p.save(&id, 1).is_err());
     assert_eq!(p.snapshot().unwrap().document.categories.len(), 1);
     assert!(p.prepare_close(&id, 1, false).is_err());
-    p.store_mut().inject_fault(None);
+    p.store_mut().unwrap().inject_fault(None);
     p.save(&id, 1).unwrap();
     assert!(p.prepare_close(&id, 0, false).is_err());
     p.prepare_close(&id, 1, false).unwrap();
@@ -315,9 +317,11 @@ fn explicit_discard_closes_despite_persistent_recovery_write_failures() {
             )
             .unwrap();
         // Leave a newer valid recovery, then keep storage broken through discard.
-        p.store_mut().inject_fault(Some(FaultPoint::MainReplace));
+        p.store_mut()
+            .unwrap()
+            .inject_fault(Some(FaultPoint::MainReplace));
         assert!(p.save(&d.project_id, 1).is_err());
-        p.store_mut().inject_fault(Some(point));
+        p.store_mut().unwrap().inject_fault(Some(point));
         assert!(p.save(&d.project_id, 1).is_err());
         assert!(p.prepare_close(&d.project_id, 1, false).is_err());
         p.prepare_close(&d.project_id, 1, true).unwrap();
@@ -360,7 +364,9 @@ fn explicit_discard_does_not_require_a_valid_primary() {
         )
         .unwrap();
     fs::write(dir.0.join("project.json"), b"corrupted outside session").unwrap();
-    p.store_mut().inject_fault(Some(FaultPoint::RecoveryWrite));
+    p.store_mut()
+        .unwrap()
+        .inject_fault(Some(FaultPoint::RecoveryWrite));
     assert!(p.save(&d.project_id, 1).is_err());
     assert!(p.prepare_close(&d.project_id, 1, false).is_err());
     p.prepare_close(&d.project_id, 1, true).unwrap();

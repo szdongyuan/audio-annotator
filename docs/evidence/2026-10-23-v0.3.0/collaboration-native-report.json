@@ -1,0 +1,14 @@
+{
+  "method": "Fresh debug e2e Tauri binary, actual IPC through owned WebView2/Selenium; native commands, not UI acceptance",
+  "output": "D:\\Work\\annotator\\.worktrees\\nas-collaboration-v030\\.test-output\\nas-task3\\ipc-RJdUOx",
+  "checks": [
+    "saved ordinary source → verified WAV copy, final manifest, creator identity and native progress; source unchanged",
+    "logout guest, wrong-password preservation, register Bob, native guest copy, independent author layers, stale-owner rejection, catalog guard, credential-free status",
+    "delayed previous identity playback configure/control and analysis lease registration reject; current playback status unchanged",
+    "real owned Windows DACL denies shared author writes; native save remains durable/pending; exact DACL restoration permits retry",
+    "native offline local save, retained layers and pending; restore owned fixture, reconnect publish, close/reopen/login restores Bob preferences and own content",
+    "validated private relink supplies bundle bytes while shared original is unavailable; JSON and imported ZIP contain only own labels with no masks, paths or credentials; ordinary imported copy remains usable",
+    "owned private-primary corruption returns recovery without active snapshot; refresh is gated, full-envelope recovery returns an atomically bound new nonce and preserved guest content",
+    "unknown account JSON cannot create a project lock in shared directory"
+  ]
+}

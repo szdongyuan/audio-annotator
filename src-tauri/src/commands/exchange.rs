@@ -48,6 +48,8 @@ impl ExchangeTasks {
 pub struct ExpectedProject {
     project_id: String,
     expected_revision: u64,
+    #[serde(default)]
+    runtime_nonce: Option<String>,
 }
 #[derive(Serialize)]
 #[serde(
@@ -137,11 +139,30 @@ async fn export(
     bundle: bool,
     on_event: Channel<ExchangeEvent>,
 ) -> Result<String> {
+    let service = state.6.clone();
     let capture = state
         .run(move |s| {
+            if let Some(p) = s.as_ref() {
+                super::collaboration::runtime::check_mutation(
+                    p,
+                    &service,
+                    expected.runtime_nonce.as_deref(),
+                )?;
+            }
             check_current(s, &Some(expected), false)?;
             let p = s.as_ref().unwrap();
-            Ok((p.snapshot()?.document, p.root().to_path_buf()))
+            let mut document = p.export_document()?;
+            // PortableMedia whitelists exported fields and never serializes source_ref.
+            // Keep validated private relinks only for internal bundle-byte resolution.
+            if p.is_shared() && bundle {
+                let private = p.snapshot()?.document;
+                for media in &mut document.media {
+                    if let Some(source) = private.media.iter().find(|m| m.id == media.id) {
+                        media.source_ref = source.source_ref.clone();
+                    }
+                }
+            }
+            Ok((document, p.root().to_path_buf()))
         })
         .await?;
     let (id, cancel) = begin(state)?;
@@ -217,13 +238,28 @@ pub fn import_exchange(
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let result = (|| {
-            // Serialize authority through validation/publication. Cancellation never takes this lock.
-            // The current session and all playback/media resources survive every pre-publication error.
-            let mut current = state
-                .0
-                .lock()
-                .map_err(|_| AppError::invalid("项目服务不可用"))?;
-            check_current(&current, &expected, true)?;
+            // Capture only authority under the global mutex; archive/NAS I/O is outside it.
+            let nonce = {
+                let current = state
+                    .0
+                    .lock()
+                    .map_err(|_| AppError::invalid("项目服务不可用"))?;
+                check_current(&current, &expected, true)?;
+                if let Some(p) = current.as_ref() {
+                    super::collaboration::runtime::check_mutation(
+                        p,
+                        &state.6,
+                        expected.as_ref().and_then(|e| e.runtime_nonce.as_deref()),
+                    )?;
+                }
+                state
+                    .6
+                    .current
+                    .lock()
+                    .map_err(|_| super::collaboration::runtime::unavailable())?
+                    .nonce
+                    .clone()
+            };
             check_cancel(&cancel)?;
             let mut last = Instant::now() - Duration::from_secs(1);
             let imported = exchange::import_exchange(
@@ -248,6 +284,22 @@ pub fn import_exchange(
                 },
             )?;
             let new = LocalProject::open(&imported.path)?;
+            let mut current = state
+                .0
+                .lock()
+                .map_err(|_| AppError::invalid("项目服务不可用"))?;
+            check_current(&current, &expected, true)?;
+            check_cancel(&cancel)?;
+            if state
+                .6
+                .current
+                .lock()
+                .map_err(|_| super::collaboration::runtime::unavailable())?
+                .nonce
+                != nonce
+            {
+                return Err(super::collaboration::runtime::stale());
+            }
             let mut media = state
                 .1
                 .lock()
@@ -261,6 +313,7 @@ pub fn import_exchange(
                 .map_err(|_| AppError::invalid("扫描服务不可用"))?
                 .reset();
             state.2.scheduler.reset();
+            state.6.retire();
             *current = Some(new);
             Ok((imported.path.to_string_lossy().into_owned(), Some(opened)))
         })();
@@ -292,6 +345,7 @@ mod tests {
         let d = p.snapshot().unwrap().document;
         let mut current = Some(p);
         let expected = Some(ExpectedProject {
+            runtime_nonce: None,
             project_id: d.project_id.clone(),
             expected_revision: d.revision,
         });
@@ -318,6 +372,7 @@ mod tests {
             ErrorCode::RevisionConflict
         );
         let next = Some(ExpectedProject {
+            runtime_nonce: None,
             project_id: d.project_id,
             expected_revision: d.revision + 1,
         });
