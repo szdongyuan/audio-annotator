@@ -27,6 +27,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     for channel in 0..m.channel_count {
         let request = TileRequest {
+            analysis_source: annotator_core::analysis::source::AnalysisSource::Original,
+            processing_version: 1,
+            edit_signature: String::new(),
             request_id: format!("b-{channel}"),
             view_id: "benchmark".into(),
             project_id: "benchmark".into(),

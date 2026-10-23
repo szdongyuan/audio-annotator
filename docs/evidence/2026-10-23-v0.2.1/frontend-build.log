@@ -1,0 +1,23 @@
+
+> audio-annotator@0.2.1 build
+> npm run typecheck && vite build
+
+
+> audio-annotator@0.2.1 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 2051 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                  0.55 kB │ gzip:   0.36 kB
+dist/assets/index-BY57-oHH.css                  36.53 kB │ gzip:   8.49 kB
+dist/assets/index-qyiZd-wJ.js                  434.42 kB │ gzip: 137.42 kB
+dist/assets/THIRD-PARTY-NOTICES-A3bB2ICj.js  2,739.24 kB │ gzip: 118.86 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 3.27s

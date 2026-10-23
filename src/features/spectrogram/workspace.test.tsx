@@ -83,3 +83,22 @@ it('keeps invalid settings out of apply, exposes samples/ms and disables mel-onl
   fireEvent.change(screen.getByRole('slider', { name: '显示增益' }), { target: { value: '12' } });
   expect(onView).toHaveBeenCalledWith({ gainDb: 12 }); expect(onApply).toHaveBeenCalledTimes(1);
 });
+it('chooses time detail from actual backing width instead of an implicit 1024 cap', () => {
+  const s = { window: 'hann' as const, windowSize: 2048, hopSize: 512, fftSize: 2048, melBands: 128 };
+  const long = { ...media, frameCount: 48000 * 600 };
+  const v = { ...defaultView(long), spectrumKind: 'mel' as const, endSeconds: 16 };
+  expect(tilePlan(long, s, v, 1920, 0, 'h')[0].timeLod).toBe(0);
+  expect(tilePlan(long, s, v, 800, 0, 'h')[0].timeLod).toBe(1);
+});
+it('requires real one-row neighbors at a time tile edge and grouped frequency neighbors', () => {
+  const s = { window: 'hann' as const, windowSize: 2048, hopSize: 512, fftSize: 65536, melBands: 128 };
+  const long = { ...media, frameCount: 48000 * 600 };
+  const v = { ...defaultView(long), spectrumKind: 'mel' as const, startSeconds: 256 * 512 / 48000, endSeconds: 512 * 512 / 48000 };
+  const visible = tilePlan(long, s, v, 800, 0, 'h').filter(r => r.visible);
+  expect(visible.some(r => r.startFrame === 512 && r.frameCount === 1)).toBe(true);
+  const hz = (k: number) => k * 48000 / s.fftSize;
+  const band = tilePlan(long, s, { ...defaultView(long), lowHz: hz(4100), highHz: hz(8198) }, 800, 0, 'h').filter(r => r.visible);
+  const step = 2 ** band[0].frequencyLod;
+  expect(Math.min(...band.map(r => r.frequencyStart)) + (step - 1) / 2).toBeLessThanOrEqual(4100);
+  expect(Math.max(...band.map(r => r.frequencyStart + r.frequencyCount)) - (step + 1) / 2).toBeGreaterThanOrEqual(8198);
+});

@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { classificationMenu } from '../annotations/classification';
 import { useAnnotationContext } from '../annotations/useAnnotations';
 import { Menu } from '../../components/menu/Menu';
@@ -6,8 +7,10 @@ import type { MediaStatus } from '../../bridge/media';
 import type { PlaybackUI } from '../playback/usePlayback';
 import type { WorkspaceUI } from '../spectrogram/useWorkspace';
 import type { SelectionUI } from './useSelection';
+import { targetCommands } from './targetCommands';
 import { resolveRegion } from './actions';
 export function RegionMenu({ ui, playback, workspace, statuses, focusNote }: { ui: SelectionUI; playback: PlaybackUI; workspace: WorkspaceUI; statuses: MediaStatus[]; focusNote: (id: string) => void }) {
+  const latest = useRef({ui,statuses}); latest.current={ui,statuses};
   const annotations = useAnnotationContext();
   const menu = ui.menu, owner = ui.active;
   if (!menu || !owner || !ui.actions) return null;
@@ -15,12 +18,16 @@ export function RegionMenu({ ui, playback, workspace, statuses, focusNote }: { u
   const liveRegion = target ? resolveRegion(owner, target) : null, disabled = owner.store.editingDisabled || !liveRegion;
   const contextMedia = doc.media.find(m => m.id === menu.mediaId);
   const missing = statuses.find(s => s.mediaId === liveRegion?.mediaId)?.status !== 'ready';
+  const canCue = () => latest.current.ui.active === owner && !!contextMedia && !owner.store.editingDisabled && Number.isFinite(menu.seconds) && menu.seconds! >= 0 && menu.seconds! * contextMedia.sampleRate < contextMedia.frameCount && latest.current.statuses.some(s=>s.mediaId===menu.mediaId&&s.status==='ready') && owner.store.snapshot.document.media.some(m=>m.id===menu.mediaId);
+  const { audition, edit: editTarget } = targetCommands(ui, target, playback, () => latest.current.statuses);
   const items: MenuItem[] = [
-    { id: 'category', label: '标注类型', disabled, children: [{ id: 'none', label: '未分类', action: () => { void ui.actions!.classify(target!, null); } }, ...doc.categories.map(c => ({ id: c.id, label: c.name, action: () => { void ui.actions!.classify(target!, c.id); } }))] },
+    { id:'cue', label:'从此处播放', disabled:!canCue(), action:()=>{if(canCue())playback.playFrom(owner,menu.mediaId,menu.seconds!);} },
+    { id: 'category', label: '标注类型', disabled, children: [{ id: 'none', label: '未分类', action: () => { editTarget(selected=>{void ui.actions!.classify(selected, null);}); } }, ...doc.categories.map(c => ({ id: c.id, label: c.name, action: () => { editTarget(selected=>{void ui.actions!.classify(selected, c.id);}); } }))] },
     ...(annotations ? [classificationMenu(doc, { mediaId: menu.mediaId, channelIndex: null }, annotations.classify, '当前文件分类', owner.store.editingDisabled), classificationMenu(doc, { mediaId: menu.mediaId, channelIndex: menu.channelIndex }, annotations.classify, '当前通道分类', owner.store.editingDisabled)] : []),
-    { id: 'note', label: '备注', disabled, action: () => { void ui.actions!.note(target!, focusNote); } },
-    { id: 'mask', label: '屏蔽选区', disabled, action: () => { void ui.actions!.mask(target!); } },
-    { id: 'play', label: '播放选区', disabled: disabled || missing, children: ['original', 'processed'].map(source => ({ id: source, label: source === 'original' ? '原始选区' : '处理后选区', action: () => ui.withTarget(target, region => playback.playSelection(region, source as 'original' | 'processed')) })) },
+    { id: 'note', label: '备注', disabled, action: () => { editTarget(selected=>{void ui.actions!.note(selected, focusNote);}); } },
+    { id: 'mask', label: '屏蔽选区', disabled, action: () => { editTarget(selected=>{void ui.actions!.mask(selected);}); } },
+    { id:'play', label:'播放选区', disabled:disabled||missing, action:()=>audition() },
+    ...(['original','processed'] as const).map(source=>({id:source,label:source==='original'?'试听选区原音':'试听选区（应用屏蔽）',disabled:disabled||missing,action:()=>audition(source)})),
     { id: 'zoom', label: '放大到选区', disabled, action: () => ui.withTarget(target, r => workspace.patch(r.mediaId, { startSeconds: r.startSeconds, endSeconds: r.endSeconds, lowHz: r.lowHz, highHz: r.highHz })) },
     { id: 'reset', label: '重置当前视图', disabled: owner.store.editingDisabled || !contextMedia, action: () => { if (contextMedia) workspace.patch(contextMedia.id, { startSeconds: 0, endSeconds: Math.min(10, contextMedia.frameCount / contextMedia.sampleRate), lowHz: 0, highHz: contextMedia.sampleRate / 2 }); } },
   ];

@@ -14,7 +14,7 @@ it('coalesces the last view into lifecycle save, serializes it, and rejects edit
   const save = vi.fn(async (_id: string, revision: number) => revision);
   const lifecycle = new ProjectLifecycle(store, queue, { save, close: vi.fn() });
   const active = { store, queue, lifecycle, path: 'project' }, id = fixture.media[0].id;
-  const hook = renderHook(() => useWorkspace(active, id));
+  const hook = renderHook(() => useWorkspace(active));
   act(() => { hook.result.current.patch(id, { gainDb: 3 }); hook.result.current.patch(id, { gainDb: 12, visibleChannels: [1], endSeconds: 1 }); });
   await act(() => lifecycle.save());
   expect(apply).toHaveBeenCalledTimes(1); expect(store.snapshot.document.viewState.media[id]).toMatchObject({ gainDb: 12, visibleChannels: [1], endSeconds: 1 });
@@ -41,7 +41,7 @@ it('reconciles history media removal before submitting pending views without los
   const queue = new CommandQueue(store, { applyChange: apply } as unknown as ProjectCommands);
   const lifecycle = new ProjectLifecycle(store, queue, { save: async (_, r) => r, close: vi.fn() });
   const active = { store, queue, lifecycle, path: '' };
-  const hook = renderHook(() => useWorkspace(active, id));
+  const hook = renderHook(() => useWorkspace(active));
   act(() => { hook.result.current.patch(id, { gainDb: 12 }); hook.result.current.compare(other.id); });
   act(() => store.accept({ ...store.snapshot, document: { ...store.snapshot.document, revision: 1, media: [document.media[0]], viewState: { ...document.viewState, compareMediaId: null } } }));
   await act(() => lifecycle.submitDrafts());

@@ -32,7 +32,7 @@ try {
   assert.equal(saved.formatVersion, 2); assert.equal(saved.media[0].categoryId, null); assert.deepEqual(saved.media[0].channelCategoryIds, [null, null]);
   assert.equal(saved.viewState.compareLayout, 'horizontal'); assert.equal(saved.viewState.compareSplit, .5);
   report.checks.push('native save writes complete format 2');
-  await h.menu('分享项目'); await h.label('仅标注文件'); await h.clickText('选择保存位置…'); await h.until(`document.querySelector('.exchange-result')`); await h.clickText('关闭');
+  await h.menu('分享项目'); await h.label('仅标注（不含音频）'); await h.clickText('选择保存位置…'); await h.until(`document.querySelector('.exchange-result')`); await h.clickText('关闭');
   const portable = JSON.parse(await fs.readFile(json, 'utf8')); assert.equal(portable.formatVersion, 2);
   for (const source of sources) {
     await fs.writeFile(source.local, JSON.stringify({ ...saved, formatVersion: source.version }));

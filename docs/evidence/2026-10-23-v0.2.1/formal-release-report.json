@@ -1,0 +1,453 @@
+{
+  "date": "2026-10-23",
+  "method": "Normal EXE after final NSIS command exit0. Owned PID/path-guarded Windows UIAutomation locators and real Win32 pointer/keyboard. Actual native folder/open/save dialogs use their real edit controls, followed by actual buttons. No test IPC, debug port, preset picker or store mutation. UIAutomation RangeValue and visible native output counters verify playback. Isolated WebView user data; app volume0.05, no system-volume/DPI change.",
+  "checks": [
+    {
+      "name": "actual native create and import folder pickers; three distinct stereo sources",
+      "passed": true,
+      "utc": "2026-10-23T10:38:52.686Z"
+    },
+    {
+      "name": "settings outside dismissal shields plot; direct other-file switch; Escape",
+      "passed": true,
+      "utc": "2026-10-23T10:40:12.065Z"
+    },
+    {
+      "name": "independent A/B to C/B and A/C; both duplicate choices rejected with visible highlight",
+      "passed": true,
+      "utc": "2026-10-23T10:40:58.192Z",
+      "pairs": [
+        [
+          2,
+          1
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "name": "toolbar category creates once; inside move persists; first outside gesture only deactivates; click reactivates",
+      "passed": true,
+      "utc": "2026-10-23T10:41:53.699Z",
+      "before": {
+        "id": "c9a53f47-2171-454d-86f5-a6a1b6f3e7ed",
+        "region": {
+          "mediaId": "d353a4c0-2cef-4622-8a1c-8204eee506cb",
+          "channelIndex": 0,
+          "startSeconds": 2,
+          "endSeconds": 6,
+          "lowHz": 4.7513526941065365,
+          "highHz": 1536.5312296138277
+        },
+        "categoryId": "e6b1f183-6668-4ecd-98ba-8de42f7cbfd7",
+        "note": "正式区域备注",
+        "createdAt": "2026-10-23T10:41:26.316Z",
+        "updatedAt": "2026-10-23T10:41:30.523Z"
+      },
+      "moved": {
+        "id": "c9a53f47-2171-454d-86f5-a6a1b6f3e7ed",
+        "region": {
+          "mediaId": "d353a4c0-2cef-4622-8a1c-8204eee506cb",
+          "channelIndex": 0,
+          "startSeconds": 2.5,
+          "endSeconds": 6.5,
+          "lowHz": 4.7513526941065365,
+          "highHz": 1536.5312296138277
+        },
+        "categoryId": "e6b1f183-6668-4ecd-98ba-8de42f7cbfd7",
+        "note": "正式区域备注",
+        "createdAt": "2026-10-23T10:41:26.316Z",
+        "updatedAt": "2026-10-23T10:41:37.255Z"
+      }
+    },
+    {
+      "name": "space starts automatic active selection native output",
+      "passed": true,
+      "utc": "2026-10-23T10:42:09.992Z"
+    },
+    {
+      "name": "automatic and toolbar native output; right click keeps live selection playback; cue uses whole file; pause/resume override and stop restores automatic bounds",
+      "passed": true,
+      "utc": "2026-10-23T10:43:30.099Z",
+      "automaticOutput": {
+        "frames": 1908576,
+        "underrun": 0
+      },
+      "toolbarOutput": {
+        "frames": 54336,
+        "underrun": 0
+      },
+      "before": {
+        "frames": 52416,
+        "underrun": 0
+      },
+      "after": {
+        "frames": 302976,
+        "underrun": 0
+      },
+      "cueOutput": {
+        "frames": 116736,
+        "underrun": 0
+      },
+      "range": {
+        "value": 4.311999797821045,
+        "min": 2.5,
+        "name": "播放位置",
+        "max": 6.5
+      },
+      "cueRange": {
+        "value": 7.751999855041504,
+        "max": 12,
+        "name": "播放位置",
+        "min": 0
+      },
+      "restored": {
+        "value": 3.111999988555908,
+        "max": 6.5,
+        "name": "播放位置",
+        "min": 2.5
+      }
+    },
+    {
+      "name": "real Delete accepts persistent mask; original/processed screenshots captured; real open picker reconstructs identical saved document",
+      "passed": true,
+      "utc": "2026-10-23T10:44:43.940Z",
+      "revision": 13,
+      "annotation": {
+        "id": "c9a53f47-2171-454d-86f5-a6a1b6f3e7ed",
+        "region": {
+          "mediaId": "d353a4c0-2cef-4622-8a1c-8204eee506cb",
+          "channelIndex": 0,
+          "startSeconds": 2.5,
+          "endSeconds": 6.5,
+          "lowHz": 4.7513526941065365,
+          "highHz": 1536.5312296138277
+        },
+        "categoryId": "e6b1f183-6668-4ecd-98ba-8de42f7cbfd7",
+        "note": "正式区域备注",
+        "createdAt": "2026-10-23T10:41:26.316Z",
+        "updatedAt": "2026-10-23T10:41:37.255Z"
+      },
+      "mask": {
+        "id": "f5fd47a0-bfbe-41e9-9f3d-5e6ddf392147",
+        "region": {
+          "mediaId": "d353a4c0-2cef-4622-8a1c-8204eee506cb",
+          "channelIndex": 0,
+          "startSeconds": 2.5,
+          "endSeconds": 6.5,
+          "lowHz": 4.7513526941065365,
+          "highHz": 1536.5312296138277
+        },
+        "enabled": true,
+        "processingVersion": 1
+      }
+    },
+    {
+      "name": "default unmodified share choice produces full ZIP through actual native save picker",
+      "passed": true,
+      "utc": "2026-10-23T10:45:11.521Z"
+    },
+    {
+      "name": "real open and destination pickers import independent self-contained project with originals unavailable; all semantics and source hashes preserved; actual processed native output",
+      "passed": true,
+      "utc": "2026-10-23T10:46:06.054Z",
+      "importedRoot": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\receiver\\imported-5993ea86-ee3f-4576-895b-4185a4d8e0bd",
+      "projectId": "5993ea86-ee3f-4576-895b-4185a4d8e0bd",
+      "sources": [
+        {
+          "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\receiver\\imported-5993ea86-ee3f-4576-895b-4185a4d8e0bd\\media\\d353a4c0-2cef-4622-8a1c-8204eee506cb",
+          "sha256": "36dfc7268ea2a223f63b50b66532596f8599a10fa958d231a14237b8cfb36fb3"
+        },
+        {
+          "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\receiver\\imported-5993ea86-ee3f-4576-895b-4185a4d8e0bd\\media\\bbb668ac-9706-4b58-98c0-ffba4257e130",
+          "sha256": "2ad4c37a40fc8ac965b01939bf9fe78dd1d5995e809c55d69e52ba0561eb80a9"
+        },
+        {
+          "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\receiver\\imported-5993ea86-ee3f-4576-895b-4185a4d8e0bd\\media\\c6fe273e-3924-42a4-b3f4-ae1358384c3e",
+          "sha256": "88e4b15c0e5ec314965211148ff98e103538f11eff4062c560d36e34e3ef376c"
+        }
+      ],
+      "output": {
+        "frames": 56256,
+        "underrun": 0
+      }
+    },
+    {
+      "name": "normal EXE version0.2.1, corrected bundled help, owned process tree without debug arguments",
+      "passed": true,
+      "utc": "2026-10-23T10:47:25.788Z",
+      "fileVersion": "0.2.1",
+      "productVersion": "0.2.1",
+      "debugArgumentCount": 0
+    },
+    {
+      "name": "all original bytes unchanged; formal binary/installer bytes match pre-launch inspection",
+      "passed": true
+    },
+    {
+      "name": "production masked300Hz pixels change,6000Hz retained and independent receiver raw/processed pixels match exactly",
+      "passed": true
+    },
+    {
+      "name": "ZIP includes all three exact raw WAVs and path-sanitized manifest; EXE/NSIS unsigned as recorded",
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "sourceBefore": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\audio\\formal-a.wav",
+      "rate": 48000,
+      "channels": 2,
+      "seconds": 12,
+      "bytes": 2304044,
+      "sha256": "36dfc7268ea2a223f63b50b66532596f8599a10fa958d231a14237b8cfb36fb3"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\audio\\formal-b.wav",
+      "rate": 48000,
+      "channels": 2,
+      "seconds": 12,
+      "bytes": 2304044,
+      "sha256": "2ad4c37a40fc8ac965b01939bf9fe78dd1d5995e809c55d69e52ba0561eb80a9"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\audio\\formal-c.wav",
+      "rate": 48000,
+      "channels": 2,
+      "seconds": 12,
+      "bytes": 2304044,
+      "sha256": "88e4b15c0e5ec314965211148ff98e103538f11eff4062c560d36e34e3ef376c"
+    }
+  ],
+  "sourceAfter": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\audio\\formal-a.wav",
+      "sha256": "36dfc7268ea2a223f63b50b66532596f8599a10fa958d231a14237b8cfb36fb3"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\audio\\formal-b.wav",
+      "sha256": "2ad4c37a40fc8ac965b01939bf9fe78dd1d5995e809c55d69e52ba0561eb80a9"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\audio\\formal-c.wav",
+      "sha256": "88e4b15c0e5ec314965211148ff98e103538f11eff4062c560d36e34e3ef376c"
+    }
+  ],
+  "production": {
+    "normalConfig": true,
+    "version": "0.2.1",
+    "webviewInstallMode": {
+      "type": "offlineInstaller",
+      "silent": true
+    },
+    "absentTestMarkers": [
+      "ANNOTATOR_E2E_PATHS",
+      "No preselected e2e picker path",
+      "--remote-debugging-port=9235"
+    ],
+    "resources": {
+      "../licenses/": "licenses/",
+      "../docs/user-guide.md": "user-guide.md",
+      "../docs/third-party.md": "third-party.md"
+    },
+    "artifacts": [
+      {
+        "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\annotator-desktop.exe",
+        "bytes": 14415360,
+        "sha256": "8e49f90e8fcd0adac0a66dd0cbb73512c4747e15f6f8b172583857c41ba79b10"
+      },
+      {
+        "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\bundle\\nsis\\Audio Annotator_0.2.1_x64-setup.exe",
+        "bytes": 221434863,
+        "sha256": "31df3d94ed173e7cef21e4b175ff1ba5fe96ba8b037c4eb525716c36e383890b"
+      }
+    ]
+  },
+  "runtime": {
+    "rangeValues": [
+      {
+        "value": 50.0,
+        "min": 25.0,
+        "name": "调整对比比例",
+        "max": 75.0
+      },
+      {
+        "value": 0.0,
+        "min": 0.0,
+        "name": "播放位置",
+        "max": 12.0
+      },
+      {
+        "value": 0.05000000074505806,
+        "min": 0.0,
+        "name": "播放音量",
+        "max": 1.0
+      }
+    ],
+    "debugArgumentCount": 0,
+    "processes": [
+      {
+        "ProcessId": 27528,
+        "ParentProcessId": 40140,
+        "Name": "annotator-desktop.exe",
+        "CommandLine": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\annotator-desktop.exe"
+      },
+      {
+        "ProcessId": 32668,
+        "ParentProcessId": 27528,
+        "Name": "msedgewebview2.exe",
+        "CommandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\155.0.4283.62\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=annotator-desktop.exe --webview-exe-version=0.2.1 --user-data-dir=\"D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --lang=zh-CN --mojo-named-platform-channel-pipe=27528.40868.1301483788723312591 /pfhostedapp:f51f43ce469b5b29301decceab0da07e0dd520a5"
+      },
+      {
+        "ProcessId": 45908,
+        "ParentProcessId": 32668,
+        "Name": "msedgewebview2.exe",
+        "CommandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\155.0.4283.62\\msedgewebview2.exe\" --type=crashpad-handler --user-data-dir=D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\webview\\EBWebView /prefetch:4 /pfhostedapp:f51f43ce469b5b29301decceab0da07e0dd520a5 --monitor-self-annotation=ptype=crashpad-handler --database=D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\webview\\EBWebView\\Crashpad --annotation=IsOfficialBuild=1 --annotation=channel= --annotation=chromium-version=155.0.8059.85 \"--annotation=exe=C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\155.0.4283.62\\msedgewebview2.exe\" --annotation=plat=Win64 \"--annotation=prod=Edge WebView2\" --annotation=ver=155.0.4283.62 --initial-client-data=0x198,0x19c,0x1a0,0x174,0x1a8,0x7ffc3eaf83e0,0x7ffc3eaf83f0,0x7ffc3eaf8400"
+      },
+      {
+        "ProcessId": 47536,
+        "ParentProcessId": 32668,
+        "Name": "msedgewebview2.exe",
+        "CommandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\155.0.4283.62\\msedgewebview2.exe\" --type=gpu-process --gpu-recent-crash-count=0 --noerrdialogs --user-data-dir=\"D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\webview\\EBWebView\" --webview-exe-name=annotator-desktop.exe --webview-exe-version=0.2.1 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --gpu-preferences=WAAAAAAAAADgAAAEAAAAAAAAAAAAAGAAQAAAAAAAAAADAAAAAAAAADgAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAoAAAAAAAAAAgAAAAAAAAAEAAAAAIAAAABAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --startup-read-main-dll --metrics-shmem-handle=1812,i,9421137483495337538,1203554932888370132,262144 --field-trial-handle=1940,i,4126577580158813585,1435862523461376821,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --pseudonymization-salt-handle=1952,i,3109566177678304735,7601770771756086438,4 --trace-process-track-uuid=3190708988185955192 --mojo-platform-channel-handle=1936 /prefetch:2 /pfhostedapp:f51f43ce469b5b29301decceab0da07e0dd520a5"
+      },
+      {
+        "ProcessId": 19736,
+        "ParentProcessId": 32668,
+        "Name": "msedgewebview2.exe",
+        "CommandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\155.0.4283.62\\msedgewebview2.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=zh-CN --service-sandbox-type=none --noerrdialogs --user-data-dir=\"D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\webview\\EBWebView\" --webview-exe-name=annotator-desktop.exe --webview-exe-version=0.2.1 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --startup-read-main-dll --metrics-shmem-handle=2172,i,12699362804123909745,14868857470816080495,524288 --field-trial-handle=1940,i,4126577580158813585,1435862523461376821,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --pseudonymization-salt-handle=1952,i,3109566177678304735,7601770771756086438,4 --trace-process-track-uuid=3190708989122997041 --mojo-platform-channel-handle=2176 /prefetch:11 /pfhostedapp:f51f43ce469b5b29301decceab0da07e0dd520a5"
+      },
+      {
+        "ProcessId": 38820,
+        "ParentProcessId": 32668,
+        "Name": "msedgewebview2.exe",
+        "CommandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\155.0.4283.62\\msedgewebview2.exe\" --type=utility --utility-sub-type=storage.mojom.StorageService --lang=zh-CN --service-sandbox-type=service --noerrdialogs --user-data-dir=\"D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\webview\\EBWebView\" --webview-exe-name=annotator-desktop.exe --webview-exe-version=0.2.1 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --startup-read-main-dll --metrics-shmem-handle=2204,i,4971075447661531412,11924277934901871510,524288 --field-trial-handle=1940,i,4126577580158813585,1435862523461376821,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --pseudonymization-salt-handle=1952,i,3109566177678304735,7601770771756086438,4 --trace-process-track-uuid=3190708990060038890 --mojo-platform-channel-handle=2532 /prefetch:13 /pfhostedapp:f51f43ce469b5b29301decceab0da07e0dd520a5"
+      },
+      {
+        "ProcessId": 28784,
+        "ParentProcessId": 32668,
+        "Name": "msedgewebview2.exe",
+        "CommandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\155.0.4283.62\\msedgewebview2.exe\" --type=renderer --noerrdialogs --user-data-dir=\"D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\formal-flow\\webview\\EBWebView\" --webview-exe-name=annotator-desktop.exe --webview-exe-version=0.2.1 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flags --device-scale-factor=1 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=5 --ssd-no-pressure-read-main-dll --launch-time-ticks=707358850097 --metrics-shmem-handle=3796,i,17736703526792031056,5394830647706472562,1048576 --field-trial-handle=1940,i,4126577580158813585,1435862523461376821,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --pseudonymization-salt-handle=1952,i,3109566177678304735,7601770771756086438,4 --trace-process-track-uuid=3190708990997080739 --mojo-platform-channel-handle=3812 /pfhostedapp:f51f43ce469b5b29301decceab0da07e0dd520a5 /prefetch:1"
+      }
+    ],
+    "fileVersion": "0.2.1",
+    "pid": 27528,
+    "productVersion": "0.2.1",
+    "exe": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\annotator-desktop.exe"
+  },
+  "signatures": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\annotator-desktop.exe",
+      "status": "NotSigned",
+      "fileVersion": "0.2.1",
+      "productVersion": "0.2.1"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\bundle\\nsis\\Audio Annotator_0.2.1_x64-setup.exe",
+      "status": "NotSigned",
+      "fileVersion": "0.2.1",
+      "productVersion": "0.2.1"
+    }
+  ],
+  "pixels": {
+    "method": "RGB statistics from actual production window screenshots; ROI3-6 seconds, 7 rows around300Hz/6000Hz using default physical view (observed0-10s,0-24kHz,65%mix) and observed UIAutomation plot rectangle. Not dB inferred from pixels.",
+    "regions": {
+      "view": {
+        "startSeconds": 0,
+        "endSeconds": 10,
+        "lowHz": 0,
+        "highHz": 24000,
+        "frequencyMix": 0.65,
+        "spectrumKind": "stft"
+      },
+      "regions": {
+        "sender": {
+          "300": [
+            411,
+            433,
+            513,
+            440
+          ],
+          "6000": [
+            411,
+            325,
+            513,
+            332
+          ]
+        },
+        "recipient": {
+          "300": [
+            411,
+            433,
+            513,
+            440
+          ],
+          "6000": [
+            411,
+            325,
+            513,
+            332
+          ]
+        }
+      }
+    },
+    "300": {
+      "originalRgbMean": 156.9047619047619,
+      "processedRgbMean": 0.0,
+      "originalProcessedMeanAbsDifference": 156.9047619047619,
+      "recipientOriginalDifference": 0.0,
+      "recipientProcessedDifference": 0.0
+    },
+    "6000": {
+      "originalRgbMean": 18.38095238095238,
+      "processedRgbMean": 18.38095238095238,
+      "originalProcessedMeanAbsDifference": 0.0,
+      "recipientOriginalDifference": 0.0,
+      "recipientProcessedDifference": 0.0
+    }
+  },
+  "bundle": {
+    "bytes": 6916837,
+    "sha256": "1a75ea6a7bd63e6858f1552d5ee24476f54526c5b407bddedaaa545b5725973d",
+    "entries": [
+      "manifest.json",
+      "media/d353a4c0-2cef-4622-8a1c-8204eee506cb",
+      "media/bbb668ac-9706-4b58-98c0-ffba4257e130",
+      "media/c6fe273e-3924-42a4-b3f4-ae1358384c3e"
+    ],
+    "audio": [
+      {
+        "file": "media/d353a4c0-2cef-4622-8a1c-8204eee506cb",
+        "bytes": 2304044,
+        "sha256": "36dfc7268ea2a223f63b50b66532596f8599a10fa958d231a14237b8cfb36fb3"
+      },
+      {
+        "file": "media/bbb668ac-9706-4b58-98c0-ffba4257e130",
+        "bytes": 2304044,
+        "sha256": "2ad4c37a40fc8ac965b01939bf9fe78dd1d5995e809c55d69e52ba0561eb80a9"
+      },
+      {
+        "file": "media/c6fe273e-3924-42a4-b3f4-ae1358384c3e",
+        "bytes": 2304044,
+        "sha256": "88e4b15c0e5ec314965211148ff98e103538f11eff4062c560d36e34e3ef376c"
+      }
+    ]
+  },
+  "limitations": [
+    "Subjective human listening not performed",
+    "Physical Windows125% display scaling not tested; desktop DPR emulation is separate",
+    "Clean offline machine install/uninstall and physical exFAT not tested",
+    "Unsigned EXE and NSIS",
+    "Receiver third file uses existing lazy verification until displayed; all three imported source files were independently hashed"
+  ]
+}

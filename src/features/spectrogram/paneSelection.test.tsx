@@ -1,0 +1,122 @@
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
+import fixture from '../../../tests/fixtures/document-v2.json';
+import { parseProjectDocument } from '../../bridge/types';
+import { ProjectStore } from '../../app/store';
+import { CommandQueue, type ProjectCommands } from '../../app/commands';
+import { ProjectLifecycle } from '../project/lifecycle';
+import { useSelection } from '../selection/useSelection';
+import { useWorkspace } from './useWorkspace';
+import { AppShell } from '../../app/AppShell';
+import type { ProjectLifecycleUI } from '../project/useProjectLifecycle';
+import type { MediaUI } from '../media/useMedia';
+
+function setup() {
+  const document = parseProjectDocument(structuredClone(fixture)), first = document.media[0];
+  document.media = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333'].map(id => ({ ...first, id }));
+  document.annotations = []; document.edits = [];
+  document.viewState = { ...document.viewState, media: {}, activeMediaId: '11111111-1111-4111-8111-111111111111', compareMediaId: '22222222-2222-4222-8222-222222222222' };
+  const store = new ProjectStore({ document, canUndo: false, canRedo: false });
+  const apply = vi.fn<ProjectCommands['applyChange']>(async (_id, revision, change) => ({ ...store.snapshot, document: { ...store.snapshot.document, revision: revision + 1, ...(change.type === 'updateViewState' ? { viewState: change.viewState } : {}) } }));
+  const queue = new CommandQueue(store, { applyChange: apply } as unknown as ProjectCommands);
+  const lifecycle = new ProjectLifecycle(store, queue, { save: async (_, r) => r, close: vi.fn() });
+  return { store, queue, lifecycle, path: 'project', apply };
+}
+it('selects each pane independently and rejects both duplicate directions without writing a draft', async () => {
+  const active = setup(), hook = renderHook(() => useWorkspace(active));
+  act(() => hook.result.current.selectPane('primary', '33333333-3333-4333-8333-333333333333'));
+  expect(hook.result.current.state).toMatchObject({ activeMediaId: '33333333-3333-4333-8333-333333333333', compareMediaId: '22222222-2222-4222-8222-222222222222' });
+  act(() => hook.result.current.selectPane('primary', '11111111-1111-4111-8111-111111111111'));
+  act(() => hook.result.current.selectPane('compare', '33333333-3333-4333-8333-333333333333'));
+  expect(hook.result.current.state).toMatchObject({ activeMediaId: '11111111-1111-4111-8111-111111111111', compareMediaId: '33333333-3333-4333-8333-333333333333' });
+  await act(() => active.lifecycle.save());
+  const state = hook.result.current.state, calls = active.apply.mock.calls.length;
+  act(() => hook.result.current.selectPane('primary', '33333333-3333-4333-8333-333333333333'));
+  expect(hook.result.current.state).toBe(state); expect(hook.result.current.duplicatePane).toBe('compare');
+  act(() => hook.result.current.selectPane('compare', '11111111-1111-4111-8111-111111111111'));
+  expect(hook.result.current.state).toBe(state); expect(hook.result.current.duplicatePane).toBe('primary');
+  expect(active.store.drafts.size).toBe(0); expect(active.apply).toHaveBeenCalledTimes(calls);
+  expect(active.store.snapshot.canUndo).toBe(false);
+  hook.unmount(); active.lifecycle.dispose();
+});
+it('routes real sidebar/title/menu controls through the guard and preserves source on duplicate title clicks', () => {
+  const active = setup(), [a, b, c] = active.store.snapshot.document.media;
+  [a, b, c].forEach((m, i) => { m.displayName = `${'ABC'[i]}.wav`; });
+  const project = { active, busy: false } as unknown as ProjectLifecycleUI;
+  const mediaUI = { selected: a, selectedId: a.id, statuses: [a, b, c].map(m => ({ mediaId: m.id, status: 'missing' })), disabled: false, setSelectedId: vi.fn() } as unknown as MediaUI;
+  const { container, unmount } = render(<AppShell project={project} mediaUI={mediaUI} />);
+  const pair = () => [screen.getByRole('combobox', { name: '主面板音频' }), screen.getByRole('combobox', { name: '对比面板音频' })];
+  const select = pair()[1]; fireEvent.pointerDown(select); fireEvent.focus(select); fireEvent.change(select, { target: { value: a.id } });
+  expect(pair()[0]).toHaveValue(a.id); expect(pair()[1]).toHaveValue(b.id);
+  expect(container.querySelector('[data-pane="primary"]')).toHaveClass('is-duplicate-target', 'is-playback-source');
+  expect(active.store.drafts.size).toBe(0);
+  fireEvent.click(container.querySelectorAll('.media-select')[2]); expect(pair()[0]).toHaveValue(c.id); expect(pair()[1]).toHaveValue(b.id);
+  fireEvent.change(pair()[1], { target: { value: a.id } }); expect(pair()[0]).toHaveValue(c.id); expect(pair()[1]).toHaveValue(a.id);
+  fireEvent.click(screen.getByRole('menuitem', { name: '视图' })); fireEvent.click(screen.getByRole('menuitem', { name: '双文件对比' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'C.wav' }));
+  expect(pair()[0]).toHaveValue(c.id); expect(pair()[1]).toHaveValue(a.id);
+  expect(mediaUI.setSelectedId).not.toHaveBeenCalled();
+  unmount(); active.lifecycle.dispose();
+});
+it('dismisses settings when its target leaves or runtime changes and never revives the stale target', () => {
+  const active = setup(), [a, b, c] = active.store.snapshot.document.media;
+  [a, b, c].forEach((m, i) => { m.displayName = `${'ABC'[i]}.wav`; });
+  const mediaUI = { selected: a, selectedId: a.id, statuses: [a, b, c].map(m => ({ mediaId: m.id, status: 'missing' })), disabled: false } as unknown as MediaUI;
+  const project = { active, busy: false } as unknown as ProjectLifecycleUI;
+  const ui = render(<AppShell project={project} mediaUI={mediaUI} />);
+  fireEvent.click(screen.getByRole('button', { name: 'B.wav 分析设置' })); expect(screen.getByRole('dialog')).toBeInTheDocument();
+  const saved = active.store.snapshot.document.viewState;
+  act(() => active.store.accept({ ...active.store.snapshot, document: { ...active.store.snapshot.document, viewState: { ...saved, compareMediaId: c.id } } }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  act(() => active.store.accept({ ...active.store.snapshot, document: { ...active.store.snapshot.document, viewState: saved } }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'B.wav 分析设置' }));
+  ui.rerender(<AppShell project={{ ...project, active: { ...active } }} mediaUI={mediaUI} />);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  ui.unmount(); active.lifecycle.dispose();
+});
+it('retained pane callbacks re-read the other pane and reject a replaced runtime', () => {
+  const active = setup(), next = setup(), hook = renderHook(({ owner }) => useWorkspace(owner), { initialProps: { owner: active } });
+  const select = hook.result.current.selectPane;
+  act(() => select('compare', '33333333-3333-4333-8333-333333333333'));
+  act(() => select('primary', '33333333-3333-4333-8333-333333333333'));
+  expect(hook.result.current.state).toMatchObject({ activeMediaId: '11111111-1111-4111-8111-111111111111', compareMediaId: '33333333-3333-4333-8333-333333333333' });
+  hook.rerender({ owner: next }); act(() => select('primary', '33333333-3333-4333-8333-333333333333'));
+  expect(next.store.drafts.size).toBe(0); expect(hook.result.current.state.activeMediaId).toBe('11111111-1111-4111-8111-111111111111');
+  hook.unmount(); active.lifecycle.dispose(); next.lifecycle.dispose();
+});
+it('rechecks accepted authority even before React effects reconcile the latest comparison', () => {
+  const active = setup(), [a, , c] = active.store.snapshot.document.media;
+  const hook = renderHook(() => useWorkspace(active));
+  const select = hook.result.current.selectPane;
+  act(() => {
+    active.store.accept({ ...active.store.snapshot, document: { ...active.store.snapshot.document, revision: 1, viewState: { ...active.store.snapshot.document.viewState, compareMediaId: c.id } } });
+    expect(select('primary', c.id)).toBe(false);
+  });
+  expect(hook.result.current.state).toMatchObject({ activeMediaId: a.id, compareMediaId: c.id });
+  expect(active.store.drafts.size).toBe(0);
+  hook.unmount(); active.lifecycle.dispose();
+});
+it('keeps a visible comparison selection and context when primary changes, clears only hidden targets', () => {
+  const active = setup();
+  const hook = renderHook(({ primary, compare }) => useSelection(active, primary, [{ mediaId: primary, channels: [0, 1] }, { mediaId: compare, channels: [0, 1] }]), { initialProps: { primary: '11111111-1111-4111-8111-111111111111', compare: '22222222-2222-4222-8222-222222222222' } });
+  const selection = { region: { mediaId: '22222222-2222-4222-8222-222222222222', channelIndex: 0, startSeconds: .01, endSeconds: .05, lowHz: 100, highHz: 1000 }, object: null };
+  act(() => hook.result.current.state.select(selection));
+  hook.rerender({ primary: '33333333-3333-4333-8333-333333333333', compare: '22222222-2222-4222-8222-222222222222' });
+  expect(hook.result.current.selection).toBe(selection); expect(hook.result.current.context?.mediaId).toBe('22222222-2222-4222-8222-222222222222');
+  hook.rerender({ primary: '33333333-3333-4333-8333-333333333333', compare: '11111111-1111-4111-8111-111111111111' });
+  expect(hook.result.current.selection).toBeNull();
+  hook.unmount(); active.lifecycle.dispose();
+});
+it('links time without identities, saves/reopens independent views and reconciles removed media', async () => {
+  const active = setup(), hook = renderHook(() => useWorkspace(active));
+  act(() => { hook.result.current.patch('22222222-2222-4222-8222-222222222222', { gainDb: 12 }); hook.result.current.link(true); hook.result.current.selectPane('primary', '33333333-3333-4333-8333-333333333333'); });
+  expect(hook.result.current.state).toMatchObject({ activeMediaId: '33333333-3333-4333-8333-333333333333', compareMediaId: '22222222-2222-4222-8222-222222222222', linkedTime: true });
+  expect(hook.result.current.view('22222222-2222-4222-8222-222222222222').gainDb).toBe(12);
+  await act(() => active.lifecycle.save()); hook.unmount();
+  const reopened = renderHook(() => useWorkspace(active));
+  expect(reopened.result.current.state).toMatchObject({ activeMediaId: '33333333-3333-4333-8333-333333333333', compareMediaId: '22222222-2222-4222-8222-222222222222' });
+  act(() => active.store.accept({ ...active.store.snapshot, document: { ...active.store.snapshot.document, media: active.store.snapshot.document.media.filter(m => m.id !== '22222222-2222-4222-8222-222222222222') } }));
+  expect(reopened.result.current.state.compareMediaId).toBeNull();
+  reopened.unmount(); active.lifecycle.dispose();
+});

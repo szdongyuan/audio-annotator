@@ -1,3 +1,4 @@
+import { originalAnalysis, type AnalysisIdentity } from './analysisSource';
 import type { AnalysisSettings, MediaDescriptor, MediaView, ViewState } from '../../bridge/types';
 import { splitFrequencyRequests, type TileRequest } from './tileClient';
 import { boundRange } from './viewport';
@@ -47,42 +48,51 @@ export type TileInput = Omit<TileRequest, 'requestId' | 'projectId' | 'viewId' |
 // dependencies, leaving room in the 64 MiB LRU for historical/prefetch tiles.
 export const CHANNEL_TILE_BUDGET = 5 * 1024 * 1024;
 export const tileInputBytes = (r: TileInput) => r.frameCount * Math.ceil(r.frequencyCount / 2 ** r.frequencyLod) * 4 + 16384;
-export function frequencyWindow(media: MediaDescriptor, settings: AnalysisSettings, view: Pick<MediaView, 'spectrumKind' | 'lowHz' | 'highHz'>) {
+export function frequencyWindow(media: MediaDescriptor, settings: AnalysisSettings, view: Pick<MediaView, 'spectrumKind' | 'lowHz' | 'highHz'>, lod = 0) {
   const bins = view.spectrumKind === 'mel' ? settings.melBands : settings.fftSize / 2 + 1;
   const binAt = (hz: number) => view.spectrumKind === 'mel' ? Math.log1p(hz / 700) / Math.log1p(media.sampleRate / 1400) * (settings.melBands + 1) - 1 : hz * settings.fftSize / media.sampleRate;
-  return { bins, lowBin: Math.max(0, Math.floor(binAt(view.lowHz)) - 1), endBin: Math.min(bins, Math.ceil(binAt(view.highHz)) + 2) };
+  return { bins, lowBin: Math.max(0, Math.floor(binAt(view.lowHz)) - 2 ** lod), endBin: Math.min(bins, Math.ceil(binAt(view.highHz)) + 1 + 2 ** lod) };
 }
 /** Aligned time tiles reuse native cache. Frequency data is independent of axis/color changes. */
-export function tilePlan(media: MediaDescriptor, settings: AnalysisSettings, view: Pick<MediaView, 'startSeconds' | 'endSeconds' | 'spectrumKind' | 'lowHz' | 'highHz'>, width: number, channelIndex: number, configHash: string): TileInput[] {
+export function tilePlan(media: MediaDescriptor, settings: AnalysisSettings, view: Pick<MediaView, 'startSeconds' | 'endSeconds' | 'spectrumKind' | 'lowHz' | 'highHz'>, width: number, channelIndex: number, configHash: string, identity: AnalysisIdentity = originalAnalysis): TileInput[] {
   const end = Math.min(duration(media), view.endSeconds);
   if (view.startSeconds >= end) return [];
   const first = Math.floor(view.startSeconds * media.sampleRate / settings.hopSize), last = Math.ceil(end * media.sampleRate / settings.hopSize);
-  let timeLod = Math.min(16, Math.max(0, Math.ceil(Math.log2((last - first) / Math.max(64, Math.min(1024, width))))));
+  let timeLod = Math.min(16, Math.max(0, Math.ceil(Math.log2((last - first) / Math.max(1, width)))));
   const total = Math.ceil(media.frameCount / settings.hopSize);
-  const { bins, lowBin, endBin } = frequencyWindow(media, settings, view);
-  // Reserve the worst possible pair of frequency partitions independently of
+  const initialFrequency = frequencyWindow(media, settings, view);
+  const frequencyLod = Math.max(0, Math.ceil(Math.log2((initialFrequency.endBin - initialFrequency.lowBin) / 1025)));
+  const { bins, lowBin, endBin } = frequencyWindow(media, settings, view, frequencyLod);
+  // Reserve up to two frequency partitions plus a grouped-neighbor partition independently of
   // the frequency viewport. Frequency-only navigation must not alter time LOD.
-  const maxColumns = Math.min(bins, 2050), maxParts = Math.ceil(maxColumns / 1025);
+  const maxColumns = Math.min(bins, 3075), maxParts = Math.ceil(maxColumns / 1025);
   const workingBytes = (lod: number) => {
     const step = 2 ** lod, span = 256 * step;
     const start = Math.floor(first / span) * span, final = Math.floor((last - 1) / span) * span;
     const count = (final - start) / span + 1;
     const rows = (count - 1) * 256 + Math.min(256, Math.ceil((total - final) / step));
-    return rows * maxColumns * 4 + count * maxParts * 16384;
+    return (rows + 2) * maxColumns * 4 + (count + 2) * maxParts * 16384;
   };
   while (timeLod < 16 && workingBytes(timeLod) > CHANNEL_TILE_BUDGET) timeLod++;
   if (workingBytes(timeLod) > CHANNEL_TILE_BUDGET) throw { code: 'ResourceLimit', message: '当前时间范围过大，请放大时间轴后重试', retryable: true };
   const stride = 2 ** timeLod, tileSpan = 256 * stride;
-  const starts: { start: number; visible: boolean }[] = [];
+  const starts: { start: number; visible: boolean; count?: number }[] = [];
   for (let start = Math.floor(first / tileSpan) * tileSpan; start < last; start += tileSpan) starts.push({ start, visible: true });
-  for (const start of [starts[0].start - tileSpan, starts[starts.length - 1].start + tileSpan]) if (start >= 0 && start < total) starts.push({ start, visible: false });
-  const frequencyLod = Math.max(0, Math.ceil(Math.log2((endBin - lowBin) / 1025)));
+  const firstStart = starts[0].start, lastStart = starts[starts.length - 1].start;
+  // A tile boundary is not a data endpoint. Retain the adjacent real LOD row
+  // when the viewport reaches beyond the first/last representative center.
+  const firstCenter = (firstStart + (stride - 1) / 2) * settings.hopSize / media.sampleRate;
+  const lastFrame = lastStart + (Math.min(256, Math.ceil((total - lastStart) / stride)) - 1) * stride;
+  const lastCenter = (lastFrame + (Math.min(stride, total - lastFrame) - 1) / 2) * settings.hopSize / media.sampleRate;
+  if (firstStart > 0 && view.startSeconds < firstCenter) starts.push({ start: firstStart - stride, count: 1, visible: true });
+  if (lastFrame + stride < total && end > lastCenter) starts.push({ start: lastFrame + stride, count: 1, visible: true });
+  for (const start of [firstStart - tileSpan, lastStart + tileSpan]) if (start >= 0 && start < total) starts.push({ start, visible: false });
   // Stable partitions, not viewport edges, define native cache keys. Default
   // STFT and every mel band fit in one full-resolution partition. Large FFTs
   // refine only as needed and each response remains at most 1025 columns.
   const partition = 1025 * 2 ** frequencyLod;
   const frequencies: { frequencyStart: number; frequencyCount: number }[] = [];
   for (let frequencyStart = Math.floor(lowBin / partition) * partition; frequencyStart < endBin; frequencyStart += partition) frequencies.push({ frequencyStart, frequencyCount: Math.min(partition, bins - frequencyStart) });
-  return starts.flatMap(({ start, visible }) => frequencies.flatMap(frequency => splitFrequencyRequests({ mediaId: media.id, settings, configHash, channelIndex, kind: view.spectrumKind, startFrame: start, frameCount: Math.min(256, Math.ceil((total - start) / stride)), timeLod, ...frequency, frequencyLod, visible })));
+  return starts.flatMap(({ start, visible, count }) => frequencies.flatMap(frequency => splitFrequencyRequests({ ...identity, mediaId: media.id, settings, configHash, channelIndex, kind: view.spectrumKind, startFrame: start, frameCount: count ?? Math.min(256, Math.ceil((total - start) / stride)), timeLod, ...frequency, frequencyLod, visible })));
 }
-export function tileKey(source: string, r: TileInput) { return `${source}|${r.mediaId}|${r.channelIndex}|${r.configHash}|${r.kind}|${r.startFrame}|${r.frameCount}|${r.timeLod}|${r.frequencyStart}|${r.frequencyCount}|${r.frequencyLod}`; }
+export function tileKey(source: string, r: TileInput) { return `${source}|${r.analysisSource}|${r.processingVersion}|${r.editSignature}|${r.mediaId}|${r.channelIndex}|${r.configHash}|${r.kind}|${r.startFrame}|${r.frameCount}|${r.timeLod}|${r.frequencyStart}|${r.frequencyCount}|${r.frequencyLod}`; }

@@ -1,0 +1,11 @@
+{
+  "edgeVersion": "Microsoft Edge WebDriver 155.0.4283.62 (aa3a7406ba8c53a83536df539f07124d73c899bd)",
+  "source": "https://msedgedriver.microsoft.com/155.0.4283.62/edgedriver_win64.zip",
+  "helpVerified": true,
+  "tauriVersion": "tauri-driver v2.1.0:",
+  "tauriDriver": "D:\\Work\\annotator\\.tools\\tauri-driver\\bin\\tauri-driver.exe",
+  "edgeDriver": "D:\\Work\\annotator\\.tools\\edgedriver\\msedgedriver.exe",
+  "signature": "Valid",
+  "webViewVersion": "155.0.4283.62",
+  "edgeSha256": "01CE0DAA683E5EA874E2E2439E4A162DB11B0D40228D37CCE1EFC990294464F6"
+}

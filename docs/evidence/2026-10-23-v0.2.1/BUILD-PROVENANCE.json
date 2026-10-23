@@ -1,0 +1,32 @@
+{
+  "version": "0.2.1",
+  "mainBase": "be1edfee3023416d1d0521f4186de1493bff5395",
+  "taskBase": "b3e63d90a1a2035f3e6536e1915111aac11332c2",
+  "sourceDescription": "Task1-7 reviewed history plus Task8 version/help/docs and semantic canvas dependencies. Exact production inputs listed in product-source-manifest.json. Task8 commit is reported after this immutable release is frozen.",
+  "productSourceFiles": 257,
+  "productSourceManifestSha256": "a09738ee6fa505512c6f2faa0d90de305acaa5ee521ddcd66895ae8892d09849",
+  "normalBuildCommand": "npm.cmd run tauri -- build --bundles nsis",
+  "normalBuildExitCode": 0,
+  "buildLogSha256": "6077415f82c1a228937c03b3bc60d3e149eec24119c3cecf2109b7e5eabb26e2",
+  "e2eFeature": false,
+  "extraTauriConfig": null,
+  "runtimeInspection": "formal-release-report.json",
+  "artifacts": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\annotator-desktop.exe",
+      "bytes": 14415360,
+      "sha256": "8e49f90e8fcd0adac0a66dd0cbb73512c4747e15f6f8b172583857c41ba79b10"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\bundle\\nsis\\Audio Annotator_0.2.1_x64-setup.exe",
+      "bytes": 221434863,
+      "sha256": "31df3d94ed173e7cef21e4b175ff1ba5fe96ba8b037c4eb525716c36e383890b"
+    }
+  ],
+  "node": "v22.23.3",
+  "rustc": "rustc 1.91.0 (f8297e351 2025-10-28)",
+  "limitations": [
+    "Unsigned executable and NSIS",
+    "No claim of root review, squash integration or push"
+  ]
+}

@@ -7,9 +7,11 @@ import { spectralFlow } from '../tests/desktop/spectral-flow.test.mjs';
 import { sharingFlow } from '../tests/desktop/sharing-flow.test.mjs';
 import { viewChurn } from '../tests/desktop/view-churn.test.mjs';
 function command(cmd, args) { const r = spawnSync(cmd, args, { stdio: 'inherit', shell: cmd.endsWith('.cmd'), windowsHide: true }); if (r.status !== 0) throw new Error(`${cmd} failed: ${r.status}`); }
+command(process.execPath, ['--test','tests/desktop/harness-lifecycle.test.mjs','tests/desktop/harness-output-init.test.mjs']);
 command('pwsh', ['-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/setup-webdriver.ps1']);
 if (!process.argv.includes('--skip-build')) command('npm.cmd', ['run','tauri','--','build','--debug','--no-bundle','--features','e2e','--config','src-tauri/tauri.e2e.conf.json']);
-const output = await fs.mkdtemp(path.resolve('.test-output/desktop-'));
+await fs.mkdir(path.resolve('.test-output/fidelity-release'), { recursive: true });
+const output = await fs.mkdtemp(path.resolve('.test-output/fidelity-release/desktop-'));
 const project = path.join(output, 'project'); await fs.mkdir(project);
 const context = { output, project };
 const paths = {
@@ -20,6 +22,10 @@ const paths = {
   '导入标注文件或完整项目包': [path.join(output,'share.json'),path.join(output,'share.zip')],
   '选择新项目的存放位置 · 将创建独立子文件夹': [output,output],
 };
+process.env.ANNOTATOR_FIDELITY_OUTPUT=path.join(output,'fidelity');
+process.env.ANNOTATOR_PROCESSED_OUTPUT=path.join(output,'processed');
+process.env.ANNOTATOR_INTERACTION_OUTPUT=path.join(output,'interaction');
+process.env.ANNOTATOR_SHARING_OUTPUT=path.join(output,'sharing');
 const report = { method: 'Selenium → official tauri-driver → matching Microsoft EdgeDriver → actual Tauri executable. Native picker paths are preselected in the e2e feature; UI workflows use WebDriver pointer/keyboard. Folder-scan separately tests native IPC contracts; targeted transport/Channel failure injections are identified in suite reports. No store mutation substitutes for UI acceptance. Subjective listening and physical picker interaction are separate release checks.', checks: [], output };
 let h;
 try {
@@ -32,7 +38,7 @@ finally { await h?.quit().catch(()=>{}); await fs.writeFile(path.join(output,'re
 // Each suite owns a fresh process and retires it before the next acquires the ports.
 // Keep the six original phases above, including a full process restart and 300-view churn.
 if (!process.exitCode) {
-  for (const suite of ['selection-flow', 'rulers-flow', 'compact-layout', 'classification-flow', 'folder-scan', 'folder-flow', 'feedback-flow', 'format-flow']) {
+  for (const suite of ['selection-flow', 'rulers-flow', 'compact-layout', 'classification-flow', 'folder-scan', 'folder-flow', 'feedback-flow', 'format-flow', 'fidelity-flow', 'processed-flow', 'interaction-flow', 'sharing-flow']) {
     console.log(`Running ${suite}`);
     const result = spawnSync(process.execPath, [`tests/desktop/${suite}.test.mjs`], { stdio: 'inherit', windowsHide: true });
     report.checks.push({ name: suite, passed: result.status === 0 });

@@ -10,7 +10,7 @@ export type ExchangeEvent =
   | { type: 'failed'; taskId: string; error: AppError }
   | { type: 'cancelled'; taskId: string };
 export const exchangeDialogs = {
-  save: (kind: 'annotations' | 'bundle') => save({ title: '分享 · 保存到本机', defaultPath: kind === 'bundle' ? 'project.audioproj.zip' : 'project.annotations.json', filters: [{ name: kind === 'bundle' ? '完整项目包' : '仅标注文件', extensions: [kind === 'bundle' ? 'zip' : 'json'] }] }),
+  save: (kind: 'annotations' | 'bundle') => save({ title: '分享 · 保存到本机', defaultPath: kind === 'bundle' ? 'project.audioproj.zip' : 'project.annotations.json', filters: [{ name: kind === 'bundle' ? '完整项目包（含音频）' : '仅标注（不含音频）', extensions: [kind === 'bundle' ? 'zip' : 'json'] }] }),
   source: () => open({ title: '导入标注文件或完整项目包', multiple: false, directory: false, filters: [{ name: '交换文件', extensions: ['json', 'zip'] }] }),
   parent: () => open({ title: '选择新项目的存放位置 · 将创建独立子文件夹', multiple: false, directory: true }),
 };

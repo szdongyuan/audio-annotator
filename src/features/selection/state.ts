@@ -20,6 +20,8 @@ export function resolveSelection(doc: ProjectDocument, selection: Selection | nu
 export class SelectionState {
   private value: Selection | null = null;
   private prior: Selection | null = null;
+  private active = false;
+  private priorActive = false;
   private dragging = false;
   private listeners = new Set<() => void>();
   context: ClassificationTarget | null = null;
@@ -28,13 +30,24 @@ export class SelectionState {
     if (context?.mediaId === this.context?.mediaId && context?.channelIndex === this.context?.channelIndex) return;
     this.context = context; this.listeners.forEach(l => l());
   }
-  getSnapshot = () => this.value;
+  /** Rendering and invalidation may inspect the retained outline; commands use active only. */
+  getCandidate = () => this.value;
+  getActiveSelection = () => this.active ? this.value : null;
+  getSnapshot = this.getActiveSelection;
+  getGesture = () => this.dragging;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
-  select(value: Selection | null) { this.value = value; if (value) this.interact({ mediaId: value.region.mediaId, channelIndex: value.region.channelIndex }); this.listeners.forEach(l => l()); }
-  beginGesture() { this.prior = this.value; this.dragging = true; }
-  endGesture() { this.dragging = false; this.prior = null; }
-  cancel() { const next = this.dragging ? this.prior : null; this.endGesture(); this.select(next); }
-  bind(target: Selection, object: ObjectRef) { if (this.value !== target) return false; this.select({ region: target.region, object }); return true; }
+  select(value: Selection | null) { this.value = value; this.active = !!value; if (value) this.interact({ mediaId: value.region.mediaId, channelIndex: value.region.channelIndex }); this.listeners.forEach(l => l()); }
+  deactivate() { this.active = false; this.listeners.forEach(l => l()); }
+  beginGesture() { this.prior = this.value; this.priorActive = this.active; this.dragging = true; this.listeners.forEach(l => l()); }
+  endGesture() { this.dragging = false; this.prior = null; this.listeners.forEach(l => l()); }
+  cancel() {
+    if (!this.dragging) { this.deactivate(); return; }
+    this.value = this.prior; this.active = this.priorActive && !!this.value;
+    this.endGesture();
+    if (this.value) this.interact({ mediaId: this.value.region.mediaId, channelIndex: this.value.region.channelIndex });
+    this.listeners.forEach(l => l());
+  }
+  bind(target: Selection, object: ObjectRef) { if (this.getActiveSelection() !== target) return false; this.select({ region: target.region, object }); return true; }
   reconcile(doc: ProjectDocument) {
     // Native work and history may settle mid-gesture. Cancellation must not
     // restore an obsolete saved region or resurrect a removed prior object.
@@ -43,6 +56,8 @@ export class SelectionState {
     const next = resolveSelection(doc, this.value);
     if (next === this.value) return;
     if (!next) this.endGesture();
-    this.select(next);
+    this.value = next; this.active = this.active && !!next;
+    if (this.active && next) this.interact({ mediaId: next.region.mediaId, channelIndex: next.region.channelIndex });
+    this.listeners.forEach(l => l());
   }
 }

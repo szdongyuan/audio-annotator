@@ -1,0 +1,115 @@
+TAP version 13
+# node:internal/fs/promises:1192
+#   return await PromisePrototypeThen(
+#          ^
+# Error: ENOENT: no such file or directory, mkdtemp 'C:\\Users\\DY\\AppData\\Local\\Temp\\annotator-output-init-XEyCfe\\.test-output\\fidelity-release\\desktop-XXXXXX'
+#     at async Object.mkdtemp (node:internal/fs/promises:1192:10)
+#     at async file:///C:/Users/DY/AppData/Local/Temp/annotator-output-init-XEyCfe/[eval1]:2:16 {
+#   errno: -4058,
+#   code: 'ENOENT',
+#   syscall: 'mkdtemp',
+#   path: 'C:\\\\Users\\\\DY\\\\AppData\\\\Local\\\\Temp\\\\annotator-output-init-XEyCfe\\\\.test-output\\\\fidelity-release\\\\desktop-XXXXXX'
+# }
+# Node.js v22.23.3
+# Subtest: run-desktop-tests.mjs initializes output with no parent and preserves previous runs
+not ok 1 - run-desktop-tests.mjs initializes output with no parent and preserves previous runs
+  ---
+  duration_ms: 83.4333
+  type: 'test'
+  location: 'D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\tests\\desktop\\harness-output-init.test.mjs:9:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Command failed: D:\Program Files\nodejs\node.exe --input-type=module -e import fs from 'node:fs/promises'; import path from 'node:path';
+    const output = await fs.mkdtemp(path.resolve('.test-output/fidelity-release/desktop-'));
+    const project = path.join(output, 'project'); await fs.mkdir(project);
+    
+    console.log(JSON.stringify({output,project}));
+    node:internal/fs/promises:1192
+      return await PromisePrototypeThen(
+             ^
+    
+    Error: ENOENT: no such file or directory, mkdtemp 'C:\Users\DY\AppData\Local\Temp\annotator-output-init-XEyCfe\.test-output\fidelity-release\desktop-XXXXXX'
+        at async Object.mkdtemp (node:internal/fs/promises:1192:10)
+        at async file:///C:/Users/DY/AppData/Local/Temp/annotator-output-init-XEyCfe/[eval1]:2:16 {
+      errno: -4058,
+      code: 'ENOENT',
+      syscall: 'mkdtemp',
+      path: 'C:\\Users\\DY\\AppData\\Local\\Temp\\annotator-output-init-XEyCfe\\.test-output\\fidelity-release\\desktop-XXXXXX'
+    }
+    
+    Node.js v22.23.3
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    async Object.mkdtemp (node:internal/fs/promises:1192:10)
+    async file:///C:/Users/DY/AppData/Local/Temp/annotator-output-init-XEyCfe/[eval1]:2:16 {
+    genericNodeError (node:internal/errors:983:15)
+    wrappedFn (node:internal/errors:537:14)
+    checkExecSyncError (node:child_process:916:11)
+    execFileSync (node:child_process:952:15)
+    initialize (file:///D:/Work/annotator/.worktrees/spectral-fidelity-v021/tests/desktop/harness-output-init.test.mjs:17:43)
+    TestContext.<anonymous> (file:///D:/Work/annotator/.worktrees/spectral-fidelity-v021/tests/desktop/harness-output-init.test.mjs:20:21)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# node:internal/fs/promises:1192
+#   return await PromisePrototypeThen(
+#          ^
+# Error: ENOENT: no such file or directory, mkdtemp 'C:\\Users\\DY\\AppData\\Local\\Temp\\annotator-output-init-9cgPeM\\.test-output\\fidelity-release\\perf-XXXXXX'
+#     at async Object.mkdtemp (node:internal/fs/promises:1192:10)
+#     at async file:///C:/Users/DY/AppData/Local/Temp/annotator-output-init-9cgPeM/[eval1]:2:14 {
+#   errno: -4058,
+#   code: 'ENOENT',
+#   syscall: 'mkdtemp',
+#   path: 'C:\\\\Users\\\\DY\\\\AppData\\\\Local\\\\Temp\\\\annotator-output-init-9cgPeM\\\\.test-output\\\\fidelity-release\\\\perf-XXXXXX'
+# }
+# Node.js v22.23.3
+# Subtest: measure-performance.mjs initializes output with no parent and preserves previous runs
+not ok 2 - measure-performance.mjs initializes output with no parent and preserves previous runs
+  ---
+  duration_ms: 75.4604
+  type: 'test'
+  location: 'D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\tests\\desktop\\harness-output-init.test.mjs:9:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Command failed: D:\Program Files\nodejs\node.exe --input-type=module -e import fs from 'node:fs/promises'; import path from 'node:path';
+    const output=await fs.mkdtemp(path.resolve('.test-output/fidelity-release/perf-'));const project=path.join(output,'project');await fs.mkdir(project);
+    
+    console.log(JSON.stringify({output,project}));
+    node:internal/fs/promises:1192
+      return await PromisePrototypeThen(
+             ^
+    
+    Error: ENOENT: no such file or directory, mkdtemp 'C:\Users\DY\AppData\Local\Temp\annotator-output-init-9cgPeM\.test-output\fidelity-release\perf-XXXXXX'
+        at async Object.mkdtemp (node:internal/fs/promises:1192:10)
+        at async file:///C:/Users/DY/AppData/Local/Temp/annotator-output-init-9cgPeM/[eval1]:2:14 {
+      errno: -4058,
+      code: 'ENOENT',
+      syscall: 'mkdtemp',
+      path: 'C:\\Users\\DY\\AppData\\Local\\Temp\\annotator-output-init-9cgPeM\\.test-output\\fidelity-release\\perf-XXXXXX'
+    }
+    
+    Node.js v22.23.3
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    async Object.mkdtemp (node:internal/fs/promises:1192:10)
+    async file:///C:/Users/DY/AppData/Local/Temp/annotator-output-init-9cgPeM/[eval1]:2:14 {
+    genericNodeError (node:internal/errors:983:15)
+    wrappedFn (node:internal/errors:537:14)
+    checkExecSyncError (node:child_process:916:11)
+    execFileSync (node:child_process:952:15)
+    initialize (file:///D:/Work/annotator/.worktrees/spectral-fidelity-v021/tests/desktop/harness-output-init.test.mjs:17:43)
+    TestContext.<anonymous> (file:///D:/Work/annotator/.worktrees/spectral-fidelity-v021/tests/desktop/harness-output-init.test.mjs:20:21)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 243.5656

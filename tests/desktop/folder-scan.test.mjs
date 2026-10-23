@@ -4,7 +4,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { start } from './harness.mjs';
 
-const output = await fs.mkdtemp(path.resolve('.test-output/task6-folders/native-'));
+const parent = path.resolve('.test-output/task6-folders');
+await fs.mkdir(parent, { recursive: true });
+const output = await fs.mkdtemp(path.join(parent, 'native-'));
 const audio = path.join(output, 'audio');
 await fs.mkdir(audio);
 await fs.mkdir(path.join(audio, 'nested'));

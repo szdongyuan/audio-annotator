@@ -3,10 +3,12 @@ use annotator_core::{
     analysis::{
         cache::{TileCache, DISK_CACHE_BYTES, TILE_CACHE_BYTES},
         scheduler::Scheduler,
+        source::SourceReader,
         tiles::{
             compute_tile, config_hash, decode_cached, encode_cached, encode_tile, TileRequest,
         },
     },
+    audio::SourceInfo,
     error::{AppError, ErrorCode, Result},
     media::{
         decode::rehydrate, identity::check_cancel, pcm_cache::PcmCache, registry::same_identity,
@@ -77,7 +79,12 @@ fn current(
         .get(&request.media_id)
         .cloned()
         .unwrap_or_default();
-    if !same_identity(actual, expected)
+    if request.processing_version != snapshot.document.algorithm_versions.dsp
+        || request.edit_signature
+            != request
+                .analysis_source
+                .signature(&request.media_id, &snapshot.document.edits)
+        || !same_identity(actual, expected)
         || actual.source_ref != expected.source_ref
         || config_hash(&settings) != request.config_hash
     {
@@ -126,10 +133,17 @@ fn enqueue(
         .get(&request.media_id)
         .cloned()
         .unwrap_or_default();
-    if config_hash(&settings) != request.config_hash {
+    if config_hash(&settings) != request.config_hash
+        || request.processing_version != snapshot.document.algorithm_versions.dsp
+        || request.edit_signature
+            != request
+                .analysis_source
+                .signature(&request.media_id, &snapshot.document.edits)
+    {
         return Err(failure());
     }
     let root = project.root().to_path_buf();
+    let edits = snapshot.document.edits;
     let generation = state.1.lock().map_err(|_| failure())?.generation();
     let scope = request.view_id.clone();
     let worker_state = state.clone();
@@ -209,8 +223,23 @@ fn enqueue(
                     .and_then(|bytes| decode_cached(&bytes))
             };
             let tile = match cached {
-                Some(tile) => tile,
+                Some(tile) => {
+                    current(&state, &request, &descriptor, generation)?;
+                    tile
+                }
                 None => {
+                    let mut reader = SourceReader::new(
+                        SourceInfo {
+                            media_id: descriptor.id.clone(),
+                            sample_rate: descriptor.sample_rate,
+                            frame_count: descriptor.frame_count,
+                            channel_count: usize::from(descriptor.channel_count),
+                        },
+                        request.analysis_source,
+                        request.processing_version,
+                        &edits,
+                        request.channel_index,
+                    )?;
                     let tile = compute_tile(
                         &request,
                         descriptor.sample_rate,
@@ -218,19 +247,19 @@ fn enqueue(
                         cancel,
                         |start, count| {
                             check_cancel(cancel)?;
-                            let interleaved = state
-                                .2
-                                .pcm
-                                .lock()
-                                .map_err(|_| failure())?
-                                .read_frames(&media.pcm, start, count)?;
-                            Ok(interleaved
-                                .chunks_exact(usize::from(descriptor.channel_count))
-                                .map(|frame| frame[usize::from(request.channel_index)])
-                                .collect())
+                            reader.read_channel(start, count, cancel, |start, count| {
+                                state
+                                    .2
+                                    .pcm
+                                    .lock()
+                                    .map_err(|_| failure())?
+                                    .read_frames(&media.pcm, start, count)
+                            })
                         },
                         |done, total| progress("analysis", done, total),
                     )?;
+                    check_cancel(cancel)?;
+                    current(&state, &request, &descriptor, generation)?;
                     // Cache failures are disposable; a valid computed tile remains usable.
                     if let Ok(bytes) = encode_cached(&tile) {
                         if let Ok(mut cache) = state.2.cache.lock() {
@@ -247,7 +276,11 @@ fn enqueue(
             current(&state, &request, &descriptor, generation)?;
             progress("ready", tile.source_frames, tile.source_frames);
             check_cancel(cancel)?;
-            encode_tile(&request, &tile)
+            current(&state, &request, &descriptor, generation)?;
+            let bytes = encode_tile(&request, &tile)?;
+            check_cancel(cancel)?;
+            current(&state, &request, &descriptor, generation)?;
+            Ok(bytes)
         })
 }
 #[tauri::command]
@@ -257,6 +290,23 @@ pub async fn request_tile(
     on_event: Channel<TileProgress>,
 ) -> Result<Response> {
     let state = state.inner().clone();
+    let publish_state = state.clone();
+    let publish_request = request.clone();
+    let (expected, generation) = {
+        let lock = state.0.lock().map_err(|_| failure())?;
+        let snapshot = lock.as_ref().ok_or_else(failure)?.snapshot()?;
+        let expected = snapshot
+            .document
+            .media
+            .iter()
+            .find(|m| m.id == request.media_id)
+            .cloned()
+            .ok_or_else(failure)?;
+        (
+            expected,
+            state.1.lock().map_err(|_| failure())?.generation(),
+        )
+    };
     let bytes = tauri::async_runtime::spawn_blocking(move || {
         enqueue(state, request, move |event| on_event.send(event).is_ok())?
             .recv()
@@ -264,6 +314,7 @@ pub async fn request_tile(
     })
     .await
     .map_err(|_| AppError::new(ErrorCode::AnalysisFailed, "分析服务中断"))??;
+    current(&publish_state, &publish_request, &expected, generation)?;
     Ok(Response::new(bytes))
 }
 #[tauri::command]
@@ -340,6 +391,157 @@ mod tests {
     use annotator_core::{media::decode::decode, model::Change, project::LocalProject};
     use std::sync::atomic::AtomicBool;
     #[test]
+    fn processed_authority_rejects_forgery_and_edit_during_work_or_cache_publication() {
+        use annotator_core::{
+            analysis::source::AnalysisSource,
+            model::{Region, SpectralEdit},
+        };
+        let root = std::env::temp_dir().join(format!("processed-tiles-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        let state = AppState::default();
+        let mut project = LocalProject::create(&root, "test".into()).unwrap();
+        let path = root.join("audio.wav");
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../tests/fixtures/audio/mono16.wav"),
+            &path,
+        )
+        .unwrap();
+        let decoded = decode(&path, &root.join("pcm"), &AtomicBool::new(false), |_, _| {}).unwrap();
+        let mut media = decoded.descriptor.clone();
+        media.source_ref = "audio.wav".into();
+        let id = project.snapshot().unwrap().document.project_id;
+        let snapshot = project
+            .session_mut()
+            .unwrap()
+            .apply_change(
+                &id,
+                0,
+                Change::ImportMedia {
+                    media: media.clone(),
+                },
+            )
+            .unwrap();
+        let settings = snapshot.document.analysis[&media.id].clone();
+        *state.0.lock().unwrap() = Some(project);
+        let request = TileRequest {
+            analysis_source: AnalysisSource::Processed,
+            processing_version: 1,
+            edit_signature: AnalysisSource::Processed.signature(&media.id, &[]),
+            request_id: "p".into(),
+            view_id: state.2.scheduler.register_view().unwrap(),
+            project_id: id.clone(),
+            media_id: media.id.clone(),
+            generation: 1,
+            config_hash: config_hash(&settings),
+            settings,
+            channel_index: 0,
+            kind: annotator_core::model::SpectrumKind::Stft,
+            start_frame: 0,
+            frame_count: 256,
+            time_lod: 0,
+            frequency_start: 0,
+            frequency_count: 1025,
+            frequency_lod: 0,
+            visible: true,
+        };
+        let mut forged = request.clone();
+        forged.edit_signature = "0".repeat(64);
+        assert!(
+            matches!(enqueue(state.clone(), forged, |_| true), Err(e) if e.code == ErrorCode::Cancelled)
+        );
+        // First compute; second is a warm native cache hit. An edit during the
+        // final ready notification must be rejected again before publication.
+        assert!(enqueue(state.clone(), request.clone(), |_| true)
+            .unwrap()
+            .recv()
+            .unwrap()
+            .is_ok());
+        let edit = SpectralEdit {
+            id: uuid::Uuid::new_v4().to_string(),
+            region: Region {
+                media_id: media.id.clone(),
+                channel_index: 0,
+                start_seconds: 0.,
+                end_seconds: media.frame_count as f64 / media.sample_rate as f64,
+                low_hz: 0.,
+                high_hz: media.sample_rate as f64 / 2.,
+            },
+            enabled: true,
+            processing_version: 1,
+        };
+        let changed = state.clone();
+        let project_id = id.clone();
+        let new_edit = edit.clone();
+        let stale = enqueue(state.clone(), request.clone(), move |event| {
+            if event.phase == "ready" {
+                let mut guard = changed.0.lock().unwrap();
+                let p = guard.as_mut().unwrap();
+                let revision = p.snapshot().unwrap().document.revision;
+                p.session_mut()
+                    .unwrap()
+                    .apply_change(
+                        &project_id,
+                        revision,
+                        Change::AddEdit {
+                            edit: new_edit.clone(),
+                        },
+                    )
+                    .unwrap();
+            }
+            true
+        })
+        .unwrap()
+        .recv()
+        .unwrap()
+        .unwrap_err();
+        assert_eq!(stale.code, ErrorCode::Cancelled);
+        assert!(
+            matches!(enqueue(state.clone(), request.clone(), |_| true), Err(e) if e.code == ErrorCode::Cancelled)
+        );
+        let mut updated = request.clone();
+        updated.edit_signature = AnalysisSource::Processed.signature(&media.id, &[edit]);
+        let changed = state.clone();
+        let project_id = id.clone();
+        let media_id = media.id.clone();
+        let stale = enqueue(state.clone(), updated, move |event| {
+            if event.phase == "analysis" && event.completed == 1 {
+                let mut guard = changed.0.lock().unwrap();
+                let p = guard.as_mut().unwrap();
+                let snapshot = p.snapshot().unwrap();
+                p.session_mut()
+                    .unwrap()
+                    .apply_change(
+                        &project_id,
+                        snapshot.document.revision,
+                        Change::SetEditEnabled {
+                            id: snapshot.document.edits[0].id.clone(),
+                            enabled: false,
+                        },
+                    )
+                    .unwrap();
+                assert_eq!(snapshot.document.edits[0].region.media_id, media_id);
+            }
+            true
+        })
+        .unwrap()
+        .recv()
+        .unwrap()
+        .unwrap_err();
+        assert_eq!(stale.code, ErrorCode::Cancelled);
+        assert!(enqueue(state.clone(), request, |_| true)
+            .unwrap()
+            .recv()
+            .unwrap()
+            .is_ok());
+        state.2.scheduler.reset();
+        state.1.lock().unwrap().reset();
+        *state.0.lock().unwrap() = None;
+        drop(decoded);
+        drop(state);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn native_service_reopens_without_relink_preserves_document_and_checks_current_identity() {
         let root = std::env::temp_dir().join(format!("native-tiles-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).unwrap();
@@ -368,6 +570,9 @@ mod tests {
         *state.0.lock().unwrap() = Some(project);
         let settings = snapshot.document.analysis[&descriptor.id].clone();
         let request = TileRequest {
+            analysis_source: annotator_core::analysis::source::AnalysisSource::Original,
+            processing_version: 1,
+            edit_signature: String::new(),
             request_id: "test".into(),
             view_id: state.2.scheduler.register_view().unwrap(),
             project_id: project_id.clone(),

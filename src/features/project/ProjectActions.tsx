@@ -9,7 +9,7 @@ export function projectMenuItems({project,onImport,onImportFolder,importDisabled
   {id:'new',label:'新建项目',disabled:busy,action:()=>{void project.open('create');}},
   {id:'open',label:'打开项目…',disabled:busy,action:()=>{void project.open('open');}},
   {id:'save',label:'保存',disabled:busy||!project.active,action:()=>{void project.save();}},
-  {id:'save-as',label:'项目另存为…',disabled:busy||!project.active,action:()=>{void project.saveAs();}},
+  {id:'save-as',label:'另存项目副本…',disabled:busy||!project.active,action:()=>{void project.saveAs();}},
   {id:'import',label:'导入音频',disabled:busy||importDisabled,action:onImport},
   {id:'import-folder',label:'导入文件夹…',disabled:busy||importDisabled||!onImportFolder,action:onImportFolder},
   {id:'import-share',label:'导入分享文件…',disabled:busy||!exchange,action:()=>exchange?.show('import')},

@@ -1,0 +1,13 @@
+
+> audio-annotator@0.2.1 test
+> vitest run src/features/spectrogram/cachePressure.test.tsx src/features/spectrogram/useTiles.test.tsx
+
+
+ RUN  v4.1.12 D:/Work/annotator/.worktrees/spectral-fidelity-v021
+
+
+ Test Files  2 passed (2)
+      Tests  16 passed (16)
+   Start at  18:12:20
+   Duration  4.60s (transform 417ms, setup 397ms, import 486ms, tests 5.63s, environment 1.06s)
+

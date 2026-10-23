@@ -17,7 +17,7 @@ export function workspaceMenus({project,mediaUI,exchange,annotations,selection,w
 }):WorkspaceMenu[]{
  const owner=project?.active,doc=owner?.store.snapshot.document,disabled=!owner||owner.store.editingDisabled;
  const target=selection.selection,region=owner&&target?resolveRegion(owner,target):null;
- const media=doc?.media.find(m=>m.id===(selection.context?.mediaId??mediaUI?.selectedId));
+ const media=doc?.media.find(m=>m.id===(selection.context?.mediaId??workspace.state.activeMediaId));
  const view=media?workspace.view(media.id):null, regionDisabled=disabled||!region;
  const pair=doc?.media.filter(m=>m.id===workspace.state.activeMediaId||m.id===workspace.state.compareMediaId)??[];
  const timeLimit=media?(workspace.state.linkedTime?Math.max(duration(media),...pair.map(duration)):duration(media)):0;
@@ -34,7 +34,7 @@ export function workspaceMenus({project,mediaUI,exchange,annotations,selection,w
    ...(target?.object?[{id:'remove',label:target.object.kind==='annotation'?'删除标注':'删除屏蔽',disabled:regionDisabled,action:()=>{void selection.actions?.remove(target);}}]:[])]},
   {id:'view',label:'视图',items:[
    {id:'single',label:'单文件',checked:!workspace.state.compareMediaId,disabled:disabled||!media,action:()=>workspace.compare(null)},
-   {id:'compare',label:'双文件对比',disabled:disabled||(doc?.media.length??0)<2,children:doc?.media.filter(m=>m.id!==mediaUI?.selectedId).map(m=>({id:m.id,label:m.displayName,checked:workspace.state.compareMediaId===m.id,action:()=>workspace.compare(m.id)}))},
+   {id:'compare',label:'双文件对比',disabled:disabled||(doc?.media.length??0)<2,children:doc?.media.map(m=>({id:m.id,label:m.displayName,checked:workspace.state.compareMediaId===m.id,action:()=>workspace.compare(m.id)}))},
    ...(['horizontal','vertical'] as const).map(layout=>({id:layout,label:layout==='horizontal'?'左右对比':'上下对比',checked:workspace.state.compareLayout===layout,disabled:disabled||!workspace.state.compareMediaId,action:()=>workspace.layout(layout)})),
    {id:'linked',label:'联动时间轴',checked:workspace.state.linkedTime,disabled:disabled||!workspace.state.compareMediaId,action:()=>workspace.link(!workspace.state.linkedTime)},
    {id:'files',label:'音频列表',checked:mediaOpen,action:toggleMedia}, {id:'properties',label:'属性面板',checked:propertiesOpen,action:toggleProperties},
@@ -49,10 +49,12 @@ export function workspaceMenus({project,mediaUI,exchange,annotations,selection,w
    ...(doc ? [classificationMenu(doc, media ? { mediaId: media.id, channelIndex: null } : null, annotations.classify, '当前文件分类', disabled), classificationMenu(doc, media && view && (selection.context?.channelIndex ?? view.visibleChannels[0]) !== undefined ? { mediaId: media.id, channelIndex: selection.context?.channelIndex ?? view.visibleChannels[0] } : null, annotations.classify, '当前通道分类', disabled)] : []),
    {id:'categories',label:'类别管理',disabled,action:()=>inspector('categories')}, {id:'list',label:'标注列表',disabled,action:()=>inspector('list')}]},
   {id:'audio',label:'音频',items:[
-   ...(['original','processed'] as const).map(mode=>({id:mode,label:mode==='original'?'原音':'处理后',checked:playback.options.mode===mode,disabled:disabled||!playback.media,action:guard(()=>playback.update({mode}))})),
-   {id:'play',label:'播放选区',disabled:regionDisabled||!ready,children:(['original','processed'] as const).map(source=>({id:source,label:source==='original'?'原始选区':'处理后选区',action:()=>selection.withTarget(target,r=>playback.playSelection(r,source))}))},
+   {id:'toggle',label:playback.playing?'暂停':'播放',disabled:disabled||!playback.media,action:guard(playback.toggle)},
+   {id:'whole',label:'播放整段',disabled:disabled||!playback.media,action:guard(playback.playFile)},
+   ...(['original','processed'] as const).map(source=>({id:source,label:source==='original'?'原音':'暂存编辑',checked:playback.workspaceSource===source,disabled,action:guard(()=>playback.updateWorkspaceSource(source))})),
+   {id:'play',label:'播放选区',disabled:regionDisabled||!ready,action:()=>selection.withTarget(target,r=>playback.playSelection(r))},
+   ...(['original','processed'] as const).map(source=>({id:'audition-'+source,label:source==='original'?'试听选区原音':'试听选区（应用屏蔽）',disabled:regionDisabled||!ready,action:()=>selection.withTarget(target,r=>playback.playSelection(r,source))})),
    {id:'mask',label:'屏蔽选区',disabled:regionDisabled,action:()=>{if(target)void selection.actions?.mask(target);}},
-   {id:'bypass',label:'旁路全部屏蔽',checked:playback.options.bypass,disabled:disabled||!playback.media,action:guard(()=>playback.update({bypass:!playback.options.bypass}))},
    {id:'devices',label:'输出设备…',disabled,action:()=>inspector('devices')}, {id:'mix',label:'通道混音',disabled:disabled||!playback.media,action:()=>inspector('mix')}]},
   {id:'help',label:'帮助',items:([{id:'shortcuts',label:'快捷键'},{id:'guide',label:'使用说明'},{id:'about',label:'版本与第三方声明'}] as const).map(t=>({...t,action:()=>help(t.id)}))},
  ];

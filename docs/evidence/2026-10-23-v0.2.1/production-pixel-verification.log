@@ -1,0 +1,57 @@
+{
+  "method": "RGB statistics from actual production window screenshots; ROI3-6 seconds, 7 rows around300Hz/6000Hz using default physical view (observed0-10s,0-24kHz,65%mix) and observed UIAutomation plot rectangle. Not dB inferred from pixels.",
+  "regions": {
+    "view": {
+      "startSeconds": 0,
+      "endSeconds": 10,
+      "lowHz": 0,
+      "highHz": 24000,
+      "frequencyMix": 0.65,
+      "spectrumKind": "stft"
+    },
+    "regions": {
+      "sender": {
+        "300": [
+          411,
+          433,
+          513,
+          440
+        ],
+        "6000": [
+          411,
+          325,
+          513,
+          332
+        ]
+      },
+      "recipient": {
+        "300": [
+          411,
+          433,
+          513,
+          440
+        ],
+        "6000": [
+          411,
+          325,
+          513,
+          332
+        ]
+      }
+    }
+  },
+  "300": {
+    "originalRgbMean": 156.9047619047619,
+    "processedRgbMean": 0.0,
+    "originalProcessedMeanAbsDifference": 156.9047619047619,
+    "recipientOriginalDifference": 0.0,
+    "recipientProcessedDifference": 0.0
+  },
+  "6000": {
+    "originalRgbMean": 18.38095238095238,
+    "processedRgbMean": 18.38095238095238,
+    "originalProcessedMeanAbsDifference": 0.0,
+    "recipientOriginalDifference": 0.0,
+    "recipientProcessedDifference": 0.0
+  }
+}

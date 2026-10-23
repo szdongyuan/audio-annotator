@@ -35,7 +35,7 @@ export function selectionActions(owner: ActiveProject, state: SelectionState) {
       await owner.queue.enqueue({ type: 'addAnnotation', annotation }, { owner: 'annotations' });
       createdAnnotations.set(target, annotation.id);
     }
-    const current = state.getSnapshot();
+    const current = state.getActiveSelection();
     const bound = state.bind(target, { kind: 'annotation', id: annotation.id });
     if (focus && (bound || current?.object?.kind === 'annotation' && current.object.id === annotation.id)) focus(annotation.id);
   });

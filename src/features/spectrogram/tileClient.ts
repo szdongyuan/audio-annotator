@@ -1,10 +1,11 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type { AnalysisSettings, AppError } from '../../bridge/types';
 import { normalizeError } from '../../bridge/client';
+import type { AnalysisIdentity } from './analysisSource';
 
 export const MAX_TILE_BYTES = 4 * 1024 * 1024;
 const METADATA_RESERVE = 16 * 1024;
-export interface TileRequest {
+export interface TileRequest extends AnalysisIdentity {
   requestId: string; viewId: string; projectId: string; mediaId: string; generation: number;
   configHash: string; settings: AnalysisSettings; channelIndex: number; kind: 'stft' | 'mel';
   startFrame: number; frameCount: number; timeLod: number;
@@ -56,22 +57,32 @@ const uint = (value: unknown, min = 0): number => {
   return value;
 };
 const finite = (value: unknown): number => { if (typeof value !== 'number' || !Number.isFinite(value)) throw invalid(); return value; };
+const exactKeys = (value: Record<string, unknown>, keys: string[]) => { if (Object.keys(value).length !== keys.length || keys.some(key => !Object.hasOwn(value, key))) throw invalid(); };
+function validateIdentity(r: AnalysisIdentity) {
+  if (r.processingVersion !== 1 || (r.analysisSource !== 'original' && r.analysisSource !== 'processed')
+    || typeof r.editSignature !== 'string' || (r.analysisSource === 'original' ? r.editSignature !== '' : !/^[a-f0-9]{64}$/.test(r.editSignature))) throw invalid();
+}
 /** One binary envelope associates compact JSON geometry and raw f32 bytes atomically.
  * Offsets are aligned to four bytes; all numeric payloads are explicitly little-endian. */
 export function decodeTile(buffer: ArrayBuffer, expected: TileRequest): TileResult {
+  validateIdentity(expected);
   if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 8 || buffer.byteLength > MAX_TILE_BYTES) throw invalid();
   const view = new DataView(buffer);
   if (view.getUint32(0, false) !== 0x41543031) throw invalid();
   const length = view.getUint32(4, true); const offset = Math.ceil((8 + length) / 4) * 4;
   if (length > METADATA_RESERVE - 12 || offset > buffer.byteLength) throw invalid();
   const header = record(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(buffer, 8, length))));
+  exactKeys(header, ['protocol', 'encoding', 'request', 'tile', 'valueCount']);
   if (header.protocol !== 1 || header.encoding !== 'f32le-db-row-major') throw invalid();
   const received = record(header.request);
+  exactKeys(received, ['requestId', 'viewId', 'projectId', 'mediaId', 'generation', 'configHash', 'settings', 'channelIndex', 'kind', 'startFrame', 'frameCount', 'timeLod', 'frequencyStart', 'frequencyCount', 'frequencyLod', 'visible', 'analysisSource', 'processingVersion', 'editSignature']);
+  exactKeys(record(received.settings), ['window', 'windowSize', 'hopSize', 'fftSize', 'melBands']);
   for (const [key, value] of Object.entries(expected)) {
     if (key === 'settings') { const settings = record(received.settings); for (const [k, v] of Object.entries(value)) if (settings[k] !== v) throw invalid(); }
     else if (received[key] !== value) throw invalid();
   }
   const m = record(header.tile);
+  exactKeys(m, ['rows', 'columns', 'sourceFrames', 'sampleRate', 'totalSamples', 'startSeconds', 'endSeconds', 'frameStepSamples', 'melPointsHz']);
   const rows = uint(m.rows, 1), columns = uint(m.columns, 1), sourceFrames = uint(m.sourceFrames, 1);
   const sampleRate = uint(m.sampleRate, 1), totalSamples = uint(m.totalSamples, 1), step = uint(m.frameStepSamples, 1);
   const start = finite(m.startSeconds), end = finite(m.endSeconds);
@@ -138,6 +149,7 @@ export class TileClient {
   }
   async request(input: Omit<TileRequest, 'requestId' | 'projectId' | 'viewId' | 'generation'>, onProgress?: (event: TileProgress) => void): Promise<TileResult> {
     if (this.disposed) throw cancelled();
+    validateIdentity(input);
     const generation = this.generation;
     try {
       const viewId = await this.register();

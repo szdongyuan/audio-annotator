@@ -1,0 +1,51 @@
+[
+  {
+    "name": "fixtures",
+    "command": "npm.cmd run fixtures",
+    "exit": 0,
+    "started": "2026-10-23T18:13:20.2659080+08:00",
+    "finished": "2026-10-23T18:13:21.7115702+08:00"
+  },
+  {
+    "name": "typecheck",
+    "command": "npm.cmd run typecheck",
+    "exit": 0,
+    "started": "2026-10-23T18:13:21.7550248+08:00",
+    "finished": "2026-10-23T18:13:27.3615354+08:00"
+  },
+  {
+    "name": "frontend-tests",
+    "command": "npm.cmd test",
+    "exit": 0,
+    "started": "2026-10-23T18:13:27.3648278+08:00",
+    "finished": "2026-10-23T18:13:39.8844609+08:00"
+  },
+  {
+    "name": "frontend-build",
+    "command": "npm.cmd run build",
+    "exit": 0,
+    "started": "2026-10-23T18:13:39.8867152+08:00",
+    "finished": "2026-10-23T18:13:49.7314522+08:00"
+  },
+  {
+    "name": "cargo-fmt",
+    "command": "cargo fmt --all -- --check",
+    "exit": 0,
+    "started": "2026-10-23T18:13:49.7328558+08:00",
+    "finished": "2026-10-23T18:13:50.5346650+08:00"
+  },
+  {
+    "name": "cargo-clippy",
+    "command": "cargo clippy --workspace --all-targets -- -D warnings",
+    "exit": 0,
+    "started": "2026-10-23T18:13:50.5361956+08:00",
+    "finished": "2026-10-23T18:13:51.7675081+08:00"
+  },
+  {
+    "name": "rust-tests",
+    "command": "cargo test --workspace",
+    "exit": 0,
+    "started": "2026-10-23T18:13:51.7690857+08:00",
+    "finished": "2026-10-23T18:14:28.7503064+08:00"
+  }
+]

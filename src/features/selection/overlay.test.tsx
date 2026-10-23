@@ -104,28 +104,30 @@ it('offset CSS drag creates only a temporary physical selection and Escape resto
   s.pointer('pointerDown', 300, 200); s.pointer('pointerMove', 500, 300); s.pointer('pointerUp', 500, 300);
   expect(s.ui().selection).toMatchObject({ object: null, region: { startSeconds: .5, endSeconds: 1, channelIndex: 1 } });
   const before = s.ui().selection;
-  s.pointer('pointerDown', 700, 200); s.pointer('pointerMove', 800, 300); expect(document.querySelector('.is-preview')).not.toBeNull();
+  s.pointer('pointerDown', 400, 250); s.pointer('pointerMove', 450, 270); expect(document.querySelector('.is-selected')).not.toBeNull();
   fireEvent.keyDown(window, { key: 'Escape' }); s.pointer('pointerUp', 800, 300);
   expect(s.ui().selection).toBe(before); expect(document.querySelector('.is-preview')).toBeNull();
   await s.active.lifecycle.save(); expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
 });
-it('single click selects an object, dragging its interior draws a new selection, border and handle edit it', async () => {
+it('single click activates an object, interior and border move it once on release, handles resize it', async () => {
   const s = mounted(), a = s.doc.annotations[0];
   // Linear view in fixture: region .2–.8 seconds, 300–3000 Hz; use actual mapper.
   const { coordinates } = await import('../spectrogram/coordinates');
   const c = coordinates(defaultView(s.doc.media[0]), s.doc.media[0].sampleRate / 2, 800, 400);
   const x = 100 + c.secondsToX((a.region.startSeconds + a.region.endSeconds) / 2), y = 100 + c.hzToY((a.region.lowHz + a.region.highHz) / 2);
   s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y); expect(s.ui().selection?.object?.id).toBe(a.id);
-  s.pointer('pointerDown', x, y); s.pointer('pointerUp', x + 20, y + 20); expect(s.ui().selection?.object).toBeNull(); expect(s.applyChange).not.toHaveBeenCalled();
+  s.pointer('pointerDown', x, y); s.pointer('pointerMove', x + 20, y); expect(s.applyChange).not.toHaveBeenCalled(); s.pointer('pointerUp', x + 20, y);
+  await waitFor(() => expect(s.applyChange).toHaveBeenCalledOnce()); expect(s.ui().selection?.object?.id).toBe(a.id);
+  expect(s.active.store.snapshot.document.annotations[0].region.startSeconds).toBeCloseTo(a.region.startSeconds + .05);
   act(() => s.ui().selectObject('annotation', a.id));
-  const edgeX = 100 + c.secondsToX(a.region.startSeconds);
+  const edgeX = 100 + c.secondsToX(a.region.startSeconds + .05);
   s.pointer('pointerDown', edgeX, y); s.pointer('pointerUp', edgeX + 20, y);
-  await waitFor(() => expect(s.applyChange).toHaveBeenCalledOnce());
-  const moved = s.active.store.snapshot.document.annotations[0]; expect(moved.region.startSeconds).toBeCloseTo(a.region.startSeconds + .05);
+  await waitFor(() => expect(s.applyChange).toHaveBeenCalledTimes(2));
+  const moved = s.active.store.snapshot.document.annotations[0]; expect(moved.region.startSeconds).toBeCloseTo(a.region.startSeconds + .1);
   const handle = document.querySelector<HTMLElement>('.annotation-rect.is-selected .handle-e')!;
   const right = 100 + c.secondsToX(moved.region.endSeconds);
   s.pointer('pointerDown', right, y, handle); s.pointer('pointerUp', right + 20, y);
-  await waitFor(() => expect(s.applyChange).toHaveBeenCalledTimes(2)); expect(s.active.store.snapshot.document.annotations[0].region.endSeconds).toBeCloseTo(moved.region.endSeconds + .05); s.finish();
+  await waitFor(() => expect(s.applyChange).toHaveBeenCalledTimes(3)); expect(s.active.store.snapshot.document.annotations[0].region.endSeconds).toBeCloseTo(moved.region.endSeconds + .05); s.finish();
 });
 it.each(['pointerCancel', 'lostPointerCapture'] as const)('%s discards a preview and cannot commit a late pointer-up', event => {
   const s = mounted(); s.pointer('pointerDown', 300, 200); s.pointer('pointerMove', 500, 300); fireEvent[event](s.surface); s.pointer('pointerUp', 500, 300);
@@ -184,4 +186,54 @@ it('never renders a menu captured by an earlier runtime after same-project Save 
   act(() => hook.result.current.openMenu({ x: 10, y: 10, target: null, overlaps: [], mediaId: s.doc.media[0].id, channelIndex: 0 }));
   expect(hook.result.current.menu).not.toBeNull(); renders.length = 0;
   hook.rerender({ active: { ...s.active } }); expect(renders.every(open => !open)).toBe(true); hook.unmount(); s.active.lifecycle.dispose();
+});
+
+it('first outside blank gesture only deactivates; inactive temporary outline ignores Delete, click reactivates and next drag replaces', async () => {
+  const s = mounted(); s.pointer('pointerDown', 300, 200); s.pointer('pointerUp', 500, 300);
+  const first = s.ui().selection;
+  s.pointer('pointerDown', 700, 150); s.pointer('pointerMove', 800, 250); s.pointer('pointerUp', 800, 250);
+  expect(s.ui().selection).toBeNull(); expect(s.ui().state.getCandidate()).toBe(first);
+  expect(document.querySelector('.is-temporary')).not.toBeNull(); expect(document.querySelector('.region-handle')).toBeNull();
+  fireEvent.keyDown(window, { key: 'Delete' }); await s.active.lifecycle.save(); expect(s.applyChange).not.toHaveBeenCalled();
+  s.pointer('pointerDown', 400, 250); s.pointer('pointerUp', 400, 250); expect(s.ui().selection).toBe(first);
+  fireEvent.keyDown(window, { key: 'Escape' }); expect(s.ui().selection).toBeNull();
+  s.pointer('pointerDown', 400, 250); s.pointer('pointerUp', 550, 320);
+  expect(s.ui().selection?.object).toBeNull(); expect(s.ui().selection).not.toBe(first);
+  expect(document.querySelectorAll('.is-temporary')).toHaveLength(1); s.finish();
+});
+it('clicking another saved object directly activates it while deactivation never disables a mask', () => {
+  const s = mounted(), a = s.doc.annotations[0], edit = s.doc.edits[0], p = objectPoint(s);
+  act(() => s.ui().selectObject('mask', edit.id));
+  s.pointer('pointerDown', p.x, p.y); s.pointer('pointerUp', p.x, p.y);
+  expect(s.ui().selection?.object?.id).toBe(a.id);
+  act(() => s.ui().selectObject('mask', edit.id)); fireEvent.keyDown(window, { key: 'Escape' });
+  expect(s.ui().selection).toBeNull(); expect(s.active.store.snapshot.document.edits[0].enabled).toBe(edit.enabled);
+  expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it('nonplot buttons do not deactivate and an inactive candidate is cleared when its pane is replaced', () => {
+  const s = setup(), media = s.doc.media[0];
+  const hook = renderHook(({ panes }) => useSelection(s.active, media.id, panes), { initialProps: { panes: [{ mediaId: media.id, channels: [1] }] } });
+  act(() => hook.result.current.state.select({ region: s.doc.annotations[0].region, object: null }));
+  const button = document.createElement('button'); document.body.append(button); fireEvent.pointerDown(button); fireEvent.click(button); button.remove();
+  expect(hook.result.current.selection).not.toBeNull();
+  act(() => hook.result.current.state.deactivate()); hook.rerender({ panes: [] });
+  expect(hook.result.current.state.getCandidate()).toBeNull(); hook.unmount(); s.active.lifecycle.dispose();
+});
+
+it('click reactivates the retained temporary outline even when it overlaps a saved annotation', () => {
+  const s = mounted(), p = objectPoint(s), target = { region: s.doc.annotations[0].region, object: null };
+  act(() => { s.ui().state.select(target); s.ui().state.deactivate(); });
+  s.pointer('pointerDown', p.x, p.y); s.pointer('pointerUp', p.x, p.y);
+  expect(s.ui().selection).toBe(target); s.finish();
+});
+
+it('a stale rendered active frame cannot begin a gesture after its target disappears from authority', () => {
+  const s = mounted(), a = s.doc.annotations[0], p = objectPoint(s);
+  act(() => s.ui().selectObject('annotation', a.id));
+  // Model authority changing before the previously rendered pointer handler is replaced.
+  s.active.store.snapshot.document.annotations = [];
+  s.pointer('pointerDown', p.x, p.y);
+  expect(s.ui().selection).toBeNull();
+  s.pointer('pointerMove', p.x + 20, p.y); s.pointer('pointerUp', p.x + 20, p.y);
+  expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
 });

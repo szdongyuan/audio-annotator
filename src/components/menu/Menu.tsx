@@ -42,7 +42,7 @@ export function Menu({ items, anchor, onClose, onNavigate, panelKey, returnFocus
     window.addEventListener('keydown', key, true); window.addEventListener('resize', resize); window.addEventListener('blur', resize);
     return () => { window.removeEventListener('keydown', key, true); window.removeEventListener('resize', resize); window.removeEventListener('blur', resize); restore.current?.focus(); };
   }, []);
-  return createPortal(<div data-app-menu data-testid="menu-shield" className="menu-shield" onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }} onPointerDown={e => { e.stopPropagation(); if (e.target === e.currentTarget) { e.preventDefault(); onClose(); } }} onWheel={e => e.stopPropagation()}>
+  return createPortal(<div data-app-menu data-pane-control data-testid="menu-shield" className="menu-shield" onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }} onPointerDown={e => { e.stopPropagation(); if (e.target === e.currentTarget) { e.preventDefault(); onClose(); } }} onWheel={e => e.stopPropagation()}>
     <Panel key={panelKey} items={items} anchor={anchor} close={onClose} navigate={onNavigate} />
   </div>, document.body);
 }

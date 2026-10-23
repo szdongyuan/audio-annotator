@@ -1,0 +1,15 @@
+{
+  "syntaxChecksPassed": [
+    "scripts/run-desktop-tests.mjs",
+    "scripts/measure-performance.mjs",
+    "tests/desktop/harness-output-init.test.mjs",
+    "tests/desktop/harness-lifecycle.test.mjs"
+  ],
+  "productionInputsVerified": 257,
+  "frozenReleaseEntriesVerified": 42,
+  "sha256SumsSha256": "38f1de133e0e4316669d488d605bd0681e7f9f8e61e592e95637de672f54c939",
+  "scriptsExcludedFromProductionManifest": [
+    "scripts/run-desktop-tests.mjs",
+    "scripts/measure-performance.mjs"
+  ]
+}

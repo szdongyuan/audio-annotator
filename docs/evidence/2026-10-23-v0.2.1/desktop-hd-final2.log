@@ -1,0 +1,3165 @@
+
+> audio-annotator@0.2.1 test:desktop
+> node scripts/run-desktop-tests.mjs
+
+TAP version 13
+# Subtest: teardown waits for an owned listener to retire before reusing its port
+ok 1 - teardown waits for an owned listener to retire before reusing its port
+  ---
+  duration_ms: 120.7963
+  type: 'test'
+  ...
+# Subtest: port-release waiting times out without closing or attaching to another listener
+ok 2 - port-release waiting times out without closing or attaching to another listener
+  ---
+  duration_ms: 105.7798
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 406.8042
+{
+  "tauriVersion": "tauri-driver v2.1.0:",
+  "webViewVersion": "155.0.4283.62",
+  "helpVerified": true,
+  "signature": "Valid",
+  "edgeVersion": "Microsoft Edge WebDriver 155.0.4283.62 (aa3a7406ba8c53a83536df539f07124d73c899bd)",
+  "source": "https://msedgedriver.microsoft.com/155.0.4283.62/edgedriver_win64.zip",
+  "edgeSha256": "01CE0DAA683E5EA874E2E2439E4A162DB11B0D40228D37CCE1EFC990294464F6",
+  "edgeDriver": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.tools\\edgedriver\\msedgedriver.exe",
+  "tauriDriver": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.tools\\tauri-driver\\bin\\tauri-driver.exe"
+}
+
+> audio-annotator@0.2.1 tauri
+> tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm.cmd run build`
+
+> audio-annotator@0.2.1 build
+> npm run typecheck && vite build
+
+
+> audio-annotator@0.2.1 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 2051 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                  0.55 kB │ gzip:   0.36 kB
+dist/assets/index-BY57-oHH.css                  36.53 kB │ gzip:   8.49 kB
+dist/assets/index-qyiZd-wJ.js                  434.42 kB │ gzip: 137.42 kB
+dist/assets/THIRD-PARTY-NOTICES-A3bB2ICj.js  2,739.24 kB │ gzip: 118.86 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 3.24s
+   Compiling annotator-desktop v0.2.1 (D:\Work\annotator\.worktrees\spectral-fidelity-v021\src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.52s
+       Built application at: D:\Work\annotator\.worktrees\spectral-fidelity-v021\target\debug\annotator-desktop.exe
+Running project
+PASS project
+Running view-churn
+PASS view-churn
+Running spectral
+PASS spectral
+Running restart
+PASS restart
+Running sharing
+PASS sharing
+Running recovery
+PASS recovery
+{
+  "method": "Selenium → official tauri-driver → matching Microsoft EdgeDriver → actual Tauri executable. Native picker paths are preselected in the e2e feature; UI workflows use WebDriver pointer/keyboard. Folder-scan separately tests native IPC contracts; targeted transport/Channel failure injections are identified in suite reports. No store mutation substitutes for UI acceptance. Subjective listening and physical picker interaction are separate release checks.",
+  "checks": [
+    {
+      "name": "project",
+      "passed": true
+    },
+    {
+      "name": "view-churn",
+      "passed": true,
+      "switches": 300,
+      "mountedChannelOwners": 450,
+      "freshNativeAnalysis": true
+    },
+    {
+      "name": "spectral",
+      "passed": true
+    },
+    {
+      "name": "restart",
+      "passed": true
+    },
+    {
+      "name": "sharing",
+      "passed": true
+    },
+    {
+      "name": "recovery",
+      "passed": true
+    }
+  ],
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg"
+}
+Running selection-flow
+{
+  "method": "Owned native Tauri process, official tauri-driver and EdgeDriver; native picker paths only use the e2e feature. Edits use WebDriver pointer/keyboard.",
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\selection",
+  "evidence": {
+    "activation": {
+      "firstTemporary": {
+        "active": true,
+        "handles": 8,
+        "height": "44.9219%",
+        "left": "20.0573%",
+        "top": "25%",
+        "width": "39.9713%"
+      },
+      "inactive": {
+        "active": false,
+        "handles": 0,
+        "height": "44.9219%",
+        "left": "20.0573%",
+        "top": "25%",
+        "width": "39.9713%"
+      },
+      "movedTemporary": {
+        "active": true,
+        "handles": 8,
+        "height": "44.9219%",
+        "left": "25.0716%",
+        "top": "25%",
+        "width": "39.9713%"
+      },
+      "priorCompareDraw": {
+        "active": true,
+        "handles": 8,
+        "height": "40.2344%",
+        "left": "65.043%",
+        "top": "19.9219%",
+        "width": "24.9284%"
+      }
+    },
+    "pan": {
+      "before": {
+        "dynamicRangeDb": 100,
+        "endSeconds": 0.07052631578947369,
+        "frequencyMix": 0.65,
+        "gainDb": 0,
+        "highHz": 11444.983206524666,
+        "lowHz": 473.2126974847661,
+        "palette": "ember",
+        "spectrumKind": "stft",
+        "startSeconds": 0.027368421052631584,
+        "visibleChannels": [
+          0
+        ]
+      },
+      "after": {
+        "dynamicRangeDb": 100,
+        "endSeconds": 0.06416620498614958,
+        "frequencyMix": 0.65,
+        "gainDb": 0,
+        "highHz": 11444.983206524665,
+        "lowHz": 473.2126974847661,
+        "palette": "ember",
+        "spectrumKind": "stft",
+        "startSeconds": 0.021008310249307487,
+        "visibleChannels": [
+          0
+        ]
+      },
+      "regionBefore": {
+        "channelIndex": 0,
+        "endSeconds": 0.07052631578947369,
+        "highHz": 11444.983206524666,
+        "lowHz": 473.2126974847661,
+        "mediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+        "startSeconds": 0.027368421052631584
+      },
+      "regionAfter": {
+        "channelIndex": 0,
+        "endSeconds": 0.07052631578947369,
+        "highHz": 11444.983206524666,
+        "lowHz": 473.2126974847661,
+        "mediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+        "startSeconds": 0.027368421052631584
+      }
+    },
+    "played": [
+      {
+        "label": "试听选区原音",
+        "status": {
+          "consumedFrames": 5856,
+          "deviceChannels": 2,
+          "deviceName": "Headphones (High Definition Audio Device)",
+          "deviceRate": 48000,
+          "endSeconds": 0.08997916666666667,
+          "error": null,
+          "firstSeconds": 0.0650625,
+          "generation": 5,
+          "mediaId": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+          "positionSeconds": 0.08739583333333334,
+          "presentation": {
+            "callbackNanos": 99087900,
+            "drained": false,
+            "pendingTailFrames": 1056,
+            "ringExhausted": false,
+            "ringExhaustedNanos": null,
+            "scheduledFrames": 5856,
+            "tailNanos": 121087900,
+            "tailNonSilent": true
+          },
+          "projectId": "4085db27-f017-49e9-82ae-df1a7b3aa8a4",
+          "startSeconds": 0.0650625,
+          "state": "playing",
+          "underrunFrames": 0
+        }
+      },
+      {
+        "label": "试听选区（应用屏蔽）",
+        "status": {
+          "consumedFrames": 6336,
+          "deviceChannels": 2,
+          "deviceName": "Headphones (High Definition Audio Device)",
+          "deviceRate": 48000,
+          "endSeconds": 0.08997916666666667,
+          "error": null,
+          "firstSeconds": 0.0650625,
+          "generation": 7,
+          "mediaId": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+          "positionSeconds": 0.07247916666666666,
+          "presentation": {
+            "callbackNanos": 109104400,
+            "drained": false,
+            "pendingTailFrames": 1056,
+            "ringExhausted": false,
+            "ringExhaustedNanos": null,
+            "scheduledFrames": 6336,
+            "tailNanos": 131104400,
+            "tailNonSilent": true
+          },
+          "projectId": "4085db27-f017-49e9-82ae-df1a7b3aa8a4",
+          "startSeconds": 0.0650625,
+          "state": "playing",
+          "underrunFrames": 0
+        }
+      }
+    ],
+    "comparePlayback": {
+      "consumedFrames": 6336,
+      "deviceChannels": 2,
+      "deviceName": "Headphones (High Definition Audio Device)",
+      "deviceRate": 48000,
+      "endSeconds": 0.06,
+      "error": null,
+      "firstSeconds": 0.020020833333333335,
+      "generation": 10,
+      "mediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+      "positionSeconds": 0.03208333333333333,
+      "presentation": {
+        "callbackNanos": 109081900,
+        "drained": false,
+        "pendingTailFrames": 1056,
+        "ringExhausted": false,
+        "ringExhaustedNanos": null,
+        "scheduledFrames": 6336,
+        "tailNanos": 131081900,
+        "tailNonSilent": true
+      },
+      "projectId": "4085db27-f017-49e9-82ae-df1a7b3aa8a4",
+      "startSeconds": 0.020020833333333335,
+      "state": "playing",
+      "underrunFrames": 0
+    },
+    "frames": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "class": "annotation-rect     ",
+        "image": "none",
+        "shadow": "none"
+      },
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "class": "annotation-rect  is-selected is-temporary  ",
+        "image": "none",
+        "shadow": "none"
+      }
+    ],
+    "menu": [
+      {
+        "bottom": 747,
+        "height": 800,
+        "left": 963,
+        "right": 1153,
+        "top": 429,
+        "width": 1280
+      }
+    ],
+    "nestedMenu": [
+      {
+        "bottom": 747,
+        "height": 800,
+        "left": 963,
+        "right": 1153,
+        "top": 429,
+        "width": 1280
+      },
+      {
+        "bottom": 528,
+        "height": 800,
+        "left": 778,
+        "right": 968,
+        "top": 462,
+        "width": 1280
+      }
+    ],
+    "finalDocument": {
+      "algorithmVersions": {
+        "analysis": 1,
+        "dsp": 1
+      },
+      "analysis": {
+        "08db34fc-5ede-4613-9e56-f02f3f4ea8c0": {
+          "fftSize": 2048,
+          "hopSize": 512,
+          "melBands": 128,
+          "window": "hann",
+          "windowSize": 2048
+        },
+        "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee": {
+          "fftSize": 2048,
+          "hopSize": 512,
+          "melBands": 128,
+          "window": "hann",
+          "windowSize": 2048
+        }
+      },
+      "annotations": [
+        {
+          "categoryId": null,
+          "createdAt": "2026-10-23T10:21:10.294Z",
+          "id": "7a3fc341-bc4a-4261-bac9-c03e0a7891ce",
+          "note": "右键选区备注",
+          "region": {
+            "channelIndex": 0,
+            "endSeconds": 0.06002865329512894,
+            "highHz": 11484.410667682158,
+            "lowHz": 473.5595795274028,
+            "mediaId": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+            "startSeconds": 0.02005730659025788
+          },
+          "updatedAt": "2026-10-23T10:21:10.688Z"
+        }
+      ],
+      "categories": [
+        {
+          "color": "#e6a65d",
+          "id": "236de3f1-c91b-486a-90d3-3f5f5e5a4efa",
+          "name": "选区测试"
+        }
+      ],
+      "createdAt": "2026-10-23T10:21:06.443Z",
+      "edits": [
+        {
+          "enabled": true,
+          "id": "e6ce2f1d-3ee8-4b2b-ac8e-21e1b12100f4",
+          "processingVersion": 1,
+          "region": {
+            "channelIndex": 0,
+            "endSeconds": 0.07052631578947369,
+            "highHz": 11444.983206524666,
+            "lowHz": 473.2126974847661,
+            "mediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+            "startSeconds": 0.027368421052631584
+          }
+        }
+      ],
+      "formatVersion": 2,
+      "media": [
+        {
+          "byteLength": 2541,
+          "categoryId": null,
+          "channelCategoryIds": [
+            null,
+            null
+          ],
+          "channelCount": 2,
+          "channelLayout": [
+            "FRONT_LEFT",
+            "FRONT_RIGHT"
+          ],
+          "channelNotes": [
+            "",
+            ""
+          ],
+          "displayName": "stereo.mp3",
+          "frameCount": 4800,
+          "id": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+          "note": "",
+          "sampleRate": 48000,
+          "sha256": "a0499c96aeff59c686c320d496c68be8bcdca981753ed943c1cbefcb1868691c",
+          "sourceRef": "\\\\?\\D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\tests\\fixtures\\audio\\stereo.mp3"
+        },
+        {
+          "byteLength": 9644,
+          "categoryId": null,
+          "channelCategoryIds": [
+            null
+          ],
+          "channelCount": 1,
+          "channelLayout": null,
+          "channelNotes": [
+            ""
+          ],
+          "displayName": "mono16.wav",
+          "frameCount": 4800,
+          "id": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+          "note": "",
+          "sampleRate": 48000,
+          "sha256": "192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e",
+          "sourceRef": "\\\\?\\D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\tests\\fixtures\\audio\\mono16.wav"
+        }
+      ],
+      "name": "project-fDSgia",
+      "playbackMix": {
+        "08db34fc-5ede-4613-9e56-f02f3f4ea8c0": {
+          "mutedChannels": [],
+          "soloChannels": []
+        },
+        "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee": {
+          "mutedChannels": [],
+          "soloChannels": []
+        }
+      },
+      "projectId": "4085db27-f017-49e9-82ae-df1a7b3aa8a4",
+      "revision": 19,
+      "updatedAt": "2026-10-23T10:21:20.094Z",
+      "viewState": {
+        "activeMediaId": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+        "compareLayout": "horizontal",
+        "compareMediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+        "compareSplit": 0.5,
+        "linkedTime": false,
+        "media": {
+          "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee": {
+            "dynamicRangeDb": 100,
+            "endSeconds": 0.1,
+            "frequencyMix": 0.65,
+            "gainDb": 0,
+            "highHz": 24000,
+            "lowHz": 0,
+            "palette": "ember",
+            "spectrumKind": "stft",
+            "startSeconds": 0,
+            "visibleChannels": [
+              0
+            ]
+          }
+        }
+      }
+    }
+  },
+  "passed": true
+}
+Running rulers-flow
+{
+  "passed": true,
+  "checks": [
+    "native Ctrl direction, clamps, Ctrl+Shift priority, unchanged page scale and warmed tile requests",
+    "linear-near axis frame/tick alignment",
+    "full-log frame/tick alignment",
+    "native ordinary/Shift wheel anchored axis-only zoom",
+    "native reverse time drag, frequency drag and separate axis resets",
+    "Mel frame/tick alignment and immutable physical annotation",
+    "synthetic normalized deltaMode supplement",
+    "synthetic normalized deltaMode supplement",
+    "synthetic normalized deltaMode supplement",
+    "native narrow nonzero-Hz window uses readable 10px labels without clipping",
+    "region zoom shares physical view patch and linked seconds, short media tail stays empty"
+  ],
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\task3-rulers"
+}
+Running compact-layout
+PASS stereo-outer1280x800
+PASS stereo-outer1920x1080
+PASS stereo-outer1000x680
+PASS sidebar collapse preserves current selection
+PASS top annotation menu uses shared selection creation and focuses note
+PASS top audio mask and edit history use native commands
+PASS device selector and counters are on demand
+PASS vertical-outer1000x680
+PASS pointer split, keyboard clamps, orientation retention and save/reopen
+PASS top-menu keyboard navigation restores active trigger
+PASS bundled final guide, current shortcuts, 0.2.1 version and readable notices
+PASS edge menus remain in viewport
+PASS isolated125percent-simulation
+PASS six-plus-six-outer1000x680
+PASS independent six-channel scrolling retains full last plots and titles
+Running classification-flow
+PASS file category and note remain independent from channels/regions after immediate save
+PASS filename right click exposes the same file category submenu
+PASS main menu and exact properties target comparison channel without changing sidebar or creating a region
+PASS right click channel submenu supports classified/unclassified independently
+PASS three real scopes classify independently
+PASS channel result locates exact comparison channel without region or playback
+PASS file result locates whole-file properties
+PASS hidden current channel falls back to first visible comparison channel
+PASS no visible channels disables current channel classification
+PASS removed comparison context falls back to visible primary channel
+PASS one category deletion clears all three scopes; one undo restores every reference and note
+PASS classification-outer1280x800
+PASS classification-outer1920x1080
+PASS classification-min-pane-long-name
+PASS fresh native process restores all classification notes and project semantics
+PASS json full semantic roundtrip preserves categories, notes, regions, analysis, mix, view and media metadata
+PASS zip full semantic roundtrip preserves categories, notes, regions, analysis, mix, view and media metadata
+Running folder-scan
+{
+  "method": "Real Tauri e2e binary via owned Selenium/WebView2 IPC; no UI/controller claimed",
+  "checks": [
+    "nonrecursive discovery; 256+4 pages; strict owner/size; no document import; release",
+    "recursive scan; save-as resets owner; old cancel cannot affect next result",
+    "close/open/create owner isolation; inaccessible root terminal failure with no page",
+    "cancel clears unpublished results and release frees active slot",
+    "failed exchange preserves scan; successful exchange replacement invalidates scan"
+  ],
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\task6-folders\\native-9m8ecB"
+}
+Running folder-flow
+PASS Default nonrecursive scan imports all 257 distinct paths across 256+2 (one corrupt) with bounded result DOM and one aggregate panel
+PASS Recursive option imports nested same-name file; existing canonical paths skipped and corrupt audio fails independently
+PASS Repeated recursive import does not duplicate any existing source
+PASS Injected one publication failure pauses before batch 2; explicit retry reuses original prepared PCM, resumes final item and corrects aggregate success
+PASS Cancel preserves failed edit; explicit End abandons only this failed import and releases native PCM
+PASS Dismissed folder results reserve no feedback height; exact 1280x800 outer window retains four 236.5px plots and 72/48/54 budgets
+PASS Injected delayed native ready/finished: cancellation visible under 500ms retains accepted media; new project remains empty and old PCM releases
+PASS Injected delayed scan terminal: cancel calls scan cancellation/release and late result cannot start a decoder
+PASS Direct multi-select audio import still works after folder cancellation
+PASS Real relink picker verifies moved fixture and preserves descriptor identity/classification/notes
+{
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\task7-folder-import\\native-JJxbDb",
+  "passed": true,
+  "checks": [
+    "Default nonrecursive scan imports all 257 distinct paths across 256+2 (one corrupt) with bounded result DOM and one aggregate panel",
+    "Recursive option imports nested same-name file; existing canonical paths skipped and corrupt audio fails independently",
+    "Repeated recursive import does not duplicate any existing source",
+    "Injected one publication failure pauses before batch 2; explicit retry reuses original prepared PCM, resumes final item and corrects aggregate success",
+    "Cancel preserves failed edit; explicit End abandons only this failed import and releases native PCM",
+    "Dismissed folder results reserve no feedback height; exact 1280x800 outer window retains four 236.5px plots and 72/48/54 budgets",
+    "Injected delayed native ready/finished: cancellation visible under 500ms retains accepted media; new project remains empty and old PCM releases",
+    "Injected delayed scan terminal: cancel calls scan cancellation/release and late result cannot start a decoder",
+    "Direct multi-select audio import still works after folder cancellation",
+    "Real relink picker verifies moved fixture and preserves descriptor identity/classification/notes"
+  ]
+}
+Running feedback-flow
+{
+  "passed": true,
+  "checks": [
+    "Concurrent command failure and remaining processing: distinct panels; cancel and retry centers hit their actual buttons at both outer sizes",
+    "Cancellation calls native and late prepared media is released; failed import stays in ledger",
+    "Dismissal retains failed command; explicit retry imports its original prepared media and clears ledger",
+    "No active feedback leaves zero reserved strip"
+  ]
+}
+Running format-flow
+{
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\task8-format-jA5noH",
+  "method": "Actual native v2 save and UI open/import rejection. Only picker results injected. Ordinary open saves/closes the old session before attempting the target; no rollback promise.",
+  "checks": [
+    "native save writes complete format 2",
+    "local format 1 rejected; source bytes unchanged",
+    "portable format 1 rejected; source bytes and current owner preserved",
+    "local format 999 rejected; source bytes unchanged",
+    "portable format 999 rejected; source bytes and current owner preserved"
+  ],
+  "sources": [
+    {
+      "version": 1,
+      "local": {
+        "path": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\task8-format-jA5noH\\local-1\\project.json",
+        "before": "ebdf0037601e5bf0cd7438b5858be07a66fe0e0ae727932d506543bfb0baabcb",
+        "after": "ebdf0037601e5bf0cd7438b5858be07a66fe0e0ae727932d506543bfb0baabcb"
+      },
+      "portable": {
+        "path": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\task8-format-jA5noH\\share-1.json",
+        "before": "11f5eed28e401ce495e2ac5fd89b38499ab49fbad3c93696081563178fcc67b7",
+        "after": "11f5eed28e401ce495e2ac5fd89b38499ab49fbad3c93696081563178fcc67b7"
+      }
+    },
+    {
+      "version": 999,
+      "local": {
+        "path": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\task8-format-jA5noH\\local-999\\project.json",
+        "before": "8789948cba88a796960f8b0cfa3fbc2d62681f7b8414f681932c23eba5d2b44f",
+        "after": "8789948cba88a796960f8b0cfa3fbc2d62681f7b8414f681932c23eba5d2b44f"
+      },
+      "portable": {
+        "path": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\task8-format-jA5noH\\share-999.json",
+        "before": "809b94082c953cd4433f02c418ffc8157f3c5860084a768cba5a77e971e47872",
+        "after": "809b94082c953cd4433f02c418ffc8157f3c5860084a768cba5a77e971e47872"
+      }
+    }
+  ],
+  "passed": true
+}
+Running fidelity-flow
+PASS stereo-1280-dpr1
+PASS stereo-1280-dpr1.25
+PASS stereo-1280-dpr2
+PASS stereo-1920-dpr1
+PASS stereo-1920-dpr1.25
+PASS stereo-1920-dpr2
+PASS single-expanded-1920-dpr2
+PASS dual-1280-dpr1
+PASS dual-1280-dpr1.25
+PASS dual-1280-dpr2
+PASS dual-1920-dpr1
+PASS dual-1920-dpr1.25
+PASS dual-1920-dpr2
+PASS six-plus-six-1280-top-dpr2
+PASS six-plus-six-1280-bottom-dpr2
+PASS six-plus-six-1280-top-dpr2
+PASS six-plus-six-1920-top-dpr2
+PASS six-plus-six-1920-bottom-dpr2
+PASS six-plus-six-1920-top-dpr2
+{
+  "baseline": false,
+  "fixture": "Synthetic 48kHz, 4s, six channels; unchanged default analysis/palette/gain. Not user audio.",
+  "checks": [
+    {
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "metrics": [
+        {
+          "backing": [
+            682,
+            237
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "dpr": 1
+        },
+        {
+          "backing": [
+            682,
+            237
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "dpr": 1
+        }
+      ]
+    },
+    {
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "metrics": [
+        {
+          "backing": [
+            1272,
+            377
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "dpr": 1
+        },
+        {
+          "backing": [
+            1272,
+            377
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "dpr": 1
+        }
+      ]
+    },
+    {
+      "name": "stereo-1280-dpr1",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 1,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            682,
+            237
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 20935,
+          "visible": true
+        },
+        {
+          "backing": [
+            682,
+            237
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 20948,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 1293072,
+      "scratchUpperBound": 60672
+    },
+    {
+      "name": "stereo-1280-dpr1.25",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 1.25,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            853,
+            296
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 33229,
+          "visible": true
+        },
+        {
+          "backing": [
+            853,
+            296
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 32898,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 2019904,
+      "scratchUpperBound": 75776
+    },
+    {
+      "name": "stereo-1280-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            1364,
+            473
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 84850,
+          "visible": true
+        },
+        {
+          "backing": [
+            1364,
+            473
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 84075,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 5161376,
+      "scratchUpperBound": 121088
+    },
+    {
+      "name": "stereo-1920-dpr1",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 1,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1272,
+            377
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 62879,
+          "visible": true
+        },
+        {
+          "backing": [
+            1272,
+            377
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 62412,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 3836352,
+      "scratchUpperBound": 96512
+    },
+    {
+      "name": "stereo-1920-dpr1.25",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 1.25,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1590,
+            471
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 98755,
+          "visible": true
+        },
+        {
+          "backing": [
+            1590,
+            471
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 97595,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 5991120,
+      "scratchUpperBound": 120576
+    },
+    {
+      "name": "stereo-1920-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            2544,
+            753
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 251244,
+          "visible": true
+        },
+        {
+          "backing": [
+            2544,
+            753
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 248955,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 15325056,
+      "scratchUpperBound": 192768
+    },
+    {
+      "name": "single-expanded-1920-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            3544,
+            1606
+          ],
+          "css": [
+            1772,
+            803
+          ],
+          "nonblack": 748061,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 22766656,
+      "scratchUpperBound": 411136
+    },
+    {
+      "name": "native numeric reference at physical centers, pulse, tile seam and tail",
+      "maxColorError": 0,
+      "points": [
+        {
+          "db": -101.46246741186077,
+          "hz": 250.85510056447282,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 0.25,
+          "x": 221,
+          "y": 1216
+        },
+        {
+          "db": -19.487603580581492,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            252,
+            186,
+            67,
+            255
+          ],
+          "seconds": 0.25,
+          "x": 221,
+          "y": 1003
+        },
+        {
+          "db": -20.29593426812303,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            252,
+            181,
+            64,
+            255
+          ],
+          "seconds": 0.25,
+          "x": 221,
+          "y": 983
+        },
+        {
+          "db": -136.6487509389533,
+          "hz": 7993.356477595019,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 0.25,
+          "x": 221,
+          "y": 536
+        },
+        {
+          "db": -76.47691194995093,
+          "hz": 250.85510056447282,
+          "rgba": [
+            48,
+            9,
+            75,
+            255
+          ],
+          "seconds": 1.9904063205417608,
+          "x": 1763,
+          "y": 1216
+        },
+        {
+          "db": -19.491375032660468,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            252,
+            186,
+            67,
+            255
+          ],
+          "seconds": 1.9904063205417608,
+          "x": 1763,
+          "y": 1003
+        },
+        {
+          "db": -20.289940788987767,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            252,
+            181,
+            64,
+            255
+          ],
+          "seconds": 1.9904063205417608,
+          "x": 1763,
+          "y": 983
+        },
+        {
+          "db": -49.74338498319377,
+          "hz": 7993.356477595019,
+          "rgba": [
+            176,
+            35,
+            72,
+            255
+          ],
+          "seconds": 1.9904063205417608,
+          "x": 1763,
+          "y": 536
+        },
+        {
+          "db": -121.5406746459019,
+          "hz": 250.85510056447282,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 2.7274266365688487,
+          "x": 2416,
+          "y": 1216
+        },
+        {
+          "db": -19.48756144597406,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            252,
+            186,
+            67,
+            255
+          ],
+          "seconds": 2.7274266365688487,
+          "x": 2416,
+          "y": 1003
+        },
+        {
+          "db": -20.276464394277,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            252,
+            181,
+            64,
+            255
+          ],
+          "seconds": 2.7274266365688487,
+          "x": 2416,
+          "y": 983
+        },
+        {
+          "db": -123.90397868538778,
+          "hz": 7993.356477595019,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 2.7274266365688487,
+          "x": 2416,
+          "y": 536
+        },
+        {
+          "db": -121.74679623501474,
+          "hz": 250.85510056447282,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 2.734198645598194,
+          "x": 2422,
+          "y": 1216
+        },
+        {
+          "db": -19.4875609720767,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            252,
+            186,
+            67,
+            255
+          ],
+          "seconds": 2.734198645598194,
+          "x": 2422,
+          "y": 1003
+        },
+        {
+          "db": -20.277211641352473,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            252,
+            181,
+            64,
+            255
+          ],
+          "seconds": 2.734198645598194,
+          "x": 2422,
+          "y": 983
+        },
+        {
+          "db": -124.4058095317329,
+          "hz": 7993.356477595019,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 2.734198645598194,
+          "x": 2422,
+          "y": 536
+        },
+        {
+          "db": -54.886432931793216,
+          "hz": 250.85510056447282,
+          "rgba": [
+            152,
+            25,
+            88,
+            255
+          ],
+          "seconds": 3.990406320541761,
+          "x": 3535,
+          "y": 1216
+        },
+        {
+          "db": -38.624452116606555,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            222,
+            73,
+            45,
+            255
+          ],
+          "seconds": 3.990406320541761,
+          "x": 3535,
+          "y": 1003
+        },
+        {
+          "db": -39.889935247123425,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            218,
+            64,
+            47,
+            255
+          ],
+          "seconds": 3.990406320541761,
+          "x": 3535,
+          "y": 983
+        },
+        {
+          "db": -81.77729614133987,
+          "hz": 7993.356477595019,
+          "rgba": [
+            30,
+            5,
+            52,
+            255
+          ],
+          "seconds": 3.990406320541761,
+          "x": 3535,
+          "y": 536
+        }
+      ]
+    },
+    {
+      "name": "physical annotation and tick alignment",
+      "maxCssError": 0.0004845845532486237,
+      "annotation": {
+        "categoryId": null,
+        "createdAt": "2026-10-23T10:24:18.482Z",
+        "id": "f161772d-f404-4bcf-9886-aa07cfbce71d",
+        "note": "",
+        "region": {
+          "channelIndex": 0,
+          "endSeconds": 2.398936170212766,
+          "highHz": 11470.608066492034,
+          "lowHz": 470.29113776087695,
+          "mediaId": "d2401ef6-6608-4e05-8e6a-31e0ae0a28ba",
+          "startSeconds": 0.800531914893617
+        },
+        "updatedAt": "2026-10-23T10:24:18.482Z"
+      }
+    },
+    {
+      "name": "dual-1280-dpr1",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 1,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            277,
+            237
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 8587,
+          "visible": true
+        },
+        {
+          "backing": [
+            277,
+            237
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 8599,
+          "visible": true
+        },
+        {
+          "backing": [
+            277,
+            237
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 8587,
+          "visible": true
+        },
+        {
+          "backing": [
+            277,
+            237
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 8599,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 1050384,
+      "scratchUpperBound": 60672
+    },
+    {
+      "name": "dual-1280-dpr1.25",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 1.25,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            346,
+            296
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 13414,
+          "visible": true
+        },
+        {
+          "backing": [
+            346,
+            296
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 13274,
+          "visible": true
+        },
+        {
+          "backing": [
+            346,
+            296
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 13414,
+          "visible": true
+        },
+        {
+          "backing": [
+            346,
+            296
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 13274,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 1638656,
+      "scratchUpperBound": 75776
+    },
+    {
+      "name": "dual-1280-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            554,
+            473
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 34644,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            473
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 34335,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            473
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 34644,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            473
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 34335,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 4192672,
+      "scratchUpperBound": 121088
+    },
+    {
+      "name": "dual-1920-dpr1",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 1,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            572,
+            377
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 28340,
+          "visible": true
+        },
+        {
+          "backing": [
+            572,
+            377
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 28122,
+          "visible": true
+        },
+        {
+          "backing": [
+            572,
+            377
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 28340,
+          "visible": true
+        },
+        {
+          "backing": [
+            572,
+            377
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 28122,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 3450304,
+      "scratchUpperBound": 96512
+    },
+    {
+      "name": "dual-1920-dpr1.25",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 1.25,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            715,
+            471
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 44356,
+          "visible": true
+        },
+        {
+          "backing": [
+            715,
+            471
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 43842,
+          "visible": true
+        },
+        {
+          "backing": [
+            715,
+            471
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 44356,
+          "visible": true
+        },
+        {
+          "backing": [
+            715,
+            471
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 43842,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 5388240,
+      "scratchUpperBound": 120576
+    },
+    {
+      "name": "dual-1920-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1144,
+            753
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 113062,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            753
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 112033,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            753
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 113062,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            753
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 112033,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 13782912,
+      "scratchUpperBound": 192768
+    },
+    {
+      "name": "six-plus-six-1280-top-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26470,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26124,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22413,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26470,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26124,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22413,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        }
+      ],
+      "retainedBytes": 4786560,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1280-bottom-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22381,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 23013,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 21012,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22381,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 23013,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 21012,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 4786560,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1280-top-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26470,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26124,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22413,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26470,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26124,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22413,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        }
+      ],
+      "retainedBytes": 4786560,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1920-top-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 54346,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 53618,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 54346,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 53618,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        }
+      ],
+      "retainedBytes": 13178880,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1920-bottom-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 47182,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 43065,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 47182,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 43065,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 13178880,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1920-top-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 54346,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 53618,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 54346,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 53618,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        }
+      ],
+      "retainedBytes": 13178880,
+      "scratchUpperBound": 92160
+    }
+  ],
+  "analysis": {
+    "fftSize": 2048,
+    "hopSize": 512,
+    "melBands": 128,
+    "window": "hann",
+    "windowSize": 2048
+  },
+  "dpi": "DPR1/1.25/2 use isolated owned WebView CDP emulation; Windows system DPI unchanged and not claimed.",
+  "passed": true
+}
+Running processed-flow
+{
+  "stage": "Actual UI processed graphs, audition, save/reopen plus native IPC authority checks",
+  "checks": [
+    {
+      "name": "UI Delete accepts mask; actual processed tile and canvas change only selected channel/file",
+      "region": {
+        "channelIndex": 0,
+        "endSeconds": 1.6,
+        "highHz": 2081.458778143964,
+        "lowHz": 892.9974385465096,
+        "mediaId": "b71e7e5e-1bfe-4427-af3f-3cee077a8355",
+        "startSeconds": 0.4
+      },
+      "rejectedDb": -160,
+      "original": [
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        }
+      ],
+      "processed": [
+        {
+          "hash": 1953310707,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        }
+      ],
+      "requestCount": 2
+    },
+    {
+      "name": "real UI undo/redo, raw switch, disable/enable, move and delete recompute matching pixels",
+      "moved": [
+        {
+          "hash": 2324051263,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        }
+      ]
+    },
+    {
+      "name": "opposite explicit auditions preserve both graphs/source; pause/resume actual frames; saved mask reconstructs after UI reopen",
+      "auditions": [
+        {
+          "workspace": "暂存编辑",
+          "label": "试听选区原音",
+          "status": {
+            "consumedFrames": 4896,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 9,
+            "mediaId": "b71e7e5e-1bfe-4427-af3f-3cee077a8355",
+            "positionSeconds": 0.6774583333333334,
+            "presentation": {
+              "callbackNanos": 79155900,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 4896,
+              "tailNanos": 101155900,
+              "tailNonSilent": true
+            },
+            "projectId": "a3e513ff-a733-4f1f-876d-373c1445e9ec",
+            "startSeconds": 0.5754583333333333,
+            "state": "playing",
+            "underrunFrames": 0
+          },
+          "paused": {
+            "consumedFrames": 19296,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 9,
+            "mediaId": "b71e7e5e-1bfe-4427-af3f-3cee077a8355",
+            "positionSeconds": 0.9774583333333333,
+            "presentation": {
+              "callbackNanos": 409145000,
+              "drained": false,
+              "pendingTailFrames": 0,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 19296,
+              "tailNanos": 401133800,
+              "tailNonSilent": true
+            },
+            "projectId": "a3e513ff-a733-4f1f-876d-373c1445e9ec",
+            "startSeconds": 0.5754583333333333,
+            "state": "paused",
+            "underrunFrames": 0
+          },
+          "resumed": {
+            "consumedFrames": 4896,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 10,
+            "mediaId": "b71e7e5e-1bfe-4427-af3f-3cee077a8355",
+            "positionSeconds": 1.0794583333333334,
+            "presentation": {
+              "callbackNanos": 79123900,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 4896,
+              "tailNanos": 101123900,
+              "tailNonSilent": true
+            },
+            "projectId": "a3e513ff-a733-4f1f-876d-373c1445e9ec",
+            "startSeconds": 0.5754583333333333,
+            "state": "playing",
+            "underrunFrames": 0
+          }
+        },
+        {
+          "workspace": "原音",
+          "label": "试听选区（应用屏蔽）",
+          "status": {
+            "consumedFrames": 4896,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 13,
+            "mediaId": "b71e7e5e-1bfe-4427-af3f-3cee077a8355",
+            "positionSeconds": 0.6774583333333334,
+            "presentation": {
+              "callbackNanos": 79022800,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 4896,
+              "tailNanos": 101022800,
+              "tailNonSilent": true
+            },
+            "projectId": "a3e513ff-a733-4f1f-876d-373c1445e9ec",
+            "startSeconds": 0.5754583333333333,
+            "state": "playing",
+            "underrunFrames": 0
+          },
+          "paused": {
+            "consumedFrames": 19296,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 13,
+            "mediaId": "b71e7e5e-1bfe-4427-af3f-3cee077a8355",
+            "positionSeconds": 0.9774583333333333,
+            "presentation": {
+              "callbackNanos": 399031800,
+              "drained": false,
+              "pendingTailFrames": 96,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 19296,
+              "tailNanos": 401045400,
+              "tailNonSilent": true
+            },
+            "projectId": "a3e513ff-a733-4f1f-876d-373c1445e9ec",
+            "startSeconds": 0.5754583333333333,
+            "state": "paused",
+            "underrunFrames": 0
+          },
+          "resumed": {
+            "consumedFrames": 3456,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 14,
+            "mediaId": "b71e7e5e-1bfe-4427-af3f-3cee077a8355",
+            "positionSeconds": 1.0494583333333334,
+            "presentation": {
+              "callbackNanos": 49092600,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 3456,
+              "tailNanos": 71092600,
+              "tailNonSilent": true
+            },
+            "projectId": "a3e513ff-a733-4f1f-876d-373c1445e9ec",
+            "startSeconds": 0.5754583333333333,
+            "state": "playing",
+            "underrunFrames": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "saved mask uses real processed PCM",
+      "rejectionDb": -149.54205703735352,
+      "retainedDb": 0,
+      "editedSignature": "ea266228962f23994eecd297af62f3c31f9b9f6869612d1340561b471927539a"
+    },
+    {
+      "name": "old/forged/unsupported/unknown identity rejected; raw cache and independent channel preserved"
+    },
+    {
+      "name": "disable/enable/move/undo/redo/delete restore matching source and cached values",
+      "movedSignature": "d24860b004d20e8559fa10a687a84d8d974e553541eed3eb6ee85f69c7fcf2e1"
+    },
+    {
+      "name": "notes/other-file edits keep signature; normal v2 save/reopen reproduces source; old runtime/retired lease rejected; original WAV SHA256 unchanged"
+    }
+  ],
+  "sourceSha256": "421fd350ee28ad3d0d806840a150c78f53e0c8c61ac1ef2c7abd9693c1a191fc",
+  "passed": true
+}
+Running interaction-flow
+PASS four plots >=180px and headers <=56px at real 1280x800
+PASS sidebar-duplicate-compare-highlight
+PASS header-duplicate-primary-highlight
+PASS menu-duplicate-primary-highlight
+PASS header-duplicate-compare-highlight
+PASS sidebar A/B to C/B retains comparison selection
+PASS comparison title A/B to A/C clears only replaced selection
+PASS top comparison menu changes only comparison identity
+PASS unapplied compute draft survives an accepted native display save
+PASS internal slider release outside and native select stay open
+PASS Escape restores trigger, discards compute draft, retains immediate display
+PASS different file settings switches directly; same trigger toggles closed
+PASS outside closing pointer drag cannot draw or change playback source
+PASS outside closing play-button click is consumed
+PASS linked time preserves identities through save/reopen
+PASS Escape from menu-opened analysis returns focus to View trigger
+PASS vertical layout also keeps both settings triggers reachable
+PASS help backdrop pointer dismisses without clickthrough
+PASS toolbar follows completed draw within its own plot
+PASS temporary toolbar one-click playback consumes native frames
+PASS toolbar hides during held gesture and restores at actual updated frame
+PASS right comparison toolbar category creates once then updates stable ID, preserves playback source, supports keyboard and moved selection actual audio
+PASS active mask has the one current toolbar
+PASS mask toolbar creates independent annotation and both opposite auditions consume frames without changing either graph
+PASS toolbar follows completed draw within its own plot
+PASS tiny top-right selection stays small with toolbar clamped inside
+PASS toolbar hides during held gesture and restores at actual updated frame
+PASS toolbar hides during held gesture and restores at actual updated frame
+PASS toolbar follows completed draw within its own plot
+PASS scroll away hides toolbar; scroll back restores it within the visible channel
+PASS hidden channel removes the active toolbar without retaining a placeholder
+Running sharing-flow
+PASS actual UI creates and saves three independent classifications/notes plus processed mask
+PASS renamed local-copy action switches to independent project, retaining original audio references
+PASS independent bundle import with unavailable original paths preserves all semantics and reconstructs processed tiles/canvas, consuming real native output frames
+PASS explicit annotations-only export imports with missing audio and a relink action
+{
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s",
+  "method": "Fresh debug/e2e EXE; owned Selenium/WebView2 pointer and keyboard. Only native picker return paths are injected. UI creates notes/categories/region/mask, saves, exports, imports and plays; read-only native snapshots/tiles/output frames measure results.",
+  "checks": [
+    {
+      "name": "actual UI creates and saves three independent classifications/notes plus processed mask",
+      "beforeEnergy": {
+        "values": {
+          "original": {
+            "1500": -10.457942962646484,
+            "6000": -10.457840919494629
+          },
+          "processed": {
+            "1500": -160,
+            "6000": -10.457840919494629
+          }
+        },
+        "rejectionDb": -149.54205703735352,
+        "retainedDb": 0,
+        "editSignature": "2d444c02b789c8e7710af3e47aa351f8ed40f6a43399fd93e1232a9d49546c89"
+      },
+      "beforePixels": [
+        {
+          "hash": 1544767335,
+          "height": 256,
+          "width": 698
+        },
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        }
+      ]
+    },
+    {
+      "name": "renamed local-copy action switches to independent project, retaining original audio references",
+      "originalId": "20f1fa6c-ef09-4b33-b4c3-11882ebb00bd",
+      "copyId": "20f1fa6c-ef09-4b33-b4c3-11882ebb00bd",
+      "copy": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\local-copy",
+      "sources": [
+        "\\\\?\\D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\owned-originals\\dual-tone.wav",
+        "\\\\?\\D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\owned-originals\\second-original.wav"
+      ]
+    },
+    {
+      "name": "independent bundle import with unavailable original paths preserves all semantics and reconstructs processed tiles/canvas, consuming real native output frames",
+      "importedRoot": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\recipient\\imported-e6f270df-7910-4f7f-8688-94e65b612474",
+      "importedSources": [
+        {
+          "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\recipient\\imported-e6f270df-7910-4f7f-8688-94e65b612474\\media\\929c53e6-0970-4c98-9f54-7df2f7323775",
+          "sha256": "36540138e71148deb787386568246edb1b23f1292d798705f2a88f61021875c3"
+        },
+        {
+          "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\recipient\\imported-e6f270df-7910-4f7f-8688-94e65b612474\\media\\fe90ed8c-2492-4f1e-8077-37cf2908e62d",
+          "sha256": "43ba3f465645acf0b80b254d3f3bfea3ff0d04beae6d3d83c45aa516653a3d8b"
+        }
+      ],
+      "recipientEnergy": {
+        "values": {
+          "original": {
+            "1500": -10.457942962646484,
+            "6000": -10.457840919494629
+          },
+          "processed": {
+            "1500": -160,
+            "6000": -10.457840919494629
+          }
+        },
+        "rejectionDb": -149.54205703735352,
+        "retainedDb": 0,
+        "editSignature": "2d444c02b789c8e7710af3e47aa351f8ed40f6a43399fd93e1232a9d49546c89"
+      },
+      "recipientPixels": [
+        {
+          "hash": 1544767335,
+          "height": 256,
+          "width": 698
+        },
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        }
+      ],
+      "originalPixels": [
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        },
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        }
+      ],
+      "playing": {
+        "consumedFrames": 2496,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 8,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 14,
+        "mediaId": "929c53e6-0970-4c98-9f54-7df2f7323775",
+        "positionSeconds": 0.052,
+        "presentation": {
+          "callbackNanos": 28974300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 2496,
+          "tailNanos": 50974300,
+          "tailNonSilent": true
+        },
+        "projectId": "e6f270df-7910-4f7f-8688-94e65b612474",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "stopped": {
+        "consumedFrames": 5856,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 8,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 15,
+        "mediaId": "929c53e6-0970-4c98-9f54-7df2f7323775",
+        "positionSeconds": 0,
+        "presentation": {
+          "callbackNanos": 98991800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 5856,
+          "tailNanos": 120991800,
+          "tailNonSilent": true
+        },
+        "projectId": "e6f270df-7910-4f7f-8688-94e65b612474",
+        "startSeconds": 0,
+        "state": "stopped",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "name": "explicit annotations-only export imports with missing audio and a relink action",
+      "root": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\recipient\\imported-be81e786-af5f-4bd1-a200-d014940b1b0c"
+    }
+  ],
+  "passed": true,
+  "restoredHashes": [
+    "36540138e71148deb787386568246edb1b23f1292d798705f2a88f61021875c3",
+    "43ba3f465645acf0b80b254d3f3bfea3ff0d04beae6d3d83c45aa516653a3d8b"
+  ]
+}

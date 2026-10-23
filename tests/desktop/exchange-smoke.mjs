@@ -24,7 +24,7 @@ let currentId;
 const snapshot=()=>invoke('get_project_snapshot',{projectId:currentId});
 const openedPath=()=>evaluate(`document.querySelector('.project-identity').title`);
 const dialogDone=()=>until(`document.querySelector('.exchange-result') && !document.querySelector('.exchange-progress')`,'exchange completion');
-const exportUI=async(kind,file)=>{await menu('分享项目');await evaluate(`(async()=>{const {exchangeDialogs}=await import('/src/bridge/exchange.ts');exchangeDialogs.save=async()=>${JSON.stringify(file)};document.querySelector('input[aria-label="${kind==='bundle'?'完整项目包':'仅标注文件'}"]').click();})()`);await click('选择保存位置…');await dialogDone();await click('关闭');};
+const exportUI=async(kind,file)=>{await menu('分享项目');await evaluate(`(async()=>{const {exchangeDialogs}=await import('/src/bridge/exchange.ts');exchangeDialogs.save=async()=>${JSON.stringify(file)};document.querySelector('input[aria-label="${kind==='bundle'?'完整项目包（含音频）':'仅标注（不含音频）'}"]').click();})()`);await click('选择保存位置…');await dialogDone();await click('关闭');};
 const importUI=async(file,parent=root)=>{await menu('导入分享文件');await evaluate(`(async()=>{const {exchangeDialogs}=await import('/src/bridge/exchange.ts');exchangeDialogs.source=async()=>${JSON.stringify(file)};exchangeDialogs.parent=async()=>${JSON.stringify(parent)};})()`);await click('选择交换文件…');};
 try{
  await send('Runtime.enable');check('fresh native window',await evaluate('!!window.__TAURI_INTERNALS__ && innerWidth===1280 && innerHeight===800'));
@@ -96,7 +96,7 @@ try{
  await evaluate(`(async()=>{const {localProjects}=await import('/src/bridge/projects.ts');localProjects.choose=async()=>${JSON.stringify(bundleRoot)};document.querySelector('.main-menu button').click();await new Promise(r=>setTimeout(r,30));[...document.querySelectorAll('button')].find(b=>b.textContent==='打开项目…').click();})()`);await until(`document.querySelectorAll('canvas').length>=2 && !document.querySelector('.tile-status')`,'reopen bundle');
  check('saved imported project reopens with identical semantics',JSON.stringify(semantic((await snapshot()).document))===JSON.stringify(semantic(doc)));
  const rebound=path.join(root,'reexport.audioproj.zip');await exportUI('bundle',rebound);check('bundle can be reexported from relative sources',(await fs.stat(rebound)).size>1000);
- const saveAs=path.join(root,'save-as');await fs.mkdir(saveAs);await evaluate(`(async()=>{const {localProjects}=await import('/src/bridge/projects.ts');localProjects.choose=async()=>${JSON.stringify(saveAs)};})()`);await menu('项目另存为');await until(`document.querySelector('.project-identity')?.title.endsWith('save-as')`,'save as');
+ const saveAs=path.join(root,'save-as');await fs.mkdir(saveAs);await evaluate(`(async()=>{const {localProjects}=await import('/src/bridge/projects.ts');localProjects.choose=async()=>${JSON.stringify(saveAs)};})()`);await menu('另存项目副本');await until(`document.querySelector('.project-identity')?.title.endsWith('save-as')`,'save as');
  const rebased=(await snapshot()).document;check('Save As rebases imported relative paths to their original project',rebased.media.every((m,i)=>path.isAbsolute(m.sourceRef)&&m.sourceRef.endsWith(bundleDoc.media[i].id)&&m.sourceRef.includes(path.basename(bundleRoot))));
  check('rebasing retains every semantic field',JSON.stringify(semantic(rebased))===JSON.stringify(semantic(doc)));
  const rebasedZip=path.join(root,'rebased.audioproj.zip');await exportUI('bundle',rebasedZip);check('rebased imported media can be shared again',(await fs.stat(rebasedZip)).size>1000);

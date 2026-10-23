@@ -1,9 +1,14 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
 export async function sharingFlow(h, context) {
-  for (const kind of ['仅标注文件', '完整项目包']) {
-    await h.menu('分享项目'); await h.label(kind); await h.clickText('选择保存位置…');
+  // The integrated runner queues JSON first, then ZIP. Only JSON needs selection.
+  for (const kind of ['仅标注（不含音频）', null]) {
+    await h.menu('分享项目');
+    assert.equal(await (await h.element('[aria-label="完整项目包（含音频）"]')).isSelected(), true);
+    if (kind) await h.label(kind);
+    await h.clickText('选择保存位置…');
     await h.until(`document.querySelector('.exchange-result') && !document.querySelector('.exchange-progress')`); await h.clickText('关闭');
   }
   for (const extension of ['json', 'zip']) {
@@ -25,4 +30,9 @@ export async function sharingFlow(h, context) {
     } else await h.screenshot('bundle-roundtrip');
   }
   await h.menu('关闭项目');
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  const { standaloneSharing } = await import('./task7-sharing.mjs');
+  await standaloneSharing();
 }

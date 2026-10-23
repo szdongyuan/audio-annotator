@@ -1,0 +1,17 @@
+[
+  {
+    "file": "ffmpeg.exe",
+    "version": "5.3.0",
+    "sha256": "04E1307997530F9CF2FE35CBA2CA7E8875CA91DA02F89D6C7243DF819C94AD00"
+  },
+  {
+    "file": "ffmpeg.exe.LICENSE",
+    "version": "5.3.0",
+    "sha256": "8CEB4B9EE5ADEDDE47B31E975C1D90C73AD27B6B165A1DCD80C7C545EB65B903"
+  },
+  {
+    "file": "ffmpeg.exe.README",
+    "version": "5.3.0",
+    "sha256": "A636A7183C58006351ACBAF35303C0ED85C6E1320FD4E80DE453BA6157DE6311"
+  }
+]

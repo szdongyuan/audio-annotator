@@ -51,11 +51,13 @@ function IconButton({ icon: Icon, label, className = '', ...props }: IconButtonP
 export function AppShell({ project, mediaUI, exchange }: { project?: ProjectLifecycleUI; mediaUI?: MediaUI; exchange?: ExchangeUI }) {
   const [mediaOpen, setMediaOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
-  const selected = mediaUI?.selected;
-  const workspace = useWorkspace(project?.active ?? null, selected?.id ?? null);
+  const workspace = useWorkspace(project?.active ?? null);
+  const selected = project?.active?.store.snapshot.document.media.find(m => m.id === workspace.state.activeMediaId);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const panes = [selected?.id, workspace.state.compareMediaId].filter((id): id is string => !!id && !!project?.active?.store.snapshot.document.media.some(m => m.id === id)).map(mediaId => ({ mediaId, channels: workspace.view(mediaId).visibleChannels }));
   const selection = useSelection(project?.active ?? null, selected?.id ?? null, panes);
+  useEffect(() => { setSettingsId(null); }, [project?.active]);
+  useEffect(() => { if (settingsId && !panes.some(p => p.mediaId === settingsId)) setSettingsId(null); }, [settingsId, workspace.state.activeMediaId, workspace.state.compareMediaId, project?.active?.store.snapshot.document.media]);
   const annotations = useAnnotations(project?.active ?? null, selection);
   const [inspectorTab, setInspectorTab] = useState('region');
   const doc = project?.active?.store.snapshot.document;
@@ -92,7 +94,7 @@ export function AppShell({ project, mediaUI, exchange }: { project?: ProjectLife
       <AnnotationTools ui={annotations} />
       {project && <ProjectActions project={project} onImport={mediaUI?.choose} importDisabled={mediaUI?.disabled} exchange={exchange} />}
       <div className="toolbar-group toolbar-end">
-        <button className="button button-quiet analysis-settings" disabled={!selected || project?.active?.store.editingDisabled} onClick={() => setSettingsId(settingsId ? null : selected?.id ?? null)}><SlidersHorizontal size={16} /><span>分析设置</span></button>
+        <button data-analysis-trigger={selected?.id} className="button button-quiet analysis-settings" disabled={!selected || project?.active?.store.editingDisabled} onClick={() => setSettingsId(settingsId === selected?.id ? null : selected?.id ?? null)}><SlidersHorizontal size={16} /><span>分析设置</span></button>
         <span className="toolbar-divider" />
         <IconButton icon={propertiesOpen ? PanelRightClose : PanelRightOpen} label={propertiesOpen ? '收起属性面板' : '展开属性面板'}
           aria-expanded={propertiesOpen} aria-controls="properties-panel" onClick={() => setPropertiesOpen(!propertiesOpen)} />
@@ -101,7 +103,7 @@ export function AppShell({ project, mediaUI, exchange }: { project?: ProjectLife
 
     <div className="workspace">
       {mediaOpen && <aside id="media-panel" className="media-panel panel" aria-label="音频列表">
-        <MediaList categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={mediaUI?.selectedId ?? null} disabled={mediaUI?.disabled ?? true} onSelect={id => mediaUI?.setSelectedId(id)} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
+        <MediaList categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => workspace.selectPane('primary', id)} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
       </aside>}
 
       <main className="analysis-workspace" aria-label="音频分析工作区">
@@ -129,12 +131,12 @@ export function AppShell({ project, mediaUI, exchange }: { project?: ProjectLife
         <div className="property-section inspector-content">
           {inspectorTab === 'region' && <AnnotationInspector ui={annotations} annotation={selectedAnnotation} />}
           {inspectorTab === 'list' && doc && <AnnotationList doc={doc} selectedId={annotations.selectedId} onLocate={result => {
-            if (result.mediaId !== selected?.id && result.mediaId !== workspace.state.compareMediaId) mediaUI?.setSelectedId(result.mediaId);
+            if (result.mediaId !== selected?.id && result.mediaId !== workspace.state.compareMediaId) workspace.selectPane('primary', result.mediaId);
             if (result.scope === 'region') { annotations.select(result.annotation.id); workspace.locate(result.annotation.region); setInspectorTab('region'); }
             else { selection.state.select(null); const channelIndex = result.scope === 'channel' ? result.channelIndex : null; if (channelIndex !== null) workspace.patch(result.mediaId, { visibleChannels: [...new Set([...workspace.view(result.mediaId).visibleChannels, channelIndex])].sort((a, b) => a - b) }); selection.state.interact({ mediaId: result.mediaId, channelIndex }); setInspectorTab('notes'); }
           }} />}
           {inspectorTab === 'notes' && <NotesEditor ui={annotations} media={doc?.media.find(m => m.id === selection.context?.mediaId) ?? selected ?? null} channelIndex={selection.context?.channelIndex ?? null} />}
-          {inspectorTab === 'masks' && <EditList ui={masks} onLocate={edit => { masks.select(edit.id); if (edit.region.mediaId !== selected?.id && edit.region.mediaId !== workspace.state.compareMediaId) mediaUI?.setSelectedId(edit.region.mediaId); workspace.locate(edit.region); }} />}
+          {inspectorTab === 'masks' && <EditList ui={masks} onLocate={edit => { masks.select(edit.id); if (edit.region.mediaId !== selected?.id && edit.region.mediaId !== workspace.state.compareMediaId) workspace.selectPane('primary', edit.region.mediaId); workspace.locate(edit.region); }} />}
           {inspectorTab === 'mix' && playback.media && <ChannelMixer media={playback.media} mix={playback.mix} disabled={project?.active?.store.editingDisabled ?? true} onChange={playback.updateMix} />}
           {inspectorTab === 'devices' && <TransportDevices ui={playback} />}
           {inspectorTab === 'categories' && <CategoryManager ui={annotations} />}

@@ -16,6 +16,6 @@ export function App() {
     {exchange.dialog === 'import' && <ImportDialog {...exchange} onStart={exchange.startImport} />}
     <RelinkDialog media={media.relink} disabled={media.disabled} onChoose={media.chooseRelink} onVerify={media.verify} onClose={() => media.setRelink(null)} />
     <RecoveryDialog project={project} /><CloseFailureDialog project={project} />
-    {project.error && !project.closePending && !project.recovery && <div className="project-notice" role="alert"><span>{project.error.message}</span><button className="button" disabled={project.busy} onClick={() => void project.retry()}>重试</button><button className="button" disabled={project.busy || !project.active} onClick={() => void project.saveAs()}>另存项目…</button><button className="button button-quiet" onClick={project.dismissError}>关闭提示</button></div>}
+    {project.error && !project.closePending && !project.recovery && <div className="project-notice" role="alert"><span>{project.error.message}</span><button className="button" disabled={project.busy} onClick={() => void project.retry()}>重试</button><button className="button" disabled={project.busy || !project.active} onClick={() => void project.saveAs()}>另存项目副本…</button><button className="button button-quiet" onClick={project.dismissError}>关闭提示</button></div>}
   </>;
 }

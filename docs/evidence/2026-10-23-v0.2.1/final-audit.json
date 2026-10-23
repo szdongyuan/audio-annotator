@@ -1,0 +1,27 @@
+{
+  "releaseEntriesVerified": 42,
+  "releaseFilesIncludingSHA256SUMS": 43,
+  "sha256SumsSha256": "38f1de133e0e4316669d488d605bd0681e7f9f8e61e592e95637de672f54c939",
+  "productionSourceFilesVerified": 257,
+  "desktopPhasesPassed": 18,
+  "formalChecksPassed": 13,
+  "warmByActionP95Ms": {
+    "zoom": 82.89999997615814,
+    "pan": 81.29999995231628,
+    "mix": 66
+  },
+  "combinedP95Ms": 82.70000004768372,
+  "underrunObservations": 60,
+  "artifacts": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\annotator-desktop.exe",
+      "bytes": 14415360,
+      "sha256": "8e49f90e8fcd0adac0a66dd0cbb73512c4747e15f6f8b172583857c41ba79b10"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\bundle\\nsis\\Audio Annotator_0.2.1_x64-setup.exe",
+      "bytes": 221434863,
+      "sha256": "31df3d94ed173e7cef21e4b175ff1ba5fe96ba8b037c4eb525716c36e383890b"
+    }
+  ]
+}

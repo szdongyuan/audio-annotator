@@ -5,6 +5,15 @@ import { spawn, spawnSync } from 'node:child_process';
 import { Builder, By, Key, until } from 'selenium-webdriver';
 export { By, Key };
 export const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+const portOccupied = port => new Promise(resolve => { const socket=net.connect({host:'127.0.0.1',port});socket.setTimeout(500);socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',()=>resolve(false));socket.once('timeout',()=>{socket.destroy();resolve(false);}); });
+// WebView children can retire after the owned parent exits. Observe readiness;
+// never attach to or terminate a listener merely because it occupies a test port.
+export async function waitForTestPortsReleased(ports, timeoutMs = 10000) {
+  const deadline=performance.now()+timeoutMs;
+  do { if(!(await Promise.all(ports.map(portOccupied))).some(Boolean))return;await wait(100); } while(performance.now()<deadline);
+  throw Error('Test port still occupied after owned process teardown; no listener was attached or terminated');
+}
+
 function stop(proc) { if(proc.exitCode===null) spawnSync('taskkill',['/PID',String(proc.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'}); }
 // EdgeDriver reports client dimensions here; measure only our spawned native PID.
 function nativeRect(pid, size) {
@@ -31,7 +40,7 @@ export async function start(paths, output, executable = path.resolve('target/deb
   const tools = JSON.parse(await fs.readFile('.tools/webdriver.json', 'utf8'));
   const port = 4445;
   for(const port of [4445,4446,9235]) {
-    const occupied=await new Promise(resolve=>{const socket=net.connect({host:'127.0.0.1',port});socket.setTimeout(500);socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',()=>resolve(false));socket.once('timeout',()=>{socket.destroy();resolve(false);});});
+    const occupied=await portOccupied(port);
     if(occupied)throw Error(`Test port already occupied: ${port}; refusing to attach to an existing process`);
   }
   const native = spawn(executable, [], { windowsHide: true, env: { ...process.env, ANNOTATOR_E2E_PATHS: JSON.stringify(paths), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9235', WEBVIEW2_USER_DATA_FOLDER: path.join(output, `webview-${Date.now()}`) } });
@@ -65,7 +74,7 @@ export async function start(paths, output, executable = path.resolve('target/deb
     async drag(selector, a, b) { const e = await h.element(selector); await driver.executeScript('arguments[0].scrollIntoView({block:"nearest"})', e); const r = await e.getRect(); await driver.actions({ async: true }).move({ x: Math.round(r.x + r.width * a[0]), y: Math.round(r.y + r.height * a[1]), origin: 'viewport' }).pause(80).press().move({ x: Math.round(r.x + r.width * b[0]), y: Math.round(r.y + r.height * b[1]), origin: 'viewport', duration: 180 }).release().perform(); },
     async context(selector, point = [.5,.5]) { const e = await h.element(selector), r = await e.getRect(); await driver.actions({ async: true }).move({ x: Math.round(r.x + r.width * point[0]), y: Math.round(r.y + r.height * point[1]), origin: 'viewport' }).press(2).release(2).perform(); },
     async snapshot(id) { return driver.executeAsyncScript('const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke("get_project_snapshot",{projectId:arguments[0]}).then(done,e=>done({error:e}));', id); },
-    async quit() { try { await Promise.race([driver.quit().catch(()=>{}),wait(5000)]); } finally { stop(proc); stop(native); await fs.writeFile(path.join(output, `driver-${native.pid}.log`), log); await wait(1000); } },
+    async quit() { try { await Promise.race([driver.quit().catch(()=>{}),wait(5000)]); } finally { stop(proc); stop(native); await fs.writeFile(path.join(output, `driver-${native.pid}.log`), log); await waitForTestPortsReleased([4445,4446,9235]); } },
   };
   return h;
 }

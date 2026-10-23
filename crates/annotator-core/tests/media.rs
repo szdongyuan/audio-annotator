@@ -20,10 +20,15 @@ fn analysis_and_playback_share_one_pcm_retention_budget() {
     let analysis = PcmCache::for_analysis();
     let playback = PcmCache::for_playback();
     assert_eq!(
-        analysis.capacity_bytes() + playback.capacity_bytes(),
+        analysis.capacity_bytes()
+            + playback.capacity_bytes()
+            + 2 * annotator_core::analysis::source::PROCESSED_CACHE_BYTES,
         PCM_CACHE_BYTES
     );
-    assert_eq!(analysis.capacity_bytes(), 96 * 1024 * 1024);
+    assert_eq!(
+        analysis.capacity_bytes() + 2 * annotator_core::analysis::source::PROCESSED_CACHE_BYTES,
+        96 * 1024 * 1024
+    );
     assert_eq!(playback.capacity_bytes(), 32 * 1024 * 1024);
     // Exercise eviction with concurrent consumers retaining different parts of real PCM.
     let root = cache();

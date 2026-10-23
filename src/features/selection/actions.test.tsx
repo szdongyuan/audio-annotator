@@ -73,3 +73,12 @@ it('a failed mask command remains owned by masks and stops subsequent annotation
   await s.actions.mask(target); await s.actions.classify(target, null);
   expect(s.applyChange).toHaveBeenCalledOnce(); expect(s.active.queue.unresolvedFailures[0]).toMatchObject({ owner: 'masks' }); s.active.lifecycle.dispose();
 });
+
+it.each(['classify', 'mask'] as const)('a pending %s action never reactivates a deactivated temporary target', async kind => {
+  const s = setup(), a = s.active.store.snapshot.document.annotations[0];
+  const target = { region: { ...a.region, lowHz: 1 }, object: null }; s.state.select(target);
+  const pending = kind === 'mask' ? s.actions.mask(target) : s.actions.classify(target, null);
+  s.state.deactivate(); await pending;
+  expect(s.applyChange).toHaveBeenCalledOnce(); expect(s.state.getActiveSelection()).toBeNull();
+  expect(s.state.getCandidate()).toBe(target); s.active.lifecycle.dispose();
+});

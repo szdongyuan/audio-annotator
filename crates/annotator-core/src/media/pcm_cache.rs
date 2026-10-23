@@ -60,7 +60,9 @@ impl PcmCache {
     /// One analysis cache shared by both analysis workers; one playback cache owned
     /// by the serial output worker. Together they retain at most 128 MiB.
     pub fn for_analysis() -> Self {
-        Self::new(96 * 1024 * 1024)
+        // Reserve the two analysis workers' retained channel blocks within the
+        // existing 96 MiB analysis share (plus 32 MiB serial playback = 128 MiB).
+        Self::new(96 * 1024 * 1024 - 2 * crate::analysis::source::PROCESSED_CACHE_BYTES)
     }
     pub fn for_playback() -> Self {
         Self::new(32 * 1024 * 1024)

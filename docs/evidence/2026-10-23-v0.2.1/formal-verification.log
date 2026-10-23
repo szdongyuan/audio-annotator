@@ -1,0 +1,43 @@
+{
+  "passed": true,
+  "checks": 13,
+  "bundle": {
+    "bytes": 6916837,
+    "sha256": "1a75ea6a7bd63e6858f1552d5ee24476f54526c5b407bddedaaa545b5725973d",
+    "entries": [
+      "manifest.json",
+      "media/d353a4c0-2cef-4622-8a1c-8204eee506cb",
+      "media/bbb668ac-9706-4b58-98c0-ffba4257e130",
+      "media/c6fe273e-3924-42a4-b3f4-ae1358384c3e"
+    ],
+    "audio": [
+      {
+        "file": "media/d353a4c0-2cef-4622-8a1c-8204eee506cb",
+        "bytes": 2304044,
+        "sha256": "36dfc7268ea2a223f63b50b66532596f8599a10fa958d231a14237b8cfb36fb3"
+      },
+      {
+        "file": "media/bbb668ac-9706-4b58-98c0-ffba4257e130",
+        "bytes": 2304044,
+        "sha256": "2ad4c37a40fc8ac965b01939bf9fe78dd1d5995e809c55d69e52ba0561eb80a9"
+      },
+      {
+        "file": "media/c6fe273e-3924-42a4-b3f4-ae1358384c3e",
+        "bytes": 2304044,
+        "sha256": "88e4b15c0e5ec314965211148ff98e103538f11eff4062c560d36e34e3ef376c"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\annotator-desktop.exe",
+      "bytes": 14415360,
+      "sha256": "8e49f90e8fcd0adac0a66dd0cbb73512c4747e15f6f8b172583857c41ba79b10"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\target\\release\\bundle\\nsis\\Audio Annotator_0.2.1_x64-setup.exe",
+      "bytes": 221434863,
+      "sha256": "31df3d94ed173e7cef21e4b175ff1ba5fe96ba8b037c4eb525716c36e383890b"
+    }
+  ]
+}

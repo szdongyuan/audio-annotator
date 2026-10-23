@@ -1,0 +1,360 @@
+{
+  "method": "Owned native Tauri process, official tauri-driver and EdgeDriver; native picker paths only use the e2e feature. Edits use WebDriver pointer/keyboard.",
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\selection",
+  "evidence": {
+    "activation": {
+      "firstTemporary": {
+        "active": true,
+        "handles": 8,
+        "height": "44.9219%",
+        "left": "20.0573%",
+        "top": "25%",
+        "width": "39.9713%"
+      },
+      "inactive": {
+        "active": false,
+        "handles": 0,
+        "height": "44.9219%",
+        "left": "20.0573%",
+        "top": "25%",
+        "width": "39.9713%"
+      },
+      "movedTemporary": {
+        "active": true,
+        "handles": 8,
+        "height": "44.9219%",
+        "left": "25.0716%",
+        "top": "25%",
+        "width": "39.9713%"
+      },
+      "priorCompareDraw": {
+        "active": true,
+        "handles": 8,
+        "height": "40.2344%",
+        "left": "65.043%",
+        "top": "19.9219%",
+        "width": "24.9284%"
+      }
+    },
+    "pan": {
+      "before": {
+        "dynamicRangeDb": 100,
+        "endSeconds": 0.07052631578947369,
+        "frequencyMix": 0.65,
+        "gainDb": 0,
+        "highHz": 11444.983206524666,
+        "lowHz": 473.2126974847661,
+        "palette": "ember",
+        "spectrumKind": "stft",
+        "startSeconds": 0.027368421052631584,
+        "visibleChannels": [
+          0
+        ]
+      },
+      "after": {
+        "dynamicRangeDb": 100,
+        "endSeconds": 0.06416620498614958,
+        "frequencyMix": 0.65,
+        "gainDb": 0,
+        "highHz": 11444.983206524665,
+        "lowHz": 473.2126974847661,
+        "palette": "ember",
+        "spectrumKind": "stft",
+        "startSeconds": 0.021008310249307487,
+        "visibleChannels": [
+          0
+        ]
+      },
+      "regionBefore": {
+        "channelIndex": 0,
+        "endSeconds": 0.07052631578947369,
+        "highHz": 11444.983206524666,
+        "lowHz": 473.2126974847661,
+        "mediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+        "startSeconds": 0.027368421052631584
+      },
+      "regionAfter": {
+        "channelIndex": 0,
+        "endSeconds": 0.07052631578947369,
+        "highHz": 11444.983206524666,
+        "lowHz": 473.2126974847661,
+        "mediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+        "startSeconds": 0.027368421052631584
+      }
+    },
+    "played": [
+      {
+        "label": "试听选区原音",
+        "status": {
+          "consumedFrames": 5856,
+          "deviceChannels": 2,
+          "deviceName": "Headphones (High Definition Audio Device)",
+          "deviceRate": 48000,
+          "endSeconds": 0.08997916666666667,
+          "error": null,
+          "firstSeconds": 0.0650625,
+          "generation": 5,
+          "mediaId": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+          "positionSeconds": 0.08739583333333334,
+          "presentation": {
+            "callbackNanos": 99087900,
+            "drained": false,
+            "pendingTailFrames": 1056,
+            "ringExhausted": false,
+            "ringExhaustedNanos": null,
+            "scheduledFrames": 5856,
+            "tailNanos": 121087900,
+            "tailNonSilent": true
+          },
+          "projectId": "4085db27-f017-49e9-82ae-df1a7b3aa8a4",
+          "startSeconds": 0.0650625,
+          "state": "playing",
+          "underrunFrames": 0
+        }
+      },
+      {
+        "label": "试听选区（应用屏蔽）",
+        "status": {
+          "consumedFrames": 6336,
+          "deviceChannels": 2,
+          "deviceName": "Headphones (High Definition Audio Device)",
+          "deviceRate": 48000,
+          "endSeconds": 0.08997916666666667,
+          "error": null,
+          "firstSeconds": 0.0650625,
+          "generation": 7,
+          "mediaId": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+          "positionSeconds": 0.07247916666666666,
+          "presentation": {
+            "callbackNanos": 109104400,
+            "drained": false,
+            "pendingTailFrames": 1056,
+            "ringExhausted": false,
+            "ringExhaustedNanos": null,
+            "scheduledFrames": 6336,
+            "tailNanos": 131104400,
+            "tailNonSilent": true
+          },
+          "projectId": "4085db27-f017-49e9-82ae-df1a7b3aa8a4",
+          "startSeconds": 0.0650625,
+          "state": "playing",
+          "underrunFrames": 0
+        }
+      }
+    ],
+    "comparePlayback": {
+      "consumedFrames": 6336,
+      "deviceChannels": 2,
+      "deviceName": "Headphones (High Definition Audio Device)",
+      "deviceRate": 48000,
+      "endSeconds": 0.06,
+      "error": null,
+      "firstSeconds": 0.020020833333333335,
+      "generation": 10,
+      "mediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+      "positionSeconds": 0.03208333333333333,
+      "presentation": {
+        "callbackNanos": 109081900,
+        "drained": false,
+        "pendingTailFrames": 1056,
+        "ringExhausted": false,
+        "ringExhaustedNanos": null,
+        "scheduledFrames": 6336,
+        "tailNanos": 131081900,
+        "tailNonSilent": true
+      },
+      "projectId": "4085db27-f017-49e9-82ae-df1a7b3aa8a4",
+      "startSeconds": 0.020020833333333335,
+      "state": "playing",
+      "underrunFrames": 0
+    },
+    "frames": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "class": "annotation-rect     ",
+        "image": "none",
+        "shadow": "none"
+      },
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "class": "annotation-rect  is-selected is-temporary  ",
+        "image": "none",
+        "shadow": "none"
+      }
+    ],
+    "menu": [
+      {
+        "bottom": 747,
+        "height": 800,
+        "left": 963,
+        "right": 1153,
+        "top": 429,
+        "width": 1280
+      }
+    ],
+    "nestedMenu": [
+      {
+        "bottom": 747,
+        "height": 800,
+        "left": 963,
+        "right": 1153,
+        "top": 429,
+        "width": 1280
+      },
+      {
+        "bottom": 528,
+        "height": 800,
+        "left": 778,
+        "right": 968,
+        "top": 462,
+        "width": 1280
+      }
+    ],
+    "finalDocument": {
+      "algorithmVersions": {
+        "analysis": 1,
+        "dsp": 1
+      },
+      "analysis": {
+        "08db34fc-5ede-4613-9e56-f02f3f4ea8c0": {
+          "fftSize": 2048,
+          "hopSize": 512,
+          "melBands": 128,
+          "window": "hann",
+          "windowSize": 2048
+        },
+        "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee": {
+          "fftSize": 2048,
+          "hopSize": 512,
+          "melBands": 128,
+          "window": "hann",
+          "windowSize": 2048
+        }
+      },
+      "annotations": [
+        {
+          "categoryId": null,
+          "createdAt": "2026-10-23T10:21:10.294Z",
+          "id": "7a3fc341-bc4a-4261-bac9-c03e0a7891ce",
+          "note": "右键选区备注",
+          "region": {
+            "channelIndex": 0,
+            "endSeconds": 0.06002865329512894,
+            "highHz": 11484.410667682158,
+            "lowHz": 473.5595795274028,
+            "mediaId": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+            "startSeconds": 0.02005730659025788
+          },
+          "updatedAt": "2026-10-23T10:21:10.688Z"
+        }
+      ],
+      "categories": [
+        {
+          "color": "#e6a65d",
+          "id": "236de3f1-c91b-486a-90d3-3f5f5e5a4efa",
+          "name": "选区测试"
+        }
+      ],
+      "createdAt": "2026-10-23T10:21:06.443Z",
+      "edits": [
+        {
+          "enabled": true,
+          "id": "e6ce2f1d-3ee8-4b2b-ac8e-21e1b12100f4",
+          "processingVersion": 1,
+          "region": {
+            "channelIndex": 0,
+            "endSeconds": 0.07052631578947369,
+            "highHz": 11444.983206524666,
+            "lowHz": 473.2126974847661,
+            "mediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+            "startSeconds": 0.027368421052631584
+          }
+        }
+      ],
+      "formatVersion": 2,
+      "media": [
+        {
+          "byteLength": 2541,
+          "categoryId": null,
+          "channelCategoryIds": [
+            null,
+            null
+          ],
+          "channelCount": 2,
+          "channelLayout": [
+            "FRONT_LEFT",
+            "FRONT_RIGHT"
+          ],
+          "channelNotes": [
+            "",
+            ""
+          ],
+          "displayName": "stereo.mp3",
+          "frameCount": 4800,
+          "id": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+          "note": "",
+          "sampleRate": 48000,
+          "sha256": "a0499c96aeff59c686c320d496c68be8bcdca981753ed943c1cbefcb1868691c",
+          "sourceRef": "\\\\?\\D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\tests\\fixtures\\audio\\stereo.mp3"
+        },
+        {
+          "byteLength": 9644,
+          "categoryId": null,
+          "channelCategoryIds": [
+            null
+          ],
+          "channelCount": 1,
+          "channelLayout": null,
+          "channelNotes": [
+            ""
+          ],
+          "displayName": "mono16.wav",
+          "frameCount": 4800,
+          "id": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+          "note": "",
+          "sampleRate": 48000,
+          "sha256": "192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e",
+          "sourceRef": "\\\\?\\D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\tests\\fixtures\\audio\\mono16.wav"
+        }
+      ],
+      "name": "project-fDSgia",
+      "playbackMix": {
+        "08db34fc-5ede-4613-9e56-f02f3f4ea8c0": {
+          "mutedChannels": [],
+          "soloChannels": []
+        },
+        "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee": {
+          "mutedChannels": [],
+          "soloChannels": []
+        }
+      },
+      "projectId": "4085db27-f017-49e9-82ae-df1a7b3aa8a4",
+      "revision": 19,
+      "updatedAt": "2026-10-23T10:21:20.094Z",
+      "viewState": {
+        "activeMediaId": "08db34fc-5ede-4613-9e56-f02f3f4ea8c0",
+        "compareLayout": "horizontal",
+        "compareMediaId": "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee",
+        "compareSplit": 0.5,
+        "linkedTime": false,
+        "media": {
+          "e44dab97-ddd5-44a6-8f6d-f7c55e21f8ee": {
+            "dynamicRangeDb": 100,
+            "endSeconds": 0.1,
+            "frequencyMix": 0.65,
+            "gainDb": 0,
+            "highHz": 24000,
+            "lowHz": 0,
+            "palette": "ember",
+            "spectrumKind": "stft",
+            "startSeconds": 0,
+            "visibleChannels": [
+              0
+            ]
+          }
+        }
+      }
+    }
+  },
+  "passed": true
+}

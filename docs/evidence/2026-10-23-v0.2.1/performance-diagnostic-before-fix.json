@@ -1,0 +1,2071 @@
+{
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\profile-XP940c",
+  "environment": {
+    "platform": "Windows 11 Enterprise",
+    "cpu": "AMD Ryzen 5 5600GT with Radeon Graphics        ",
+    "memory": 33596846080,
+    "build": "release + e2e picker feature"
+  },
+  "fixtures": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\performance-fixtures\\ten-minute-six.wav",
+      "channels": 6,
+      "seconds": 600,
+      "rate": 48000,
+      "size": 345600044,
+      "sha256": "c1c63cc3788f47124314a251de43c9cc15071b98a9889242a58d2b7c7eb5f5e4"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\performance-fixtures\\comparison-stereo.wav",
+      "channels": 2,
+      "seconds": 600,
+      "rate": 48000,
+      "size": 115200044,
+      "sha256": "722ff4d5ccb92119cf1421ed42349f272c793f4f8efb1fe23819b09ccc493375"
+    }
+  ],
+  "backend": {
+    "analysisPcmBytes": 100294656,
+    "channels": 6,
+    "combinedPcmBytes": 133840896,
+    "decodeMs": 1893.1445,
+    "firstTilesMs": 44.399,
+    "fixture": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\performance-fixtures\\ten-minute-six.wav",
+    "note": "backend throughput, not native device or UI latency",
+    "pcmBudgetBytes": 134217728,
+    "playbackPcmBytes": 33546240,
+    "processedFrames": 1441792,
+    "processedSeconds": 30.037333333333333,
+    "renderMs": 469.361,
+    "sampleRate": 48000,
+    "sourceSeconds": 600
+  },
+  "method": "Cold app analysis cache and fresh project/PCM; OS cache not purged. Warm feedback measures input event timestamp → terminal dirty strip of full-resolution canvas draw, waits until all tile statuses clear, invalidates superseded draw callbacks → two animation frames (paint opportunity). No first-strip/preview sample. Distinct ten-minute 48kHz 6ch and 2ch sources; real native device output. Memory queries only retain the owned native/WebView2 tree; one-second wait follows each process query, with actual intervals reported.",
+  "coldImportAndDualFirstScreenMs": 3601.4399000000003,
+  "window": {
+    "densityMethod": "Actual Windows display density; no CDP override in performance run",
+    "outer": {
+      "width": 1920,
+      "pid": 2500,
+      "y": 20,
+      "method": "Win32 GetWindowRect on owned native PID",
+      "x": 20,
+      "height": 1080
+    },
+    "dpr": 1,
+    "scale": 1,
+    "viewport": [
+      1904,
+      1041
+    ]
+  },
+  "firstReady": {
+    "originalMs": 3601.4399000000003,
+    "processedWithAcceptedMaskMs": 334.47130000000107
+  },
+  "originalCanvases": [
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 558758744,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 731666642,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2687396592,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 285893881,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2166136261,
+      "height": 0,
+      "rgbaBytes": 0,
+      "width": 0
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2166136261,
+      "height": 0,
+      "rgbaBytes": 0,
+      "width": 0
+    },
+    {
+      "cssHeight": 376.5,
+      "cssWidth": 572,
+      "hash": 3949678254,
+      "height": 377,
+      "rgbaBytes": 862576,
+      "width": 572
+    },
+    {
+      "cssHeight": 376.5,
+      "cssWidth": 572,
+      "hash": 4072890266,
+      "height": 377,
+      "rgbaBytes": 862576,
+      "width": 572
+    }
+  ],
+  "mask": {
+    "enabled": true,
+    "id": "4e96566b-09e0-4f03-b465-5111d8bb4009",
+    "processingVersion": 1,
+    "region": {
+      "channelIndex": 0,
+      "endSeconds": 5.996503496503497,
+      "highHz": 1264.5787082636052,
+      "lowHz": 2.5680649448434067,
+      "mediaId": "f1c4519e-1c6c-45a1-88aa-4ffe3e717f04",
+      "startSeconds": 1.993006993006993
+    }
+  },
+  "processedCanvases": [
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2603195972,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 3654445643,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 997365826,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 3625723528,
+      "height": 180,
+      "rgbaBytes": 411840,
+      "width": 572
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2166136261,
+      "height": 0,
+      "rgbaBytes": 0,
+      "width": 0
+    },
+    {
+      "cssHeight": 180,
+      "cssWidth": 572,
+      "hash": 2166136261,
+      "height": 0,
+      "rgbaBytes": 0,
+      "width": 0
+    },
+    {
+      "cssHeight": 376.5,
+      "cssWidth": 572,
+      "hash": 3949678254,
+      "height": 377,
+      "rgbaBytes": 862576,
+      "width": 572
+    },
+    {
+      "cssHeight": 376.5,
+      "cssWidth": 572,
+      "hash": 4072890266,
+      "height": 377,
+      "rgbaBytes": 862576,
+      "width": 572
+    }
+  ],
+  "budgets": {
+    "rasterRetainedPlusScratchBytes": 3469024,
+    "rasterLimitBytes": 33554432,
+    "numericLimitBytes": 67108864,
+    "pcmLimitBytes": 134217728,
+    "analysisPcmLimitBytes": 100663296
+  },
+  "energyDb": {
+    "original": -11.448796629447074,
+    "processed": -158.10930062539032,
+    "attenuation": -146.66050399594326
+  },
+  "feedbackSamplesMs": [
+    98.70000004768372,
+    99,
+    99.10000002384186,
+    102.10000002384186
+  ],
+  "panFeedbackSamplesMs": [
+    154.39999997615814,
+    155.89999997615814,
+    145.60000002384186,
+    167.89999997615814
+  ],
+  "mixFeedbackSamplesMs": [
+    98.89999997615814,
+    98.80000007152557,
+    99.09999990463257,
+    98.20000004768372
+  ],
+  "warmByActionP95Ms": {
+    "zoom": 102.10000002384186,
+    "pan": 167.89999997615814,
+    "mix": 99.09999990463257
+  },
+  "warmFeedbackP95Ms": 167.89999997615814,
+  "diagnosticOnly": true,
+  "trace": [
+    {
+      "at": 6672.299999952316,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 55.5
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.700000047683716,
+      "terminal": 60.200000047683716
+    },
+    {
+      "canvas": 1,
+      "drawStart": 61.90000009536743
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.599999904632568,
+      "terminal": 66.5
+    },
+    {
+      "canvas": 2,
+      "drawStart": 68.20000004768372
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.700000047683716,
+      "terminal": 72.90000009536743
+    },
+    {
+      "canvas": 3,
+      "drawStart": 74.30000007152557
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.699999928474426,
+      "terminal": 79
+    },
+    {
+      "canvas": 6,
+      "drawStart": 81.70000004768372
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.899999976158142,
+      "terminal": 91.60000002384186
+    },
+    {
+      "canvas": 7,
+      "drawStart": 94.30000007152557
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.100000023841858,
+      "terminal": 104.40000009536743
+    },
+    {
+      "paintOpportunity": 115.20000004768372
+    },
+    {
+      "at": 6970.799999952316,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 34.700000047683716
+    },
+    {
+      "canvas": 0,
+      "drawMs": 5.5,
+      "terminal": 40.200000047683716
+    },
+    {
+      "canvas": 1,
+      "drawStart": 41.800000071525574
+    },
+    {
+      "canvas": 1,
+      "drawMs": 5.100000023841858,
+      "terminal": 46.90000009536743
+    },
+    {
+      "canvas": 2,
+      "drawStart": 48.40000009536743
+    },
+    {
+      "canvas": 2,
+      "drawMs": 5.599999904632568,
+      "terminal": 54
+    },
+    {
+      "canvas": 3,
+      "drawStart": 55.60000002384186
+    },
+    {
+      "canvas": 3,
+      "drawMs": 5,
+      "terminal": 60.60000002384186
+    },
+    {
+      "canvas": 6,
+      "drawStart": 63.10000002384186
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.200000047683716,
+      "terminal": 73.30000007152557
+    },
+    {
+      "canvas": 7,
+      "drawStart": 75.80000007152557
+    },
+    {
+      "canvas": 7,
+      "drawMs": 11.299999952316284,
+      "terminal": 87.10000002384186
+    },
+    {
+      "paintOpportunity": 99
+    },
+    {
+      "at": 7371.299999952316,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 42
+    },
+    {
+      "canvas": 0,
+      "drawMs": 6.400000095367432,
+      "terminal": 48.40000009536743
+    },
+    {
+      "canvas": 1,
+      "drawStart": 50
+    },
+    {
+      "canvas": 1,
+      "drawMs": 5.600000023841858,
+      "terminal": 55.60000002384186
+    },
+    {
+      "canvas": 2,
+      "drawStart": 57.700000047683716
+    },
+    {
+      "canvas": 2,
+      "drawMs": 7.100000023841858,
+      "terminal": 64.80000007152557
+    },
+    {
+      "canvas": 3,
+      "drawStart": 67
+    },
+    {
+      "canvas": 3,
+      "drawMs": 5.100000023841858,
+      "terminal": 72.10000002384186
+    },
+    {
+      "canvas": 6,
+      "drawStart": 74.70000004768372
+    },
+    {
+      "canvas": 6,
+      "drawMs": 11.200000047683716,
+      "terminal": 85.90000009536743
+    },
+    {
+      "canvas": 7,
+      "drawStart": 88.5
+    },
+    {
+      "canvas": 7,
+      "drawMs": 11,
+      "terminal": 99.40000009536743
+    },
+    {
+      "paintOpportunity": 114.40000009536743
+    },
+    {
+      "at": 7686.299999952316,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 33.300000071525574
+    },
+    {
+      "canvas": 0,
+      "drawMs": 5,
+      "terminal": 38.300000071525574
+    },
+    {
+      "canvas": 1,
+      "drawStart": 39.700000047683716
+    },
+    {
+      "canvas": 1,
+      "drawMs": 5,
+      "terminal": 44.700000047683716
+    },
+    {
+      "canvas": 2,
+      "drawStart": 46.5
+    },
+    {
+      "canvas": 2,
+      "drawMs": 5.100000023841858,
+      "terminal": 51.60000002384186
+    },
+    {
+      "canvas": 3,
+      "drawStart": 53.200000047683716
+    },
+    {
+      "canvas": 3,
+      "drawMs": 5,
+      "terminal": 58.200000047683716
+    },
+    {
+      "canvas": 6,
+      "drawStart": 60.800000071525574
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.799999952316284,
+      "terminal": 70.60000002384186
+    },
+    {
+      "canvas": 7,
+      "drawStart": 73.10000002384186
+    },
+    {
+      "canvas": 7,
+      "drawMs": 11.300000071525574,
+      "terminal": 84.40000009536743
+    },
+    {
+      "paintOpportunity": 98.90000009536743
+    },
+    {
+      "at": 7986,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 37.700000047683716
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.399999976158142,
+      "terminal": 42.10000002384186
+    },
+    {
+      "canvas": 1,
+      "drawStart": 43.60000002384186
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.399999976158142,
+      "terminal": 48
+    },
+    {
+      "canvas": 2,
+      "drawStart": 49.799999952316284
+    },
+    {
+      "canvas": 2,
+      "drawMs": 5.700000047683716,
+      "terminal": 55.5
+    },
+    {
+      "canvas": 3,
+      "drawStart": 57
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.399999976158142,
+      "terminal": 61.39999997615814
+    },
+    {
+      "canvas": 6,
+      "drawStart": 63.89999997615814
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.100000023841858,
+      "terminal": 74
+    },
+    {
+      "canvas": 7,
+      "drawStart": 76.70000004768372
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.799999952316284,
+      "terminal": 87.5
+    },
+    {
+      "paintOpportunity": 98.89999997615814
+    },
+    {
+      "at": 8385.899999976158,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 37.60000002384186
+    },
+    {
+      "canvas": 0,
+      "drawMs": 5.100000023841858,
+      "terminal": 42.700000047683716
+    },
+    {
+      "canvas": 1,
+      "drawStart": 44.300000071525574
+    },
+    {
+      "canvas": 1,
+      "drawMs": 5.099999904632568,
+      "terminal": 49.39999997615814
+    },
+    {
+      "canvas": 2,
+      "drawStart": 51
+    },
+    {
+      "canvas": 2,
+      "drawMs": 5.100000023841858,
+      "terminal": 56.10000002384186
+    },
+    {
+      "canvas": 3,
+      "drawStart": 57.700000047683716
+    },
+    {
+      "canvas": 3,
+      "drawMs": 5,
+      "terminal": 62.700000047683716
+    },
+    {
+      "canvas": 6,
+      "drawStart": 65.30000007152557
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.799999952316284,
+      "terminal": 75.10000002384186
+    },
+    {
+      "canvas": 7,
+      "drawStart": 77.70000004768372
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10,
+      "terminal": 87.70000004768372
+    },
+    {
+      "paintOpportunity": 98.70000004768372
+    },
+    {
+      "at": 8701.100000023842,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 37
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.699999928474426,
+      "terminal": 41.699999928474426
+    },
+    {
+      "canvas": 1,
+      "drawStart": 43.39999997615814
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.299999952316284,
+      "terminal": 47.699999928474426
+    },
+    {
+      "canvas": 2,
+      "drawStart": 49.299999952316284
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.5,
+      "terminal": 53.799999952316284
+    },
+    {
+      "canvas": 3,
+      "drawStart": 55.299999952316284
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.600000023841858,
+      "terminal": 59.89999997615814
+    },
+    {
+      "canvas": 6,
+      "drawStart": 62.60000002384186
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.199999928474426,
+      "terminal": 72.79999995231628
+    },
+    {
+      "canvas": 7,
+      "drawStart": 75.39999997615814
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.700000047683716,
+      "terminal": 85.10000002384186
+    },
+    {
+      "paintOpportunity": 99
+    },
+    {
+      "at": 9017,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 34.10000002384186
+    },
+    {
+      "canvas": 0,
+      "drawMs": 5.100000023841858,
+      "terminal": 39.200000047683716
+    },
+    {
+      "canvas": 1,
+      "drawStart": 40.700000047683716
+    },
+    {
+      "canvas": 1,
+      "drawMs": 5.099999904632568,
+      "terminal": 45.799999952316284
+    },
+    {
+      "canvas": 2,
+      "drawStart": 47.299999952316284
+    },
+    {
+      "canvas": 2,
+      "drawMs": 5.200000047683716,
+      "terminal": 52.5
+    },
+    {
+      "canvas": 3,
+      "drawStart": 54.200000047683716
+    },
+    {
+      "canvas": 3,
+      "drawMs": 5.099999904632568,
+      "terminal": 59.299999952316284
+    },
+    {
+      "canvas": 6,
+      "drawStart": 61.799999952316284
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.800000071525574,
+      "terminal": 71.60000002384186
+    },
+    {
+      "canvas": 7,
+      "drawStart": 74
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.299999952316284,
+      "terminal": 84.29999995231628
+    },
+    {
+      "paintOpportunity": 99.10000002384186
+    },
+    {
+      "at": 9316.799999952316,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 40.700000047683716
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.399999976158142,
+      "terminal": 45.10000002384186
+    },
+    {
+      "canvas": 1,
+      "drawStart": 46.5
+    },
+    {
+      "canvas": 1,
+      "drawMs": 5.900000095367432,
+      "terminal": 52.40000009536743
+    },
+    {
+      "canvas": 2,
+      "drawStart": 54.5
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.800000071525574,
+      "terminal": 59.300000071525574
+    },
+    {
+      "canvas": 3,
+      "drawStart": 60.700000047683716
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.600000023841858,
+      "terminal": 65.30000007152557
+    },
+    {
+      "canvas": 6,
+      "drawStart": 68.80000007152557
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.799999952316284,
+      "terminal": 78.60000002384186
+    },
+    {
+      "canvas": 7,
+      "drawStart": 81
+    },
+    {
+      "canvas": 7,
+      "drawMs": 12.200000047683716,
+      "terminal": 93.20000004768372
+    },
+    {
+      "paintOpportunity": 102.10000002384186
+    },
+    {
+      "at": 9745.600000023842,
+      "event": "pointermove"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 55.199999928474426
+    },
+    {
+      "canvas": 0,
+      "drawMs": 5.400000095367432,
+      "terminal": 60.60000002384186
+    },
+    {
+      "canvas": 1,
+      "drawStart": 62.10000002384186
+    },
+    {
+      "canvas": 1,
+      "drawMs": 5,
+      "terminal": 67.10000002384186
+    },
+    {
+      "canvas": 2,
+      "drawStart": 68.60000002384186
+    },
+    {
+      "canvas": 2,
+      "drawMs": 5.699999928474426,
+      "terminal": 74.29999995231628
+    },
+    {
+      "canvas": 3,
+      "drawStart": 75.89999997615814
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.399999976158142,
+      "terminal": 80.29999995231628
+    },
+    {
+      "canvas": 6,
+      "drawStart": 82.89999997615814
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.299999952316284,
+      "terminal": 93.19999992847443
+    },
+    {
+      "canvas": 7,
+      "drawStart": 95.79999995231628
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.300000071525574,
+      "terminal": 106.10000002384186
+    },
+    {
+      "canvas": 6,
+      "drawStart": 123.79999995231628
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.100000023841858,
+      "terminal": 133.89999997615814
+    },
+    {
+      "canvas": 7,
+      "drawStart": 136.29999995231628
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.200000047683716,
+      "terminal": 146.5
+    },
+    {
+      "paintOpportunity": 152.79999995231628
+    },
+    {
+      "at": 10190.200000047684,
+      "event": "pointermove"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 33.799999952316284
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.5,
+      "terminal": 38.299999952316284
+    },
+    {
+      "canvas": 1,
+      "drawStart": 39.699999928474426
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.5,
+      "terminal": 44.199999928474426
+    },
+    {
+      "canvas": 2,
+      "drawStart": 45.5
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.5,
+      "terminal": 50
+    },
+    {
+      "canvas": 3,
+      "drawStart": 51.299999952316284
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.799999952316284,
+      "terminal": 56.09999990463257
+    },
+    {
+      "canvas": 6,
+      "drawStart": 58.799999952316284
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.899999976158142,
+      "terminal": 69.69999992847443
+    },
+    {
+      "canvas": 7,
+      "drawStart": 72.19999992847443
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.700000047683716,
+      "terminal": 81.89999997615814
+    },
+    {
+      "canvas": 6,
+      "drawStart": 99.09999990463257
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.200000047683716,
+      "terminal": 109.29999995231628
+    },
+    {
+      "canvas": 7,
+      "drawStart": 111.69999992847443
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.700000047683716,
+      "terminal": 121.39999997615814
+    },
+    {
+      "paintOpportunity": 140.29999995231628
+    },
+    {
+      "at": 10711.100000023842,
+      "event": "pointermove"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 35.799999952316284
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.600000023841858,
+      "terminal": 40.39999997615814
+    },
+    {
+      "canvas": 1,
+      "drawStart": 41.89999997615814
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.5,
+      "terminal": 46.39999997615814
+    },
+    {
+      "canvas": 2,
+      "drawStart": 47.699999928474426
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.600000023841858,
+      "terminal": 52.299999952316284
+    },
+    {
+      "canvas": 3,
+      "drawStart": 54.10000002384186
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.5,
+      "terminal": 58.60000002384186
+    },
+    {
+      "canvas": 6,
+      "drawStart": 61.199999928474426
+    },
+    {
+      "canvas": 6,
+      "drawMs": 11.100000023841858,
+      "terminal": 72.29999995231628
+    },
+    {
+      "canvas": 7,
+      "drawStart": 74.79999995231628
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10,
+      "terminal": 84.79999995231628
+    },
+    {
+      "canvas": 6,
+      "drawStart": 103.69999992847443
+    },
+    {
+      "canvas": 6,
+      "drawMs": 13.200000047683716,
+      "terminal": 116.89999997615814
+    },
+    {
+      "canvas": 7,
+      "drawStart": 119.60000002384186
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.399999976158142,
+      "terminal": 129
+    },
+    {
+      "paintOpportunity": 135.69999992847443
+    },
+    {
+      "at": 11248.200000047684,
+      "event": "pointermove"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 32.89999997615814
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.5,
+      "terminal": 37.39999997615814
+    },
+    {
+      "canvas": 1,
+      "drawStart": 38.89999997615814
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.799999952316284,
+      "terminal": 43.699999928474426
+    },
+    {
+      "canvas": 2,
+      "drawStart": 45.199999928474426
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.5,
+      "terminal": 49.699999928474426
+    },
+    {
+      "canvas": 3,
+      "drawStart": 51.199999928474426
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.5,
+      "terminal": 55.699999928474426
+    },
+    {
+      "canvas": 6,
+      "drawStart": 58.39999997615814
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.899999976158142,
+      "terminal": 69.29999995231628
+    },
+    {
+      "canvas": 7,
+      "drawStart": 71.69999992847443
+    },
+    {
+      "canvas": 7,
+      "drawMs": 13.100000023841858,
+      "terminal": 84.79999995231628
+    },
+    {
+      "canvas": 6,
+      "drawStart": 101.59999990463257
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.5,
+      "terminal": 111.09999990463257
+    },
+    {
+      "canvas": 7,
+      "drawStart": 113.39999997615814
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.5,
+      "terminal": 122.89999997615814
+    },
+    {
+      "paintOpportunity": 130.59999990463257
+    },
+    {
+      "at": 11668.299999952316,
+      "event": "pointermove"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 34.40000009536743
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.5,
+      "terminal": 38.90000009536743
+    },
+    {
+      "canvas": 1,
+      "drawStart": 40.300000071525574
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.5,
+      "terminal": 44.800000071525574
+    },
+    {
+      "canvas": 2,
+      "drawStart": 46.10000002384186
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.5,
+      "terminal": 50.60000002384186
+    },
+    {
+      "canvas": 3,
+      "drawStart": 51.90000009536743
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.5,
+      "terminal": 56.40000009536743
+    },
+    {
+      "canvas": 6,
+      "drawStart": 58.700000047683716
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.700000047683716,
+      "terminal": 68.40000009536743
+    },
+    {
+      "canvas": 7,
+      "drawStart": 70.80000007152557
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.600000023841858,
+      "terminal": 80.40000009536743
+    },
+    {
+      "canvas": 6,
+      "drawStart": 97.40000009536743
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.599999904632568,
+      "terminal": 107
+    },
+    {
+      "canvas": 7,
+      "drawStart": 109.5
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.700000047683716,
+      "terminal": 119.20000004768372
+    },
+    {
+      "paintOpportunity": 126.80000007152557
+    },
+    {
+      "at": 12139.100000023842,
+      "event": "pointermove"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 39.39999997615814
+    },
+    {
+      "canvas": 0,
+      "drawMs": 5.299999952316284,
+      "terminal": 44.699999928474426
+    },
+    {
+      "canvas": 1,
+      "drawStart": 46.199999928474426
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.700000047683716,
+      "terminal": 50.89999997615814
+    },
+    {
+      "canvas": 2,
+      "drawStart": 52.39999997615814
+    },
+    {
+      "canvas": 2,
+      "drawMs": 5.399999976158142,
+      "terminal": 57.799999952316284
+    },
+    {
+      "canvas": 3,
+      "drawStart": 59.5
+    },
+    {
+      "canvas": 3,
+      "drawMs": 5.399999976158142,
+      "terminal": 64.89999997615814
+    },
+    {
+      "canvas": 6,
+      "drawStart": 67.79999995231628
+    },
+    {
+      "canvas": 6,
+      "drawMs": 11.5,
+      "terminal": 79.29999995231628
+    },
+    {
+      "canvas": 7,
+      "drawStart": 81.89999997615814
+    },
+    {
+      "canvas": 7,
+      "drawMs": 11.200000047683716,
+      "terminal": 93.10000002384186
+    },
+    {
+      "canvas": 6,
+      "drawStart": 114.60000002384186
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.899999976158142,
+      "terminal": 125.5
+    },
+    {
+      "canvas": 7,
+      "drawStart": 128
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.100000023841858,
+      "terminal": 138.10000002384186
+    },
+    {
+      "paintOpportunity": 154.39999997615814
+    },
+    {
+      "at": 12687.200000047684,
+      "event": "pointermove"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 41
+    },
+    {
+      "canvas": 0,
+      "drawMs": 5.399999976158142,
+      "terminal": 46.39999997615814
+    },
+    {
+      "canvas": 1,
+      "drawStart": 47.89999997615814
+    },
+    {
+      "canvas": 1,
+      "drawMs": 5.199999928474426,
+      "terminal": 53.09999990463257
+    },
+    {
+      "canvas": 2,
+      "drawStart": 55.09999990463257
+    },
+    {
+      "canvas": 2,
+      "drawMs": 7,
+      "terminal": 62.09999990463257
+    },
+    {
+      "canvas": 3,
+      "drawStart": 64.19999992847443
+    },
+    {
+      "canvas": 3,
+      "drawMs": 7.300000071525574,
+      "terminal": 71.5
+    },
+    {
+      "canvas": 6,
+      "drawStart": 75.19999992847443
+    },
+    {
+      "canvas": 6,
+      "drawMs": 12,
+      "terminal": 87.19999992847443
+    },
+    {
+      "canvas": 7,
+      "drawStart": 90.5
+    },
+    {
+      "canvas": 7,
+      "drawMs": 12.199999928474426,
+      "terminal": 102.59999990463257
+    },
+    {
+      "canvas": 6,
+      "drawStart": 125.89999997615814
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.100000023841858,
+      "terminal": 136
+    },
+    {
+      "canvas": 7,
+      "drawStart": 138.69999992847443
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.5,
+      "terminal": 149.19999992847443
+    },
+    {
+      "paintOpportunity": 155.89999997615814
+    },
+    {
+      "at": 13162.600000023842,
+      "event": "pointermove"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 39.60000002384186
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.599999904632568,
+      "terminal": 44.199999928474426
+    },
+    {
+      "canvas": 1,
+      "drawStart": 45.799999952316284
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.800000071525574,
+      "terminal": 50.60000002384186
+    },
+    {
+      "canvas": 2,
+      "drawStart": 52.10000002384186
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.699999928474426,
+      "terminal": 56.799999952316284
+    },
+    {
+      "canvas": 3,
+      "drawStart": 58.299999952316284
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.700000047683716,
+      "terminal": 63
+    },
+    {
+      "canvas": 6,
+      "drawStart": 65.79999995231628
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.899999976158142,
+      "terminal": 75.69999992847443
+    },
+    {
+      "canvas": 7,
+      "drawStart": 78.29999995231628
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.300000071525574,
+      "terminal": 88.60000002384186
+    },
+    {
+      "canvas": 6,
+      "drawStart": 108.19999992847443
+    },
+    {
+      "canvas": 6,
+      "drawMs": 13.200000047683716,
+      "terminal": 121.39999997615814
+    },
+    {
+      "canvas": 7,
+      "drawStart": 124
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.899999976158142,
+      "terminal": 134.89999997615814
+    },
+    {
+      "paintOpportunity": 145.60000002384186
+    },
+    {
+      "at": 13606.200000047684,
+      "event": "pointermove"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 38.5
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.699999928474426,
+      "terminal": 43.199999928474426
+    },
+    {
+      "canvas": 1,
+      "drawStart": 44.799999952316284
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.799999952316284,
+      "terminal": 49.59999990463257
+    },
+    {
+      "canvas": 2,
+      "drawStart": 51.199999928474426
+    },
+    {
+      "canvas": 2,
+      "drawMs": 6.100000023841858,
+      "terminal": 57.299999952316284
+    },
+    {
+      "canvas": 3,
+      "drawStart": 59.199999928474426
+    },
+    {
+      "canvas": 3,
+      "drawMs": 6.5,
+      "terminal": 65.69999992847443
+    },
+    {
+      "canvas": 6,
+      "drawStart": 68.89999997615814
+    },
+    {
+      "canvas": 6,
+      "drawMs": 13.199999928474426,
+      "terminal": 82.09999990463257
+    },
+    {
+      "canvas": 7,
+      "drawStart": 85.69999992847443
+    },
+    {
+      "canvas": 7,
+      "drawMs": 12.700000047683716,
+      "terminal": 98.39999997615814
+    },
+    {
+      "canvas": 6,
+      "drawStart": 120
+    },
+    {
+      "canvas": 6,
+      "drawMs": 12.099999904632568,
+      "terminal": 132.09999990463257
+    },
+    {
+      "canvas": 7,
+      "drawStart": 135.79999995231628
+    },
+    {
+      "canvas": 7,
+      "drawMs": 14.899999976158142,
+      "terminal": 150.69999992847443
+    },
+    {
+      "paintOpportunity": 167.89999997615814
+    },
+    {
+      "at": 14041.5,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 31.100000023841858
+    },
+    {
+      "canvas": 0,
+      "drawMs": 5.100000023841858,
+      "terminal": 36.200000047683716
+    },
+    {
+      "canvas": 1,
+      "drawStart": 37.60000002384186
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.5,
+      "terminal": 42.10000002384186
+    },
+    {
+      "canvas": 2,
+      "drawStart": 43.39999997615814
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.600000023841858,
+      "terminal": 48
+    },
+    {
+      "canvas": 3,
+      "drawStart": 49.39999997615814
+    },
+    {
+      "canvas": 3,
+      "drawMs": 6.800000071525574,
+      "terminal": 56.200000047683716
+    },
+    {
+      "canvas": 6,
+      "drawStart": 59
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.200000047683716,
+      "terminal": 69.20000004768372
+    },
+    {
+      "canvas": 7,
+      "drawStart": 71.70000004768372
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.199999928474426,
+      "terminal": 81.89999997615814
+    },
+    {
+      "paintOpportunity": 98.5
+    },
+    {
+      "at": 14340.5,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 32.299999952316284
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.5,
+      "terminal": 36.799999952316284
+    },
+    {
+      "canvas": 1,
+      "drawStart": 38.10000002384186
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.600000023841858,
+      "terminal": 42.700000047683716
+    },
+    {
+      "canvas": 2,
+      "drawStart": 44
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.700000047683716,
+      "terminal": 48.700000047683716
+    },
+    {
+      "canvas": 3,
+      "drawStart": 50.200000047683716
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.5,
+      "terminal": 54.700000047683716
+    },
+    {
+      "canvas": 6,
+      "drawStart": 57.10000002384186
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.5,
+      "terminal": 67.60000002384186
+    },
+    {
+      "canvas": 7,
+      "drawStart": 70.10000002384186
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.899999976158142,
+      "terminal": 80
+    },
+    {
+      "paintOpportunity": 99
+    },
+    {
+      "at": 14639.899999976158,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 32.300000071525574
+    },
+    {
+      "canvas": 0,
+      "drawMs": 5.5,
+      "terminal": 37.800000071525574
+    },
+    {
+      "canvas": 1,
+      "drawStart": 39.300000071525574
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.5,
+      "terminal": 43.800000071525574
+    },
+    {
+      "canvas": 2,
+      "drawStart": 45.300000071525574
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.599999904632568,
+      "terminal": 49.89999997615814
+    },
+    {
+      "canvas": 3,
+      "drawStart": 51.5
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.5,
+      "terminal": 56
+    },
+    {
+      "canvas": 6,
+      "drawStart": 58.60000002384186
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.600000023841858,
+      "terminal": 69.20000004768372
+    },
+    {
+      "canvas": 7,
+      "drawStart": 71.70000004768372
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.799999952316284,
+      "terminal": 81.5
+    },
+    {
+      "paintOpportunity": 99
+    },
+    {
+      "at": 14955.700000047684,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 34.799999952316284
+    },
+    {
+      "canvas": 0,
+      "drawMs": 6.299999952316284,
+      "terminal": 41.09999990463257
+    },
+    {
+      "canvas": 1,
+      "drawStart": 42.699999928474426
+    },
+    {
+      "canvas": 1,
+      "drawMs": 6.899999976158142,
+      "terminal": 49.59999990463257
+    },
+    {
+      "canvas": 2,
+      "drawStart": 51.299999952316284
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.700000047683716,
+      "terminal": 56
+    },
+    {
+      "canvas": 3,
+      "drawStart": 57.5
+    },
+    {
+      "canvas": 3,
+      "drawMs": 5.899999976158142,
+      "terminal": 63.39999997615814
+    },
+    {
+      "canvas": 6,
+      "drawStart": 66.69999992847443
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.100000023841858,
+      "terminal": 76.79999995231628
+    },
+    {
+      "canvas": 7,
+      "drawStart": 79.39999997615814
+    },
+    {
+      "canvas": 7,
+      "drawMs": 11.100000023841858,
+      "terminal": 90.5
+    },
+    {
+      "paintOpportunity": 99.19999992847443
+    },
+    {
+      "at": 15255.5,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 32
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.899999976158142,
+      "terminal": 36.89999997615814
+    },
+    {
+      "canvas": 1,
+      "drawStart": 38.39999997615814
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.5,
+      "terminal": 42.89999997615814
+    },
+    {
+      "canvas": 2,
+      "drawStart": 44.299999952316284
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.700000047683716,
+      "terminal": 49
+    },
+    {
+      "canvas": 3,
+      "drawStart": 50.60000002384186
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.5,
+      "terminal": 55.10000002384186
+    },
+    {
+      "canvas": 6,
+      "drawStart": 57.5
+    },
+    {
+      "canvas": 6,
+      "drawMs": 11.399999976158142,
+      "terminal": 68.89999997615814
+    },
+    {
+      "canvas": 7,
+      "drawStart": 71.29999995231628
+    },
+    {
+      "canvas": 7,
+      "drawMs": 11,
+      "terminal": 82.29999995231628
+    },
+    {
+      "paintOpportunity": 98.89999997615814
+    },
+    {
+      "at": 15555,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 33.200000047683716
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.5,
+      "terminal": 37.700000047683716
+    },
+    {
+      "canvas": 1,
+      "drawStart": 39.10000002384186
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.799999952316284,
+      "terminal": 43.89999997615814
+    },
+    {
+      "canvas": 2,
+      "drawStart": 45.299999952316284
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.800000071525574,
+      "terminal": 50.10000002384186
+    },
+    {
+      "canvas": 3,
+      "drawStart": 51.60000002384186
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.5,
+      "terminal": 56.10000002384186
+    },
+    {
+      "canvas": 6,
+      "drawStart": 58.5
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10,
+      "terminal": 68.5
+    },
+    {
+      "canvas": 7,
+      "drawStart": 71
+    },
+    {
+      "canvas": 7,
+      "drawMs": 9.799999952316284,
+      "terminal": 80.79999995231628
+    },
+    {
+      "paintOpportunity": 98.89999997615814
+    },
+    {
+      "at": 15854.399999976158,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 32
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.899999976158142,
+      "terminal": 36.89999997615814
+    },
+    {
+      "canvas": 1,
+      "drawStart": 38.300000071525574
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.5,
+      "terminal": 42.800000071525574
+    },
+    {
+      "canvas": 2,
+      "drawStart": 44.10000002384186
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.600000023841858,
+      "terminal": 48.700000047683716
+    },
+    {
+      "canvas": 3,
+      "drawStart": 50.10000002384186
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.700000047683716,
+      "terminal": 54.800000071525574
+    },
+    {
+      "canvas": 6,
+      "drawStart": 57.300000071525574
+    },
+    {
+      "canvas": 6,
+      "drawMs": 10.5,
+      "terminal": 67.80000007152557
+    },
+    {
+      "canvas": 7,
+      "drawStart": 70.30000007152557
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10,
+      "terminal": 80.30000007152557
+    },
+    {
+      "paintOpportunity": 98.80000007152557
+    },
+    {
+      "at": 16153.700000047684,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 33
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.5,
+      "terminal": 37.5
+    },
+    {
+      "canvas": 1,
+      "drawStart": 38.799999952316284
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.600000023841858,
+      "terminal": 43.39999997615814
+    },
+    {
+      "canvas": 2,
+      "drawStart": 44.799999952316284
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.600000023841858,
+      "terminal": 49.39999997615814
+    },
+    {
+      "canvas": 3,
+      "drawStart": 50.799999952316284
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.5,
+      "terminal": 55.299999952316284
+    },
+    {
+      "canvas": 6,
+      "drawStart": 57.89999997615814
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.799999952316284,
+      "terminal": 67.69999992847443
+    },
+    {
+      "canvas": 7,
+      "drawStart": 70.19999992847443
+    },
+    {
+      "canvas": 7,
+      "drawMs": 10.300000071525574,
+      "terminal": 80.5
+    },
+    {
+      "paintOpportunity": 99.09999990463257
+    },
+    {
+      "at": 16520.5,
+      "event": "wheel"
+    },
+    {
+      "canvas": 0,
+      "drawStart": 31.5
+    },
+    {
+      "canvas": 0,
+      "drawMs": 4.600000023841858,
+      "terminal": 36.10000002384186
+    },
+    {
+      "canvas": 1,
+      "drawStart": 37.39999997615814
+    },
+    {
+      "canvas": 1,
+      "drawMs": 4.5,
+      "terminal": 41.89999997615814
+    },
+    {
+      "canvas": 2,
+      "drawStart": 43.200000047683716
+    },
+    {
+      "canvas": 2,
+      "drawMs": 4.699999928474426,
+      "terminal": 47.89999997615814
+    },
+    {
+      "canvas": 3,
+      "drawStart": 49.200000047683716
+    },
+    {
+      "canvas": 3,
+      "drawMs": 4.5,
+      "terminal": 53.700000047683716
+    },
+    {
+      "canvas": 6,
+      "drawStart": 56.10000002384186
+    },
+    {
+      "canvas": 6,
+      "drawMs": 9.799999952316284,
+      "terminal": 65.89999997615814
+    },
+    {
+      "canvas": 7,
+      "drawStart": 68.39999997615814
+    },
+    {
+      "canvas": 7,
+      "drawMs": 11.399999976158142,
+      "terminal": 79.79999995231628
+    },
+    {
+      "paintOpportunity": 98.20000004768372
+    }
+  ],
+  "memory": {
+    "actualIntervalMs": {
+      "min": 1224,
+      "median": 1260,
+      "max": 1398
+    },
+    "intervalMs": 1000,
+    "samples": 12,
+    "nativePeakSampledBytes": 97001472,
+    "processTreePeakSampledBytes": 786550784,
+    "monitorExitCode": 0
+  }
+}

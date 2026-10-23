@@ -30,10 +30,10 @@ it('persists layout and bounded split through view draft save and reopen without
  const apply=vi.fn<ProjectCommands['applyChange']>(async(_id,revision,change)=>({...store.snapshot,document:{...store.snapshot.document,revision:revision+1,...(change.type==='updateViewState'?{viewState:change.viewState}:{})}}));
  const queue=new CommandQueue(store,{applyChange:apply} as unknown as ProjectCommands);
  const lifecycle=new ProjectLifecycle(store,queue,{save:async(_,r)=>r,close:vi.fn()}); const active={store,queue,lifecycle,path:'project'};
- const hook=renderHook(()=>useWorkspace(active,fixture.media[0].id)); expect(hook.result.current.state.compareLayout).toBe('horizontal');
+ const hook=renderHook(()=>useWorkspace(active)); expect(hook.result.current.state.compareLayout).toBe('horizontal');
  act(()=>{hook.result.current.split(.9);hook.result.current.layout('vertical');}); expect(hook.result.current.state.compareSplit).toBe(.75);
  await act(()=>lifecycle.save()); expect(store.snapshot.canUndo).toBe(false);expect(apply).toHaveBeenCalledTimes(1);
- hook.unmount(); const reopened=renderHook(()=>useWorkspace(active,fixture.media[0].id)); expect(reopened.result.current.state).toMatchObject({compareLayout:'vertical',compareSplit:.75});
+ hook.unmount(); const reopened=renderHook(()=>useWorkspace(active)); expect(reopened.result.current.state).toMatchObject({compareLayout:'vertical',compareSplit:.75});
  const release=store.beginTransition(); act(()=>reopened.result.current.split(.2)); expect(reopened.result.current.state.compareSplit).toBe(.75); release();
  reopened.unmount(); lifecycle.dispose();
 });
@@ -60,7 +60,7 @@ it('binds the six menus to lifecycle and shared durable selection actions; barri
  const queue=new CommandQueue(store,{applyChange:apply} as unknown as ProjectCommands);const lifecycle=new ProjectLifecycle(store,queue,{save:async(_,r)=>r,close:vi.fn()});const active={store,queue,lifecycle,path:'project'};
  const open=vi.fn(),save=vi.fn(),help=vi.fn(),focusNote=vi.fn();const project={active,busy:false,recovery:null,open,save} as unknown as ProjectLifecycleUI;
  const media=store.snapshot.document.media[0],mediaUI={selected:media,selectedId:media.id,disabled:false,statuses:[{mediaId:media.id,status:'ready'}],choose:vi.fn()} as unknown as MediaUI;
- const hook=renderHook(()=>{const selection=useSelection(active,media.id),workspace=useWorkspace(active,media.id),annotations=useAnnotations(active,selection),playback=usePlayback(active,media.id,selection.selection?.region);return{selection,menus:workspaceMenus({project,mediaUI,selection,workspace,annotations,playback,mediaOpen:true,propertiesOpen:true,toggleMedia:vi.fn(),toggleProperties:vi.fn(),settings:vi.fn(),inspector:vi.fn(),help,focusNote})};});
+ const hook=renderHook(()=>{const selection=useSelection(active,media.id),workspace=useWorkspace(active),annotations=useAnnotations(active,selection),playback=usePlayback(active,media.id,selection.selection?.region);return{selection,menus:workspaceMenus({project,mediaUI,selection,workspace,annotations,playback,mediaOpen:true,propertiesOpen:true,toggleMedia:vi.fn(),toggleProperties:vi.fn(),settings:vi.fn(),inspector:vi.fn(),help,focusNote})};});
  expect(hook.result.current.menus.map(m=>m.label)).toEqual(['文件','编辑','视图','标注','音频','帮助']);
  const item=(menu:string,id:string)=>hook.result.current.menus.find(m=>m.id===menu)!.items.find(i=>i.id===id)!;
  item('file','new').action!();item('file','save').action!();expect(open).toHaveBeenCalledWith('create');expect(save).toHaveBeenCalledOnce();

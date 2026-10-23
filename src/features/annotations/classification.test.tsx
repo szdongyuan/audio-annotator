@@ -157,8 +157,8 @@ import { defaultSettings } from '../spectrogram/workspace';
 it('interacting with comparison file header controls sets its visible context even outside the plot', () => {
  const s = setup(), first = s.store.snapshot.document.media[0], other = { ...first, id: 'other', displayName: 'other.wav' }; s.store.snapshot.document.media.push(other);
  const hook = renderHook(() => useSelection(s.active, first.id, [{ mediaId: first.id, channels: [0,1] }, { mediaId: other.id, channels: [1] }]));
- render(<SelectionContext.Provider value={hook.result.current}><FilePane active={s.active} media={other} settings={defaultSettings} view={{ ...defaultView(other), visibleChannels: [1] }} status="missing" timeLimit={2} onView={vi.fn()} onSettings={vi.fn()} onRelink={vi.fn()} /></SelectionContext.Provider>);
- fireEvent.pointerDown(screen.getByLabelText('other.wav 分析设置'));
+ render(<SelectionContext.Provider value={hook.result.current}><FilePane pane="compare" choices={s.store.snapshot.document.media} duplicate={false} onSelect={vi.fn()} active={s.active} media={other} settings={defaultSettings} view={{ ...defaultView(other), visibleChannels: [1] }} status="missing" timeLimit={2} onView={vi.fn()} onSettings={vi.fn()} onRelink={vi.fn()} /></SelectionContext.Provider>);
+ fireEvent(screen.getByLabelText('other.wav 频谱类型'), new MouseEvent('pointerdown', {bubbles:true,button:0}));
  expect(hook.result.current.context).toEqual({ mediaId: other.id, channelIndex: 1 });
  hook.unmount(); s.lifecycle.dispose();
 });

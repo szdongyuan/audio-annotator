@@ -1,0 +1,2056 @@
+{
+  "baseline": false,
+  "fixture": "Synthetic 48kHz, 4s, six channels; unchanged default analysis/palette/gain. Not user audio.",
+  "checks": [
+    {
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "metrics": [
+        {
+          "backing": [
+            682,
+            237
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "dpr": 1
+        },
+        {
+          "backing": [
+            682,
+            237
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "dpr": 1
+        }
+      ]
+    },
+    {
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "metrics": [
+        {
+          "backing": [
+            1272,
+            377
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "dpr": 1
+        },
+        {
+          "backing": [
+            1272,
+            377
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "dpr": 1
+        }
+      ]
+    },
+    {
+      "name": "stereo-1280-dpr1",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 1,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            682,
+            237
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 20935,
+          "visible": true
+        },
+        {
+          "backing": [
+            682,
+            237
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 20948,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 1293072,
+      "scratchUpperBound": 60672
+    },
+    {
+      "name": "stereo-1280-dpr1.25",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 1.25,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            853,
+            296
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 33229,
+          "visible": true
+        },
+        {
+          "backing": [
+            853,
+            296
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 32898,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 2019904,
+      "scratchUpperBound": 75776
+    },
+    {
+      "name": "stereo-1280-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            1364,
+            473
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 84850,
+          "visible": true
+        },
+        {
+          "backing": [
+            1364,
+            473
+          ],
+          "css": [
+            682,
+            236.5
+          ],
+          "nonblack": 84075,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 5161376,
+      "scratchUpperBound": 121088
+    },
+    {
+      "name": "stereo-1920-dpr1",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 1,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1272,
+            377
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 62879,
+          "visible": true
+        },
+        {
+          "backing": [
+            1272,
+            377
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 62412,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 3836352,
+      "scratchUpperBound": 96512
+    },
+    {
+      "name": "stereo-1920-dpr1.25",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 1.25,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1590,
+            471
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 98755,
+          "visible": true
+        },
+        {
+          "backing": [
+            1590,
+            471
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 97595,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 5991120,
+      "scratchUpperBound": 120576
+    },
+    {
+      "name": "stereo-1920-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            2544,
+            753
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 251244,
+          "visible": true
+        },
+        {
+          "backing": [
+            2544,
+            753
+          ],
+          "css": [
+            1272,
+            376.5
+          ],
+          "nonblack": 248955,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 15325056,
+      "scratchUpperBound": 192768
+    },
+    {
+      "name": "single-expanded-1920-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            3544,
+            1606
+          ],
+          "css": [
+            1772,
+            803
+          ],
+          "nonblack": 748061,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 22766656,
+      "scratchUpperBound": 411136
+    },
+    {
+      "name": "native numeric reference at physical centers, pulse, tile seam and tail",
+      "maxColorError": 0,
+      "points": [
+        {
+          "db": -101.46246741186077,
+          "hz": 250.85510056447282,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 0.25,
+          "x": 221,
+          "y": 1216
+        },
+        {
+          "db": -19.487603580581492,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            252,
+            186,
+            67,
+            255
+          ],
+          "seconds": 0.25,
+          "x": 221,
+          "y": 1003
+        },
+        {
+          "db": -20.29593426812303,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            252,
+            181,
+            64,
+            255
+          ],
+          "seconds": 0.25,
+          "x": 221,
+          "y": 983
+        },
+        {
+          "db": -136.6487509389533,
+          "hz": 7993.356477595019,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 0.25,
+          "x": 221,
+          "y": 536
+        },
+        {
+          "db": -76.47691194995093,
+          "hz": 250.85510056447282,
+          "rgba": [
+            48,
+            9,
+            75,
+            255
+          ],
+          "seconds": 1.9904063205417608,
+          "x": 1763,
+          "y": 1216
+        },
+        {
+          "db": -19.491375032660468,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            252,
+            186,
+            67,
+            255
+          ],
+          "seconds": 1.9904063205417608,
+          "x": 1763,
+          "y": 1003
+        },
+        {
+          "db": -20.289940788987767,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            252,
+            181,
+            64,
+            255
+          ],
+          "seconds": 1.9904063205417608,
+          "x": 1763,
+          "y": 983
+        },
+        {
+          "db": -49.74338498319377,
+          "hz": 7993.356477595019,
+          "rgba": [
+            176,
+            35,
+            72,
+            255
+          ],
+          "seconds": 1.9904063205417608,
+          "x": 1763,
+          "y": 536
+        },
+        {
+          "db": -121.5406746459019,
+          "hz": 250.85510056447282,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 2.7274266365688487,
+          "x": 2416,
+          "y": 1216
+        },
+        {
+          "db": -19.48756144597406,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            252,
+            186,
+            67,
+            255
+          ],
+          "seconds": 2.7274266365688487,
+          "x": 2416,
+          "y": 1003
+        },
+        {
+          "db": -20.276464394277,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            252,
+            181,
+            64,
+            255
+          ],
+          "seconds": 2.7274266365688487,
+          "x": 2416,
+          "y": 983
+        },
+        {
+          "db": -123.90397868538778,
+          "hz": 7993.356477595019,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 2.7274266365688487,
+          "x": 2416,
+          "y": 536
+        },
+        {
+          "db": -121.74679623501474,
+          "hz": 250.85510056447282,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 2.734198645598194,
+          "x": 2422,
+          "y": 1216
+        },
+        {
+          "db": -19.4875609720767,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            252,
+            186,
+            67,
+            255
+          ],
+          "seconds": 2.734198645598194,
+          "x": 2422,
+          "y": 1003
+        },
+        {
+          "db": -20.277211641352473,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            252,
+            181,
+            64,
+            255
+          ],
+          "seconds": 2.734198645598194,
+          "x": 2422,
+          "y": 983
+        },
+        {
+          "db": -124.4058095317329,
+          "hz": 7993.356477595019,
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "seconds": 2.734198645598194,
+          "x": 2422,
+          "y": 536
+        },
+        {
+          "db": -54.886432931793216,
+          "hz": 250.85510056447282,
+          "rgba": [
+            152,
+            25,
+            88,
+            255
+          ],
+          "seconds": 3.990406320541761,
+          "x": 3535,
+          "y": 1216
+        },
+        {
+          "db": -38.624452116606555,
+          "hz": 1001.4850512939361,
+          "rgba": [
+            222,
+            73,
+            45,
+            255
+          ],
+          "seconds": 3.990406320541761,
+          "x": 3535,
+          "y": 1003
+        },
+        {
+          "db": -39.889935247123425,
+          "hz": 1126.9937636868644,
+          "rgba": [
+            218,
+            64,
+            47,
+            255
+          ],
+          "seconds": 3.990406320541761,
+          "x": 3535,
+          "y": 983
+        },
+        {
+          "db": -81.77729614133987,
+          "hz": 7993.356477595019,
+          "rgba": [
+            30,
+            5,
+            52,
+            255
+          ],
+          "seconds": 3.990406320541761,
+          "x": 3535,
+          "y": 536
+        }
+      ]
+    },
+    {
+      "name": "physical annotation and tick alignment",
+      "maxCssError": 0.0004845845532486237,
+      "annotation": {
+        "categoryId": null,
+        "createdAt": "2026-10-23T10:24:18.482Z",
+        "id": "f161772d-f404-4bcf-9886-aa07cfbce71d",
+        "note": "",
+        "region": {
+          "channelIndex": 0,
+          "endSeconds": 2.398936170212766,
+          "highHz": 11470.608066492034,
+          "lowHz": 470.29113776087695,
+          "mediaId": "d2401ef6-6608-4e05-8e6a-31e0ae0a28ba",
+          "startSeconds": 0.800531914893617
+        },
+        "updatedAt": "2026-10-23T10:24:18.482Z"
+      }
+    },
+    {
+      "name": "dual-1280-dpr1",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 1,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            277,
+            237
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 8587,
+          "visible": true
+        },
+        {
+          "backing": [
+            277,
+            237
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 8599,
+          "visible": true
+        },
+        {
+          "backing": [
+            277,
+            237
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 8587,
+          "visible": true
+        },
+        {
+          "backing": [
+            277,
+            237
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 8599,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 1050384,
+      "scratchUpperBound": 60672
+    },
+    {
+      "name": "dual-1280-dpr1.25",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 1.25,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            346,
+            296
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 13414,
+          "visible": true
+        },
+        {
+          "backing": [
+            346,
+            296
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 13274,
+          "visible": true
+        },
+        {
+          "backing": [
+            346,
+            296
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 13414,
+          "visible": true
+        },
+        {
+          "backing": [
+            346,
+            296
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 13274,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 1638656,
+      "scratchUpperBound": 75776
+    },
+    {
+      "name": "dual-1280-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            554,
+            473
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 34644,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            473
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 34335,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            473
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 34644,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            473
+          ],
+          "css": [
+            277,
+            236.5
+          ],
+          "nonblack": 34335,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 4192672,
+      "scratchUpperBound": 121088
+    },
+    {
+      "name": "dual-1920-dpr1",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 1,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            572,
+            377
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 28340,
+          "visible": true
+        },
+        {
+          "backing": [
+            572,
+            377
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 28122,
+          "visible": true
+        },
+        {
+          "backing": [
+            572,
+            377
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 28340,
+          "visible": true
+        },
+        {
+          "backing": [
+            572,
+            377
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 28122,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 3450304,
+      "scratchUpperBound": 96512
+    },
+    {
+      "name": "dual-1920-dpr1.25",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 1.25,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            715,
+            471
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 44356,
+          "visible": true
+        },
+        {
+          "backing": [
+            715,
+            471
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 43842,
+          "visible": true
+        },
+        {
+          "backing": [
+            715,
+            471
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 44356,
+          "visible": true
+        },
+        {
+          "backing": [
+            715,
+            471
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 43842,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 5388240,
+      "scratchUpperBound": 120576
+    },
+    {
+      "name": "dual-1920-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1144,
+            753
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 113062,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            753
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 112033,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            753
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 113062,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            753
+          ],
+          "css": [
+            572,
+            376.5
+          ],
+          "nonblack": 112033,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 13782912,
+      "scratchUpperBound": 192768
+    },
+    {
+      "name": "six-plus-six-1280-top-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26470,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26124,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22413,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26470,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26124,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22413,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        }
+      ],
+      "retainedBytes": 4786560,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1280-bottom-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22381,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 23013,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 21012,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22381,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 23013,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 21012,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 4786560,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1280-top-dpr2",
+      "outer": {
+        "width": 1280,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "dpr": 2,
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26470,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26124,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22413,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26470,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 26124,
+          "visible": true
+        },
+        {
+          "backing": [
+            554,
+            360
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 22413,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            277,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        }
+      ],
+      "retainedBytes": 4786560,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1920-top-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 54346,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 53618,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 54346,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 53618,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        }
+      ],
+      "retainedBytes": 13178880,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1920-bottom-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 47182,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 43065,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 47182,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 43065,
+          "visible": true
+        }
+      ],
+      "retainedBytes": 13178880,
+      "scratchUpperBound": 92160
+    },
+    {
+      "name": "six-plus-six-1920-top-dpr2",
+      "outer": {
+        "width": 1920,
+        "pid": 5836,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "dpr": 2,
+      "inner": [
+        1904,
+        1041
+      ],
+      "plots": [
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 54346,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 53618,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 54346,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 53618,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45973,
+          "visible": true
+        },
+        {
+          "backing": [
+            1144,
+            360
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 45899,
+          "visible": true
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        },
+        {
+          "backing": [
+            0,
+            0
+          ],
+          "css": [
+            572,
+            180
+          ],
+          "nonblack": 0,
+          "visible": false
+        }
+      ],
+      "retainedBytes": 13178880,
+      "scratchUpperBound": 92160
+    }
+  ],
+  "analysis": {
+    "fftSize": 2048,
+    "hopSize": 512,
+    "melBands": 128,
+    "window": "hann",
+    "windowSize": 2048
+  },
+  "dpi": "DPR1/1.25/2 use isolated owned WebView CDP emulation; Windows system DPI unchanged and not claimed.",
+  "passed": true
+}

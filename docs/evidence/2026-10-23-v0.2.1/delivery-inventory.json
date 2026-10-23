@@ -1,0 +1,216 @@
+{
+  "directory": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\releases\\0.2.1",
+  "files": [
+    {
+      "file": "Audio Annotator_0.2.1_x64-setup.exe",
+      "bytes": 221434863,
+      "sha256": "31df3d94ed173e7cef21e4b175ff1ba5fe96ba8b037c4eb525716c36e383890b"
+    },
+    {
+      "file": "BUILD-PROVENANCE.json",
+      "bytes": 1541,
+      "sha256": "4709a3d0631d08a4e6e91d6b17f891c57de793493edc7c7943bb63826e1b9796"
+    },
+    {
+      "file": "DELIVERY.json",
+      "bytes": 727,
+      "sha256": "86c4136d6b4b2bbaa051e02ee8fb6d77bde9b14d4b9fc23c5128b8bad11c023c"
+    },
+    {
+      "file": "FILE-INVENTORY.json",
+      "bytes": 7196,
+      "sha256": "5f33f55173d0d93361ea5caa5bb74aa4576f942a9c3c2aea33ce2d76c605f376"
+    },
+    {
+      "file": "README.txt",
+      "bytes": 472,
+      "sha256": "2757f44e2c540801d1bec991f9a5c9fe98b7ba68e83b8b8b4616996aee11b244"
+    },
+    {
+      "file": "annotator-desktop.exe",
+      "bytes": 14415360,
+      "sha256": "8e49f90e8fcd0adac0a66dd0cbb73512c4747e15f6f8b172583857c41ba79b10"
+    },
+    {
+      "file": "formal-release-report.json",
+      "bytes": 21391,
+      "sha256": "b6ce4b7d3a63015065b258aa2f6fc207651b2118283225080326fcac2cd5678f"
+    },
+    {
+      "file": "licenses/THIRD-PARTY-NOTICES.txt",
+      "bytes": 2688591,
+      "sha256": "8ec6b0414a40b3cfa53a1cd1afc7dd1168706afc6306d9749f886264368e49ef"
+    },
+    {
+      "file": "licenses/inventory.json",
+      "bytes": 83587,
+      "sha256": "3174830a837175ea9dfc6d88660e947677f6cd2d7f6c7ddb5f7423e6862f1ebd"
+    },
+    {
+      "file": "licenses/sources/cssparser-0.37.0.crate",
+      "bytes": 56860,
+      "sha256": "8c9cdaae01d5ed7882b04d795e7f752f46ff52d2fa3b50a20d28c464510bba98"
+    },
+    {
+      "file": "licenses/sources/cssparser-macros-0.7.1.crate",
+      "bytes": 8197,
+      "sha256": "d045de693cb712d0b22c6a64be5b953f67b3ce00ab5ad3dd5d8b441886ab8e1a"
+    },
+    {
+      "file": "licenses/sources/dtoa-short-0.3.5.crate",
+      "bytes": 8287,
+      "sha256": "cd1511a7b6a56299bd043a9c167a6d2bfb37bf84a6dfceaba651168adfb43c87"
+    },
+    {
+      "file": "licenses/sources/option-ext-0.2.0.crate",
+      "bytes": 7345,
+      "sha256": "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+    },
+    {
+      "file": "licenses/sources/selectors-0.38.0.crate",
+      "bytes": 69601,
+      "sha256": "8adfa1c298912827b8a28b223b3b874357397ae706e6190acd9bf28cee99114d"
+    },
+    {
+      "file": "licenses/sources/symphonia-0.5.5.crate",
+      "bytes": 12085,
+      "sha256": "5773a4c030a19d9bfaa090f49746ff35c75dfddfa700df7a5939d5e076a57039"
+    },
+    {
+      "file": "licenses/sources/symphonia-bundle-flac-0.5.5.crate",
+      "bytes": 24141,
+      "sha256": "c91565e180aea25d9b80a910c546802526ffd0072d0b8974e3ebe59b686c9976"
+    },
+    {
+      "file": "licenses/sources/symphonia-bundle-mp3-0.5.5.crate",
+      "bytes": 61019,
+      "sha256": "4872dd6bb56bf5eac799e3e957aa1981086c3e613b27e0ac23b176054f7c57ed"
+    },
+    {
+      "file": "licenses/sources/symphonia-codec-pcm-0.5.5.crate",
+      "bytes": 6795,
+      "sha256": "4e89d716c01541ad3ebe7c91ce4c8d38a7cf266a3f7b2f090b108fb0cb031d95"
+    },
+    {
+      "file": "licenses/sources/symphonia-core-0.5.5.crate",
+      "bytes": 99682,
+      "sha256": "ea00cc4f79b7f6bb7ff87eddc065a1066f3a43fe1875979056672c9ef948c2af"
+    },
+    {
+      "file": "licenses/sources/symphonia-format-riff-0.5.5.crate",
+      "bytes": 17993,
+      "sha256": "c2d7c3df0e7d94efb68401d81906eae73c02b40d5ec1a141962c592d0f11a96f"
+    },
+    {
+      "file": "licenses/sources/symphonia-metadata-0.5.5.crate",
+      "bytes": 24184,
+      "sha256": "36306ff42b9ffe6e5afc99d49e121e0bd62fe79b9db7b9681d48e29fa19e6b16"
+    },
+    {
+      "file": "licenses/sources/symphonia-utils-xiph-0.5.5.crate",
+      "bytes": 6617,
+      "sha256": "ee27c85ab799a338446b68eec77abf42e1a6f1bb490656e121c6e27bfbab9f16"
+    },
+    {
+      "file": "licenses/upstream/alloc-stdlib-0.3.0.txt",
+      "bytes": 1618,
+      "sha256": "b783140f43962627254f852ecdb1a10346508f9d6b0bcdaa7af7627138be22f5"
+    },
+    {
+      "file": "licenses/upstream/dasp_sample-0.11.0.txt",
+      "bytes": 1223,
+      "sha256": "ebf7a04101801b655f7e676b9326dfa5084c9cf38cb2ecfa4628ff3800c96d0b"
+    },
+    {
+      "file": "licenses/upstream/realfft-3.5.0.txt",
+      "bytes": 1299,
+      "sha256": "93dbd50d8fc4ea1746d888cacc0b923581b7b8a225fcf93d5ab16a5514965727"
+    },
+    {
+      "file": "licenses/upstream/selectors-0.38.0.txt",
+      "bytes": 17331,
+      "sha256": "637646e4349651b84453502fc64fb4601d985bc75bd9ea54188318e424408338"
+    },
+    {
+      "file": "licenses/upstream/symphonia-0.5.5.txt",
+      "bytes": 17211,
+      "sha256": "70f71bd365d5a5371f8596ed08cccfacb2a9326553d1c6fa579c8784286d5a8e"
+    },
+    {
+      "file": "licenses/upstream/symphonia-bundle-flac-0.5.5.txt",
+      "bytes": 17211,
+      "sha256": "70f71bd365d5a5371f8596ed08cccfacb2a9326553d1c6fa579c8784286d5a8e"
+    },
+    {
+      "file": "licenses/upstream/symphonia-bundle-mp3-0.5.5.txt",
+      "bytes": 17211,
+      "sha256": "70f71bd365d5a5371f8596ed08cccfacb2a9326553d1c6fa579c8784286d5a8e"
+    },
+    {
+      "file": "licenses/upstream/symphonia-codec-pcm-0.5.5.txt",
+      "bytes": 17211,
+      "sha256": "70f71bd365d5a5371f8596ed08cccfacb2a9326553d1c6fa579c8784286d5a8e"
+    },
+    {
+      "file": "licenses/upstream/symphonia-core-0.5.5.txt",
+      "bytes": 17211,
+      "sha256": "70f71bd365d5a5371f8596ed08cccfacb2a9326553d1c6fa579c8784286d5a8e"
+    },
+    {
+      "file": "licenses/upstream/symphonia-format-riff-0.5.5.txt",
+      "bytes": 17211,
+      "sha256": "70f71bd365d5a5371f8596ed08cccfacb2a9326553d1c6fa579c8784286d5a8e"
+    },
+    {
+      "file": "licenses/upstream/symphonia-metadata-0.5.5.txt",
+      "bytes": 17211,
+      "sha256": "70f71bd365d5a5371f8596ed08cccfacb2a9326553d1c6fa579c8784286d5a8e"
+    },
+    {
+      "file": "licenses/upstream/symphonia-utils-xiph-0.5.5.txt",
+      "bytes": 17211,
+      "sha256": "70f71bd365d5a5371f8596ed08cccfacb2a9326553d1c6fa579c8784286d5a8e"
+    },
+    {
+      "file": "licenses/upstream/tauri-plugin-2.7.2.txt",
+      "bytes": 1226,
+      "sha256": "9006621336ec30c84eb681dc7f3c51c723c82abb022dcfb589ab192b0abd676f"
+    },
+    {
+      "file": "licenses/upstream/webview2-com-0.39.1.txt",
+      "bytes": 1202,
+      "sha256": "6c921550cc760eb63ba4ba6f529518d58c2a896893dcf13d4e3c4f633a03f205"
+    },
+    {
+      "file": "licenses/upstream/webview2-com-macros-0.8.1.txt",
+      "bytes": 1202,
+      "sha256": "20691fc3ff2e4949c895cc1ce46718997f571fccbbc1473025438232f162b465"
+    },
+    {
+      "file": "licenses/upstream/webview2-com-sys-0.39.1.txt",
+      "bytes": 1202,
+      "sha256": "6c921550cc760eb63ba4ba6f529518d58c2a896893dcf13d4e3c4f633a03f205"
+    },
+    {
+      "file": "product-source-manifest.json",
+      "bytes": 37614,
+      "sha256": "a09738ee6fa505512c6f2faa0d90de305acaa5ee521ddcd66895ae8892d09849"
+    },
+    {
+      "file": "third-party.md",
+      "bytes": 2247,
+      "sha256": "4e7c7aaf4f81c1367280d446d184da32fe65e8b86310487ab603056e76935f1c"
+    },
+    {
+      "file": "user-guide.md",
+      "bytes": 8186,
+      "sha256": "24246baee92790cfeb25953f196d8cc7d61aafb69f1f6a6da5d77992a108cd6a"
+    },
+    {
+      "file": "verification-0.2.1.md",
+      "bytes": 10951,
+      "sha256": "e8e2d6db7d246c22aa04c253661fd01642e781ad7e8da0e6edaf1ea17a3727d7"
+    }
+  ],
+  "shaListSha256": "38f1de133e0e4316669d488d605bd0681e7f9f8e61e592e95637de672f54c939"
+}

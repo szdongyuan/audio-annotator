@@ -214,5 +214,14 @@
 .channel-caption > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
 .file-heading small { flex-shrink: 2; overflow: hidden; text-overflow: ellipsis; }
 .file-heading h2 { min-width: 20px; }
+.file-heading { position: relative; }
+.pane-file-select { width: 24px; min-width: 24px; height: 20px; border: 1px solid #49424b; border-radius: 3px; color: #d6cbd5; background: #25252c; font-size: 0; }
+.pane-file-select option { font-size: 11px; }
+.file-pane.is-duplicate-target { border-color: #e9b57c; box-shadow: inset 0 0 0 2px #e9b57c; }
+.pane-duplicate-message:not(:empty) { position: absolute; right: 6px; top: 2px; padding: 3px 6px; background: #493829; color: #ffe0b9; border-radius: 3px; font-size: 10px; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .file-pane.is-duplicate-target { transition: none; animation: none; } }
 
 .classification-title { display: contents; }
+
+.file-pane { position: relative; }
+.file-pane .analysis-popover { right: 8px; top: 56px; width: min(340px, calc(100% - 16px)); max-height: calc(100% - 64px); }

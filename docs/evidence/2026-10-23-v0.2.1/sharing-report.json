@@ -1,0 +1,160 @@
+{
+  "output": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s",
+  "method": "Fresh debug/e2e EXE; owned Selenium/WebView2 pointer and keyboard. Only native picker return paths are injected. UI creates notes/categories/region/mask, saves, exports, imports and plays; read-only native snapshots/tiles/output frames measure results.",
+  "checks": [
+    {
+      "name": "actual UI creates and saves three independent classifications/notes plus processed mask",
+      "beforeEnergy": {
+        "values": {
+          "original": {
+            "1500": -10.457942962646484,
+            "6000": -10.457840919494629
+          },
+          "processed": {
+            "1500": -160,
+            "6000": -10.457840919494629
+          }
+        },
+        "rejectionDb": -149.54205703735352,
+        "retainedDb": 0,
+        "editSignature": "2d444c02b789c8e7710af3e47aa351f8ed40f6a43399fd93e1232a9d49546c89"
+      },
+      "beforePixels": [
+        {
+          "hash": 1544767335,
+          "height": 256,
+          "width": 698
+        },
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        }
+      ]
+    },
+    {
+      "name": "renamed local-copy action switches to independent project, retaining original audio references",
+      "originalId": "20f1fa6c-ef09-4b33-b4c3-11882ebb00bd",
+      "copyId": "20f1fa6c-ef09-4b33-b4c3-11882ebb00bd",
+      "copy": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\local-copy",
+      "sources": [
+        "\\\\?\\D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\owned-originals\\dual-tone.wav",
+        "\\\\?\\D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\owned-originals\\second-original.wav"
+      ]
+    },
+    {
+      "name": "independent bundle import with unavailable original paths preserves all semantics and reconstructs processed tiles/canvas, consuming real native output frames",
+      "importedRoot": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\recipient\\imported-e6f270df-7910-4f7f-8688-94e65b612474",
+      "importedSources": [
+        {
+          "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\recipient\\imported-e6f270df-7910-4f7f-8688-94e65b612474\\media\\929c53e6-0970-4c98-9f54-7df2f7323775",
+          "sha256": "36540138e71148deb787386568246edb1b23f1292d798705f2a88f61021875c3"
+        },
+        {
+          "file": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\recipient\\imported-e6f270df-7910-4f7f-8688-94e65b612474\\media\\fe90ed8c-2492-4f1e-8077-37cf2908e62d",
+          "sha256": "43ba3f465645acf0b80b254d3f3bfea3ff0d04beae6d3d83c45aa516653a3d8b"
+        }
+      ],
+      "recipientEnergy": {
+        "values": {
+          "original": {
+            "1500": -10.457942962646484,
+            "6000": -10.457840919494629
+          },
+          "processed": {
+            "1500": -160,
+            "6000": -10.457840919494629
+          }
+        },
+        "rejectionDb": -149.54205703735352,
+        "retainedDb": 0,
+        "editSignature": "2d444c02b789c8e7710af3e47aa351f8ed40f6a43399fd93e1232a9d49546c89"
+      },
+      "recipientPixels": [
+        {
+          "hash": 1544767335,
+          "height": 256,
+          "width": 698
+        },
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        }
+      ],
+      "originalPixels": [
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        },
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        }
+      ],
+      "playing": {
+        "consumedFrames": 2496,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 8,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 14,
+        "mediaId": "929c53e6-0970-4c98-9f54-7df2f7323775",
+        "positionSeconds": 0.052,
+        "presentation": {
+          "callbackNanos": 28974300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 2496,
+          "tailNanos": 50974300,
+          "tailNonSilent": true
+        },
+        "projectId": "e6f270df-7910-4f7f-8688-94e65b612474",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "stopped": {
+        "consumedFrames": 5856,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 8,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 15,
+        "mediaId": "929c53e6-0970-4c98-9f54-7df2f7323775",
+        "positionSeconds": 0,
+        "presentation": {
+          "callbackNanos": 98991800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 5856,
+          "tailNanos": 120991800,
+          "tailNonSilent": true
+        },
+        "projectId": "e6f270df-7910-4f7f-8688-94e65b612474",
+        "startSeconds": 0,
+        "state": "stopped",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "name": "explicit annotations-only export imports with missing audio and a relink action",
+      "root": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\sharing\\native-gqLG8s\\recipient\\imported-be81e786-af5f-4bd1-a200-d014940b1b0c"
+    }
+  ],
+  "passed": true,
+  "restoredHashes": [
+    "36540138e71148deb787386568246edb1b23f1292d798705f2a88f61021875c3",
+    "43ba3f465645acf0b80b254d3f3bfea3ff0d04beae6d3d83c45aa516653a3d8b"
+  ]
+}

@@ -364,7 +364,7 @@ npm.cmd run tauri -- build --bundles nsis
 
 最终 NSIS 命令不传 e2e feature 或测试配置，默认 release 没有路径预置入口或调试端口。`licenses/` 整目录作为资源打包，包括 MPL 源码归档。离线 WebView2 安装器由 Tauri 从 Microsoft 官方源下载；构建时需联网，安装包完成后不依赖用户联网下载 WebView2。应用本身的标注操作不需网络。没有签名证书，产物未签名。
 
-缓存约束：全局 PCM 保留预算 128 MiB，唯一共享分析缓存 96 MiB + 串行音频工作线程 32 MiB；移除无消费者的 registry cache。tile backend 128 MiB，disk 2 GiB；frontend 数值 64 MiB，最多 12 个 1 MiB canvas 和对应临时 raster，总体低于 96 MiB。native 分析 2 工作者/32 等待项，frontend 全局 4 个在途请求。callback 保持无分配、无锁、无 I/O，EOF/WASAPI 排空契约保持 CPAL 0.15.3 已锁定版本。
+缓存约束：全局 PCM 保留预算 128 MiB，唯一共享分析缓存 96 MiB + 串行音频工作线程 32 MiB；移除无消费者的 registry cache。tile backend 128 MiB，disk 2 GiB；frontend 数值 64 MiB，真实 CSS×DPR canvas 加共享64列 scratch 共用32 MiB硬预算，离屏画布释放。处理分析每job九个4096帧单声道块计入96 MiB分析PCM额度。native 分析 2 工作者/32 等待项，frontend 全局 4 个在途请求。callback 保持无分配、无锁、无 I/O，EOF/WASAPI 排空契约保持 CPAL 0.15.3 已锁定版本。
 
 最终检查按计划顺序运行：`npm.cmd ci`、`npm.cmd run fixtures`、`npm.cmd run typecheck`、`npm.cmd test`、`npm.cmd run build`、`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`npm.cmd run test:desktop`、`npm.cmd run perf`、`npm.cmd run tauri -- build --bundles nsis`。历史 Task10 clippy 暂时豁免已移除需要：本任务将 Renderer 参数组合成 RenderOptions，简化布尔式和 slice 引用，严格 clippy 不添加 allow。
 
@@ -389,3 +389,12 @@ TileClient 注册采用惰性单次 Promise，注册失败可重试；dispose �
 `npm.cmd run perf` 使用真实 600 秒 48kHz 六通道及独立第二音频；预热后采样 40 次缩放、20 次 Alt+左键平移、20 次 Ctrl+滚轮轴混合，测量输入事件→实际 Canvas putImageData→两次 requestAnimationFrame（paint opportunity）。P95 不是显示器光子延迟。记录冷启动导入到双文件八图就绪、取消可见反馈、原音/处理后实际设备各 30 秒的欠载计数，以及每秒采样的 native/WebView2 进程树峰值。性能过程与构建顺序执行。
 
 完整命令及实际结果见 `docs/verification-0.2.0.md`。最终 NSIS 使用正常配置且不含 e2e feature，完成打包后再启动 release 程序做真实系统选择框与 pointer 流程。`licenses/` 包含第三方声明与 MPL 源码；无新依赖时保留现有锁定清单，无需重新抓取许可。交付副本放 `releases/0.2.0`，不覆盖 `releases/0.1.0`；发布包未签名。物理 DPI、新机离线安装/卸载、人工听感、exFAT 没有实际执行时明确保留未验证状态。
+
+
+## 0.2.1 清晰频谱与选区流程
+
+真实 backing 为 CSS×DPR，32 MiB 全局栅格预算包含挂载画布和共享64列 scratch；数值缓存64 MiB。每个处理分析 job 至多九个4096帧单声道块，从96 MiB分析PCM额度扣除，播放32 MiB保持不变。分析源、处理版本及权威屏蔽IEEE754签名贯穿请求与缓存身份。
+
+声音版本默认processed，原音/暂存编辑统一两侧频谱与普通播放。active selection独立于保留轮廓；框内抓取，框外首次取消激活，二次新建。explicit file/cue/selection意图保留到停止或结束，单次audition覆盖不改变全局源。浮动工具条复用targetCommands的owner/geometry校验。两侧文件独立选择且重复高亮，设置外部关闭有事件屏障。
+
+顺序desktop runner保留原六阶段和既有八流程，并追加fidelity、processed、interaction和独立sharing。最终证据见verification-0.2.1.md；性能在1920×1080实际外窗记录每张CSS/backing和完成整张canvas后paint机会，分别记录原音与含已接受屏蔽的暂存编辑首次就绪。正常EXE/NSIS只在无e2e正式构建退出0后验证，真实系统选择器与输入使用归属核验的release-ui.ps1。交付releases/0.2.1保留前两版，不增加格式迁移。

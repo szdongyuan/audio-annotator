@@ -1,0 +1,29 @@
+{
+  "exactSourceHashes": 234,
+  "lineEndingOnly": 23,
+  "files": [
+    "crates/annotator-core/src/analysis/source.rs",
+    "crates/annotator-core/src/analysis/tiles.rs",
+    "crates/annotator-core/tests/analysis_jobs.rs",
+    "crates/annotator-core/tests/media.rs",
+    "crates/annotator-core/tests/processed_analysis.rs",
+    "src-tauri/src/commands/analysis.rs",
+    "src/app/App.test.tsx",
+    "src/components/popover/DismissibleLayer.test.tsx",
+    "src/components/popover/DismissibleLayer.tsx",
+    "src/features/playback/CueLine.tsx",
+    "src/features/playback/PlaybackMode.tsx",
+    "src/features/playback/playbackIntent.ts",
+    "src/features/selection/SelectionToolbar.tsx",
+    "src/features/selection/selectionToolbar.test.tsx",
+    "src/features/selection/targetCommands.ts",
+    "src/features/spectrogram/ChannelPane.tsx",
+    "src/features/spectrogram/FilePane.tsx",
+    "src/features/spectrogram/analysisSource.test.ts",
+    "src/features/spectrogram/analysisSource.ts",
+    "src/features/spectrogram/sampling.ts",
+    "src/features/spectrogram/useTiles.test.tsx",
+    "src/features/spectrogram/workspace.test.tsx",
+    "src/styles/annotations.css"
+  ]
+}

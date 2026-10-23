@@ -35,10 +35,10 @@ it('channel controls preserve source channel identity and report silent mixing',
  fireEvent.click(screen.getByLabelText('独听通道 2'));expect(change).toHaveBeenCalledWith({soloChannels:[1],mutedChannels:[]});
  fireEvent.click(screen.getByLabelText('静音通道 1'));expect(change).toHaveBeenCalledWith({soloChannels:[],mutedChannels:[0]});
 });
-it('selection controls send original and processed as distinct sources',()=>{
- const change=vi.fn();render(<PlaybackModeControl mode="selection" selectionSource="original" bypass={false} disabled={false} hasSelection onChange={change}/>);
- fireEvent.change(screen.getByLabelText('选区来源'),{target:{value:'processed'}});expect(change).toHaveBeenCalledWith({selectionSource:'processed'});
- expect(screen.getByLabelText('选区来源')).toHaveValue('original'); expect(screen.queryByText(/当前：/)).not.toBeInTheDocument();
+it('workspace source control is separate from automatic range and has no bypass',()=>{
+ const change=vi.fn();render(<PlaybackModeControl source="processed" disabled={false} onChange={change}/>);
+ fireEvent.change(screen.getByLabelText('声音版本'),{target:{value:'original'}});expect(change).toHaveBeenCalledWith('original');
+ expect(screen.queryByLabelText('试听模式')).not.toBeInTheDocument();expect(screen.queryByLabelText('旁路全部屏蔽')).not.toBeInTheDocument();
 });
 it('plays a captured temporary region on another source without waiting for React selection state', async () => {
  const s=activeProject(),first=s.active.store.snapshot.document.media[0],other={...first,id:'other'};s.active.store.snapshot.document.media.push(other);
@@ -130,4 +130,78 @@ it('user pause supersedes a deferred configure without being undone by playback 
  api.configure.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));act(()=>hook.result.current.update({volume:.5}));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));
  act(()=>hook.result.current.toggle());expect(hook.result.current.playing).toBe(false);act(()=>listener(make(3,'playing')));await act(async()=>resolve(make(3,'buffering')));await waitFor(()=>expect(hook.result.current.status.state).toBe('paused'));expect(hook.result.current.playing).toBe(false);
  act(()=>hook.result.current.seek(.5));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(3));expect(api.configure.mock.calls[2][0].play).toBe(false);hook.unmount();s.active.lifecycle.dispose();
+});
+it('defaults to processed active selection, preserves explicit overrides through pause, and restores automatic on stop',async()=>{
+ const s=activeProject(),region=s.active.store.snapshot.document.annotations[0].region;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async(action:string)=>({...emptyPlayback,generation:++generation,state:action==='pause'?'paused' as const:'stopped' as const})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
+ const hook=renderHook(()=>usePlayback(s.active,region.mediaId,region,api));
+ fireEvent.keyDown(window,{key:' '});await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(1));
+ expect(api.configure.mock.calls[0][0]).toMatchObject({mode:{mode:'selection',region,selectionSource:'processed'},seekSeconds:region.startSeconds});
+ expect(hook.result.current.workspaceSource).toBe('processed');
+ act(()=>hook.result.current.playSelection(region,'original'));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));
+ expect(hook.result.current.workspaceSource).toBe('processed');expect(api.configure.mock.calls[1][0].mode).toMatchObject({selectionSource:'original'});
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(hook.result.current.status.state).toBe('paused'));
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(3));expect(api.configure.mock.calls[2][0]).toMatchObject({seekSeconds:null,mode:{selectionSource:'original'}});
+ act(()=>hook.result.current.stop());await waitFor(()=>expect(hook.result.current.status.state).toBe('stopped'));
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(4));expect(api.configure.mock.calls[3][0]).toMatchObject({mode:{selectionSource:'processed'},seekSeconds:region.startSeconds});
+ hook.unmount();s.active.lifecycle.dispose();
+});
+it('new explicit file and cue intents bypass selection; selection changes stop without autoplay',async()=>{
+ const s=activeProject(),region=s.active.store.snapshot.document.annotations[0].region;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
+ const hook=renderHook(({selection})=>usePlayback(s.active,region.mediaId,selection,api),{initialProps:{selection:region}});
+ act(()=>hook.result.current.playFile());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(1));expect(api.configure.mock.calls[0][0]).toMatchObject({mode:{mode:'processed'},seekSeconds:0});
+ act(()=>hook.result.current.playFrom(s.active,region.mediaId,.5));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0]).toMatchObject({mode:{mode:'processed'},seekSeconds:.5});
+ act(()=>hook.rerender({selection:{...region,startSeconds:region.startSeconds+.01}}));await waitFor(()=>expect(hook.result.current.playing).toBe(false));expect(api.configure).toHaveBeenCalledTimes(2);
+ hook.unmount();s.active.lifecycle.dispose();
+});
+it('cue capture does not control output and refuses stale owners, blank tails and nonfinite seconds',async()=>{
+ const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
+ const hook=renderHook(({owner})=>usePlayback(owner,id,undefined,api),{initialProps:{owner:s.active}});
+ await waitFor(()=>expect(api.control).toHaveBeenCalledOnce());
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ act(()=>hook.result.current.setCue(s.active,id,.7));expect(api.control).toHaveBeenCalledOnce();expect(api.configure).toHaveBeenCalledOnce();expect(hook.result.current.playing).toBe(true);
+ for(const seconds of [-1,2,99,NaN,Infinity])act(()=>hook.result.current.playFrom(s.active,id,seconds));expect(api.configure).toHaveBeenCalledOnce();
+ act(()=>hook.result.current.stop());await waitFor(()=>expect(api.control).toHaveBeenCalledTimes(2));
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0].seekSeconds).toBe(.7);
+ const oldPlay=hook.result.current.playFrom;
+ act(()=>hook.rerender({owner:{...s.active}}));act(()=>oldPlay(s.active,id,.5));await waitFor(()=>expect(api.control).toHaveBeenCalledTimes(3));expect(api.configure).toHaveBeenCalledTimes(2);expect(hook.result.current.cues).toEqual({});
+ hook.unmount();s.active.lifecycle.dispose();
+});
+it('ended clears explicit source and range, workspace source changes stop, and an inactive selection is excluded',async()=>{
+ const s=activeProject(),r=s.active.store.snapshot.document.annotations[0].region;let generation=0,listener!:(s:PlaybackStatus)=>void;
+ const api={available:()=>true,devices:async()=>[],listen:async(fn:typeof listener)=>{listener=fn;return()=>{};},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
+ const hook=renderHook(({selection})=>usePlayback(s.active,r.mediaId,selection,api),{initialProps:{selection:r as typeof r|undefined}});
+ act(()=>hook.result.current.playSelection(r,'original'));await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ act(()=>listener({...hook.result.current.status,state:'ended'}));act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0].mode).toMatchObject({selectionSource:'processed'});
+ act(()=>hook.result.current.updateWorkspaceSource('original'));await waitFor(()=>expect(hook.result.current.status.state).toBe('stopped'));expect(api.configure).toHaveBeenCalledTimes(2);
+ act(()=>hook.rerender({selection:undefined}));act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(3));expect(api.configure.mock.calls[2][0]).toMatchObject({mode:{mode:'original'},seekSeconds:0});
+ hook.unmount();s.active.lifecycle.dispose();
+});
+it('a blank-tail cue remains a marker but cannot become an ordinary playback seek',async()=>{
+ const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:async()=>({...emptyPlayback,generation:++generation}),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.setCue(s.active,id,99));
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());expect(api.configure.mock.calls[0][0].seekSeconds).toBe(0);
+ hook.unmount();s.active.lifecycle.dispose();
+});
+it('rapid source/runtime replacement drops an old configure and starts only the latest owner intent',async()=>{
+ const s=activeProject(),doc=s.active.store.snapshot.document,id=doc.media[0].id,other={...doc.media[0],id:'other'};doc.media.push(other);let release!:(s:PlaybackStatus)=>void,generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(r:PlaybackRequest):Promise<PlaybackStatus>=>({...emptyPlayback,generation:++generation,mediaId:r.mediaId,projectId:r.projectId,state:'playing' as const}))};
+ api.configure.mockImplementationOnce(()=>new Promise(r=>{release=r;}));
+ const hook=renderHook(({owner})=>usePlayback(owner,id,undefined,api),{initialProps:{owner:s.active}});
+ act(()=>hook.result.current.playFile());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ act(()=>hook.result.current.selectSource(other.id));const replacement={...s.active};act(()=>hook.rerender({owner:replacement}));
+ act(()=>hook.result.current.playFrom(replacement,other.id,.4));
+ await act(async()=>release({...emptyPlayback,generation:++generation,mediaId:id,projectId:doc.projectId,state:'error',error:{code:'DeviceFailed',message:'obsolete',retryable:true}}));
+ await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0]).toMatchObject({mediaId:other.id,seekSeconds:.4,mode:{mode:'processed'}});expect(hook.result.current.error).toBeNull();expect(hook.result.current.playing).toBe(true);expect(hook.result.current.status.mediaId).toBe(other.id);
+ hook.unmount();s.active.lifecycle.dispose();
+});
+it('ordinary stopped playback without a cue retains its current file position',async()=>{
+ const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async(action:string)=>({...emptyPlayback,generation:++generation,mediaId:action==='stop'?id:null,positionSeconds:action==='stop'?.5:0})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.seek(.5));await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ act(()=>hook.result.current.stop());await waitFor(()=>expect(hook.result.current.status.positionSeconds).toBe(.5));act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0].seekSeconds).toBe(.5);
+ hook.unmount();s.active.lifecycle.dispose();
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { AnalysisSettings, MediaDescriptor, MediaView } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import { mediaClient, type MediaStatus } from '../../bridge/media';
@@ -7,20 +7,26 @@ import { analysisConfigHash, TileClient } from './tileClient';
 import { analysisKey, CHANNEL_TILE_BUDGET, frequencyWindow, tileInputBytes, tileKey, tilePlan } from './workspace';
 import { tileCache, tileScheduler } from './tileScheduler';
 import { coveringTileKeys } from './tileCoverage';
+import { canonicalEdits, editSignature, type AnalysisSource } from './analysisSource';
 
 export interface TileState { keys: string[]; completed: number; total: number; phase: string; error: string | null; cancelled: boolean; version: number }
 const empty = (): TileState => ({ keys: [], completed: 0, total: 0, phase: '准备分析', error: null, cancelled: false, version: 0 });
 const runtimeIds = new WeakMap<ActiveProject, string>();
 function runtimeId(active: ActiveProject) { if (!runtimeIds.has(active)) runtimeIds.set(active, crypto.randomUUID()); return runtimeIds.get(active)!; }
-export function useTiles(active: ActiveProject, media: MediaDescriptor, settings: AnalysisSettings, view: MediaView, channel: number, width: number, status: MediaStatus['status']) {
+export function useTiles(active: ActiveProject, media: MediaDescriptor, settings: AnalysisSettings, view: MediaView, channel: number, width: number, status: MediaStatus['status'], analysisSource: AnalysisSource = 'original') {
+  const snapshot = useSyncExternalStore(active.store.subscribe, () => active.store.snapshot);
+  const processingVersion = snapshot.document.algorithmVersions.dsp;
+  const geometry = analysisSource === 'processed' ? canonicalEdits(media.id, snapshot.document.edits) : '';
+  const authorityConfig = snapshot.document.analysis[media.id];
   const [state, setState] = useState<TileState>(empty);
   const [retry, setRetry] = useState(0);
   const stop = useRef(() => {});
   const displayed = useRef('');
   const source = `${runtimeId(active)}|${media.id}|${media.sha256}|${media.sourceRef}|${media.sampleRate}|${media.frameCount}`;
-  const dataKey = `${source}|${analysisKey(settings)}|${view.spectrumKind}|${channel}`;
+  const dataKey = `${source}|${analysisKey(settings)}|${view.spectrumKind}|${channel}|${analysisSource}|${processingVersion}|${geometry}`;
   // Do not key on document revision, notes, axis transform or palette.
-  const key = `${source}|${analysisKey(settings)}|${view.spectrumKind}|${view.startSeconds}|${view.endSeconds}|${view.lowHz}|${view.highHz}|${Math.round(width / 64)}|${channel}|${status}|${retry}|${active.store.editingDisabled}`;
+  const key = `${dataKey}|${view.startSeconds}|${view.endSeconds}|${view.lowHz}|${view.highHz}|${Math.round(width)}|${status}|${retry}|${active.store.editingDisabled}`;
+  const latestKey = useRef(key); latestKey.current = key;
   const owner = useRef<{ active: ActiveProject; client: TileClient; cacheOwner: string } | null>(null);
   useEffect(() => {
     const cacheOwner = crypto.randomUUID();
@@ -30,7 +36,8 @@ export function useTiles(active: ActiveProject, media: MediaDescriptor, settings
   }, [active]);
   useEffect(() => {
     const client = owner.current?.client;
-    if (!client || !width || active.store.editingDisabled) return;
+    if (!client) return;
+    if (!width || active.store.editingDisabled) { tileCache.setPins(owner.current!.cacheOwner, []); return; }
     const cacheOwner = owner.current!.cacheOwner;
     const invalidateSource = () => tileCache.deleteMatching(key => key.startsWith(`${source}|`));
     client.nextGeneration();
@@ -46,7 +53,19 @@ export function useTiles(active: ActiveProject, media: MediaDescriptor, settings
       setState({ ...empty(), error: status === 'missing' ? '音频缺失，请重新关联' : '源文件已改变，请重新校验关联' });
       return () => { alive = false; client.nextGeneration(); };
     }
-    const valid = () => alive && !active.store.editingDisabled;
+    // Read the store synchronously too: an accepted edit can precede React's
+    // effect cleanup. A late worker must never publish in that interval.
+    let checkedEdits = snapshot.document.edits, checkedGeometry = geometry;
+    const valid = () => {
+      const doc = active.store.snapshot.document;
+      if (analysisSource === 'processed' && checkedEdits !== doc.edits) { checkedEdits = doc.edits; checkedGeometry = canonicalEdits(media.id, doc.edits); }
+      const currentMedia = doc.media.find(m => m.id === media.id);
+      return alive && latestKey.current === key && !active.store.editingDisabled
+        && doc.algorithmVersions.dsp === processingVersion && checkedGeometry === geometry
+        && currentMedia?.sha256 === media.sha256 && currentMedia.sourceRef === media.sourceRef
+        && currentMedia.sampleRate === media.sampleRate && currentMedia.frameCount === media.frameCount && currentMedia.channelCount === media.channelCount
+        && (doc.analysis[media.id] === authorityConfig || !!doc.analysis[media.id] && !!authorityConfig && analysisKey(doc.analysis[media.id]) === analysisKey(authorityConfig));
+    };
     const timer = setTimeout(() => {
       void (async () => {
         // Validate source even on a frontend cache hit. Unverified sources must go
@@ -57,9 +76,12 @@ export function useTiles(active: ActiveProject, media: MediaDescriptor, settings
         if (current === 'missing' || current === 'changed') { tileCache.setPins(cacheOwner, []); invalidateSource(); throw { code: current === 'missing' ? 'MissingMedia' : 'IdentityMismatch', retryable: true, message: current === 'missing' ? '音频缺失，请重新关联' : '源文件已改变，请重新校验关联' }; }
         const hash = await analysisConfigHash(settings);
         if (!valid()) return;
-        const requests = tilePlan(media, settings, view, width, channel, hash);
-        const { lowBin, endBin } = frequencyWindow(media, settings, view);
+        const signature = analysisSource === 'processed' ? await editSignature(media.id, snapshot.document.edits) : '';
+        if (!valid()) return;
+        const requests = tilePlan(media, settings, view, width, channel, hash, { analysisSource, processingVersion, editSignature: signature });
+
         const resolved = requests.map(request => {
+          const { lowBin, endBin } = frequencyWindow(media, settings, view, request.frequencyLod);
           const frequencyStart = Math.max(lowBin, request.frequencyStart);
           const frequencyCount = Math.min(endBin, request.frequencyStart + request.frequencyCount) - frequencyStart;
           // Only the visible part needs coverage; do not recompute FFT merely
@@ -67,6 +89,13 @@ export function useTiles(active: ActiveProject, media: MediaDescriptor, settings
           return { request, cached: current === 'ready' ? coveringTileKeys(tileCache, source, { ...request, frequencyStart, frequencyCount }) : undefined };
         });
         const visible = resolved.filter(r => r.request.visible);
+        // A complete raster row needs all frequency partitions on one time
+        // grid. Keep finer time coverage when every dependency shares it;
+        // otherwise resolve the requested grid before declaring completion.
+        const timeGrids = new Set(visible.flatMap(r => r.cached?.map(key => tileCache.get(key)!.request.timeLod) ?? [r.request.timeLod]));
+        if (timeGrids.size > 1) for (const r of visible) {
+          if (r.cached?.some(key => tileCache.get(key)!.request.timeLod !== r.request.timeLod)) r.cached = undefined;
+        }
         // Covering finer tiles can have a larger footprint than the requested
         // LOD. Reuse them only if their complete retained buffers fit this view.
         const dependencyBytes = new Map<string, number>();

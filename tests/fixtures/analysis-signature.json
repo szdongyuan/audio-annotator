@@ -1,0 +1,33 @@
+{
+  "mediaId": "m",
+  "edits": [
+    {
+      "id": "one",
+      "enabled": true,
+      "processingVersion": 1,
+      "region": {
+        "mediaId": "m",
+        "channelIndex": 0,
+        "startSeconds": -0.0,
+        "endSeconds": 1.0,
+        "lowHz": 1000.0,
+        "highHz": 2000.0
+      }
+    },
+    {
+      "id": "two",
+      "enabled": true,
+      "processingVersion": 1,
+      "region": {
+        "mediaId": "m",
+        "channelIndex": 1,
+        "startSeconds": 1e-07,
+        "endSeconds": 1.0000000000000002,
+        "lowHz": 1e-06,
+        "highHz": 23999.999999999996
+      }
+    }
+  ],
+  "canonical": "analysis-edits-v1|0|1|0000000000000000|3ff0000000000000|408f400000000000|409f400000000000;1|1|3e7ad7f29abcaf48|3ff0000000000001|3eb0c6f7a0b5ed8d|40d76fffffffffff",
+  "signature": "2762ea8cad5c20e7c8d86e6b820c381c6397c1ab84adbd012287166e6704cf7d"
+}

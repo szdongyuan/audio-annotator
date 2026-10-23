@@ -1,0 +1,1185 @@
+{
+  "method": "Fresh debug/e2e executable, owned WebView2, trusted WebDriver pointer/keyboard; real 1280x800 outer window, unchanged Windows DPI/audio settings.",
+  "project": "D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\.test-output\\fidelity-release\\desktop-yDlyyg\\interaction\\project-0Nvs8G",
+  "checks": [
+    {
+      "name": "four plots >=180px and headers <=56px at real 1280x800",
+      "passed": true
+    },
+    {
+      "name": "sidebar-duplicate-compare-highlight",
+      "passed": true
+    },
+    {
+      "name": "header-duplicate-primary-highlight",
+      "passed": true
+    },
+    {
+      "name": "menu-duplicate-primary-highlight",
+      "passed": true
+    },
+    {
+      "name": "header-duplicate-compare-highlight",
+      "passed": true
+    },
+    {
+      "name": "sidebar A/B to C/B retains comparison selection",
+      "passed": true
+    },
+    {
+      "name": "comparison title A/B to A/C clears only replaced selection",
+      "passed": true
+    },
+    {
+      "name": "top comparison menu changes only comparison identity",
+      "passed": true
+    },
+    {
+      "name": "unapplied compute draft survives an accepted native display save",
+      "passed": true
+    },
+    {
+      "name": "internal slider release outside and native select stay open",
+      "passed": true
+    },
+    {
+      "name": "Escape restores trigger, discards compute draft, retains immediate display",
+      "passed": true
+    },
+    {
+      "name": "different file settings switches directly; same trigger toggles closed",
+      "passed": true
+    },
+    {
+      "name": "outside closing pointer drag cannot draw or change playback source",
+      "passed": true
+    },
+    {
+      "name": "outside closing play-button click is consumed",
+      "passed": true
+    },
+    {
+      "name": "linked time preserves identities through save/reopen",
+      "passed": true
+    },
+    {
+      "name": "Escape from menu-opened analysis returns focus to View trigger",
+      "passed": true
+    },
+    {
+      "name": "vertical layout also keeps both settings triggers reachable",
+      "passed": true
+    },
+    {
+      "name": "help backdrop pointer dismisses without clickthrough",
+      "passed": true
+    },
+    {
+      "name": "native cue semantics, no audio mutation on other-file/blank-tail menu, automatic/explicit/pause/stop/end, zoom and simulated DPR",
+      "auto": {
+        "consumedFrames": 2496,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 2.007229166666667,
+        "error": null,
+        "firstSeconds": 0.7942291666666667,
+        "generation": 15,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 0.8462291666666667,
+        "presentation": {
+          "callbackNanos": 29031800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 2496,
+          "tailNanos": 51031800,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 0.7942291666666667,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "before": {
+        "consumedFrames": 9696,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 2.007229166666667,
+        "error": null,
+        "firstSeconds": 0.7942291666666667,
+        "generation": 15,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 0.9962291666666667,
+        "presentation": {
+          "callbackNanos": 179032000,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 9696,
+          "tailNanos": 201032000,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 0.7942291666666667,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "after": {
+        "consumedFrames": 17856,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 2.007229166666667,
+        "error": null,
+        "firstSeconds": 0.7942291666666667,
+        "generation": 15,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 1.1662291666666667,
+        "presentation": {
+          "callbackNanos": 349028300,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 17856,
+          "tailNanos": 371028300,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 0.7942291666666667,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "cue": [
+        {
+          "color": "rgb(255, 255, 255)",
+          "left": 459,
+          "plot": {
+            "bottom": 414.5,
+            "height": 236.5,
+            "left": 279,
+            "right": 556,
+            "top": 178,
+            "width": 277,
+            "x": 279,
+            "y": 178
+          },
+          "pointer": "none",
+          "seconds": 2.5992779783393503,
+          "style": "dashed",
+          "width": "1px"
+        },
+        {
+          "color": "rgb(255, 255, 255)",
+          "left": 459,
+          "plot": {
+            "bottom": 701,
+            "height": 236.5,
+            "left": 279,
+            "right": 556,
+            "top": 464.5,
+            "width": 277,
+            "x": 279,
+            "y": 464.5
+          },
+          "pointer": "none",
+          "seconds": 2.5992779783393503,
+          "style": "dashed",
+          "width": "1px"
+        }
+      ],
+      "from": {
+        "consumedFrames": 4416,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 4,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 17,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 2.6912708333333333,
+        "presentation": {
+          "callbackNanos": 69112400,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 4416,
+          "tailNanos": 91112400,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 2.599270833333333,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "paused": {
+        "consumedFrames": 6336,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 4,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 17,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 2.7312708333333333,
+        "presentation": {
+          "callbackNanos": 119113900,
+          "drained": false,
+          "pendingTailFrames": 576,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 6336,
+          "tailNanos": 131121300,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 2.599270833333333,
+        "state": "paused",
+        "underrunFrames": 0
+      },
+      "resumed": {
+        "consumedFrames": 4896,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 4,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 18,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 2.833270833333333,
+        "presentation": {
+          "callbackNanos": 79140700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 4896,
+          "tailNanos": 101140700,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 2.599270833333333,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "restored": {
+        "consumedFrames": 3936,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 2.007229166666667,
+        "error": null,
+        "firstSeconds": 0.7942291666666667,
+        "generation": 20,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 0.8762291666666666,
+        "presentation": {
+          "callbackNanos": 59094700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 3936,
+          "tailNanos": 81094700,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 0.7942291666666667,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "whole": {
+        "consumedFrames": 3456,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 4,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 22,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 0.072,
+        "presentation": {
+          "callbackNanos": 49095500,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 3456,
+          "tailNanos": 71095500,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "ended": {
+        "consumedFrames": 58224,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 2.007229166666667,
+        "error": null,
+        "firstSeconds": 0.7942291666666667,
+        "generation": 24,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 2.007229166666667,
+        "presentation": {
+          "callbackNanos": 1219110200,
+          "drained": true,
+          "pendingTailFrames": 0,
+          "ringExhausted": true,
+          "ringExhaustedNanos": 1199110400,
+          "scheduledFrames": 58224,
+          "tailNanos": 1212110400,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 0.7942291666666667,
+        "state": "ended",
+        "underrunFrames": 0
+      },
+      "again": {
+        "consumedFrames": 2976,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 2.007229166666667,
+        "error": null,
+        "firstSeconds": 0.7942291666666667,
+        "generation": 25,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 0.8562291666666667,
+        "presentation": {
+          "callbackNanos": 39131500,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 2976,
+          "tailNanos": 61131500,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 0.7942291666666667,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "inactive": {
+        "consumedFrames": 4416,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 4,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 27,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 2.6912708333333333,
+        "presentation": {
+          "callbackNanos": 69088800,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 4416,
+          "tailNanos": 91088800,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 2.599270833333333,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "densities": [
+        {
+          "dpr": 1,
+          "lines": [
+            {
+              "dpr": 1,
+              "error": 0,
+              "width": "1px"
+            },
+            {
+              "dpr": 1,
+              "error": 0,
+              "width": "1px"
+            }
+          ]
+        },
+        {
+          "dpr": 1.25,
+          "lines": [
+            {
+              "dpr": 1.25,
+              "error": 0,
+              "width": "1px"
+            },
+            {
+              "dpr": 1.25,
+              "error": 0,
+              "width": "1px"
+            }
+          ]
+        },
+        {
+          "dpr": 2,
+          "lines": [
+            {
+              "dpr": 2,
+              "error": 0,
+              "width": "1px"
+            },
+            {
+              "dpr": 2,
+              "error": 0,
+              "width": "1px"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "toolbar follows completed draw within its own plot",
+      "passed": true,
+      "frame": {
+        "bottom": 349,
+        "height": 95,
+        "left": 739,
+        "right": 836,
+        "top": 254,
+        "width": 97,
+        "x": 739,
+        "y": 254
+      },
+      "plot": {
+        "bottom": 414.5,
+        "height": 236.5,
+        "left": 684,
+        "right": 961,
+        "top": 178,
+        "width": 277,
+        "x": 684,
+        "y": 178
+      },
+      "scroll": {
+        "bottom": 706,
+        "height": 573,
+        "left": 622,
+        "right": 1017,
+        "top": 133,
+        "width": 395,
+        "x": 622,
+        "y": 133
+      },
+      "toolbar": {
+        "bottom": 250,
+        "height": 30,
+        "left": 739,
+        "right": 852.40625,
+        "top": 220,
+        "width": 113.40625,
+        "x": 739,
+        "y": 220
+      }
+    },
+    {
+      "name": "temporary toolbar one-click playback consumes native frames",
+      "passed": true,
+      "temporaryPlayed": {
+        "consumedFrames": 5376,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 2.194958333333333,
+        "error": null,
+        "firstSeconds": 0.7942291666666667,
+        "generation": 31,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 0.9062291666666666,
+        "presentation": {
+          "callbackNanos": 89113700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 5376,
+          "tailNanos": 111113700,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 0.7942291666666667,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "name": "toolbar hides during held gesture and restores at actual updated frame",
+      "passed": true,
+      "frame": {
+        "bottom": 349,
+        "height": 95,
+        "left": 752,
+        "right": 849,
+        "top": 254,
+        "width": 97,
+        "x": 752,
+        "y": 254
+      },
+      "plot": {
+        "bottom": 414.5,
+        "height": 236.5,
+        "left": 684,
+        "right": 961,
+        "top": 178,
+        "width": 277,
+        "x": 684,
+        "y": 178
+      },
+      "scroll": {
+        "bottom": 706,
+        "height": 573,
+        "left": 622,
+        "right": 1017,
+        "top": 133,
+        "width": 395,
+        "x": 622,
+        "y": 133
+      },
+      "toolbar": {
+        "bottom": 250,
+        "height": 30,
+        "left": 752,
+        "right": 865.40625,
+        "top": 220,
+        "width": 113.40625,
+        "x": 752,
+        "y": 220
+      }
+    },
+    {
+      "name": "right comparison toolbar category creates once then updates stable ID, preserves playback source, supports keyboard and moved selection actual audio",
+      "passed": true,
+      "temporary": [
+        {
+          "frame": {
+            "bottom": 349,
+            "height": 95,
+            "left": 739,
+            "right": 836,
+            "top": 254,
+            "width": 97,
+            "x": 739,
+            "y": 254
+          },
+          "plot": {
+            "bottom": 414.5,
+            "height": 236.5,
+            "left": 684,
+            "right": 961,
+            "top": 178,
+            "width": 277,
+            "x": 684,
+            "y": 178
+          },
+          "scroll": {
+            "bottom": 706,
+            "height": 573,
+            "left": 622,
+            "right": 1017,
+            "top": 133,
+            "width": 395,
+            "x": 622,
+            "y": 133
+          },
+          "toolbar": {
+            "bottom": 250,
+            "height": 30,
+            "left": 739,
+            "right": 852.40625,
+            "top": 220,
+            "width": 113.40625,
+            "x": 739,
+            "y": 220
+          }
+        }
+      ],
+      "created": {
+        "categoryId": "7b3e77ca-9c02-4b07-a508-2a136f27923e",
+        "createdAt": "2026-10-23T10:25:28.578Z",
+        "id": "ab55d8c0-d699-4215-9461-bde2e65e89db",
+        "note": "",
+        "region": {
+          "channelIndex": 0,
+          "endSeconds": 2.1949458483754514,
+          "highHz": 8488.101899918634,
+          "lowHz": 367.09310632947114,
+          "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+          "startSeconds": 0.7942238267148014
+        },
+        "updatedAt": "2026-10-23T10:25:28.578Z"
+      },
+      "moved": {
+        "categoryId": null,
+        "createdAt": "2026-10-23T10:25:28.578Z",
+        "id": "ab55d8c0-d699-4215-9461-bde2e65e89db",
+        "note": "",
+        "region": {
+          "channelIndex": 0,
+          "endSeconds": 2.3826714801444044,
+          "highHz": 8488.101899918634,
+          "lowHz": 367.09310632947114,
+          "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+          "startSeconds": 0.9819494584837544
+        },
+        "updatedAt": "2026-10-23T10:25:29.373Z"
+      },
+      "played": {
+        "consumedFrames": 3936,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 2.3826875,
+        "error": null,
+        "firstSeconds": 0.9819583333333334,
+        "generation": 35,
+        "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+        "positionSeconds": 1.0639583333333333,
+        "presentation": {
+          "callbackNanos": 58791100,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 3936,
+          "tailNanos": 80791100,
+          "tailNonSilent": true
+        },
+        "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+        "startSeconds": 0.9819583333333334,
+        "state": "playing",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "name": "active mask has the one current toolbar",
+      "passed": true,
+      "frame": {
+        "bottom": 349,
+        "height": 95,
+        "left": 752,
+        "right": 849,
+        "top": 254,
+        "width": 97,
+        "x": 752,
+        "y": 254
+      },
+      "plot": {
+        "bottom": 414.5,
+        "height": 236.5,
+        "left": 684,
+        "right": 961,
+        "top": 178,
+        "width": 277,
+        "x": 684,
+        "y": 178
+      },
+      "scroll": {
+        "bottom": 706,
+        "height": 573,
+        "left": 622,
+        "right": 1017,
+        "top": 133,
+        "width": 395,
+        "x": 622,
+        "y": 133
+      },
+      "toolbar": {
+        "bottom": 250,
+        "height": 30,
+        "left": 752,
+        "right": 865.40625,
+        "top": 220,
+        "width": 113.40625,
+        "x": 752,
+        "y": 220
+      }
+    },
+    {
+      "name": "mask toolbar creates independent annotation and both opposite auditions consume frames without changing either graph",
+      "passed": true,
+      "masked": {
+        "enabled": true,
+        "id": "9c9b1cd0-4b74-4e6d-9274-36ecfad36339",
+        "processingVersion": 1,
+        "region": {
+          "channelIndex": 0,
+          "endSeconds": 2.3826714801444044,
+          "highHz": 8488.101899918634,
+          "lowHz": 367.09310632947114,
+          "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+          "startSeconds": 0.9819494584837544
+        }
+      },
+      "auditions": [
+        {
+          "workspace": "暂存编辑",
+          "label": "试听选区原音",
+          "status": {
+            "consumedFrames": 3936,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 2.3826875,
+            "error": null,
+            "firstSeconds": 0.9819583333333334,
+            "generation": 38,
+            "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+            "positionSeconds": 1.0639583333333333,
+            "presentation": {
+              "callbackNanos": 59090400,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 3936,
+              "tailNanos": 81090400,
+              "tailNonSilent": true
+            },
+            "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+            "startSeconds": 0.9819583333333334,
+            "state": "playing",
+            "underrunFrames": 0
+          }
+        },
+        {
+          "workspace": "原音",
+          "label": "试听选区（应用屏蔽）",
+          "status": {
+            "consumedFrames": 3936,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 2.3826875,
+            "error": null,
+            "firstSeconds": 0.9819583333333334,
+            "generation": 41,
+            "mediaId": "8cf52a38-d619-4b63-be08-27e5bbe45481",
+            "positionSeconds": 1.0639583333333333,
+            "presentation": {
+              "callbackNanos": 59108600,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 3936,
+              "tailNanos": 81108600,
+              "tailNonSilent": true
+            },
+            "projectId": "4c7e86e7-3698-45a6-9220-9db3f718bd82",
+            "startSeconds": 0.9819583333333334,
+            "state": "playing",
+            "underrunFrames": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "toolbar follows completed draw within its own plot",
+      "passed": true,
+      "frame": {
+        "bottom": 189,
+        "height": 7,
+        "left": 944,
+        "right": 955,
+        "top": 182,
+        "width": 11,
+        "x": 944,
+        "y": 182
+      },
+      "plot": {
+        "bottom": 414.5,
+        "height": 236.5,
+        "left": 684,
+        "right": 961,
+        "top": 178,
+        "width": 277,
+        "x": 684,
+        "y": 178
+      },
+      "scroll": {
+        "bottom": 706,
+        "height": 573,
+        "left": 622,
+        "right": 1017,
+        "top": 133,
+        "width": 395,
+        "x": 622,
+        "y": 133
+      },
+      "toolbar": {
+        "bottom": 216,
+        "height": 30,
+        "left": 847.59375,
+        "right": 961,
+        "top": 186,
+        "width": 113.40625,
+        "x": 847.59375,
+        "y": 186
+      }
+    },
+    {
+      "name": "tiny top-right selection stays small with toolbar clamped inside",
+      "passed": true,
+      "frame": {
+        "bottom": 189,
+        "height": 7,
+        "left": 944,
+        "right": 955,
+        "top": 182,
+        "width": 11,
+        "x": 944,
+        "y": 182
+      },
+      "plot": {
+        "bottom": 414.5,
+        "height": 236.5,
+        "left": 684,
+        "right": 961,
+        "top": 178,
+        "width": 277,
+        "x": 684,
+        "y": 178
+      },
+      "scroll": {
+        "bottom": 706,
+        "height": 573,
+        "left": 622,
+        "right": 1017,
+        "top": 133,
+        "width": 395,
+        "x": 622,
+        "y": 133
+      },
+      "toolbar": {
+        "bottom": 216,
+        "height": 30,
+        "left": 847.59375,
+        "right": 961,
+        "top": 186,
+        "width": 113.40625,
+        "x": 847.59375,
+        "y": 186
+      }
+    },
+    {
+      "name": "toolbar hides during held gesture and restores at actual updated frame",
+      "passed": true,
+      "frame": {
+        "bottom": 189,
+        "height": 7,
+        "left": 944,
+        "right": 955,
+        "top": 182,
+        "width": 11,
+        "x": 944,
+        "y": 182
+      },
+      "plot": {
+        "bottom": 414.5,
+        "height": 236.5,
+        "left": 684,
+        "right": 961,
+        "top": 178,
+        "width": 277,
+        "x": 684,
+        "y": 178
+      },
+      "scroll": {
+        "bottom": 706,
+        "height": 573,
+        "left": 622,
+        "right": 1017,
+        "top": 133,
+        "width": 395,
+        "x": 622,
+        "y": 133
+      },
+      "toolbar": {
+        "bottom": 216,
+        "height": 30,
+        "left": 847.59375,
+        "right": 961,
+        "top": 186,
+        "width": 113.40625,
+        "x": 847.59375,
+        "y": 186
+      }
+    },
+    {
+      "name": "toolbar hides during held gesture and restores at actual updated frame",
+      "passed": true,
+      "frame": {
+        "bottom": 189,
+        "height": 7,
+        "left": 944,
+        "right": 955,
+        "top": 182,
+        "width": 11,
+        "x": 944,
+        "y": 182
+      },
+      "plot": {
+        "bottom": 414.5,
+        "height": 236.5,
+        "left": 684,
+        "right": 961,
+        "top": 178,
+        "width": 277,
+        "x": 684,
+        "y": 178
+      },
+      "scroll": {
+        "bottom": 706,
+        "height": 573,
+        "left": 622,
+        "right": 1017,
+        "top": 133,
+        "width": 395,
+        "x": 622,
+        "y": 133
+      },
+      "toolbar": {
+        "bottom": 216,
+        "height": 30,
+        "left": 847.59375,
+        "right": 961,
+        "top": 186,
+        "width": 113.40625,
+        "x": 847.59375,
+        "y": 186
+      }
+    },
+    {
+      "name": "toolbar follows completed draw within its own plot",
+      "passed": true,
+      "frame": {
+        "bottom": 643,
+        "height": 63,
+        "left": 321,
+        "right": 390,
+        "top": 580,
+        "width": 69,
+        "x": 321,
+        "y": 580
+      },
+      "plot": {
+        "bottom": 706,
+        "height": 180,
+        "left": 279,
+        "right": 556,
+        "top": 526,
+        "width": 277,
+        "x": 279,
+        "y": 526
+      },
+      "scroll": {
+        "bottom": 706,
+        "height": 573,
+        "left": 217,
+        "right": 612,
+        "top": 133,
+        "width": 395,
+        "x": 217,
+        "y": 133
+      },
+      "toolbar": {
+        "bottom": 576,
+        "height": 30,
+        "left": 321,
+        "right": 434.40625,
+        "top": 546,
+        "width": 113.40625,
+        "x": 321,
+        "y": 546
+      }
+    },
+    {
+      "name": "scroll away hides toolbar; scroll back restores it within the visible channel",
+      "passed": true,
+      "frame": {
+        "bottom": 638,
+        "height": 63,
+        "left": 321,
+        "right": 390,
+        "top": 575,
+        "width": 69,
+        "x": 321,
+        "y": 575
+      },
+      "plot": {
+        "bottom": 701,
+        "height": 180,
+        "left": 279,
+        "right": 556,
+        "top": 521,
+        "width": 277,
+        "x": 279,
+        "y": 521
+      },
+      "scroll": {
+        "bottom": 706,
+        "height": 573,
+        "left": 217,
+        "right": 612,
+        "top": 133,
+        "width": 395,
+        "x": 217,
+        "y": 133
+      },
+      "toolbar": {
+        "bottom": 571,
+        "height": 30,
+        "left": 321,
+        "right": 434.40625,
+        "top": 541,
+        "width": 113.40625,
+        "x": 321,
+        "y": 541
+      }
+    },
+    {
+      "name": "hidden channel removes the active toolbar without retaining a placeholder",
+      "passed": true
+    }
+  ],
+  "nativePid": 26324,
+  "layout": {
+    "outer": {
+      "width": 1280,
+      "pid": 26324,
+      "y": 20,
+      "method": "Win32 GetWindowRect on owned native PID",
+      "x": 20,
+      "height": 800
+    },
+    "backing": [
+      {
+        "css": {
+          "bottom": 414.5,
+          "height": 236.5,
+          "left": 279,
+          "right": 556,
+          "top": 178,
+          "width": 277,
+          "x": 279,
+          "y": 178
+        },
+        "height": 237,
+        "width": 277
+      },
+      {
+        "css": {
+          "bottom": 701,
+          "height": 236.5,
+          "left": 279,
+          "right": 556,
+          "top": 464.5,
+          "width": 277,
+          "x": 279,
+          "y": 464.5
+        },
+        "height": 237,
+        "width": 277
+      },
+      {
+        "css": {
+          "bottom": 414.5,
+          "height": 236.5,
+          "left": 684,
+          "right": 961,
+          "top": 178,
+          "width": 277,
+          "x": 684,
+          "y": 178
+        },
+        "height": 237,
+        "width": 277
+      },
+      {
+        "css": {
+          "bottom": 701,
+          "height": 236.5,
+          "left": 684,
+          "right": 961,
+          "top": 464.5,
+          "width": 277,
+          "x": 684,
+          "y": 464.5
+        },
+        "height": 237,
+        "width": 277
+      }
+    ],
+    "dpr": 1,
+    "headers": [
+      54,
+      54
+    ],
+    "inner": [
+      1264,
+      761
+    ],
+    "plots": [
+      {
+        "bottom": 414.5,
+        "height": 236.5,
+        "left": 279,
+        "right": 556,
+        "top": 178,
+        "width": 277,
+        "x": 279,
+        "y": 178
+      },
+      {
+        "bottom": 701,
+        "height": 236.5,
+        "left": 279,
+        "right": 556,
+        "top": 464.5,
+        "width": 277,
+        "x": 279,
+        "y": 464.5
+      },
+      {
+        "bottom": 414.5,
+        "height": 236.5,
+        "left": 684,
+        "right": 961,
+        "top": 178,
+        "width": 277,
+        "x": 684,
+        "y": 178
+      },
+      {
+        "bottom": 701,
+        "height": 236.5,
+        "left": 684,
+        "right": 961,
+        "top": 464.5,
+        "width": 277,
+        "x": 684,
+        "y": 464.5
+      }
+    ]
+  }
+}

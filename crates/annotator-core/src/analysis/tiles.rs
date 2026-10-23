@@ -1,5 +1,6 @@
 use super::{
     mel::MelBank,
+    source::AnalysisSource,
     stft::{frame_count, power_db, Stft},
 };
 use crate::{
@@ -30,6 +31,9 @@ pub fn config_hash(s: &AnalysisSettings) -> String {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TileRequest {
+    pub analysis_source: AnalysisSource,
+    pub processing_version: u32,
+    pub edit_signature: String,
     pub request_id: String,
     pub view_id: String,
     pub project_id: String,
@@ -51,6 +55,20 @@ pub struct TileRequest {
 impl TileRequest {
     pub fn validate(&self) -> Result<()> {
         validate_analysis(&self.settings)?;
+        if self.processing_version != crate::audio::DSP_VERSION
+            || match self.analysis_source {
+                AnalysisSource::Original => !self.edit_signature.is_empty(),
+                AnalysisSource::Processed => {
+                    self.edit_signature.len() != 64
+                        || !self
+                            .edit_signature
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                }
+            }
+        {
+            return Err(AppError::invalid("无效分析源版本或屏蔽签名"));
+        }
         if [
             &self.request_id,
             &self.view_id,
@@ -94,8 +112,11 @@ impl TileRequest {
     pub fn cache_key(&self, source_hash: &str, sample_rate: u32, samples: u64) -> String {
         // Request IDs, view generation, priority and renderer styles are deliberately absent.
         let key = serde_json::to_vec(&(
-            1,
+            2,
             source_hash,
+            self.analysis_source,
+            self.processing_version,
+            &self.edit_signature,
             sample_rate,
             samples,
             self.channel_index,

@@ -1,0 +1,13 @@
+
+> audio-annotator@0.2.1 test
+> vitest run
+
+
+ RUN  v4.1.12 D:/Work/annotator/.worktrees/spectral-fidelity-v021
+
+
+ Test Files  40 passed (40)
+      Tests  309 passed (309)
+   Start at  18:30:54
+   Duration  11.24s (transform 6.20s, setup 14.82s, import 11.04s, tests 29.24s, environment 46.47s)
+

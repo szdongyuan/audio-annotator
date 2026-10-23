@@ -1,0 +1,220 @@
+   Compiling annotator-core v0.2.1 (D:\Work\annotator\crates\annotator-core)
+   Compiling annotator-desktop v0.2.1 (D:\Work\annotator\src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 52.27s
+     Running unittests src\lib.rs (target\debug\deps\annotator_core-ed06c25fc161ac81.exe)
+
+running 3 tests
+test exchange::export::tests::publication_refuses_a_target_created_during_write_and_cleans_only_its_temp ... ok
+test exchange::export::tests::publication_cleans_partial_and_cancelled_files_and_moves_complete_bytes ... ok
+test exchange::limits::tests::rejects_an_index_that_does_not_end_at_the_end_record ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\analysis_jobs.rs (target\debug\deps\analysis_jobs-baf9191109659360.exe)
+
+running 9 tests
+test configuration_keys_cover_identity_and_analysis_but_not_view_style ... ok
+test visible_jobs_precede_background_queue_and_old_generations_never_run ... ok
+test scheduler_bounds_workers_queue_cancels_only_view_and_drops_late_results ... ok
+test tile_averages_linear_power_and_clips_physical_tail ... ok
+test frequency_lod_uses_power_and_mel_tiles_keep_triangle_geometry ... ok
+test scheduler_reset_invalidates_same_project_runtime_and_panics_do_not_kill_workers ... ok
+test disk_lru_refreshes_on_memory_hits_and_never_deletes_noncache_files ... ok
+test cache_is_bounded_lru_persistent_and_recovers_corruption ... ok
+test reopening_relative_media_rehydrates_without_changing_document_path_and_rejects_changed_source ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\analysis_owners.rs (target\debug\deps\analysis_owners-b895f2e603bc77c7.exe)
+
+running 3 tests
+test retirement_and_reset_cancel_late_results_without_affecting_other_views ... ok
+test live_leases_are_bounded_and_unknown_cancel_never_allocates ... ok
+test more_than_256_sequentially_disposed_views_keep_accepting_work ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\document.rs (target\debug\deps\document-8082669273e5980b.exe)
+
+running 13 tests
+test playback_mix_validates_deduplicates_and_media_removal_is_undoable ... ok
+test annotation_editor_boundary_sequence_keeps_notes_and_rejected_history_atomic ... ok
+test text_merges_only_for_the_same_target_and_preferences_survive_undo ... ok
+test revision_exhaustion_and_unknown_entities_leave_document_and_history_unchanged ... ok
+test shared_fixture_round_trips_and_rejects_invalid_documents ... ok
+test changes_are_atomic_and_history_revisions_only_increase ... ok
+test nullable_document_fields_are_required_keys ... ok
+test classification_commands_are_independent_atomic_and_category_removal_undoes_once ... ok
+test only_v2_documents_are_supported ... ok
+test view_changes_persist_outside_content_history_and_channel_bounds_use_the_target_media ... ok
+test malformed_settings_metadata_ids_and_unknown_fields_are_rejected ... ok
+test every_content_change_is_serializable_and_undoable ... ok
+test strict_versioned_reads_reject_missing_unknown_and_invalid_fields ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\dsp.rs (target\debug\deps\dsp-7b80fdbe6e179666.exe)
+
+running 12 tests
+test unusual_rate_pairs_are_rejected_before_large_fft_allocation ... ok
+test mixing_solo_then_mute_layouts_and_output_safety ... ok
+test invalid_versions_ranges_nonfinite_and_empty_are_explicit ... ok
+test resampler_drains_nonzero_final_filter_tail_and_keeps_output_finite ... ok
+test ten_minute_six_channel_source_renders_a_seek_without_full_file_reads ... ok
+test raised_cosine_widths_union_disabled_narrow_and_physical_edges ... ok
+test visual_stft_settings_do_not_change_processing ... ok
+test identity_exact_length_short_boundaries_dc_nyquist_and_no_mutation ... ok
+test rubato_block_resampling_duration_frequency_delay_tail_and_partition_invariance ... ok
+test overlap_is_max_union_and_channels_are_isolated ... ok
+test dual_tone_mask_selection_and_sources ... ok
+test arbitrary_blocks_and_seeks_have_global_stft_phase_and_bounded_reads ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.72s
+
+     Running tests\exchange.rs (target\debug\deps\exchange-47212e32687ce485.exe)
+
+running 13 tests
+test portable_v2_rejects_missing_nullable_fields_unknown_fields_and_local_paths ... ok
+test bundle_preserves_original_bytes_and_fails_missing_sources_atomically ... ok
+test json_preserves_all_semantics_without_source_paths_and_imports_missing_media ... ok
+test rejects_unknown_versions_fields_dangling_references_and_bounds ... ok
+test source_mutation_during_copy_never_publishes_partial_package ... ok
+test portable_v1_and_future_versions_are_explicitly_unsupported ... ok
+test export_refuses_changed_missing_and_existing_targets_and_cancel_never_publishes ... ok
+test limits_use_actual_stream_counts_and_cancel_cleans_owned_staging_only ... ok
+test zip_roundtrip_matches_every_semantic_field_and_original_bytes ... ok
+test zip_rejects_fingerprint_metadata_unknown_fields_and_unlisted_files ... ok
+test zip64_index_is_validated_without_large_test_files ... ok
+test hostile_paths_case_collisions_links_and_limits_leave_only_input_files ... ok
+test bundle_two_formats_reimports_without_validation_cache ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests\folder_scan.rs (target\debug\deps\folder_scan-084e85a14420bef3.exe)
+
+running 7 tests
+test cancellation_has_its_own_signal_and_terminal_results_release_storage ... ok
+test limits_cancel_and_root_failure_never_return_partial_results ... ok
+test unresolved_existing_sources_are_reported_and_hardlinks_remain_distinct ... ok
+test recursive_extensions_stable_order_and_relative_existing_paths ... ok
+test child_permission_failure_continues_and_issue_storage_is_bounded ... ok
+test real_ntfs_junction_is_not_followed ... ok
+test task_pages_reset_and_release_are_bounded_and_owner_checked ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.16s
+
+     Running tests\media.rs (target\debug\deps\media-a20b5113a44b6b2e.exe)
+
+running 12 tests
+test known_pcm_size_checks_available_space_before_decoding ... ok
+test release_is_scoped_to_the_task_that_prepared_the_descriptor ... ok
+test stale_preparations_cannot_publish_after_runtime_replacement ... ok
+test relink_preserves_current_notes_and_rejects_different_identity ... ok
+test streaming_hash_checks_original_bytes_and_changed_source_aborts ... ok
+test pcm_ranges_identity_and_source_changes_are_checked ... ok
+test malformed_and_cancelled_never_publish_pcm ... ok
+test analysis_and_playback_share_one_pcm_retention_budget ... ok
+test contradictory_or_reserved_wav_masks_are_rejected_without_decoder_repairs ... ok
+test mp3_frame_count_comes_from_actual_packets_not_bitrate_estimates ... ok
+test real_formats_decode_with_distinct_channels_and_exact_frames ... ok
+test wav_layout_requires_an_explicit_valid_mask_and_preserves_sample_order ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests\persistence.rs (target\debug\deps\persistence-8a28bc44980b1ab3.exe)
+
+running 16 tests
+test create_never_overwrites_an_existing_project ... ok
+test explicit_discard_does_not_require_a_valid_primary ... ok
+test invalid_checksum_and_foreign_recovery_are_never_offered ... ok
+test corruption_offers_verified_backup_without_overwriting_main ... ok
+test classifications_and_compare_preferences_survive_save_and_reopen ... ok
+test recovery_requires_a_choice_and_keep_primary_survives_reopen ... ok
+test local_session_save_failure_keeps_memory_and_close_requires_saved_revision ... ok
+test explicit_recovery_publishes_selected_revision_and_reopens ... ok
+test save_as_preserves_history_and_rebases_relative_media_in_undo ... ok
+test save_reopen_preserves_mix_and_os_lock_releases ... ok
+test valid_checksum_from_another_project_is_not_a_recovery_candidate ... ok
+test unsupported_primary_is_rejected_without_changing_project_or_recovery_bytes ... ok
+test explicit_discard_closes_despite_persistent_recovery_write_failures ... ok
+test every_failed_boundary_keeps_primary_and_exposes_newer_recovery ... ok
+test oversized_encoding_is_rejected_before_any_existing_file_changes ... ok
+test large_but_supported_envelope_remains_readable ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.39s
+
+     Running tests\playback_state.rs (target\debug\deps\playback_state-a27de3428278c749.exe)
+
+running 18 tests
+test counted_device_clock_only_advances_on_consumption ... ok
+test pause_retains_buffer_and_clock ... ok
+test callback_timestamp_publication_is_required_even_after_ring_exhaustion ... ok
+test delayed_output_sink_keeps_stream_until_the_nonzero_tail_is_presented ... ok
+test nonfinite_and_clipping_are_sanitized ... ok
+test natural_end_stays_at_end_and_replay_starts_at_beginning ... ok
+test play_pause_resume_stop_preserves_session_start ... ok
+test ring_exhaustion_does_not_mean_device_presentation ... ok
+test obsolete_generation_never_outputs_queued_audio ... ok
+test ring_is_bounded_and_reuses_consumed_slots ... ok
+test seek_clamps_to_exact_selection_bounds ... ok
+test selection_loop_clock_retains_original_source_coordinates ... ok
+test switching_source_cancels_old_buffer_before_new_source_is_ready ... ok
+test underrun_does_not_advance_source_clock ... ok
+test wasapi_padding_and_retired_frames_bound_the_scheduled_tail ... ok
+test sub_device_frame_loop_is_rejected_without_infinite_production ... ok
+test resampled_renderer_finishes_at_exact_source_frame_and_seeks_without_old_filter_tail ... ok
+test real_selection_renderer_loops_both_sources_on_original_channel_and_exact_bounds ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\processed_analysis.rs (target\debug\deps\processed_analysis-dbce747aa6b2509e.exe)
+
+running 3 tests
+test original_and_processed_cache_identities_never_alias_and_geometry_is_authoritative ... ok
+test random_access_head_tail_overlap_reuse_and_cancellation_are_bounded ... ok
+test processed_tiles_match_independent_dsp_then_stft_for_masks_channels_and_large_windows ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.90s
+
+     Running tests\spectra.rs (target\debug\deps\spectra-8c7bad1da8a2eddd.exe)
+
+running 3 tests
+test dc_nyquist_short_tail_and_hop_are_not_doubled_or_extended ... ok
+test mel_uses_fixed_triangles_normalized_by_weight_sum_and_energy_compensation ... ok
+test tones_have_fixed_window_normalized_amplitude_and_physical_bins ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\lib.rs (target\debug\deps\annotator_desktop_lib-e6956b543c02adc7.exe)
+
+running 9 tests
+test commands::exchange::tests::task_cancellation_is_independent_and_single_terminal_slot ... ok
+test commands::playback::tests::prebuffer_completion_preserves_stopped_and_paused_transport_intent ... ok
+test commands::playback::tests::native_pause_stop_and_reset_use_counted_output_and_invalidate_old_callbacks ... ok
+test commands::playback::tests::native_ended_status_waits_for_presentation_but_stop_cancels_immediately ... ok
+test commands::playback::tests::native_document_changes_only_cancel_audio_inputs_for_active_media ... ok
+test commands::exchange::tests::authority_requires_saved_current_identity_and_revision ... ok
+test commands::folders::tests::background_channel_reports_terminal_without_holding_project_lock ... ok
+test commands::analysis::tests::processed_authority_rejects_forgery_and_edit_during_work_or_cache_publication ... ok
+test commands::analysis::tests::native_service_reopens_without_relink_preserves_document_and_checks_current_identity ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running unittests src\main.rs (target\debug\deps\annotator_desktop-fa15f673771d4a43.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests annotator_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests annotator_desktop_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

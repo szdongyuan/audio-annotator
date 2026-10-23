@@ -12,3 +12,11 @@ it('binds project menu actions and dismisses after action, outside pointer and E
  fireEvent.click(trigger);fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.queryByRole('menu')).not.toBeInTheDocument();expect(trigger).toHaveFocus();
  fireEvent.click(trigger);expect(screen.getByRole('menuitem',{name:'保存'})).toHaveAttribute('aria-disabled','true');
 });
+
+it('names the local project copy accurately and calls the existing saveAs action', () => {
+ const project={busy:false,recovery:null,active:{store:{editingDisabled:false}},saveAs:vi.fn()} as unknown as ProjectLifecycleUI;
+ render(<AppMenu owner={null} menus={[{id:'file',label:'文件',items:projectMenuItems({project})}]}/>);
+ fireEvent.click(screen.getByRole('menuitem',{name:'文件'}));
+ fireEvent.click(screen.getByRole('menuitem',{name:'另存项目副本…'}));
+ expect(project.saveAs).toHaveBeenCalledOnce();
+});

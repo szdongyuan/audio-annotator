@@ -41,7 +41,7 @@ async function call<T>(command: string, args: Record<string, unknown>, parse: (v
 export const localProjects: LocalProjectCommands = {
   choose: async kind => {
     const result = await open({ directory: kind !== 'open', multiple: false,
-      title: kind === 'open' ? '打开项目 · 选择 project.json' : kind === 'create' ? '新建项目 · 选择空文件夹' : '另存项目 · 选择空文件夹',
+      title: kind === 'open' ? '打开项目 · 选择 project.json' : kind === 'create' ? '新建项目 · 选择空文件夹' : '另存项目副本 · 选择空文件夹',
       ...(kind === 'open' ? { filters: [{ name: '项目文档', extensions: ['json'] }] } : {}),
     });
     return typeof result === 'string' ? result : null;

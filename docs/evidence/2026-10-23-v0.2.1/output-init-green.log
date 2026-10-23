@@ -1,0 +1,34 @@
+TAP version 13
+# Subtest: teardown waits for an owned listener to retire before reusing its port
+ok 1 - teardown waits for an owned listener to retire before reusing its port
+  ---
+  duration_ms: 121.304
+  type: 'test'
+  ...
+# Subtest: port-release waiting times out without closing or attaching to another listener
+ok 2 - port-release waiting times out without closing or attaching to another listener
+  ---
+  duration_ms: 107.4647
+  type: 'test'
+  ...
+# Subtest: run-desktop-tests.mjs initializes output with no parent and preserves previous runs
+ok 3 - run-desktop-tests.mjs initializes output with no parent and preserves previous runs
+  ---
+  duration_ms: 168.7124
+  type: 'test'
+  ...
+# Subtest: measure-performance.mjs initializes output with no parent and preserves previous runs
+ok 4 - measure-performance.mjs initializes output with no parent and preserves previous runs
+  ---
+  duration_ms: 153.2362
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 420.1236

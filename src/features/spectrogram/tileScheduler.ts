@@ -1,7 +1,7 @@
 import type { TileResult } from './tileClient';
 import { TileCache } from './tileCache';
-// 64 MiB numeric tiles + <=12 one-MiB canvases + transient one-MiB raster per canvas
-// stays below the 96 MiB frontend tile/image budget. No retained image copies.
+// 64 MiB numeric tiles; rasterBudget separately owns the global 32 MiB
+// retained backing and reusable RGBA scratch budget.
 export const tileCache = new TileCache<TileResult>(64 * 1024 * 1024);
 /** Four native requests across ALL panes, below the native 32 waiting-job bound. */
 export class TileScheduler {

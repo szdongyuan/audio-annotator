@@ -1,0 +1,37 @@
+
+> audio-annotator@0.2.1 test
+> vitest run src/features/spectrogram/cachePressure.test.tsx
+
+
+ RUN  v4.1.12 D:/Work/annotator/.worktrees/spectral-fidelity-v021
+
+ ❯ src/features/spectrogram/cachePressure.test.tsx (5 tests | 1 failed) 1137ms
+   × renders all twelve channels after gain, palette and mix changes without reload churn 875ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/features/spectrogram/cachePressure.test.tsx > renders all twelve channels after gain, palette and mix changes without reload churn
+AssertionError: equal native snapshots must retain already rendered pixels: expected 12 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 12
+
+ ❯ src/features/spectrogram/cachePressure.test.tsx:65:85
+     63|   await paintOpportunity(); images.clear();
+     64|   screen.rerender(panes(0, 'ember', .65)); await paintOpportunity();
+     65|   expect(images.size, 'equal native snapshots must retain already rend…
+       |                                                                                     ^
+     66|   const before = request.mock.calls.length;
+     67|   const retained = tileCache.get(tileCache.matchingKeys(() => true)[0]…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  18:11:47
+   Duration  2.30s (transform 222ms, setup 214ms, import 258ms, tests 1.14s, environment 518ms)
+

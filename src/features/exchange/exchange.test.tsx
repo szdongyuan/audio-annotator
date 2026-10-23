@@ -28,7 +28,11 @@ it.each([['exchange','SaveFailed'],['normalSave','SaveFailed'],['normalSave','Re
 });
 it('explains JSON versus complete packages and exposes progress, cancellation and result location',()=>{
  const start=vi.fn(), cancel=vi.fn();const {rerender}=render(<ExportDialog busy={false} phase="" completed={0} result={null} error={null} cancelled={false} onStart={start} onCancel={cancel} onClose={()=>{}} />);
- fireEvent.click(screen.getByLabelText('完整项目包'));fireEvent.click(screen.getByRole('button',{name:'选择保存位置…'}));expect(start).toHaveBeenCalledWith('bundle');
+ expect(screen.getAllByRole('radio').map(r=>r.getAttribute('aria-label'))).toEqual(['完整项目包（含音频）','仅标注（不含音频）']);
+ expect(screen.getByLabelText('完整项目包（含音频）')).toBeChecked();
+ fireEvent.click(screen.getByRole('button',{name:'选择保存位置…'}));expect(start).toHaveBeenCalledWith('bundle');
+ fireEvent.click(screen.getByLabelText('仅标注（不含音频）'));fireEvent.click(screen.getByRole('button',{name:'选择保存位置…'}));expect(start).toHaveBeenLastCalledWith('annotations');
+ expect(screen.getByText(/接收方需要同一批原始音频/)).toBeInTheDocument();
  rerender(<ExportDialog busy phase="复制原始媒体" completed={1024} result={null} error={null} cancelled={false} onStart={start} onCancel={cancel} onClose={()=>{}} />);
  expect(screen.getByRole('status').textContent).toContain('复制原始媒体');fireEvent.click(screen.getByRole('button',{name:'取消任务'}));expect(cancel).toHaveBeenCalled();
  rerender(<ExportDialog busy={false} phase="" completed={0} result="D:/shared/test.zip" error={null} cancelled={false} onStart={start} onCancel={cancel} onClose={()=>{}} />);expect(screen.getByText('D:/shared/test.zip')).toBeInTheDocument();

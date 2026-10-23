@@ -1,0 +1,42 @@
+TAP version 13
+# Subtest: teardown waits for an owned listener to retire before reusing its port
+not ok 1 - teardown waits for an owned listener to retire before reusing its port
+  ---
+  duration_ms: 15.8017
+  type: 'test'
+  location: 'D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\tests\\desktop\\harness-lifecycle.test.mjs:7:1'
+  failureType: 'testCodeFailure'
+  error: 'harness.waitForTestPortsReleased is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/Work/annotator/.worktrees/spectral-fidelity-v021/tests/desktop/harness-lifecycle.test.mjs:9:21)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: port-release waiting times out without closing or attaching to another listener
+not ok 2 - port-release waiting times out without closing or attaching to another listener
+  ---
+  duration_ms: 2.9106
+  type: 'test'
+  location: 'D:\\Work\\annotator\\.worktrees\\spectral-fidelity-v021\\tests\\desktop\\harness-lifecycle.test.mjs:11:1'
+  failureType: 'testCodeFailure'
+  error: 'harness.waitForTestPortsReleased is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/Work/annotator/.worktrees/spectral-fidelity-v021/tests/desktop/harness-lifecycle.test.mjs:13:36)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 205.5356

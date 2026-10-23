@@ -61,3 +61,39 @@ it('cancel clears a temporary prior whose channel became invalid during the drag
   state.reconcile({ ...doc, media: doc.media.map(m => ({ ...m, channelCount: 1 })) });
   state.cancel(); expect(state.getSnapshot()).toBeNull();
 });
+
+it('separates the active target from its retained candidate and rejects late binding after deactivation', () => {
+  const doc = parseProjectDocument(structuredClone(fixture)), state = new SelectionState();
+  const target = { region: doc.annotations[0].region, object: null };
+  state.select(target); expect(state.getActiveSelection()).toBe(target);
+  state.deactivate(); expect(state.getActiveSelection()).toBeNull(); expect(state.getCandidate()).toBe(target);
+  expect(state.bind(target, { kind: 'mask', id: 'late' })).toBe(false);
+  state.reconcile(doc); expect(state.getActiveSelection()).toBeNull(); expect(state.getCandidate()).toBe(target);
+  state.beginGesture(); state.select({ region: doc.edits[0].region, object: null }); state.cancel();
+  expect(state.getActiveSelection()).toBeNull(); expect(state.getCandidate()).toBe(target);
+});
+
+it('reconciles an inactive saved target without reactivating it and invalidates it on deletion', () => {
+  const doc = parseProjectDocument(structuredClone(fixture)), state = new SelectionState(), a = doc.annotations[0];
+  state.select({ region: a.region, object: { kind: 'annotation', id: a.id } }); state.deactivate();
+  state.reconcile({ ...doc, annotations: [{ ...a, region: { ...a.region, lowHz: 200 } }] });
+  expect(state.getActiveSelection()).toBeNull(); expect(state.getCandidate()?.region.lowHz).toBe(200);
+  state.reconcile({ ...doc, annotations: [] }); expect(state.getCandidate()).toBeNull();
+});
+
+it('cancelling a gesture restores the prior selection interaction context as well as its active state', () => {
+  const doc = parseProjectDocument(structuredClone(fixture)), state = new SelectionState(), a = doc.annotations[0];
+  state.select({ region: a.region, object: null }); state.beginGesture();
+  state.select({ region: { ...a.region, channelIndex: 0 }, object: null }); state.cancel();
+  expect(state.getContext()).toEqual({ mediaId: a.region.mediaId, channelIndex: a.region.channelIndex });
+  expect(state.getActiveSelection()?.region).toBe(a.region);
+});
+
+it('active context follows authoritative channel changes while inactive reconciliation keeps the current interaction context', () => {
+  const doc = parseProjectDocument(structuredClone(fixture)), state = new SelectionState(), a = doc.annotations[0];
+  state.select({ region: a.region, object: { kind: 'annotation', id: a.id } });
+  state.reconcile({ ...doc, annotations: [{ ...a, region: { ...a.region, channelIndex: 0 } }] });
+  expect(state.getContext()?.channelIndex).toBe(0);
+  state.deactivate(); state.reconcile(doc);
+  expect(state.getContext()?.channelIndex).toBe(0); expect(state.getActiveSelection()).toBeNull();
+});
