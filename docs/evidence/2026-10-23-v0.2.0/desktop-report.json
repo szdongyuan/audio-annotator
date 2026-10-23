@@ -1,0 +1,65 @@
+{
+  "method": "Selenium → official tauri-driver → matching Microsoft EdgeDriver → actual Tauri executable. Only native picker return paths are preselected in the e2e feature; all edits use WebDriver pointer/keyboard actions. Native listening and physical picker interaction remain manual.",
+  "checks": [
+    {
+      "name": "project",
+      "passed": true
+    },
+    {
+      "name": "view-churn",
+      "passed": true,
+      "switches": 300,
+      "mountedChannelOwners": 450,
+      "freshNativeAnalysis": true
+    },
+    {
+      "name": "spectral",
+      "passed": true
+    },
+    {
+      "name": "restart",
+      "passed": true
+    },
+    {
+      "name": "sharing",
+      "passed": true
+    },
+    {
+      "name": "recovery",
+      "passed": true
+    },
+    {
+      "name": "selection-flow",
+      "passed": true
+    },
+    {
+      "name": "rulers-flow",
+      "passed": true
+    },
+    {
+      "name": "compact-layout",
+      "passed": true
+    },
+    {
+      "name": "classification-flow",
+      "passed": true
+    },
+    {
+      "name": "folder-scan",
+      "passed": true
+    },
+    {
+      "name": "folder-flow",
+      "passed": true
+    },
+    {
+      "name": "feedback-flow",
+      "passed": true
+    },
+    {
+      "name": "format-flow",
+      "passed": true
+    }
+  ],
+  "output": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\desktop-8rX2lk"
+}

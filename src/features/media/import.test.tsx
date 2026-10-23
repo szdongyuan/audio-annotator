@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
-import fixture from '../../../tests/fixtures/document-v1.json';
+import fixture from '../../../tests/fixtures/document-v2.json';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue, type ProjectCommands } from '../../app/commands';
 import { parseProjectDocument, type ProjectSnapshot } from '../../bridge/types';

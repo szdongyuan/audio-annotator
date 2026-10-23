@@ -1,14 +1,19 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import type { Annotation, Change, Region } from '../../bridge/types';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { classifyTarget, type ClassificationTarget } from './classification';
+import type { Annotation, Change } from '../../bridge/types';
 import { normalizeError } from '../../bridge/client';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import { shortcutAction } from '../project/shortcuts';
 import { AnnotationDrafts } from './drafts';
-export type Tool = 'select' | 'annotate' | 'mask';
-export function useAnnotations(active: ActiveProject | null) {
-  const [tool, setTool] = useState<Tool>('select'), [selectedId, select] = useState<string | null>(null), [cancelVersion, setCancel] = useState(0);
+import type { SelectionUI } from '../selection/useSelection';
+export function useAnnotations(active: ActiveProject | null, selection?: SelectionUI) {
+  const binding = useRef(active); binding.current = active;
+  useEffect(() => { binding.current = active; return () => { binding.current = null; }; }, [active]);
+  const [fallbackId, setFallbackId] = useState<string | null>(null);
+  const selectedId = selection ? selection.selection?.object?.kind === 'annotation' ? selection.selection.object.id : null : fallbackId;
+  const select = (id: string | null) => selection ? selection.selectObject('annotation', id) : setFallbackId(id);
   const drafts = useMemo(() => active ? new AnnotationDrafts(active) : null, [active]);
-  useEffect(() => { select(null); return () => drafts?.dispose(); }, [drafts]);
+  useEffect(() => { setFallbackId(null); return () => drafts?.dispose(); }, [drafts]);
   const run = (action: () => Promise<unknown>) => {
     if (!active || active.store.editingDisabled) return;
     const owner = active;
@@ -21,27 +26,16 @@ export function useAnnotations(active: ActiveProject | null) {
   });
   const history = (kind: 'undo' | 'redo') => run(async () => { if (active!.store.snapshot[kind === 'undo' ? 'canUndo' : 'canRedo']) await active!.queue[kind]({ owner: 'annotations' }); });
   const remove = () => { if (selectedId) run(async () => { if (active!.store.snapshot.document.annotations.some(a => a.id === selectedId)) await active!.queue.enqueue({ type: 'removeAnnotation', id: selectedId }, { owner: 'annotations' }); }); };
-  const cancel = () => { setCancel(v => v + 1); select(null); };
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
       if (!active || active.store.editingDisabled || e.defaultPrevented) return;
-      const action = shortcutAction(e); if (!action) return;
-      if (action === 'delete' && !selectedId) return;
-      e.preventDefault();
-      if (action === 'undo' || action === 'redo') history(action);
-      else if (action === 'delete') remove();
-      else if (action === 'cancel') cancel();
-      else setTool(action);
+      const action = shortcutAction(e);
+      if (action === 'undo' || action === 'redo') { e.preventDefault(); history(action); }
     };
     window.addEventListener('keydown', listener); return () => window.removeEventListener('keydown', listener);
-  // Keep other selection listeners installed if React commits during this event.
-  }, [active, selectedId]);
-  return { active, drafts, tool, setTool, selectedId, select, cancelVersion, cancel, command, mutate, history, remove,
-    create: (region: Region) => {
-      const id = crypto.randomUUID(), now = new Date().toISOString();
-      run(async () => { await active!.queue.enqueue({ type: 'addAnnotation', annotation: { id, region, categoryId: null, note: '', createdAt: now, updatedAt: now } }, { owner: 'annotations' }); select(id); });
-    },
-  };
+  }, [active]);
+  const classify = (target: ClassificationTarget, categoryId: string | null) => active ? classifyTarget(active, target, categoryId, () => binding.current === active) : Promise.resolve();
+  return { active, drafts, selectedId, select, command, mutate, history, remove, classify };
 }
 export type AnnotationUI = ReturnType<typeof useAnnotations>;
 export const AnnotationContext = createContext<AnnotationUI | null>(null);

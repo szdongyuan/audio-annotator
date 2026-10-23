@@ -1,7 +1,7 @@
 use annotator_core::{error::ErrorCode, model::*, project::ProjectSession};
 
 fn fixture() -> ProjectDocument {
-    ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v1.json")).unwrap()
+    ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json")).unwrap()
 }
 
 #[test]
@@ -29,7 +29,7 @@ fn shared_fixture_round_trips_and_rejects_invalid_documents() {
     invalid.categories.push(duplicate);
     assert!(invalid.validate().is_err());
     assert_eq!(
-        ProjectDocument::from_json(r#"{"formatVersion":2}"#)
+        ProjectDocument::from_json(r#"{"formatVersion":3}"#)
             .unwrap_err()
             .code,
         ErrorCode::UnsupportedVersion
@@ -256,6 +256,7 @@ fn view_changes_persist_outside_content_history_and_channel_bounds_use_the_targe
     mono.id = "00000000-0000-4000-8000-000000000030".into();
     mono.channel_count = 1;
     mono.channel_notes.truncate(1);
+    mono.channel_category_ids.truncate(1);
     mono.channel_layout = None;
     doc.analysis
         .insert(mono.id.clone(), AnalysisSettings::default());
@@ -371,6 +372,15 @@ fn every_content_change_is_serializable_and_undoable() {
     let mut edit = doc.edits[0].clone();
     edit.id = "00000000-0000-4000-8000-000000000023".into();
     let changes = vec![
+        Change::SetMediaCategory {
+            media_id: media_id.clone(),
+            category_id: Some(doc.categories[0].id.clone()),
+        },
+        Change::SetChannelCategory {
+            media_id: media_id.clone(),
+            channel_index: 0,
+            category_id: Some(doc.categories[0].id.clone()),
+        },
         Change::ImportMedia { media: new_media },
         Change::AddCategory { category },
         Change::UpdateCategory {
@@ -509,4 +519,136 @@ fn annotation_editor_boundary_sequence_keeps_notes_and_rejected_history_atomic()
         session.undo(&id, 3).unwrap().document.annotations,
         doc.annotations
     );
+}
+
+#[test]
+fn classification_commands_are_independent_atomic_and_category_removal_undoes_once() {
+    let doc = fixture();
+    let id = &doc.project_id;
+    let mid = &doc.media[0].id;
+    let cid = &doc.categories[0].id;
+    let mut session = ProjectSession::new(doc.clone()).unwrap();
+    let command = |value| serde_json::from_value::<Change>(value).unwrap();
+    let first = session
+        .apply_change(
+            id,
+            0,
+            command(serde_json::json!({"type":"setMediaCategory","mediaId":mid,"categoryId":cid})),
+        )
+        .unwrap();
+    let value = serde_json::to_value(&first.document).unwrap();
+    assert_eq!(value["media"][0]["categoryId"], cid.as_str());
+    assert_eq!(
+        value["media"][0]["channelCategoryIds"],
+        serde_json::json!([null, null])
+    );
+    session.apply_change(id,1,command(serde_json::json!({"type":"setChannelCategory","mediaId":mid,"channelIndex":1,"categoryId":cid}))).unwrap();
+    let classified = session.snapshot();
+    for bad in [
+        serde_json::json!({"type":"setMediaCategory","mediaId":mid,"categoryId":id}),
+        serde_json::json!({"type":"setChannelCategory","mediaId":mid,"channelIndex":2,"categoryId":cid}),
+    ] {
+        assert!(session.apply_change(id, 2, command(bad)).is_err());
+        assert_eq!(session.snapshot(), classified);
+    }
+    let mut relink = doc.media[0].clone();
+    relink.source_ref = "elsewhere.wav".into();
+    relink.note = "stale".into();
+    let relinked = session
+        .apply_change(id, 2, Change::RelinkMedia { media: relink })
+        .unwrap();
+    let v = serde_json::to_value(&relinked.document).unwrap();
+    assert_eq!(v["media"][0]["categoryId"], cid.as_str());
+    assert_eq!(
+        v["media"][0]["channelCategoryIds"],
+        serde_json::json!([null, cid])
+    );
+    assert_eq!(relinked.document.media[0].note, doc.media[0].note);
+    let removed = session
+        .apply_change(id, 3, Change::RemoveCategory { id: cid.clone() })
+        .unwrap();
+    let v = serde_json::to_value(&removed.document).unwrap();
+    assert!(v["media"][0]["categoryId"].is_null());
+    assert_eq!(
+        v["media"][0]["channelCategoryIds"],
+        serde_json::json!([null, null])
+    );
+    assert!(removed.document.annotations[0].category_id.is_none());
+    let restored = session.undo(id, 4).unwrap();
+    assert_eq!(restored.document.media, relinked.document.media);
+    assert_eq!(restored.document.categories, relinked.document.categories);
+    assert_eq!(restored.document.annotations, relinked.document.annotations);
+}
+
+#[test]
+fn only_v2_documents_are_supported() {
+    assert_eq!(
+        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v1.json"))
+            .unwrap_err()
+            .code,
+        ErrorCode::UnsupportedVersion
+    );
+    for version in [0, 1, 3] {
+        let mut value = serde_json::to_value(fixture()).unwrap();
+        value["formatVersion"] = serde_json::json!(version);
+        assert_eq!(
+            ProjectDocument::from_json(&value.to_string())
+                .unwrap_err()
+                .code,
+            ErrorCode::UnsupportedVersion
+        );
+    }
+}
+
+#[test]
+fn strict_versioned_reads_reject_missing_unknown_and_invalid_fields() {
+    use serde_json::{json, Value};
+    const V2: &str = include_str!("../../../tests/fixtures/document-v2.json");
+    assert!(ProjectDocument::from_json(V2).is_ok());
+    for (pointer, key) in [
+        ("/media/0", "categoryId"),
+        ("/media/0", "channelCategoryIds"),
+        ("/viewState", "compareLayout"),
+        ("/viewState", "compareSplit"),
+    ] {
+        let mut v: Value = serde_json::from_str(V2).unwrap();
+        v.pointer_mut(pointer)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove(key);
+        assert!(ProjectDocument::from_json(&v.to_string()).is_err());
+    }
+    for (pointer, bad) in [
+        (
+            "/media/0/categoryId",
+            json!("00000000-0000-4000-8000-000000000099"),
+        ),
+        ("/media/0/channelCategoryIds", json!([null])),
+        ("/viewState/compareSplit", json!(0.76)),
+        ("/formatVersion", json!(3)),
+    ] {
+        let mut v: Value = serde_json::from_str(V2).unwrap();
+        *v.pointer_mut(pointer).unwrap() = bad;
+        assert!(ProjectDocument::from_json(&v.to_string()).is_err());
+    }
+    {
+        let original = V2;
+        for (pointer, key) in [
+            ("/media/0", "channelLayout"),
+            ("/annotations/0", "categoryId"),
+            ("/viewState", "compareMediaId"),
+        ] {
+            let mut v: Value = serde_json::from_str(original).unwrap();
+            v.pointer_mut(pointer)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .remove(key);
+            assert!(ProjectDocument::from_json(&v.to_string()).is_err());
+        }
+        let mut v: Value = serde_json::from_str(original).unwrap();
+        v["media"][0]["typo"] = json!(true);
+        assert!(ProjectDocument::from_json(&v.to_string()).is_err());
+    }
 }

@@ -8,7 +8,7 @@ export interface ProjectCommands {
   undo(projectId: string, expectedRevision: number): Promise<ProjectSnapshot>;
   redo(projectId: string, expectedRevision: number): Promise<ProjectSnapshot>;
 }
-type CommandOwner = 'annotations' | 'masks' | 'playback';
+type CommandOwner = 'annotations' | 'masks' | 'playback' | `media:${string}`;
 type QueuedCommand = (
   | { kind: 'change'; change: Change; draftKey?: string; draft?: string }
   | { kind: 'undo' | 'redo' }) & { owner?: CommandOwner };

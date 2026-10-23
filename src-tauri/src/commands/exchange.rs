@@ -255,6 +255,11 @@ pub fn import_exchange(
             let opened = info(&new);
             state.3.reset();
             media.reset();
+            state
+                .5
+                .lock()
+                .map_err(|_| AppError::invalid("扫描服务不可用"))?
+                .reset();
             state.2.scheduler.reset();
             *current = Some(new);
             Ok((imported.path.to_string_lossy().into_owned(), Some(opened)))

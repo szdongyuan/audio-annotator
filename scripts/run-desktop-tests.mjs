@@ -20,7 +20,7 @@ const paths = {
   '导入标注文件或完整项目包': [path.join(output,'share.json'),path.join(output,'share.zip')],
   '选择新项目的存放位置 · 将创建独立子文件夹': [output,output],
 };
-const report = { method: 'Selenium → official tauri-driver → matching Microsoft EdgeDriver → actual Tauri executable. Only native picker return paths are preselected in the e2e feature; all edits use WebDriver pointer/keyboard actions. Native listening and physical picker interaction remain manual.', checks: [], output };
+const report = { method: 'Selenium → official tauri-driver → matching Microsoft EdgeDriver → actual Tauri executable. Native picker paths are preselected in the e2e feature; UI workflows use WebDriver pointer/keyboard. Folder-scan separately tests native IPC contracts; targeted transport/Channel failure injections are identified in suite reports. No store mutation substitutes for UI acceptance. Subjective listening and physical picker interaction are separate release checks.', checks: [], output };
 let h;
 try {
   h = await start(paths, output);
@@ -29,4 +29,15 @@ try {
   for (const [name, run] of [['restart',restartFlow],['sharing',sharingFlow],['recovery',recoveryFlow]]) { console.log(`Running ${name}`); await run(h,context); report.checks.push({name,passed:true}); console.log(`PASS ${name}`); }
 } catch(error) { report.error = error.stack; await h?.screenshot('failure').catch(()=>{}); console.error(error); process.exitCode=1; }
 finally { await h?.quit().catch(()=>{}); await fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2)); console.log(JSON.stringify(report,null,2)); }
+// Each suite owns a fresh process and retires it before the next acquires the ports.
+// Keep the six original phases above, including a full process restart and 300-view churn.
+if (!process.exitCode) {
+  for (const suite of ['selection-flow', 'rulers-flow', 'compact-layout', 'classification-flow', 'folder-scan', 'folder-flow', 'feedback-flow', 'format-flow']) {
+    console.log(`Running ${suite}`);
+    const result = spawnSync(process.execPath, [`tests/desktop/${suite}.test.mjs`], { stdio: 'inherit', windowsHide: true });
+    report.checks.push({ name: suite, passed: result.status === 0 });
+    await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
+    if (result.status !== 0) { process.exitCode = 1; break; }
+  }
+}
 

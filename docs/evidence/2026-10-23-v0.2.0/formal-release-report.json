@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-23",
+  "method": "Normal release exe after complete NSIS build; owned Windows UIAutomation locators and real Win32 pointer/keyboard. Actual native folder/open/save dialogs; WM_SETTEXT fills their native edit controls, followed by actual button click. No e2e feature, injected picker return, test IPC, store mutation, or remote debugging.",
+  "source": {
+    "file": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task8-release\\formal-flow\\audio\\formal-stereo.wav",
+    "rate": 48000,
+    "channels": 2,
+    "seconds": 12,
+    "bytes": 2304044,
+    "sha256": "0e671c8188c832cd36f45e87df34dcc4b60a77f669bd036f5f48bf0c49cd2ce0"
+  },
+  "sourceSha256After": "0e671c8188c832cd36f45e87df34dcc4b60a77f669bd036f5f48bf0c49cd2ce0",
+  "runtime": {
+    "pid": 48056,
+    "productVersion": "0.2.0",
+    "executable": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\target\\release\\annotator-desktop.exe",
+    "appVolume": 0.05000000074505806,
+    "exeSignature": "NotSigned",
+    "debugArgumentCount": 0,
+    "ownedProcessIds": [
+      48056,
+      46528,
+      42352,
+      360,
+      47352,
+      46816,
+      40180
+    ],
+    "installerSignature": "NotSigned",
+    "fileVersion": "0.2.0"
+  },
+  "production": {
+    "normalConfig": true,
+    "version": "0.2.0",
+    "webviewInstallMode": {
+      "type": "offlineInstaller",
+      "silent": true
+    },
+    "absentTestMarkers": [
+      "ANNOTATOR_E2E_PATHS",
+      "No preselected e2e picker path",
+      "--remote-debugging-port=9235"
+    ],
+    "resources": {
+      "../licenses/": "licenses/",
+      "../docs/user-guide.md": "user-guide.md",
+      "../docs/third-party.md": "third-party.md"
+    },
+    "artifacts": [
+      {
+        "file": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\target\\release\\annotator-desktop.exe",
+        "bytes": 14380544,
+        "sha256": "0ad24b0d10989b9ad10031a8c0af3a24f548d5be4a9c0ebb5a8be8c6cb568afe"
+      },
+      {
+        "file": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\target\\release\\bundle\\nsis\\Audio Annotator_0.2.0_x64-setup.exe",
+        "bytes": 221422008,
+        "sha256": "3906e833dd2e4c28977ffe575e6bda244de830619f2114499bf3677dd61ef49d"
+      }
+    ]
+  },
+  "playback": [
+    {
+      "mode": "original",
+      "counters": "48000 Hz · 已提交 71136 帧 · 欠载 0"
+    },
+    {
+      "mode": "processed",
+      "counters": "48000 Hz · 已提交 77376 帧 · 欠载 0"
+    }
+  ],
+  "checks": {
+    "realCreateFolderPicker": true,
+    "realImportFolderPicker": true,
+    "pointerRectangleAndRightClickCategory": true,
+    "independentFileChannelRegionCategoriesAndNotes": true,
+    "originalAndProcessedSelectionNativeOutput": true,
+    "deleteCreatesMatchingMask": true,
+    "v2SaveAndNativeReopen": true,
+    "jsonFullSemanticExport": true,
+    "sourceBytesUnchanged": true
+  },
+  "document": {
+    "revision": 11,
+    "media": 1,
+    "annotations": 1,
+    "masks": 1,
+    "categories": [
+      "文件类",
+      "通道类",
+      "区域类"
+    ]
+  },
+  "share": {
+    "bytes": 2724,
+    "sha256": "0c88e7db0bb7888615dba7fdfa144f8cb93e6682b609bc41f4d4bfc81eda2867"
+  },
+  "limitations": [
+    "Subjective human listening not performed",
+    "Actual Windows125% system scaling not verified",
+    "Clean offline machine install/uninstall and physical exFAT not tested",
+    "Unsigned exe and installer"
+  ]
+}

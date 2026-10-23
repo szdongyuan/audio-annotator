@@ -32,8 +32,8 @@ const record = (item: Check): Check => (v) => { for (const [key, value] of Objec
 const channel: Check = (v) => { integer(v); check((v as number) <= 5); };
 const regionShape = shape({ mediaId: uuid, channelIndex: channel, startSeconds: finite, endSeconds: finite, lowHz: finite, highHz: finite });
 const region: Check = (v) => { regionShape(v); const r = v as Region; check(r.startSeconds >= 0 && r.startSeconds < r.endSeconds && r.lowHz >= 0 && r.lowHz < r.highHz); };
-const mediaShape = shape({ id: uuid, displayName: nonempty, sourceRef: nonempty, sha256: (v) => { text(v); check(/^[0-9a-f]{64}$/.test(v as string)); }, byteLength: positive, sampleRate: positive, frameCount: positive, channelCount: positive, channelLayout: nullable(array(text)), note: text, channelNotes: array(text) });
-const media: Check = (v) => { mediaShape(v); const m = v as MediaDescriptor; check(m.channelCount <= 6 && m.sampleRate <= 0xffffffff && m.channelNotes.length === m.channelCount && (m.channelLayout === null || m.channelLayout.length === m.channelCount)); };
+const mediaShape = shape({ id: uuid, displayName: nonempty, sourceRef: nonempty, sha256: (v) => { text(v); check(/^[0-9a-f]{64}$/.test(v as string)); }, byteLength: positive, sampleRate: positive, frameCount: positive, channelCount: positive, channelLayout: nullable(array(text)), note: text, channelNotes: array(text), categoryId: nullable(uuid), channelCategoryIds: array(nullable(uuid)) });
+const media: Check = (v) => { mediaShape(v); const m = v as MediaDescriptor; check(m.channelCount <= 6 && m.sampleRate <= 0xffffffff && m.channelNotes.length === m.channelCount && m.channelCategoryIds.length === m.channelCount && (m.channelLayout === null || m.channelLayout.length === m.channelCount)); };
 const category = shape({ id: uuid, name: nonempty, color: (v) => { text(v); check(/^#[0-9a-fA-F]{6}$/.test(v as string)); } });
 const annotation = shape({ id: uuid, region, categoryId: nullable(uuid), note: text, createdAt: utc, updatedAt: utc });
 const edit = shape({ id: uuid, region, enabled: bool, processingVersion: oneOf(1) });
@@ -44,8 +44,8 @@ const analysis: Check = (v) => {
 };
 const mix = shape({ soloChannels: array(channel), mutedChannels: array(channel) });
 const view = shape({ visibleChannels: array(channel), startSeconds: finite, endSeconds: finite, lowHz: finite, highHz: finite, frequencyMix: finite, spectrumKind: oneOf('stft', 'mel'), gainDb: finite, dynamicRangeDb: finite, palette: nonempty });
-const viewState = shape({ media: record(view), activeMediaId: nullable(uuid), compareMediaId: nullable(uuid), linkedTime: bool });
-const project = shape({ formatVersion: oneOf(1), projectId: uuid, name: nonempty, revision: integer, createdAt: utc, updatedAt: utc, media: array(media), categories: array(category), annotations: array(annotation), edits: array(edit), analysis: record(analysis), playbackMix: record(mix), viewState, algorithmVersions: shape({ analysis: oneOf(1), dsp: oneOf(1) }) });
+const viewState = shape({ media: record(view), activeMediaId: nullable(uuid), compareMediaId: nullable(uuid), linkedTime: bool, compareLayout: oneOf('horizontal', 'vertical'), compareSplit: (v) => { finite(v); check((v as number) >= .25 && (v as number) <= .75); } });
+const project = shape({ formatVersion: oneOf(2), projectId: uuid, name: nonempty, revision: integer, createdAt: utc, updatedAt: utc, media: array(media), categories: array(category), annotations: array(annotation), edits: array(edit), analysis: record(analysis), playbackMix: record(mix), viewState, algorithmVersions: shape({ analysis: oneOf(1), dsp: oneOf(1) }) });
 const unique = (values: unknown[]) => check(new Set(values).size === values.length, 'Duplicate values');
 const dates = (v: { createdAt: string; updatedAt: string }) => check(Date.parse(v.createdAt) <= Date.parse(v.updatedAt));
 function regionInMedia(r: Region, source: MediaDescriptor | undefined) {
@@ -61,6 +61,7 @@ export function parseProjectDocument(value: unknown): ProjectDocument {
   unique(d.categories.map((c) => c.name.trim()));
   const sources = new Map(d.media.map((m) => [m.id, m]));
   for (const a of d.annotations) { dates(a); regionInMedia(a.region, sources.get(a.region.mediaId)); check(a.categoryId === null || d.categories.some((c) => c.id === a.categoryId)); }
+  for (const m of d.media) for (const id of [m.categoryId, ...m.channelCategoryIds]) check(id === null || d.categories.some(c => c.id === id));
   for (const e of d.edits) regionInMedia(e.region, sources.get(e.region.mediaId));
   for (const m of d.media) check(Object.hasOwn(d.analysis, m.id) && Object.hasOwn(d.playbackMix, m.id));
   for (const id of Object.keys(d.analysis)) check(sources.has(id));
@@ -90,6 +91,8 @@ export function parseAppError(value: unknown): AppError {
 }
 const changeFields: Record<Change['type'], Record<string, Check>> = {
   importMedia: { media }, relinkMedia: { media }, removeMedia: { mediaId: uuid },
+  setMediaCategory: { mediaId: uuid, categoryId: nullable(uuid) },
+  setChannelCategory: { mediaId: uuid, channelIndex: channel, categoryId: nullable(uuid) },
   updateMediaNote: { mediaId: uuid, note: text, mergeKey: nullable(text) },
   updateChannelNote: { mediaId: uuid, channelIndex: channel, note: text, mergeKey: nullable(text) },
   updateAnnotationNote: { id: uuid, note: text, mergeKey: nullable(text) },

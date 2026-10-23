@@ -1,0 +1,81 @@
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
+import { AppMenu } from './AppMenu';
+import { CompareSplitter } from '../features/spectrogram/CompareSplitter';
+import { useWorkspace } from '../features/spectrogram/useWorkspace';
+import fixture from '../../tests/fixtures/document-v2.json';
+import { parseProjectDocument } from '../bridge/types';
+import { ProjectStore } from './store';
+import { CommandQueue, type ProjectCommands } from './commands';
+import { ProjectLifecycle } from '../features/project/lifecycle';
+it('opens keyboard menus, skips disabled actions, shields shortcuts and returns focus', () => {
+ const save=vi.fn(), blocked=vi.fn(), global=vi.fn(); window.addEventListener('keydown',global);
+ render(<AppMenu owner={null} menus={[{id:'file',label:'文件',items:[{id:'blocked',label:'禁止',disabled:true,action:blocked},{id:'save',label:'保存',action:save}]}]} />);
+ const trigger=screen.getByRole('menuitem',{name:'文件'}); trigger.focus(); fireEvent.keyDown(trigger,{key:'ArrowDown'});
+ expect(screen.getByRole('menuitem',{name:'保存'})).toHaveFocus(); global.mockClear(); fireEvent.keyDown(document.activeElement!,{key:'Delete'}); expect(global).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('menuitem',{name:'禁止'})); expect(blocked).not.toHaveBeenCalled();
+ fireEvent.keyDown(document.activeElement!,{key:'Enter'}); expect(save).toHaveBeenCalledOnce(); expect(trigger).toHaveFocus();
+ window.removeEventListener('keydown',global);
+});
+it('clamps splitter keyboard changes and changes keyboard axis with orientation',()=>{
+ const change=vi.fn(); const {rerender}=render(<CompareSplitter layout="horizontal" value={.74} disabled={false} onChange={change}/>);
+ fireEvent.keyDown(screen.getByRole('separator'),{key:'ArrowRight'}); expect(change).toHaveBeenLastCalledWith(.75);
+ rerender(<CompareSplitter layout="vertical" value={.26} disabled={false} onChange={change}/>);
+ fireEvent.keyDown(screen.getByRole('separator'),{key:'ArrowUp'}); expect(change).toHaveBeenLastCalledWith(.25);
+ rerender(<CompareSplitter layout="vertical" value={.26} disabled onChange={change}/>);
+ fireEvent.keyDown(screen.getByRole('separator'),{key:'End'}); expect(change).toHaveBeenCalledTimes(2);
+});
+it('persists layout and bounded split through view draft save and reopen without content undo',async()=>{
+ const store=new ProjectStore({document:parseProjectDocument(fixture),canUndo:false,canRedo:false});
+ const apply=vi.fn<ProjectCommands['applyChange']>(async(_id,revision,change)=>({...store.snapshot,document:{...store.snapshot.document,revision:revision+1,...(change.type==='updateViewState'?{viewState:change.viewState}:{})}}));
+ const queue=new CommandQueue(store,{applyChange:apply} as unknown as ProjectCommands);
+ const lifecycle=new ProjectLifecycle(store,queue,{save:async(_,r)=>r,close:vi.fn()}); const active={store,queue,lifecycle,path:'project'};
+ const hook=renderHook(()=>useWorkspace(active,fixture.media[0].id)); expect(hook.result.current.state.compareLayout).toBe('horizontal');
+ act(()=>{hook.result.current.split(.9);hook.result.current.layout('vertical');}); expect(hook.result.current.state.compareSplit).toBe(.75);
+ await act(()=>lifecycle.save()); expect(store.snapshot.canUndo).toBe(false);expect(apply).toHaveBeenCalledTimes(1);
+ hook.unmount(); const reopened=renderHook(()=>useWorkspace(active,fixture.media[0].id)); expect(reopened.result.current.state).toMatchObject({compareLayout:'vertical',compareSplit:.75});
+ const release=store.beginTransition(); act(()=>reopened.result.current.split(.2)); expect(reopened.result.current.state.compareSplit).toBe(.75); release();
+ reopened.unmount(); lifecycle.dispose();
+});
+it('navigates between top menus and restores the active trigger',()=>{
+ render(<AppMenu owner={null} menus={[{id:'file',label:'文件',items:[{id:'one',label:'一',action:vi.fn()}]},{id:'view',label:'视图',items:[{id:'two',label:'二',action:vi.fn()}]}]}/>);
+ fireEvent.click(screen.getByRole('menuitem',{name:'文件'}));fireEvent.keyDown(document.activeElement!,{key:'ArrowRight'});expect(screen.getByRole('menuitem',{name:'二'})).toHaveFocus();
+ fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('menuitem',{name:'视图'})).toHaveFocus();
+});
+it('closes an open menu immediately when its owner enters a save/close barrier',()=>{
+ const store=new ProjectStore({document:parseProjectDocument(fixture),canUndo:false,canRedo:false});const action=vi.fn();
+ const owner={store} as Parameters<typeof AppMenu>[0]['owner'];
+ render(<AppMenu owner={owner} menus={[{id:'edit',label:'编辑',items:[{id:'mask',label:'屏蔽选区',action}]}]}/>);
+ fireEvent.click(screen.getByRole('menuitem',{name:'编辑'}));let release=()=>{};act(()=>{release=store.beginTransition();});expect(screen.queryByRole('menu')).not.toBeInTheDocument();expect(action).not.toHaveBeenCalled();release();
+});
+import { workspaceMenus } from './WorkspaceActions';
+import { useSelection } from '../features/selection/useSelection';
+import { useAnnotations } from '../features/annotations/useAnnotations';
+import { usePlayback } from '../features/playback/usePlayback';
+import type { ProjectLifecycleUI } from '../features/project/useProjectLifecycle';
+import type { MediaUI } from '../features/media/useMedia';
+it('binds the six menus to lifecycle and shared durable selection actions; barriers disable them',async()=>{
+ const store=new ProjectStore({document:{...parseProjectDocument(fixture),annotations:[],edits:[]},canUndo:false,canRedo:false});
+ const apply=vi.fn<ProjectCommands['applyChange']>(async(_id,revision,change)=>({...store.snapshot,document:{...store.snapshot.document,revision:revision+1,...(change.type==='addAnnotation'?{annotations:[change.annotation]}:{}),...(change.type==='updateViewState'?{viewState:change.viewState}:{})}}));
+ const queue=new CommandQueue(store,{applyChange:apply} as unknown as ProjectCommands);const lifecycle=new ProjectLifecycle(store,queue,{save:async(_,r)=>r,close:vi.fn()});const active={store,queue,lifecycle,path:'project'};
+ const open=vi.fn(),save=vi.fn(),help=vi.fn(),focusNote=vi.fn();const project={active,busy:false,recovery:null,open,save} as unknown as ProjectLifecycleUI;
+ const media=store.snapshot.document.media[0],mediaUI={selected:media,selectedId:media.id,disabled:false,statuses:[{mediaId:media.id,status:'ready'}],choose:vi.fn()} as unknown as MediaUI;
+ const hook=renderHook(()=>{const selection=useSelection(active,media.id),workspace=useWorkspace(active,media.id),annotations=useAnnotations(active,selection),playback=usePlayback(active,media.id,selection.selection?.region);return{selection,menus:workspaceMenus({project,mediaUI,selection,workspace,annotations,playback,mediaOpen:true,propertiesOpen:true,toggleMedia:vi.fn(),toggleProperties:vi.fn(),settings:vi.fn(),inspector:vi.fn(),help,focusNote})};});
+ expect(hook.result.current.menus.map(m=>m.label)).toEqual(['文件','编辑','视图','标注','音频','帮助']);
+ const item=(menu:string,id:string)=>hook.result.current.menus.find(m=>m.id===menu)!.items.find(i=>i.id===id)!;
+ item('file','new').action!();item('file','save').action!();expect(open).toHaveBeenCalledWith('create');expect(save).toHaveBeenCalledOnce();
+ expect(item('annotation','category').disabled).toBe(true);expect(item('audio','mask').disabled).toBe(true);
+ act(()=>hook.result.current.selection.state.select({region:{mediaId:media.id,channelIndex:0,startSeconds:.01,endSeconds:.05,lowHz:100,highHz:1000},object:null}));
+ const captured=item('annotation','note');expect(captured.disabled).toBe(false);await act(async()=>{captured.action!();await lifecycle.submitDrafts();});
+ expect(store.snapshot.document.annotations).toHaveLength(1);expect(focusNote).toHaveBeenCalledWith(store.snapshot.document.annotations[0].id);
+ let release=()=>{};act(()=>{release=store.beginTransition();});hook.rerender();expect(item('annotation','note').disabled).toBe(true);expect(item('audio','mask').disabled).toBe(true);expect(item('view','settings').disabled).toBe(true);
+ captured.action!();await act(async()=>{});expect(store.snapshot.document.annotations).toHaveLength(1);release();hook.unmount();lifecycle.dispose();
+});
+it('zooms out the short linked comparison tail using the displayed pair duration',()=>{
+ const doc=parseProjectDocument(fixture),long={...doc.media[0],frameCount:doc.media[0].sampleRate*20},short={...doc.media[0],id:'short',frameCount:doc.media[0].sampleRate/10};doc.media=[long,short];
+ const patch=vi.fn(),view={...doc.viewState.media[long.id],startSeconds:5,endSeconds:10,lowHz:100,highHz:1000,frequencyMix:.65,spectrumKind:'stft',visibleChannels:[0,1]};
+ const menus=workspaceMenus({project:{active:{store:{snapshot:{document:doc},editingDisabled:false}}},mediaUI:{selectedId:long.id,statuses:[]},selection:{selection:null,context:{mediaId:short.id}},workspace:{state:{activeMediaId:long.id,compareMediaId:short.id,linkedTime:true},view:()=>view,patch},annotations:{},playback:{options:{}},toggleMedia:vi.fn(),toggleProperties:vi.fn(),settings:vi.fn(),inspector:vi.fn(),help:vi.fn(),focusNote:vi.fn()} as unknown as Parameters<typeof workspaceMenus>[0]);
+ menus.find(m=>m.id==='view')!.items.find(i=>i.id==='out')!.action!();
+ expect(patch).toHaveBeenLastCalledWith(short.id,expect.objectContaining({startSeconds:2.5,endSeconds:12.5}));
+ menus.find(m=>m.id==='view')!.items.find(i=>i.id==='reset')!.action!();expect(patch).toHaveBeenLastCalledWith(short.id,expect.objectContaining({startSeconds:0,endSeconds:10}));
+});

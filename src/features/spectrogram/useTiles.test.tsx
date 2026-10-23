@@ -2,7 +2,7 @@
 import { afterEach, it, expect, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { webcrypto } from 'node:crypto';
-import fixture from '../../../tests/fixtures/document-v1.json';
+import fixture from '../../../tests/fixtures/document-v2.json';
 import { ProjectStore } from '../../app/store';
 import { mediaClient } from '../../bridge/media';
 import { parseProjectDocument } from '../../bridge/types';

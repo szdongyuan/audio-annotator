@@ -20,13 +20,14 @@ fn root() -> PathBuf {
     p
 }
 fn document() -> ProjectDocument {
-    ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v1.json")).unwrap()
+    ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json")).unwrap()
 }
 #[test]
 fn json_preserves_all_semantics_without_source_paths_and_imports_missing_media() {
     let r = root();
     let mut d = document();
     d.media[0].source_ref = "C:/private/source.wav".into();
+    classify(&mut d);
     let p = r.join("notes.annotations.json");
     let cancel = AtomicBool::new(false);
     export_annotations(&d, &p, &cancel, Limits::default(), |_, _| {}).unwrap();
@@ -68,7 +69,7 @@ fn rejects_unknown_versions_fields_dangling_references_and_bounds() {
     for (pointer, value, expected) in [
         (
             "/formatVersion",
-            serde_json::json!(2),
+            serde_json::json!(3),
             ErrorCode::UnsupportedVersion,
         ),
         (
@@ -127,6 +128,7 @@ fn real_document(r: &Path) -> ProjectDocument {
 fn zip_roundtrip_matches_every_semantic_field_and_original_bytes() {
     let r = root();
     let mut d = real_document(&r);
+    classify(&mut d);
     let p = r.join("full.audioproj.zip");
     let cancel = AtomicBool::new(false);
     let hash = fingerprint(Path::new(&d.media[0].source_ref), &cancel, |_| {}).unwrap();
@@ -289,6 +291,7 @@ fn limits_use_actual_stream_counts_and_cancel_cleans_owned_staging_only() {
 fn export_refuses_changed_missing_and_existing_targets_and_cancel_never_publishes() {
     let r = root();
     let mut d = real_document(&r);
+    classify(&mut d);
     let source = r.join("source.wav");
     fs::copy(&d.media[0].source_ref, &source).unwrap();
     d.media[0].source_ref = source.to_string_lossy().into();
@@ -374,6 +377,7 @@ fn zip_rejects_fingerprint_metadata_unknown_fields_and_unlisted_files() {
 fn source_mutation_during_copy_never_publishes_partial_package() {
     let r = root();
     let mut d = real_document(&r);
+    classify(&mut d);
     let source = r.join("source.wav");
     fs::copy(&d.media[0].source_ref, &source).unwrap();
     d.media[0].source_ref = source.to_string_lossy().into();
@@ -406,6 +410,7 @@ fn source_mutation_during_copy_never_publishes_partial_package() {
 fn bundle_two_formats_reimports_without_validation_cache() {
     let r = root();
     let mut d = real_document(&r);
+    classify(&mut d);
     let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/audio/six.flac");
     let decoded = decode(&file, &r.join("cache"), &AtomicBool::new(false), |_, _| {}).unwrap();
     let m = decoded.descriptor.clone();
@@ -473,5 +478,98 @@ fn zip64_index_is_validated_without_large_test_files() {
             .code,
         ErrorCode::InvalidArchive
     );
+    fs::remove_dir_all(r).unwrap();
+}
+
+fn classify(d: &mut ProjectDocument) {
+    d.media[0].category_id = Some(d.categories[0].id.clone());
+    d.media[0].channel_category_ids[1] = Some(d.categories[0].id.clone());
+    d.view_state.compare_layout = annotator_core::model::CompareLayout::Vertical;
+    d.view_state.compare_split = 0.7;
+}
+#[test]
+fn portable_v2_rejects_missing_nullable_fields_unknown_fields_and_local_paths() {
+    use annotator_core::exchange::Manifest;
+    let current = serde_json::to_value(Manifest::capture(&document(), false).unwrap()).unwrap();
+    {
+        let original = current;
+        for (pointer, key) in [
+            ("/media/0", "channelLayout"),
+            ("/media/0", "mediaPath"),
+            ("/annotations/0", "categoryId"),
+            ("/viewState", "activeMediaId"),
+        ] {
+            let mut bad = original.clone();
+            bad.pointer_mut(pointer)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .remove(key);
+            assert!(Manifest::parse(&serde_json::to_vec(&bad).unwrap(), false).is_err());
+        }
+        for key in ["sourceRef", "typo"] {
+            let mut bad = original.clone();
+            bad["media"][0][key] = serde_json::json!("C:/private.wav");
+            assert!(Manifest::parse(&serde_json::to_vec(&bad).unwrap(), false).is_err());
+        }
+    }
+    let original = serde_json::to_value(Manifest::capture(&document(), false).unwrap()).unwrap();
+    for (pointer, key) in [
+        ("/media/0", "categoryId"),
+        ("/media/0", "channelCategoryIds"),
+        ("/viewState", "compareLayout"),
+        ("/viewState", "compareSplit"),
+    ] {
+        let mut bad = original.clone();
+        bad.pointer_mut(pointer)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove(key);
+        assert!(Manifest::parse(&serde_json::to_vec(&bad).unwrap(), false).is_err());
+    }
+}
+
+#[test]
+fn portable_v1_and_future_versions_are_explicitly_unsupported() {
+    use annotator_core::exchange::Manifest;
+    let mut value: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tests/fixtures/document-v1.json")).unwrap();
+    for media in value["media"].as_array_mut().unwrap() {
+        media.as_object_mut().unwrap().remove("sourceRef");
+        media["mediaPath"] = serde_json::Value::Null;
+    }
+    let r = root();
+    let cancel = AtomicBool::new(false);
+    for version in [1, 3] {
+        value["formatVersion"] = serde_json::json!(version);
+        let bytes = serde_json::to_vec(&value).unwrap();
+        assert_eq!(
+            Manifest::parse(&bytes, false).unwrap_err().code,
+            ErrorCode::UnsupportedVersion
+        );
+        for bundle in [false, true] {
+            let source = r.join(if bundle {
+                "unsupported.zip"
+            } else {
+                "unsupported.json"
+            });
+            if bundle {
+                archive(&source, &[("manifest.json", &bytes)]);
+            } else {
+                fs::write(&source, &bytes).unwrap();
+            }
+            let original = fs::read(&source).unwrap();
+            assert_eq!(
+                import_exchange(&source, &r, &cancel, Limits::default(), |_, _| {})
+                    .unwrap_err()
+                    .code,
+                ErrorCode::UnsupportedVersion
+            );
+            assert_eq!(fs::read(&source).unwrap(), original);
+            fs::remove_file(source).unwrap();
+            assert_eq!(fs::read_dir(&r).unwrap().count(), 0);
+        }
+    }
     fs::remove_dir_all(r).unwrap();
 }

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v1.json';
+import fixture from '../../../tests/fixtures/document-v2.json';
 import { ExportDialog } from './ExportDialog';
 import { ImportDialog } from './ImportDialog';
 import { useProjectLifecycle } from '../project/useProjectLifecycle';

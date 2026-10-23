@@ -1,33 +1,10 @@
 import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { AnnotationOverlay } from './AnnotationOverlay';
-import { AnnotationContext } from './useAnnotations';
-import fixture from '../../../tests/fixtures/document-v1.json';
-import { defaultView } from '../spectrogram/workspace';
-import { parseProjectDocument, type MediaDescriptor } from '../../bridge/types';
+import fixture from '../../../tests/fixtures/document-v2.json';
+import { parseProjectDocument } from '../../bridge/types';
 import { AnnotationInspector } from './AnnotationInspector';
 import { CategoryManager } from './CategoryManager';
 import { AnnotationList } from './AnnotationList';
-const media = fixture.media[0] as MediaDescriptor;
-it('draws via offset CSS pointer positions, commits once on release, Escape cancels preview', () => {
-  vi.stubGlobal('PointerEvent', MouseEvent);
-  const create = vi.fn();
-  const ui = { tool: 'annotate', selectedId: null, cancelVersion: 0, select: vi.fn(), create, mutate: vi.fn(), active: { store: { snapshot: { document: { annotations: [], categories: [] } }, editingDisabled: false } } };
-  const { rerender } = render(<AnnotationContext.Provider value={ui as never}><AnnotationOverlay media={media} channel={0} view={defaultView(media)} /></AnnotationContext.Provider>);
-  const surface = screen.getByLabelText('通道 1 标注图层');
-  vi.spyOn(surface, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100, width: 800, height: 400 } as DOMRect);
-  surface.setPointerCapture = vi.fn();
-  fireEvent.pointerDown(surface, { button: 0, pointerId: 1, clientX: 300, clientY: 200 });
-  fireEvent.pointerMove(surface, { pointerId: 1, clientX: 500, clientY: 300 });
-  expect(create).not.toHaveBeenCalled();
-  fireEvent.pointerUp(surface, { pointerId: 1, clientX: 500, clientY: 300 });
-  expect(create).toHaveBeenCalledTimes(1);
-  expect(create.mock.calls[0][0]).toMatchObject({ mediaId: media.id, channelIndex: 0, startSeconds: .5, endSeconds: 1 });
-  fireEvent.pointerDown(surface, { button: 0, pointerId: 2, clientX: 300, clientY: 200 });
-  rerender(<AnnotationContext.Provider value={{ ...ui, cancelVersion: 1 } as never}><AnnotationOverlay media={media} channel={0} view={defaultView(media)} /></AnnotationContext.Provider>);
-  fireEvent.pointerUp(surface, { pointerId: 2, clientX: 500, clientY: 300 });
-  expect(create).toHaveBeenCalledTimes(1);
-});
 it('displays readable numeric precision without writing rounded geometry on focus or blur', () => {
   const doc = parseProjectDocument(fixture), annotation = { ...doc.annotations[0], region: { ...doc.annotations[0].region, startSeconds: .200000016, lowHz: 469.6729297 } };
   const write = vi.fn(), mutate = vi.fn(), submit = vi.fn(async () => {});
@@ -57,7 +34,7 @@ it('combines category/channel/note filters and locates the exact media and chann
   fireEvent.change(screen.getByLabelText('筛选通道'), { target: { value: '1' } });
   fireEvent.change(screen.getByLabelText('筛选备注'), { target: { value: '区域' } });
   expect(screen.getAllByRole('button')).toHaveLength(1); fireEvent.click(screen.getByRole('button'));
-  expect(onLocate).toHaveBeenCalledWith(a);
+  expect(onLocate).toHaveBeenCalledWith(expect.objectContaining({ scope: 'region', annotation: a }));
   fireEvent.change(screen.getByLabelText('筛选通道'), { target: { value: '0' } });
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });

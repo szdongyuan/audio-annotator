@@ -661,7 +661,7 @@ pub async fn playback_configure(
 mod tests {
     use super::*;
     fn document() -> ProjectDocument {
-        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v1.json"))
+        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json"))
             .unwrap()
     }
     #[test]

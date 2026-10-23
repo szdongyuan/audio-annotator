@@ -1,7 +1,7 @@
 import { it, expect } from 'vitest';
 import { frequencyRows, rasterize } from './renderer';
 import { defaultSettings, defaultView } from './workspace';
-import fixture from '../../../tests/fixtures/document-v1.json';
+import fixture from '../../../tests/fixtures/document-v2.json';
 import type { TileResult } from './tileClient';
 const media = fixture.media[0];
 it('rasterizes raw dB with high frequency at top and blank short-file tail', () => {

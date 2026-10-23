@@ -1,24 +1,30 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { mediaClient, mediaDialogs, type MediaStatus } from '../../bridge/media';
 import { normalizeError } from '../../bridge/client';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import type { AppError, MediaDescriptor } from '../../bridge/types';
 import { MediaImportController } from './imports';
+import { FolderImportController } from './folderImport';
+import { folderClient } from '../../bridge/folders';
 const none = () => () => {};
 const zero = () => 0;
 export function useMedia(active: ActiveProject | null) {
-  const [binding, setBinding] = useState<{ owner: ActiveProject; controller: MediaImportController } | null>(null);
+  const current = useRef(active); current.current = active;
+  const [binding, setBinding] = useState<{ owner: ActiveProject; controller: MediaImportController; folder: FolderImportController } | null>(null);
   const controller = binding?.owner === active ? binding?.controller ?? null : null;
+  const folder = binding?.owner === active ? binding?.folder ?? null : null;
   useSyncExternalStore(controller?.subscribe ?? none, controller?.getVersion ?? zero);
+  useSyncExternalStore(folder?.subscribe ?? none, folder?.getVersion ?? zero);
   const [statuses, setStatuses] = useState<MediaStatus[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [relink, setRelink] = useState<MediaDescriptor | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   useEffect(() => {
-    const next = active ? new MediaImportController(active.store, active.queue, mediaClient) : null;
-    setBinding(active && next ? { owner: active, controller: next } : null);
+    const next = active ? new MediaImportController(active.store, active.queue, mediaClient, active.lifecycle) : null;
+    const nextFolder = active && next ? new FolderImportController(active, next, folderClient) : null;
+    setBinding(active && next && nextFolder ? { owner: active, controller: next, folder: nextFolder } : null);
     setStatuses([]); setSelectedId(active?.store.snapshot.document.viewState.activeMediaId ?? null); setRelink(null); setError(null);
-    return () => next?.dispose();
+    return () => { nextFolder?.dispose(); next?.dispose(); };
   }, [active]);
   const sourceKey = active?.store.snapshot.document.media.map(m => `${m.id}:${m.sha256}:${m.sourceRef}`).join('|');
   useEffect(() => {
@@ -35,20 +41,24 @@ export function useMedia(active: ActiveProject | null) {
     return () => { disposed = true; clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [active, sourceKey, controller?.busy]);
   const choose = async (target?: MediaDescriptor) => {
-    if (!active || !controller || active.store.editingDisabled || controller.busy) return;
+    if (!active || !controller || active.store.editingDisabled) return;
+    const reservation = {};
+    if (!controller.reserve(reservation)) return;
     try {
       const paths = await mediaDialogs.choose(!target);
-      if (!paths || active.store.editingDisabled) return;
+      if (!paths || current.current !== active || active.store.editingDisabled) return;
       setRelink(null); setError(null);
-      await controller.start(Array.isArray(paths) ? paths : [paths], target?.id);
-    } catch (e) { setError(normalizeError(e)); }
+      await controller.start(Array.isArray(paths) ? paths : [paths], target?.id, reservation);
+    } catch (e) { if (current.current === active) setError(normalizeError(e)); }
+    finally { controller.unreserve(reservation); }
   };
   const media = active?.store.snapshot.document.media ?? [];
   const selected = media.find(m => m.id === selectedId) ?? media.find(m => m.id === active?.store.snapshot.document.viewState.activeMediaId) ?? media[0] ?? null;
-  return { controller, statuses, selected, selectedId: selected?.id ?? null, setSelectedId, relink, setRelink, error,
-    disabled: !active || !controller || active.store.editingDisabled || controller.busy,
+  return { controller, folder, statuses, selected, selectedId: selected?.id ?? null, setSelectedId, relink, setRelink, error,
+    disabled: !active || !controller || active.store.editingDisabled || controller.occupied,
+    chooseFolder: () => { folder?.begin(); },
     choose: () => void choose(), chooseRelink: () => void choose(relink ?? undefined),
-    verify: () => { if (relink && controller && !active?.store.editingDisabled) { const target = relink; setRelink(null); void controller.start([target.sourceRef], target.id).catch(e => setError(normalizeError(e))); } },
+    verify: () => { if (relink && controller && !controller.occupied && !active?.store.editingDisabled) { const target = relink; setRelink(null); void controller.start([target.sourceRef], target.id).catch(e => { if (current.current === active) setError(normalizeError(e)); }); } },
   };
 }
 export type MediaUI = ReturnType<typeof useMedia>;

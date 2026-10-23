@@ -4,6 +4,26 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CompareLayout {
+    #[default]
+    Horizontal,
+    Vertical,
+}
+impl Default for ViewState {
+    fn default() -> Self {
+        Self {
+            media: BTreeMap::new(),
+            active_media_id: None,
+            compare_media_id: None,
+            linked_time: false,
+            compare_layout: CompareLayout::Horizontal,
+            compare_split: 0.5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ViewState {
     pub media: BTreeMap<String, MediaView>,
@@ -12,6 +32,8 @@ pub struct ViewState {
     #[serde(deserialize_with = "super::required_nullable")]
     pub compare_media_id: Option<String>,
     pub linked_time: bool,
+    pub compare_layout: CompareLayout,
+    pub compare_split: f64,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -42,7 +64,7 @@ impl ProjectDocument {
     pub fn create(name: String) -> Result<Self> {
         let now = now();
         let doc = Self {
-            format_version: 1,
+            format_version: 2,
             project_id: uuid::Uuid::new_v4().to_string(),
             name,
             revision: 0,
@@ -67,7 +89,7 @@ impl ProjectDocument {
         let value: serde_json::Value =
             serde_json::from_str(json).map_err(|_| AppError::invalid("Invalid project JSON"))?;
         match value.get("formatVersion").and_then(|v| v.as_u64()) {
-            Some(1) => (),
+            Some(2) => (),
             Some(_) => {
                 return Err(AppError::new(
                     ErrorCode::UnsupportedVersion,

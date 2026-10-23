@@ -70,7 +70,7 @@ pub fn validate_region(region: &Region, media: &[MediaDescriptor]) -> Result<()>
     )
 }
 pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
-    if doc.format_version != 1
+    if doc.format_version != 2
         || doc.algorithm_versions.analysis != 1
         || doc.algorithm_versions.dsp != 1
     {
@@ -127,6 +127,7 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
         )?;
         require(
             media.channel_notes.len() == media.channel_count as usize
+                && media.channel_category_ids.len() == media.channel_count as usize
                 && media
                     .channel_layout
                     .as_ref()
@@ -134,6 +135,22 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
             "Channel metadata length mismatch",
         )?;
     }
+    for media in &doc.media {
+        for category in std::iter::once(&media.category_id)
+            .chain(&media.channel_category_ids)
+            .flatten()
+        {
+            require(
+                doc.categories.iter().any(|c| &c.id == category),
+                "Unknown category reference",
+            )?;
+        }
+    }
+    require(
+        doc.view_state.compare_split.is_finite()
+            && (0.25..=0.75).contains(&doc.view_state.compare_split),
+        "Invalid comparison split",
+    )?;
     let mut names = HashSet::new();
     for category in &doc.categories {
         require(

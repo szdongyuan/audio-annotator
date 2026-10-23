@@ -11,7 +11,9 @@ pub use media::*;
 pub use project::*;
 
 // Nullable is distinct from missing in the versioned wire contract.
-fn required_nullable<'de, D, T>(deserializer: D) -> std::result::Result<Option<T>, D::Error>
+pub(crate) fn required_nullable<'de, D, T>(
+    deserializer: D,
+) -> std::result::Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
     T: serde::Deserialize<'de>,

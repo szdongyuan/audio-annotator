@@ -1,0 +1,265 @@
+{
+  "method": "Owned native Tauri process, official tauri-driver and EdgeDriver; native picker paths only use the e2e feature. Edits use WebDriver pointer/keyboard.",
+  "output": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task2-selection",
+  "evidence": {
+    "played": [
+      {
+        "label": "原始选区",
+        "status": {
+          "consumedFrames": 5376,
+          "deviceChannels": 2,
+          "deviceName": "Headphones (High Definition Audio Device)",
+          "deviceRate": 48000,
+          "endSeconds": 0.08997916666666667,
+          "error": null,
+          "firstSeconds": 0.0650625,
+          "generation": 5,
+          "mediaId": "dabbc0a7-9c37-4b74-af15-89b30ac7ac8c",
+          "positionSeconds": 0.07739583333333333,
+          "presentation": {
+            "callbackNanos": 89743900,
+            "drained": false,
+            "pendingTailFrames": 1056,
+            "ringExhausted": false,
+            "ringExhaustedNanos": null,
+            "scheduledFrames": 5376,
+            "tailNanos": 111743900,
+            "tailNonSilent": true
+          },
+          "projectId": "ea1146ee-10ee-4214-ad42-0927b0d620bc",
+          "startSeconds": 0.0650625,
+          "state": "playing",
+          "underrunFrames": 0
+        }
+      },
+      {
+        "label": "处理后选区",
+        "status": {
+          "consumedFrames": 4896,
+          "deviceChannels": 2,
+          "deviceName": "Headphones (High Definition Audio Device)",
+          "deviceRate": 48000,
+          "endSeconds": 0.08997916666666667,
+          "error": null,
+          "firstSeconds": 0.0650625,
+          "generation": 7,
+          "mediaId": "dabbc0a7-9c37-4b74-af15-89b30ac7ac8c",
+          "positionSeconds": 0.06739583333333334,
+          "presentation": {
+            "callbackNanos": 80106000,
+            "drained": false,
+            "pendingTailFrames": 1056,
+            "ringExhausted": false,
+            "ringExhaustedNanos": null,
+            "scheduledFrames": 4896,
+            "tailNanos": 102106000,
+            "tailNonSilent": true
+          },
+          "projectId": "ea1146ee-10ee-4214-ad42-0927b0d620bc",
+          "startSeconds": 0.0650625,
+          "state": "playing",
+          "underrunFrames": 0
+        }
+      }
+    ],
+    "comparePlayback": {
+      "consumedFrames": 5376,
+      "deviceChannels": 2,
+      "deviceName": "Headphones (High Definition Audio Device)",
+      "deviceRate": 48000,
+      "endSeconds": 0.06,
+      "error": null,
+      "firstSeconds": 0.020020833333333335,
+      "generation": 10,
+      "mediaId": "11f5fd67-ed49-4e76-a0f6-385fbd3c89c6",
+      "positionSeconds": 0.0520625,
+      "presentation": {
+        "callbackNanos": 90009400,
+        "drained": false,
+        "pendingTailFrames": 1056,
+        "ringExhausted": false,
+        "ringExhaustedNanos": null,
+        "scheduledFrames": 5376,
+        "tailNanos": 112009400,
+        "tailNonSilent": true
+      },
+      "projectId": "ea1146ee-10ee-4214-ad42-0927b0d620bc",
+      "startSeconds": 0.020020833333333335,
+      "state": "playing",
+      "underrunFrames": 0
+    },
+    "frames": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "class": "annotation-rect    ",
+        "image": "none",
+        "shadow": "none"
+      },
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "class": "annotation-rect  is-selected is-temporary ",
+        "image": "none",
+        "shadow": "none"
+      }
+    ],
+    "menu": [
+      {
+        "bottom": 663,
+        "height": 800,
+        "left": 963,
+        "right": 1153,
+        "top": 429,
+        "width": 1280
+      }
+    ],
+    "nestedMenu": [
+      {
+        "bottom": 663,
+        "height": 800,
+        "left": 963,
+        "right": 1153,
+        "top": 429,
+        "width": 1280
+      },
+      {
+        "bottom": 500,
+        "height": 800,
+        "left": 778,
+        "right": 968,
+        "top": 434,
+        "width": 1280
+      }
+    ],
+    "finalDocument": {
+      "algorithmVersions": {
+        "analysis": 1,
+        "dsp": 1
+      },
+      "analysis": {
+        "11f5fd67-ed49-4e76-a0f6-385fbd3c89c6": {
+          "fftSize": 2048,
+          "hopSize": 512,
+          "melBands": 128,
+          "window": "hann",
+          "windowSize": 2048
+        },
+        "dabbc0a7-9c37-4b74-af15-89b30ac7ac8c": {
+          "fftSize": 2048,
+          "hopSize": 512,
+          "melBands": 128,
+          "window": "hann",
+          "windowSize": 2048
+        }
+      },
+      "annotations": [
+        {
+          "categoryId": null,
+          "createdAt": "2026-10-23T05:18:32.072Z",
+          "id": "a662b800-018c-4540-8aa2-2d7f64a989a4",
+          "note": "右键选区备注",
+          "region": {
+            "channelIndex": 0,
+            "endSeconds": 0.06002865329512894,
+            "highHz": 11484.410667682158,
+            "lowHz": 473.5595795274028,
+            "mediaId": "dabbc0a7-9c37-4b74-af15-89b30ac7ac8c",
+            "startSeconds": 0.02005730659025788
+          },
+          "updatedAt": "2026-10-23T05:18:32.513Z"
+        }
+      ],
+      "categories": [
+        {
+          "color": "#e6a65d",
+          "id": "d192fd6d-aac9-49d1-9401-a194ef30c874",
+          "name": "选区测试"
+        }
+      ],
+      "createdAt": "2026-10-23T05:18:30.743Z",
+      "edits": [
+        {
+          "enabled": true,
+          "id": "a280fa16-2472-4b5a-bab9-b63cd03ea383",
+          "processingVersion": 1,
+          "region": {
+            "channelIndex": 0,
+            "endSeconds": 0.06666666666666667,
+            "highHz": 11444.983206524666,
+            "lowHz": 473.2126974847661,
+            "mediaId": "11f5fd67-ed49-4e76-a0f6-385fbd3c89c6",
+            "startSeconds": 0.02350877192982457
+          }
+        }
+      ],
+      "formatVersion": 2,
+      "media": [
+        {
+          "byteLength": 2541,
+          "categoryId": null,
+          "channelCategoryIds": [
+            null,
+            null
+          ],
+          "channelCount": 2,
+          "channelLayout": [
+            "FRONT_LEFT",
+            "FRONT_RIGHT"
+          ],
+          "channelNotes": [
+            "",
+            ""
+          ],
+          "displayName": "stereo.mp3",
+          "frameCount": 4800,
+          "id": "dabbc0a7-9c37-4b74-af15-89b30ac7ac8c",
+          "note": "",
+          "sampleRate": 48000,
+          "sha256": "a0499c96aeff59c686c320d496c68be8bcdca981753ed943c1cbefcb1868691c",
+          "sourceRef": "\\\\?\\D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\tests\\fixtures\\audio\\stereo.mp3"
+        },
+        {
+          "byteLength": 9644,
+          "categoryId": null,
+          "channelCategoryIds": [
+            null
+          ],
+          "channelCount": 1,
+          "channelLayout": null,
+          "channelNotes": [
+            ""
+          ],
+          "displayName": "mono16.wav",
+          "frameCount": 4800,
+          "id": "11f5fd67-ed49-4e76-a0f6-385fbd3c89c6",
+          "note": "",
+          "sampleRate": 48000,
+          "sha256": "192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e",
+          "sourceRef": "\\\\?\\D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\tests\\fixtures\\audio\\mono16.wav"
+        }
+      ],
+      "name": "project-COloqP",
+      "playbackMix": {
+        "11f5fd67-ed49-4e76-a0f6-385fbd3c89c6": {
+          "mutedChannels": [],
+          "soloChannels": []
+        },
+        "dabbc0a7-9c37-4b74-af15-89b30ac7ac8c": {
+          "mutedChannels": [],
+          "soloChannels": []
+        }
+      },
+      "projectId": "ea1146ee-10ee-4214-ad42-0927b0d620bc",
+      "revision": 15,
+      "updatedAt": "2026-10-23T05:18:39.701Z",
+      "viewState": {
+        "activeMediaId": "dabbc0a7-9c37-4b74-af15-89b30ac7ac8c",
+        "compareLayout": "horizontal",
+        "compareMediaId": "11f5fd67-ed49-4e76-a0f6-385fbd3c89c6",
+        "compareSplit": 0.5,
+        "linkedTime": false,
+        "media": {}
+      }
+    }
+  },
+  "passed": true
+}

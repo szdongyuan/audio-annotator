@@ -2,7 +2,7 @@
 import { afterEach, it, expect, vi } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { webcrypto } from 'node:crypto';
-import fixture from '../../../tests/fixtures/document-v1.json';
+import fixture from '../../../tests/fixtures/document-v2.json';
 import { ProjectStore } from '../../app/store';
 import { parseProjectDocument } from '../../bridge/types';
 import { mediaClient } from '../../bridge/media';
@@ -12,7 +12,7 @@ import { nativeTileTransport, type TileRequest } from './tileClient';
 import { defaultSettings, defaultView, tilePlan } from './workspace';
 import { tileCache } from './tileScheduler';
 import { TileCache } from './tileCache';
-const media = [0, 1].map(index => ({ ...fixture.media[0], id: index ? '00000000-0000-4000-8000-000000000009' : fixture.media[0].id, channelCount: 6, channelLayout: null, channelNotes: Array(6).fill(''), frameCount: 600 * 48000 }));
+const media = [0, 1].map(index => ({ ...fixture.media[0], id: index ? '00000000-0000-4000-8000-000000000009' : fixture.media[0].id, channelCount: 6, channelLayout: null, channelNotes: Array(6).fill(''), channelCategoryIds: Array(6).fill(null), frameCount: 600 * 48000 }));
 const settings = { ...defaultSettings, fftSize: 4096 };
 const view = { ...defaultView(media[0]), lowHz: 6100, highHz: 17800, visibleChannels: [0, 1, 2, 3, 4, 5] };
 function packet(r: TileRequest) {

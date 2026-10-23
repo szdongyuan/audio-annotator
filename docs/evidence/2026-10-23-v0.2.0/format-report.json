@@ -1,0 +1,40 @@
+{
+  "output": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task8-format-P5u8gE",
+  "method": "Actual native v2 save and UI open/import rejection. Only picker results injected. Ordinary open saves/closes the old session before attempting the target; no rollback promise.",
+  "checks": [
+    "native save writes complete format 2",
+    "local format 1 rejected; source bytes unchanged",
+    "portable format 1 rejected; source bytes and current owner preserved",
+    "local format 999 rejected; source bytes unchanged",
+    "portable format 999 rejected; source bytes and current owner preserved"
+  ],
+  "sources": [
+    {
+      "version": 1,
+      "local": {
+        "path": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task8-format-P5u8gE\\local-1\\project.json",
+        "before": "de47b08bac6c30232b60333192b59f296480e9944e5ef781afc5624e893a49e5",
+        "after": "de47b08bac6c30232b60333192b59f296480e9944e5ef781afc5624e893a49e5"
+      },
+      "portable": {
+        "path": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task8-format-P5u8gE\\share-1.json",
+        "before": "02d54ae7ec7c3f6907bff4dbfdbb88b532507821b8211e6bfac24c583c8219e7",
+        "after": "02d54ae7ec7c3f6907bff4dbfdbb88b532507821b8211e6bfac24c583c8219e7"
+      }
+    },
+    {
+      "version": 999,
+      "local": {
+        "path": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task8-format-P5u8gE\\local-999\\project.json",
+        "before": "138e9f822d9f84be6c7de94228a366ecd311bfd911a91186cc4650dfe7e0678e",
+        "after": "138e9f822d9f84be6c7de94228a366ecd311bfd911a91186cc4650dfe7e0678e"
+      },
+      "portable": {
+        "path": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task8-format-P5u8gE\\share-999.json",
+        "before": "f8b4858a0b5376b75598d8df39b1d5201f5316a4bbb3f119c186f26a317f8783",
+        "after": "f8b4858a0b5376b75598d8df39b1d5201f5316a4bbb3f119c186f26a317f8783"
+      }
+    }
+  ],
+  "passed": true
+}

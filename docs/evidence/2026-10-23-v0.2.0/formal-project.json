@@ -1,0 +1,107 @@
+{
+  "formatVersion": 2,
+  "projectId": "dbb00aad-4f1d-43dd-9097-13372d02cb05",
+  "name": "project",
+  "revision": 11,
+  "createdAt": "2026-10-23T05:24:49.903Z",
+  "updatedAt": "2026-10-23T05:27:31.709Z",
+  "media": [
+    {
+      "id": "be5ef1a2-92a7-4a1b-8a69-43e26fa2a687",
+      "displayName": "formal-stereo.wav",
+      "sourceRef": "\\\\?\\D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task8-release\\formal-flow\\audio\\formal-stereo.wav",
+      "sha256": "0e671c8188c832cd36f45e87df34dcc4b60a77f669bd036f5f48bf0c49cd2ce0",
+      "byteLength": 2304044,
+      "sampleRate": 48000,
+      "frameCount": 576000,
+      "channelCount": 2,
+      "channelLayout": null,
+      "note": "正式文件备注",
+      "channelNotes": [
+        "正式通道备注",
+        ""
+      ],
+      "categoryId": "f981ed76-d8ae-49b6-a6c3-9a6a0adf9cd4",
+      "channelCategoryIds": [
+        "38473ab4-e291-4eef-814d-8058ab659e11",
+        null
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "f981ed76-d8ae-49b6-a6c3-9a6a0adf9cd4",
+      "name": "文件类",
+      "color": "#e6a65d"
+    },
+    {
+      "id": "38473ab4-e291-4eef-814d-8058ab659e11",
+      "name": "通道类",
+      "color": "#e6a65d"
+    },
+    {
+      "id": "240dead7-6cc8-4b21-b98d-ac5c7a6533de",
+      "name": "区域类",
+      "color": "#e6a65d"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "2ff0d212-712d-4e0a-b3fa-8f5dcf105705",
+      "region": {
+        "mediaId": "be5ef1a2-92a7-4a1b-8a69-43e26fa2a687",
+        "channelIndex": 0,
+        "startSeconds": 1.4975247524752475,
+        "endSeconds": 5.99009900990099,
+        "lowHz": 14.0644446510807,
+        "highHz": 13803.496174928783
+      },
+      "categoryId": "240dead7-6cc8-4b21-b98d-ac5c7a6533de",
+      "note": "正式区域备注",
+      "createdAt": "2026-10-23T05:27:02.609Z",
+      "updatedAt": "2026-10-23T05:27:03.418Z"
+    }
+  ],
+  "edits": [
+    {
+      "id": "5a899687-20b7-468f-aaea-79625001fa79",
+      "region": {
+        "mediaId": "be5ef1a2-92a7-4a1b-8a69-43e26fa2a687",
+        "channelIndex": 0,
+        "startSeconds": 1.4975247524752475,
+        "endSeconds": 5.99009900990099,
+        "lowHz": 14.0644446510807,
+        "highHz": 13803.496174928783
+      },
+      "enabled": true,
+      "processingVersion": 1
+    }
+  ],
+  "analysis": {
+    "be5ef1a2-92a7-4a1b-8a69-43e26fa2a687": {
+      "window": "hann",
+      "windowSize": 2048,
+      "hopSize": 512,
+      "fftSize": 2048,
+      "melBands": 128
+    }
+  },
+  "playbackMix": {
+    "be5ef1a2-92a7-4a1b-8a69-43e26fa2a687": {
+      "soloChannels": [],
+      "mutedChannels": []
+    }
+  },
+  "viewState": {
+    "media": {},
+    "activeMediaId": null,
+    "compareMediaId": null,
+    "linkedTime": false,
+    "compareLayout": "horizontal",
+    "compareSplit": 0.5
+  },
+  "algorithmVersions": {
+    "analysis": 1,
+    "dsp": 1
+  }
+}

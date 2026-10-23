@@ -14,7 +14,7 @@ const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pen
 const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(JSON.stringify(r.exceptionDetails));return r.result.value;};
 const until=async(exp,label)=>{for(let i=0;i<300;i++){if(await evaluate(`!!(${exp})`))return;await wait(100);}throw new Error(label+': '+await evaluate('document.body.innerText'));};
 const click=async text=>{await evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)}).click()`);await wait(80);};
-const menu=async text=>{await evaluate(`document.querySelector('.project-menu').open=true;[...document.querySelectorAll('.project-menu button')].find(b=>b.textContent.startsWith(${JSON.stringify(text)})).click()`);await wait(80);};
+const menu=async text=>{await evaluate(`(async()=>{document.querySelector('.main-menu button').click();await new Promise(r=>setTimeout(r,30));[...document.querySelectorAll('.app-menu button')].find(b=>b.textContent.startsWith(${JSON.stringify(text)})).click();})()`);await wait(80);};
 const invoke=(name,args)=>evaluate(`window.__TAURI_INTERNALS__.invoke(${JSON.stringify(name)},${JSON.stringify(args)})`);
 const setValue=(selector,value)=>evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(e.tagName==='SELECT'?HTMLSelectElement.prototype:e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
 const screenshot=async name=>{const r=await send('Page.captureScreenshot',{format:'png'});await fs.writeFile(`.test-output/${name}.png`,Buffer.from(r.data,'base64'));};
@@ -43,13 +43,13 @@ try{
  changes.push({type:'updateViewState',viewState:{media:{[a.id]:view(a,0),[b.id]:view(b,1)},activeMediaId:a.id,compareMediaId:b.id,linkedTime:true}});
  for(const change of changes){doc=(await snapshot()).document;await invoke('apply_change',{projectId:currentId,expectedRevision:doc.revision,change});}
  doc=(await snapshot()).document;await invoke('save_project',{projectId:currentId,expectedRevision:doc.revision});await invoke('close_project',{projectId:currentId,expectedRevision:doc.revision,discard:false});
- await evaluate(`(async()=>{const {localProjects}=await import('/src/bridge/projects.ts');localProjects.choose=async()=>${JSON.stringify(original)};[...document.querySelectorAll('button')].find(b=>b.textContent==='打开项目').click();})()`);
+ await evaluate(`(async()=>{const {localProjects}=await import('/src/bridge/projects.ts');localProjects.choose=async()=>${JSON.stringify(original)};document.querySelector('.main-menu button').click();await new Promise(r=>setTimeout(r,30));[...document.querySelectorAll('button')].find(b=>b.textContent==='打开项目…').click();})()`);
  await until(`document.querySelectorAll('canvas').length>=2 && !document.querySelector('.tile-status')`,'source spectrum');
  // Block the actual recovery replacement, then recover through export on the SAME runtime.
  const recovery=path.join(original,'recovery.json'),heldRecovery=path.join(original,'held-recovery.json');
  const blockSave=async()=>{await fs.rename(recovery,heldRecovery);await fs.mkdir(recovery);};
  const restoreSave=async()=>{await fs.rmdir(recovery);await fs.rename(heldRecovery,recovery);};
- await blockSave();await click('保存Ctrl S');await until(`document.querySelector('.save-failed') && document.querySelector('.project-notice')`,'normal save failure');
+ await blockSave();await click('保存');await until(`document.querySelector('.save-failed') && document.querySelector('.project-notice')`,'normal save failure');
  check('native normal Save failure is visible',await evaluate(`!!document.querySelector('.save-failed')`));await restoreSave();
  await exportUI('annotations',path.join(root,'after-save-failure.annotations.json'));
  check('successful export clears normal Save error and status without replacing project',(await snapshot()).document.projectId===currentId&&await evaluate(`!!document.querySelector('.save-saved')&&!document.querySelector('.project-notice')`));
@@ -92,8 +92,8 @@ try{
  await click('关闭');await until(`document.querySelectorAll('canvas').length>=2 && !document.querySelector('.tile-status')`,'bundle spectrum');
  check('bundle relative media rehydrates for real analysis',(await invoke('media_status',{projectId:currentId})).every(s=>s.status==='ready'));
  await screenshot('task10-bundle-1280x800');check('five-zone layout has no horizontal overflow',await evaluate('document.documentElement.scrollWidth<=innerWidth'));
- await click('保存Ctrl S');await menu('关闭项目');await until(`document.querySelector('.project-identity')?.innerText.includes('尚未打开项目')`,'close bundle');
- await evaluate(`(async()=>{const {localProjects}=await import('/src/bridge/projects.ts');localProjects.choose=async()=>${JSON.stringify(bundleRoot)};[...document.querySelectorAll('button')].find(b=>b.textContent==='打开项目').click();})()`);await until(`document.querySelectorAll('canvas').length>=2 && !document.querySelector('.tile-status')`,'reopen bundle');
+ await click('保存');await menu('关闭项目');await until(`document.querySelector('.project-identity')?.innerText.includes('音频标注')`,'close bundle');
+ await evaluate(`(async()=>{const {localProjects}=await import('/src/bridge/projects.ts');localProjects.choose=async()=>${JSON.stringify(bundleRoot)};document.querySelector('.main-menu button').click();await new Promise(r=>setTimeout(r,30));[...document.querySelectorAll('button')].find(b=>b.textContent==='打开项目…').click();})()`);await until(`document.querySelectorAll('canvas').length>=2 && !document.querySelector('.tile-status')`,'reopen bundle');
  check('saved imported project reopens with identical semantics',JSON.stringify(semantic((await snapshot()).document))===JSON.stringify(semantic(doc)));
  const rebound=path.join(root,'reexport.audioproj.zip');await exportUI('bundle',rebound);check('bundle can be reexported from relative sources',(await fs.stat(rebound)).size>1000);
  const saveAs=path.join(root,'save-as');await fs.mkdir(saveAs);await evaluate(`(async()=>{const {localProjects}=await import('/src/bridge/projects.ts');localProjects.choose=async()=>${JSON.stringify(saveAs)};})()`);await menu('项目另存为');await until(`document.querySelector('.project-identity')?.title.endsWith('save-as')`,'save as');
@@ -104,5 +104,5 @@ try{
  check('no owned staging directories remain',!(await fs.readdir(root)).some(n=>n.startsWith('.exchange-')));
  check('no uncaught WebView runtime errors',report.runtimeErrors.length===0,report.runtimeErrors);
  report.passed=true;report.bundleRoot=bundleRoot;report.sourceSemantics=semantic(doc);await fs.writeFile('.test-output/task10-restart-target.json',JSON.stringify({bundleRoot,projectId:currentId,semantics:semantic(doc)}));
- await menu('关闭项目');await until(`document.querySelector('.project-identity')?.innerText.includes('尚未打开项目')`,'final close');
+ await menu('关闭项目');await until(`document.querySelector('.project-identity')?.innerText.includes('音频标注')`,'final close');
 }catch(error){report.error=String(error);console.error(error);process.exitCode=1;await screenshot('task10-failure').catch(()=>{});}finally{await fs.writeFile('.test-output/task10-native-report.json',JSON.stringify(report,null,2));socket.close();}

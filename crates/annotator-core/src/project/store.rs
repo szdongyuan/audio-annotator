@@ -223,9 +223,15 @@ impl FileStore {
     }
     /// An explicit decision to keep the primary suppresses an otherwise recurring offer.
     pub fn keep_primary(&self, document: &ProjectDocument) -> Result<()> {
+        document.validate()?;
+        if document.project_id != self.project_id {
+            return Err(AppError::invalid("项目身份不匹配"));
+        }
+        let bytes = recovery::encode(document)?;
+        check_size(&bytes)?;
         self.publish(
             "recovery.json",
-            &recovery::encode(document)?,
+            &bytes,
             [
                 FaultPoint::RecoveryWrite,
                 FaultPoint::RecoverySync,

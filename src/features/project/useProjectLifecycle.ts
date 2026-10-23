@@ -15,6 +15,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
   const current = useRef<ActiveProject | null>(null);
   const [recovery, setRecovery] = useState<OpenedProject | null>(null);
   const pendingRecovery = useRef(false);
+  const mounted = useRef(true);
   const [error, setError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
   const occupied = useRef(false);
@@ -25,6 +26,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
   useSyncExternalStore(active?.lifecycle.subscribe ?? noopSubscribe, active?.lifecycle.getVersion ?? zero);
 
   const adopt = useCallback((opened: OpenedProject) => {
+    if (!mounted.current) return;
     current.current?.lifecycle.dispose();
     current.current = null;
     pendingRecovery.current = opened.recovery !== null;
@@ -37,12 +39,15 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
     setActive(current.current);
   }, [api, commands]);
   const operation = useCallback(async (action: () => Promise<void>) => {
-    if (occupied.current) return;
+    if (!mounted.current || occupied.current) return;
     occupied.current = true; setBusy(true); setError(null);
-    try { await action(); } catch (e) { setError(normalizeError(e)); }
+    try { await action(); } catch (e) { if (mounted.current) setError(normalizeError(e)); }
     finally {
-      occupied.current = false; setBusy(false);
-      if (deferredClose.current) { deferredClose.current = false; queueMicrotask(() => closeWindow.current()); }
+      occupied.current = false;
+      if (mounted.current) {
+        setBusy(false);
+        if (deferredClose.current) { deferredClose.current = false; queueMicrotask(() => { if (mounted.current) closeWindow.current(); }); }
+      } else deferredClose.current = false;
     }
   }, []);
   const finishCurrent = useCallback(async (next: () => Promise<void>, discard = false) => {
@@ -116,7 +121,10 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
     window.addEventListener('keydown', keydown);
     return () => { disposed = true; unlisten?.(); window.removeEventListener('keydown', keydown); };
   }, [api]);
-  useEffect(() => () => { current.current?.lifecycle.dispose(); }, []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; current.current?.lifecycle.dispose(); };
+  }, []);
   return {
     active, recovery, busy, editingDisabled: active?.store.editingDisabled ?? true,
     error: error ?? active?.lifecycle.error ?? null, closePending,

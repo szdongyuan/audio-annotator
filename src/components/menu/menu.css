@@ -1,0 +1,5 @@
+.menu-shield { position: fixed; inset: 0; z-index: 1000; }
+.app-menu { position: fixed; min-width: 190px; max-width: calc(100vw - 8px); max-height: calc(100vh - 8px); overflow-y: auto; padding: 4px; border: 1px solid #665b70; border-radius: 5px; background: #24202a; box-shadow: 0 5px 20px #0008; color: #e9e1ed; }
+.app-menu > button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 18px; padding: 6px 10px; border: 0; border-radius: 3px; background: transparent; color: inherit; font: inherit; font-size: 12px; text-align: left; white-space: nowrap; cursor: pointer; }
+.app-menu > button.is-current, .app-menu > button:focus-visible { background: #51405f; outline: none; }
+.app-menu > button[aria-disabled=true] { opacity: .42; cursor: default; }

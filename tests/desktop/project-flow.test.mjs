@@ -15,7 +15,7 @@ export async function projectFlow(h, context) {
   await h.screenshot('import-1280x800');
 }
 export async function restartFlow(h, context) {
-  await h.clickText('打开项目');
+  await h.menu('打开项目…');
   await h.until(`document.querySelectorAll('.file-pane').length===2 && !document.querySelector('.tile-status')`);
   const after = (await h.snapshot(context.id)).document;
   for (const field of ['annotations', 'categories', 'media', 'edits', 'viewState']) assert.deepEqual(after[field], context.saved[field], `restart restores ${field}`);
@@ -25,11 +25,11 @@ export async function recoveryFlow(h, context) {
   const recovery=path.join(context.output,'recovery-project');
   await fs.cp(context.project,recovery,{recursive:true});
   await fs.writeFile(path.join(recovery,'project.json'),'{ interrupted write');
-  await h.clickText('打开项目');await h.until(`document.querySelector('[aria-label="发现可恢复的项目版本"]')`);
+  await h.menu('打开项目…');await h.until(`document.querySelector('[aria-label="发现可恢复的项目版本"]')`);
   assert.equal(await h.evaluate('return document.activeElement.getAttribute("role")'), 'dialog');
   await h.screenshot('recovery-dialog');await h.clickText('取消打开');
   await h.until(`!document.querySelector('[aria-label="发现可恢复的项目版本"]')`);
-  await h.clickText('打开项目');await h.until(`document.querySelector('.recovery-version')`);
+  await h.menu('打开项目…');await h.until(`document.querySelector('.recovery-version')`);
   await h.click('.recovery-version');await h.until(`document.querySelectorAll('.file-pane').length===2`);
   const recovered=JSON.parse(await fs.readFile(path.join(recovery,'project.json')));
   assert.deepEqual(recovered.annotations,context.saved.annotations);

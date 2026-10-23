@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/react';
-import fixture from '../../../tests/fixtures/document-v1.json';
+import fixture from '../../../tests/fixtures/document-v2.json';
 import type { MediaDescriptor, ViewState } from '../../bridge/types';
 import { defaultView, changeView, toggleLinked, analysisError, tilePlan, analysisKey } from './workspace';
 import { TileCache } from './tileCache';
 import { AnalysisSettings } from './AnalysisSettings';
-const media = { ...fixture.media[0], channelCount: 6, channelNotes: Array(6).fill(''), channelLayout: null } as MediaDescriptor;
+const media = { ...fixture.media[0], channelCount: 6, channelNotes: Array(6).fill(''), channelCategoryIds: Array(6).fill(null), channelLayout: null } as MediaDescriptor;
 const short = { ...media, id: 'other', frameCount: 22050, sampleRate: 22050 };
 describe('workspace semantics', () => {
   it('defaults to first two actual channels and each file keeps its Nyquist', () => {
@@ -13,7 +13,7 @@ describe('workspace semantics', () => {
     expect(defaultView(short).highHz).toBe(11025);
   });
   it('links seconds without stretching short data, unlink clamps every view', () => {
-    const state: ViewState = { media: { [media.id]: defaultView(media), other: defaultView(short) }, activeMediaId: media.id, compareMediaId: 'other', linkedTime: false };
+    const state: ViewState = { compareLayout: 'horizontal', compareSplit: .5, media: { [media.id]: defaultView(media), other: defaultView(short) }, activeMediaId: media.id, compareMediaId: 'other', linkedTime: false };
     const linked = toggleLinked(state, [media, short], true);
     const moved = changeView(linked, [media, short], media.id, { startSeconds: .4, endSeconds: 1.8, gainDb: 8 });
     expect(moved.media.other.endSeconds).toBe(1.8); expect(moved.media.other.gainDb).toBe(0); expect(moved.media.other.highHz).toBe(11025);
@@ -28,7 +28,7 @@ describe('workspace semantics', () => {
   it('bounds linked time by the displayed pair when either file is replaced', () => {
     const long = { ...media, id: 'long', frameCount: 600 * media.sampleRate };
     const two = { ...media, id: 'two' };
-    const state: ViewState = { media: {
+    const state: ViewState = { compareLayout: 'horizontal', compareSplit: .5, media: {
       [short.id]: { ...defaultView(short), startSeconds: 100, endSeconds: 110 },
       [long.id]: { ...defaultView(long), startSeconds: 100, endSeconds: 110 },
       [two.id]: { ...defaultView(two), startSeconds: 100, endSeconds: 110 },

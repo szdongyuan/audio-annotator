@@ -19,6 +19,9 @@ pub struct PortableMedia {
     pub channel_layout: Option<Vec<String>>,
     pub note: String,
     pub channel_notes: Vec<String>,
+    #[serde(deserialize_with = "crate::model::required_nullable")]
+    pub category_id: Option<String>,
+    pub channel_category_ids: Vec<Option<String>>,
     pub media_path: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,7 +49,7 @@ impl Manifest {
     pub fn capture(doc: &ProjectDocument, bundle: bool) -> Result<Self> {
         doc.validate()?;
         Ok(Self {
-            format_version: 1,
+            format_version: 2,
             project_id: doc.project_id.clone(),
             name: doc.name.clone(),
             revision: doc.revision,
@@ -66,6 +69,8 @@ impl Manifest {
                     channel_layout: m.channel_layout.clone(),
                     note: m.note.clone(),
                     channel_notes: m.channel_notes.clone(),
+                    category_id: m.category_id.clone(),
+                    channel_category_ids: m.channel_category_ids.clone(),
                     media_path: bundle.then(|| media_path(&m.id)),
                 })
                 .collect(),
@@ -82,7 +87,7 @@ impl Manifest {
         let v: serde_json::Value =
             serde_json::from_slice(bytes).map_err(|_| super::invalid("无效的 UTF-8 JSON 清单"))?;
         match v.get("formatVersion").and_then(|v| v.as_u64()) {
-            Some(1) => (),
+            Some(2) => (),
             Some(_) => {
                 return Err(AppError::new(
                     ErrorCode::UnsupportedVersion,
@@ -110,7 +115,7 @@ impl Manifest {
     }
     pub fn document(&self, independent: bool) -> Result<ProjectDocument> {
         let d = ProjectDocument {
-            format_version: 1,
+            format_version: 2,
             project_id: if independent {
                 uuid::Uuid::new_v4().to_string()
             } else {
@@ -135,6 +140,8 @@ impl Manifest {
                     channel_layout: m.channel_layout.clone(),
                     note: m.note.clone(),
                     channel_notes: m.channel_notes.clone(),
+                    category_id: m.category_id.clone(),
+                    channel_category_ids: m.channel_category_ids.clone(),
                 })
                 .collect(),
             categories: self.categories.clone(),

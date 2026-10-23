@@ -20,7 +20,7 @@ impl Drop for Temp {
 }
 fn document(revision: u64) -> ProjectDocument {
     let mut d =
-        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v1.json"))
+        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json"))
             .unwrap();
     d.revision = revision;
     d.playback_mix
@@ -372,4 +372,76 @@ fn explicit_discard_does_not_require_a_valid_primary() {
     let p = LocalProject::open(&dir.0).unwrap();
     assert!(p.snapshot().is_err());
     assert!(p.recovery().is_some());
+}
+
+#[test]
+fn unsupported_primary_is_rejected_without_changing_project_or_recovery_bytes() {
+    for version in [1, 3] {
+        let dir = Temp::new();
+        drop(FileStore::create(&dir.0, &document(0)).unwrap());
+        let recovery = fs::read(dir.0.join("recovery.json")).unwrap();
+        let mut value: serde_json::Value =
+            serde_json::from_str(include_str!("../../../tests/fixtures/document-v1.json")).unwrap();
+        value["formatVersion"] = serde_json::json!(version);
+        let raw = value.to_string();
+        fs::write(dir.0.join("project.json"), &raw).unwrap();
+        assert_eq!(
+            FileStore::open(&dir.0).err().unwrap().code,
+            ErrorCode::UnsupportedVersion
+        );
+        assert_eq!(fs::read_to_string(dir.0.join("project.json")).unwrap(), raw);
+        assert_eq!(fs::read(dir.0.join("recovery.json")).unwrap(), recovery);
+    }
+}
+
+#[test]
+fn classifications_and_compare_preferences_survive_save_and_reopen() {
+    use annotator_core::{
+        model::{Change, CompareLayout},
+        project::LocalProject,
+    };
+    let dir = Temp::new();
+    drop(FileStore::create(&dir.0, &document(0)).unwrap());
+    let mut p = LocalProject::open(&dir.0).unwrap();
+    let d = p.snapshot().unwrap().document;
+    let category = Some(d.categories[0].id.clone());
+    p.session_mut()
+        .unwrap()
+        .apply_change(
+            &d.project_id,
+            0,
+            Change::SetMediaCategory {
+                media_id: d.media[0].id.clone(),
+                category_id: category.clone(),
+            },
+        )
+        .unwrap();
+    p.session_mut()
+        .unwrap()
+        .apply_change(
+            &d.project_id,
+            1,
+            Change::SetChannelCategory {
+                media_id: d.media[0].id.clone(),
+                channel_index: 0,
+                category_id: category,
+            },
+        )
+        .unwrap();
+    let mut view = d.view_state.clone();
+    view.compare_layout = CompareLayout::Vertical;
+    view.compare_split = 0.25;
+    p.session_mut()
+        .unwrap()
+        .apply_change(
+            &d.project_id,
+            2,
+            Change::UpdateViewState { view_state: view },
+        )
+        .unwrap();
+    let expected = p.snapshot().unwrap().document;
+    p.save(&d.project_id, 3).unwrap();
+    drop(p);
+    let p = LocalProject::open(&dir.0).unwrap();
+    assert_eq!(p.snapshot().unwrap().document, expected);
 }

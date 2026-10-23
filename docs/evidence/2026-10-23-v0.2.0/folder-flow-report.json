@@ -1,0 +1,84 @@
+{
+  "method": "Owned native e2e Tauri/WebView2, WebDriver menu/options/buttons; native folder scan/decode/command queue. Only picker return values injected. Explicitly labeled transport-failure and Channel-delay injections exercise recovery/cancellation deterministically; no store mutations.",
+  "output": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task7-folder-import\\native-hVXXS5",
+  "checks": [
+    "Default nonrecursive scan imports all 257 distinct paths across 256+2 (one corrupt) with bounded result DOM and one aggregate panel",
+    "Recursive option imports nested same-name file; existing canonical paths skipped and corrupt audio fails independently",
+    "Repeated recursive import does not duplicate any existing source",
+    "Injected one publication failure pauses before batch 2; explicit retry reuses original prepared PCM, resumes final item and corrects aggregate success",
+    "Cancel preserves failed edit; explicit End abandons only this failed import and releases native PCM",
+    "Dismissed folder results reserve no feedback height; exact 1280x800 outer window retains four 236.5px plots and 72/48/54 budgets",
+    "Injected delayed native ready/finished: cancellation visible under 500ms retains accepted media; new project remains empty and old PCM releases",
+    "Injected delayed scan terminal: cancel calls scan cancellation/release and late result cannot start a decoder",
+    "Direct multi-select audio import still works after folder cancellation",
+    "Real relink picker verifies moved fixture and preserves descriptor identity/classification/notes"
+  ],
+  "frames": [
+    {
+      "outer": {
+        "width": 1280,
+        "pid": 46736,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "bottom": 48,
+      "feedback": 0,
+      "headers": [
+        54,
+        54
+      ],
+      "inner": [
+        1264,
+        761
+      ],
+      "plots": [
+        {
+          "bottom": 414.5,
+          "height": 236.5,
+          "left": 279,
+          "right": 556,
+          "top": 178,
+          "width": 277,
+          "x": 279,
+          "y": 178
+        },
+        {
+          "bottom": 701,
+          "height": 236.5,
+          "left": 279,
+          "right": 556,
+          "top": 464.5,
+          "width": 277,
+          "x": 279,
+          "y": 464.5
+        },
+        {
+          "bottom": 414.5,
+          "height": 236.5,
+          "left": 684,
+          "right": 961,
+          "top": 178,
+          "width": 277,
+          "x": 684,
+          "y": 178
+        },
+        {
+          "bottom": 701,
+          "height": 236.5,
+          "left": 684,
+          "right": 961,
+          "top": 464.5,
+          "width": 277,
+          "x": 684,
+          "y": 464.5
+        }
+      ],
+      "top": 72
+    }
+  ],
+  "pid": 46736,
+  "cancelVisibleMs": 95,
+  "passed": true
+}

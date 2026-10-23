@@ -37,6 +37,7 @@ export class ProjectLifecycle {
   private notify() { this.version++; this.listeners.forEach(l => l()); }
   private get commandError() { return this.queue.unresolvedFailures[0]?.error ?? this.store.error; }
   get error(): AppError | null { return this.commandError ?? this.saveError; }
+  get admissionClosed() { return this.transitioning || this.disposed; }
   get hasPendingWork() { return this.store.isDirty || this.store.drafts.size > 0 || this.queue.unresolvedFailures.length > 0 || this.pendingEdits.size > 0; }
   /** Admit renderer actions synchronously, before they await drafts or native writes. */
   async enqueueEdit(action: () => Promise<unknown>): Promise<unknown> {
@@ -124,7 +125,7 @@ export class ProjectLifecycle {
   /** Submit drafts while enqueue is available, then freeze admission and drain accepted work. */
   async transition<T>(action: () => Promise<T>, discard = false): Promise<T> {
     if (this.transitioning || this.disposed) throw { code: 'InvalidInput', message: '项目正在切换或已关闭', retryable: true } satisfies AppError;
-    this.transitioning = true; this.clearTimers();
+    this.transitioning = true; this.clearTimers(); this.notify();
     let release: (() => void) | undefined;
     try {
       // Save As/discard must remain possible after a disk save fails.
@@ -151,10 +152,23 @@ export class ProjectLifecycle {
       this.notify();
     }
   }
-  async retryFailures() {
-    // Only the user's Retry action refreshes and then replays failed mutations.
+  /** Recovery shares edit admission with media abandonment, before either can touch prepared PCM. */
+  retryFailure(failureId: number, submit?: () => Promise<unknown>): Promise<unknown> {
+    return this.enqueueEdit(() => this.retryAcceptedFailure(failureId, submit));
+  }
+  private async retryAcceptedFailure(failureId: number, submit?: () => Promise<unknown>) {
+    // A prior accepted retry/abandonment may have resolved this captured UI callback.
+    if (!this.queue.unresolvedFailures.some(f => f.id === failureId)) return;
     if (this.queue.needsRefresh) await this.queue.refresh();
-    for (const failure of this.queue.unresolvedFailures) await this.queue.retry(failure.id);
+    return submit ? submit() : this.queue.retry(failureId);
+  }
+  async retryFailures() {
+    // Capture the failures reviewed by this user action, then recheck inside shared admission.
+    const ids = this.queue.unresolvedFailures.map(f => f.id);
+    await this.enqueueEdit(async () => {
+      if (this.queue.needsRefresh) await this.queue.refresh();
+      for (const id of ids) await this.retryAcceptedFailure(id);
+    });
     await this.save();
   }
   /** Persist inside the transition barrier, using the same acknowledgement as normal Save. */

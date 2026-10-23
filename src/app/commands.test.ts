@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import fixture from '../../tests/fixtures/document-v1.json';
+import fixture from '../../tests/fixtures/document-v2.json';
 import { ProjectStore } from './store';
 import { CommandQueue, type ProjectCommands } from './commands';
 import { parseProjectDocument, type Change, type ProjectSnapshot } from '../bridge/types';

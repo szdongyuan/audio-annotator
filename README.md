@@ -1,11 +1,13 @@
 # 音频标注 · Audio Annotator
 
-Windows x64 本地音频频谱标注工作区。支持 WAV、FLAC、MP3、1–6 通道、双文件对比、STFT/梅尔频谱、区域与类别、三层备注、非破坏性频段试听和屏蔽、自动保存及 JSON/ZIP 分享。原始音频保持只读。
+0.2.0 · Windows x64 本地音频频谱标注工作区。支持 WAV、FLAC、MP3、1–6 通道、双文件对比、STFT/梅尔频谱、统一框选与右键操作、三层独立分类与备注、文件夹批量导入、非破坏性频段试听和屏蔽、自动保存及 JSON/ZIP 分享。原始音频保持只读。
 
 - [使用说明](docs/user-guide.md)：从新建项目到交接文件。
 - [开发说明](docs/development.md)：构建、自动测试和性能复现。
-- [验收记录](docs/verification.md)：实际结果、环境与验证限制。
+- [验收记录](docs/verification-0.2.0.md)：实际结果、环境与验证限制。
 - [第三方依赖](docs/third-party.md)：随安装包分发的许可及 MPL 源代码。
+
+当前仅支持格式 2 项目及分享文件；旧测试项目需要重新创建。Delete 屏蔽选区，对象删除使用明确菜单项。
 
 安装包位于 `target/release/bundle/nsis/`。本版没有代码签名证书；安装包未签名。NSIS 包内含 WebView2 离线安装程序，标注、保存、播放和分享文件不需要网络。没有声称在全新 Windows 系统或 exFAT 实体设备上完成验证。
 

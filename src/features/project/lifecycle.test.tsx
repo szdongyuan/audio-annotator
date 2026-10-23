@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v1.json';
+import fixture from '../../../tests/fixtures/document-v2.json';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue, type ProjectCommands } from '../../app/commands';
 import { parseProjectDocument, type ProjectSnapshot } from '../../bridge/types';
@@ -373,4 +373,17 @@ it('explicit discard refreshes blocked authority without replay and preserves dr
   await lifecycle.close(true);
   expect(api.applyChange).toHaveBeenCalledTimes(1);
   expect(persistence.close).toHaveBeenCalledWith(fixture.projectId, 7, true);
+});
+
+it('a deferred native close is not replayed after the hook unmounts during saving', async () => {
+  const { api, hook, requestClose } = uiSetup();
+  await act(async () => { await hook.result.current.open('open'); });
+  let finish!: (revision: number) => void;
+  vi.mocked(api.save).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  let saving!: Promise<void>;
+  act(() => { saving = hook.result.current.save(); });
+  await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
+  act(requestClose);hook.unmount();
+  await act(async () => { finish(0); await saving; });
+  expect(api.close).not.toHaveBeenCalled();expect(api.destroyWindow).not.toHaveBeenCalled();
 });

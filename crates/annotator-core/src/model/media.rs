@@ -15,6 +15,9 @@ pub struct MediaDescriptor {
     pub channel_layout: Option<Vec<String>>,
     pub note: String,
     pub channel_notes: Vec<String>,
+    #[serde(deserialize_with = "super::required_nullable")]
+    pub category_id: Option<String>,
+    pub channel_category_ids: Vec<Option<String>>,
 }
 impl MediaDescriptor {
     pub fn duration(&self) -> f64 {

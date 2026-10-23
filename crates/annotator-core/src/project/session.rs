@@ -209,6 +209,22 @@ fn apply(doc: &mut ProjectDocument, change: &Change) -> Result<()> {
             doc.playback_mix.remove(media_id);
             clean_view(doc);
         }
+        Change::SetMediaCategory {
+            media_id,
+            category_id,
+        } => {
+            find_mut(&mut doc.media, media_id, |m| &m.id)?.category_id = category_id.clone();
+        }
+        Change::SetChannelCategory {
+            media_id,
+            channel_index,
+            category_id,
+        } => {
+            *find_mut(&mut doc.media, media_id, |m| &m.id)?
+                .channel_category_ids
+                .get_mut(*channel_index as usize)
+                .ok_or_else(|| AppError::invalid("Invalid channel"))? = category_id.clone();
+        }
         Change::UpdateMediaNote { media_id, note, .. } => {
             find_mut(&mut doc.media, media_id, |m| &m.id)?.note = note.clone()
         }
@@ -241,6 +257,15 @@ fn apply(doc: &mut ProjectDocument, change: &Change) -> Result<()> {
         }
         Change::RemoveCategory { id } => {
             remove(&mut doc.categories, id, |c| &c.id)?;
+            for media in &mut doc.media {
+                for category in
+                    std::iter::once(&mut media.category_id).chain(&mut media.channel_category_ids)
+                {
+                    if category.as_ref() == Some(id) {
+                        *category = None;
+                    }
+                }
+            }
             for annotation in &mut doc.annotations {
                 if annotation.category_id.as_ref() == Some(id) {
                     annotation.category_id = None;

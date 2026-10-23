@@ -1,0 +1,411 @@
+{
+  "output": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\perf-n1s784",
+  "environment": {
+    "platform": "Windows 11 Enterprise",
+    "cpu": "AMD Ryzen 5 5600GT with Radeon Graphics        ",
+    "memory": 33596846080,
+    "build": "release + e2e picker feature"
+  },
+  "fixtures": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\performance-fixtures\\ten-minute-six.wav",
+      "channels": 6,
+      "seconds": 600,
+      "rate": 48000,
+      "size": 345600044,
+      "sha256": "c1c63cc3788f47124314a251de43c9cc15071b98a9889242a58d2b7c7eb5f5e4"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\performance-fixtures\\comparison-stereo.wav",
+      "channels": 2,
+      "seconds": 600,
+      "rate": 48000,
+      "size": 115200044,
+      "sha256": "722ff4d5ccb92119cf1421ed42349f272c793f4f8efb1fe23819b09ccc493375"
+    }
+  ],
+  "backend": {
+    "analysisPcmBytes": 100589568,
+    "channels": 6,
+    "combinedPcmBytes": 134135808,
+    "decodeMs": 2152.2692,
+    "firstTilesMs": 48.21,
+    "fixture": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\performance-fixtures\\ten-minute-six.wav",
+    "note": "backend throughput, not native device or UI latency",
+    "pcmBudgetBytes": 134217728,
+    "playbackPcmBytes": 33546240,
+    "processedFrames": 1441792,
+    "processedSeconds": 30.037333333333333,
+    "renderMs": 537.7683,
+    "sampleRate": 48000,
+    "sourceSeconds": 600
+  },
+  "method": "Cold app analysis cache and fresh project/PCM; OS cache not purged. Warm feedback measures input event timestamp → actual canvas draw → two animation frames (paint opportunity). Distinct ten-minute 48kHz 6ch and 2ch sources; real native device output. Memory sampled once per second across owned native/WebView2 process tree.",
+  "coldImportAndDualFirstScreenMs": 4330.484499999991,
+  "window": {
+    "outer": {
+      "width": 1296,
+      "pid": 48104,
+      "y": 26,
+      "method": "Win32 GetWindowRect on owned native PID",
+      "x": 26,
+      "height": 839
+    },
+    "dpr": 1,
+    "scale": 1,
+    "viewport": [
+      1280,
+      800
+    ]
+  },
+  "feedbackSamplesMs": [
+    48.89999997615814,
+    65.60000002384186,
+    49.300000071525574,
+    48.89999997615814,
+    48.799999952316284,
+    49.39999997615814,
+    56.10000002384186,
+    65.20000004768372,
+    56.5,
+    66,
+    49.299999952316284,
+    49.299999952316284,
+    50.200000047683716,
+    48.60000002384186,
+    49.89999997615814,
+    65.20000004768372,
+    54.60000002384186,
+    49.5,
+    49.5,
+    48.5,
+    55.300000071525574,
+    49.299999952316284,
+    51.299999952316284,
+    49.200000047683716,
+    65.60000002384186,
+    54.39999997615814,
+    49.200000047683716,
+    48.799999952316284,
+    56.39999997615814,
+    64.30000007152557,
+    55.300000071525574,
+    49.200000047683716,
+    48.60000002384186,
+    56.89999997615814,
+    49.200000047683716,
+    65.5,
+    67.20000004768372,
+    65.89999997615814,
+    64.80000007152557,
+    65.60000002384186
+  ],
+  "panFeedbackSamplesMs": [
+    49.60000002384186,
+    102.60000002384186,
+    98.19999992847443,
+    78.79999995231628,
+    48.300000071525574,
+    49.10000002384186,
+    48.89999997615814,
+    65.89999997615814,
+    51.300000071525574,
+    49.300000071525574,
+    49.800000071525574,
+    66.10000002384186,
+    48.40000009536743,
+    66.19999992847443,
+    49.199999928474426,
+    66.29999995231628,
+    65.29999995231628,
+    65.89999997615814,
+    66.5,
+    66.19999992847443
+  ],
+  "mixFeedbackSamplesMs": [
+    95.5,
+    49.300000071525574,
+    48.60000002384186,
+    48.39999997615814,
+    65.29999995231628,
+    53,
+    49.10000002384186,
+    49.60000002384186,
+    48.90000009536743,
+    54.5,
+    48.89999997615814,
+    48.59999990463257,
+    48.699999928474426,
+    54.39999997615814,
+    48.799999952316284,
+    48.09999990463257,
+    47.89999997615814,
+    65.20000004768372,
+    49.699999928474426,
+    48.799999952316284
+  ],
+  "warmByActionP95Ms": {
+    "zoom": 65.89999997615814,
+    "pan": 98.19999992847443,
+    "mix": 65.29999995231628
+  },
+  "warmFeedbackP95Ms": 67.20000004768372,
+  "cancelVisibleMs": 15.399999976158142,
+  "cancelCompletionMs": 87.75270000001183,
+  "device": "Headphones (High Definition Audio Device)",
+  "appVolume": 0.05,
+  "playback": [
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 52896 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 100416 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 149856 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 198816 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 247776 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 296736 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 345696 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 393216 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 441696 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 490656 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 539616 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 588576 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 637536 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 686976 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 734016 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 782976 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 831936 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 879456 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 928416 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 977376 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1026336 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1075776 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1123296 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1172256 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1221696 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1268736 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1317696 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1367136 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1416096 帧 · 欠载 0"
+    },
+    {
+      "mode": "原音",
+      "counter": "48000 Hz · 已提交 1463136 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 50976 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 99936 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 149856 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 198336 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 247296 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 296256 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 344736 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 393696 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 442656 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 491136 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 539616 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 588576 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 637056 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 687456 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 736416 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 785376 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 833856 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 882336 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 931296 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 980256 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1028256 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1076736 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1125696 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1174176 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1223136 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1273056 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1321536 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1370016 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1418496 帧 · 欠载 0"
+    },
+    {
+      "mode": "处理后",
+      "counter": "48000 Hz · 已提交 1466976 帧 · 欠载 0"
+    }
+  ],
+  "playbackObservationSeconds": 60,
+  "passed": {
+    "warm": true,
+    "cancel": true,
+    "underruns": true
+  },
+  "memory": {
+    "intervalMs": 1000,
+    "samples": 67,
+    "nativePeakSampledBytes": 140972032,
+    "processTreePeakSampledBytes": 755871744
+  }
+}

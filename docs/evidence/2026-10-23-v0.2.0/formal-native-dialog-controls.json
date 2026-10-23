@@ -1,0 +1,203 @@
+{
+  "create-dialog.json": [
+    {
+      "Name": "新建项目 · 选择空文件夹",
+      "Type": "ControlType.Window",
+      "Id": "",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        34.0,
+        57.0,
+        960.0,
+        540.0
+      ]
+    },
+    {
+      "Name": "文件夹:",
+      "Type": "ControlType.Text",
+      "Id": "1090",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        172.0,
+        519.0,
+        39.0,
+        17.0
+      ]
+    },
+    {
+      "Name": "文件夹:",
+      "Type": "ControlType.Edit",
+      "Id": "1152",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        216.0,
+        515.0,
+        753.0,
+        26.0
+      ]
+    },
+    {
+      "Name": "选择文件夹",
+      "Type": "ControlType.Button",
+      "Id": "1",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        765.0,
+        546.0,
+        104.0,
+        26.0
+      ]
+    },
+    {
+      "Name": "新建项目 · 选择空文件夹",
+      "Type": "ControlType.TitleBar",
+      "Id": "TitleBar",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        42.0,
+        65.0,
+        944.0,
+        23.0
+      ]
+    }
+  ],
+  "save-dialog-ui.json": [
+    {
+      "Name": "分享 · 保存到本机",
+      "Type": "ControlType.Window",
+      "Id": "",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        -73.0,
+        291.0,
+        960.0,
+        540.0
+      ]
+    },
+    {
+      "Name": "保存(S)",
+      "Type": "ControlType.Button",
+      "Id": "1",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        674.0,
+        780.0,
+        88.0,
+        26.0
+      ]
+    },
+    {
+      "Name": "分享 · 保存到本机",
+      "Type": "ControlType.TitleBar",
+      "Id": "TitleBar",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        -65.0,
+        299.0,
+        944.0,
+        23.0
+      ]
+    }
+  ],
+  "open-picker-ui.json": [
+    {
+      "Name": "打开项目 · 选择 project.json",
+      "Type": "ControlType.Window",
+      "Id": "",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        174.0,
+        72.0,
+        960.0,
+        540.0
+      ]
+    },
+    {
+      "Name": "文件名(N):",
+      "Type": "ControlType.Text",
+      "Id": "1090",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        312.0,
+        534.0,
+        57.0,
+        17.0
+      ]
+    },
+    {
+      "Name": "文件名(N):",
+      "Type": "ControlType.ComboBox",
+      "Id": "1148",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        374.0,
+        530.0,
+        535.0,
+        26.0
+      ]
+    },
+    {
+      "Name": "文件名(N):",
+      "Type": "ControlType.Edit",
+      "Id": "1148",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        378.0,
+        535.0,
+        511.0,
+        17.0
+      ]
+    },
+    {
+      "Name": "文件名(N):",
+      "Type": "ControlType.List",
+      "Id": "ListBox",
+      "Enabled": true,
+      "Offscreen": true,
+      "Rect": [
+        0.0,
+        26.0,
+        535.0,
+        297.0
+      ]
+    },
+    {
+      "Name": "打开(O)",
+      "Type": "ControlType.Button",
+      "Id": "1",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        921.0,
+        561.0,
+        88.0,
+        26.0
+      ]
+    },
+    {
+      "Name": "打开项目 · 选择 project.json",
+      "Type": "ControlType.TitleBar",
+      "Id": "TitleBar",
+      "Enabled": true,
+      "Offscreen": false,
+      "Rect": [
+        182.0,
+        80.0,
+        944.0,
+        23.0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2816 @@
+[
+  {
+    "treeWorkingSet": 440397824,
+    "processes": [
+      {
+        "bytes": 31428608,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 118919168,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 126681088,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42311680,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 89825280,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:28.1967730Z",
+    "nativeWorkingSet": 31428608
+  },
+  {
+    "treeWorkingSet": 453320704,
+    "processes": [
+      {
+        "bytes": 31436800,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 133672960,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 123273216,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42491904,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 91213824,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:29.6535022Z",
+    "nativeWorkingSet": 31436800
+  },
+  {
+    "treeWorkingSet": 544808960,
+    "processes": [
+      {
+        "bytes": 38789120,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 135426048,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 140251136,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42528768,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 156581888,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:31.0168021Z",
+    "nativeWorkingSet": 38789120
+  },
+  {
+    "treeWorkingSet": 668831744,
+    "processes": [
+      {
+        "bytes": 103563264,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136253440,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 166506496,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42369024,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 188907520,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:32.3542723Z",
+    "nativeWorkingSet": 103563264
+  },
+  {
+    "treeWorkingSet": 697360384,
+    "processes": [
+      {
+        "bytes": 103604224,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136306688,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 166752256,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42475520,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 216989696,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:33.6759744Z",
+    "nativeWorkingSet": 103604224
+  },
+  {
+    "treeWorkingSet": 679489536,
+    "processes": [
+      {
+        "bytes": 103620608,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136327168,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 166772736,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42508288,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 199028736,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:34.9969733Z",
+    "nativeWorkingSet": 103620608
+  },
+  {
+    "treeWorkingSet": 707072000,
+    "processes": [
+      {
+        "bytes": 103669760,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136540160,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 162775040,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42663936,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 230191104,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:36.3288925Z",
+    "nativeWorkingSet": 103669760
+  },
+  {
+    "treeWorkingSet": 710123520,
+    "processes": [
+      {
+        "bytes": 103686144,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136605696,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 162779136,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42741760,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 233078784,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:37.6461616Z",
+    "nativeWorkingSet": 103686144
+  },
+  {
+    "treeWorkingSet": 713871360,
+    "processes": [
+      {
+        "bytes": 103702528,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136613888,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 162803712,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42762240,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 236756992,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:38.9552542Z",
+    "nativeWorkingSet": 103702528
+  },
+  {
+    "treeWorkingSet": 713621504,
+    "processes": [
+      {
+        "bytes": 103706624,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136617984,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 162779136,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42766336,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 236519424,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:40.2738799Z",
+    "nativeWorkingSet": 103706624
+  },
+  {
+    "treeWorkingSet": 713695232,
+    "processes": [
+      {
+        "bytes": 103714816,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136982528,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 162906112,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42860544,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 235999232,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:41.5951681Z",
+    "nativeWorkingSet": 103714816
+  },
+  {
+    "treeWorkingSet": 706793472,
+    "processes": [
+      {
+        "bytes": 103747584,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137097216,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 154238976,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42872832,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 237604864,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:42.9554374Z",
+    "nativeWorkingSet": 103747584
+  },
+  {
+    "treeWorkingSet": 705130496,
+    "processes": [
+      {
+        "bytes": 103870464,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137342976,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 154234880,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43061248,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 235388928,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:45.2840333Z",
+    "nativeWorkingSet": 103870464
+  },
+  {
+    "treeWorkingSet": 710266880,
+    "processes": [
+      {
+        "bytes": 103882752,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137515008,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 154259456,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43069440,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 240308224,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:46.6349077Z",
+    "nativeWorkingSet": 103882752
+  },
+  {
+    "treeWorkingSet": 706052096,
+    "processes": [
+      {
+        "bytes": 103886848,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137535488,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 154275840,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43069440,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 236052480,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:47.9679138Z",
+    "nativeWorkingSet": 103886848
+  },
+  {
+    "treeWorkingSet": 708329472,
+    "processes": [
+      {
+        "bytes": 103895040,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137875456,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 154288128,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43069440,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 237969408,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:49.3334574Z",
+    "nativeWorkingSet": 103895040
+  },
+  {
+    "treeWorkingSet": 708153344,
+    "processes": [
+      {
+        "bytes": 103878656,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137891840,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 154275840,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43069440,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 237805568,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:50.6787471Z",
+    "nativeWorkingSet": 103878656
+  },
+  {
+    "treeWorkingSet": 705564672,
+    "processes": [
+      {
+        "bytes": 103886848,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137895936,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 154382336,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43069440,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 235098112,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:51.9968396Z",
+    "nativeWorkingSet": 103886848
+  },
+  {
+    "treeWorkingSet": 705568768,
+    "processes": [
+      {
+        "bytes": 103890944,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137895936,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 154390528,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43069440,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 235089920,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:53.3109695Z",
+    "nativeWorkingSet": 103890944
+  },
+  {
+    "treeWorkingSet": 707895296,
+    "processes": [
+      {
+        "bytes": 103890944,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137895936,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 154398720,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43069440,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 237408256,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:54.6547037Z",
+    "nativeWorkingSet": 103890944
+  },
+  {
+    "treeWorkingSet": 710946816,
+    "processes": [
+      {
+        "bytes": 103956480,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137326592,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 11161600,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 158052352,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43069440,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 237309952,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:55.9836901Z",
+    "nativeWorkingSet": 103956480
+  },
+  {
+    "treeWorkingSet": 726228992,
+    "processes": [
+      {
+        "bytes": 109142016,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138555392,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146939904,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 247894016,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:57.3352443Z",
+    "nativeWorkingSet": 109142016
+  },
+  {
+    "treeWorkingSet": 725336064,
+    "processes": [
+      {
+        "bytes": 110764032,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138522624,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147361792,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 244989952,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:58.6594461Z",
+    "nativeWorkingSet": 110764032
+  },
+  {
+    "treeWorkingSet": 723525632,
+    "processes": [
+      {
+        "bytes": 112304128,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138432512,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147443712,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 241647616,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:16:59.9940147Z",
+    "nativeWorkingSet": 112304128
+  },
+  {
+    "treeWorkingSet": 724918272,
+    "processes": [
+      {
+        "bytes": 113987584,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138432512,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147521536,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 241278976,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:01.3550533Z",
+    "nativeWorkingSet": 113987584
+  },
+  {
+    "treeWorkingSet": 736395264,
+    "processes": [
+      {
+        "bytes": 115396608,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138432512,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147603456,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 251265024,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:02.7061014Z",
+    "nativeWorkingSet": 115396608
+  },
+  {
+    "treeWorkingSet": 734261248,
+    "processes": [
+      {
+        "bytes": 117035008,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147689472,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 247402496,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:04.0423387Z",
+    "nativeWorkingSet": 117035008
+  },
+  {
+    "treeWorkingSet": 736149504,
+    "processes": [
+      {
+        "bytes": 118579200,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147775488,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 247660544,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:05.4201750Z",
+    "nativeWorkingSet": 118579200
+  },
+  {
+    "treeWorkingSet": 737198080,
+    "processes": [
+      {
+        "bytes": 120131584,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138440704,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147841024,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 247087104,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:06.7863701Z",
+    "nativeWorkingSet": 120131584
+  },
+  {
+    "treeWorkingSet": 733220864,
+    "processes": [
+      {
+        "bytes": 121647104,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147861504,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 241577984,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:08.1157108Z",
+    "nativeWorkingSet": 121647104
+  },
+  {
+    "treeWorkingSet": 742871040,
+    "processes": [
+      {
+        "bytes": 123224064,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147865600,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 249647104,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:09.4749868Z",
+    "nativeWorkingSet": 123224064
+  },
+  {
+    "treeWorkingSet": 739385344,
+    "processes": [
+      {
+        "bytes": 124698624,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147873792,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 244678656,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:10.8193991Z",
+    "nativeWorkingSet": 124698624
+  },
+  {
+    "treeWorkingSet": 740499456,
+    "processes": [
+      {
+        "bytes": 126271488,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147877888,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 244215808,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:12.1613353Z",
+    "nativeWorkingSet": 126271488
+  },
+  {
+    "treeWorkingSet": 740057088,
+    "processes": [
+      {
+        "bytes": 127877120,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147886080,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 242159616,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:13.5026986Z",
+    "nativeWorkingSet": 127877120
+  },
+  {
+    "treeWorkingSet": 743337984,
+    "processes": [
+      {
+        "bytes": 129417216,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147894272,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 243892224,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:14.8281307Z",
+    "nativeWorkingSet": 129417216
+  },
+  {
+    "treeWorkingSet": 741945344,
+    "processes": [
+      {
+        "bytes": 130924544,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147902464,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 240984064,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:16.1389453Z",
+    "nativeWorkingSet": 130924544
+  },
+  {
+    "treeWorkingSet": 742031360,
+    "processes": [
+      {
+        "bytes": 132497408,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147906560,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 239493120,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:17.4938170Z",
+    "nativeWorkingSet": 132497408
+  },
+  {
+    "treeWorkingSet": 749355008,
+    "processes": [
+      {
+        "bytes": 134037504,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147914752,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 245268480,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:18.8521929Z",
+    "nativeWorkingSet": 134037504
+  },
+  {
+    "treeWorkingSet": 749830144,
+    "processes": [
+      {
+        "bytes": 135573504,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147918848,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 244203520,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:20.1769677Z",
+    "nativeWorkingSet": 135573504
+  },
+  {
+    "treeWorkingSet": 748089344,
+    "processes": [
+      {
+        "bytes": 137158656,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147931136,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 240865280,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:21.5091058Z",
+    "nativeWorkingSet": 137158656
+  },
+  {
+    "treeWorkingSet": 751976448,
+    "processes": [
+      {
+        "bytes": 138600448,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138436608,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147935232,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 243306496,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:22.8421979Z",
+    "nativeWorkingSet": 138600448
+  },
+  {
+    "treeWorkingSet": 755871744,
+    "processes": [
+      {
+        "bytes": 140173312,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138440704,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147931136,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 245628928,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:24.1636664Z",
+    "nativeWorkingSet": 140173312
+  },
+  {
+    "treeWorkingSet": 751800320,
+    "processes": [
+      {
+        "bytes": 140468224,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138440704,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20615168,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147927040,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 43012096,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20070400,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 241266688,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:25.4760015Z",
+    "nativeWorkingSet": 140468224
+  },
+  {
+    "treeWorkingSet": 740749312,
+    "processes": [
+      {
+        "bytes": 140529664,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136105984,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14524416,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146558976,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42606592,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 240320512,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:26.8220189Z",
+    "nativeWorkingSet": 140529664
+  },
+  {
+    "treeWorkingSet": 712953856,
+    "processes": [
+      {
+        "bytes": 109965312,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 139358208,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14454784,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146608128,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42758144,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 239706112,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:28.2435436Z",
+    "nativeWorkingSet": 109965312
+  },
+  {
+    "treeWorkingSet": 718897152,
+    "processes": [
+      {
+        "bytes": 111341568,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 138231808,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14454784,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146718720,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42758144,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 245288960,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:29.5834322Z",
+    "nativeWorkingSet": 111341568
+  },
+  {
+    "treeWorkingSet": 717910016,
+    "processes": [
+      {
+        "bytes": 112820224,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 136642560,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14454784,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146771968,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42573824,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 244543488,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:30.8985531Z",
+    "nativeWorkingSet": 112820224
+  },
+  {
+    "treeWorkingSet": 719515648,
+    "processes": [
+      {
+        "bytes": 114466816,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137256960,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146862080,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42647552,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 243720192,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:32.2815525Z",
+    "nativeWorkingSet": 114466816
+  },
+  {
+    "treeWorkingSet": 719429632,
+    "processes": [
+      {
+        "bytes": 115961856,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137154560,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146948096,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42647552,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 242155520,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:33.6708669Z",
+    "nativeWorkingSet": 115961856
+  },
+  {
+    "treeWorkingSet": 717512704,
+    "processes": [
+      {
+        "bytes": 117547008,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137142272,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147034112,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42590208,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 238637056,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:35.0550629Z",
+    "nativeWorkingSet": 117547008
+  },
+  {
+    "treeWorkingSet": 718757888,
+    "processes": [
+      {
+        "bytes": 119226368,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137293824,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147042304,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42590208,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 238043136,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:36.4240979Z",
+    "nativeWorkingSet": 119226368
+  },
+  {
+    "treeWorkingSet": 724307968,
+    "processes": [
+      {
+        "bytes": 120803328,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137175040,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147058688,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42590208,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 242118656,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:37.7776191Z",
+    "nativeWorkingSet": 120803328
+  },
+  {
+    "treeWorkingSet": 721698816,
+    "processes": [
+      {
+        "bytes": 122281984,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137142272,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147005440,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42590208,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 238116864,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:39.0996204Z",
+    "nativeWorkingSet": 122281984
+  },
+  {
+    "treeWorkingSet": 723877888,
+    "processes": [
+      {
+        "bytes": 123858944,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137306112,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 147013632,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42614784,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 238522368,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:40.4147367Z",
+    "nativeWorkingSet": 123858944
+  },
+  {
+    "treeWorkingSet": 723484672,
+    "processes": [
+      {
+        "bytes": 125353984,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137191424,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146780160,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42651648,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20103168,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 236945408,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:41.7747781Z",
+    "nativeWorkingSet": 125353984
+  },
+  {
+    "treeWorkingSet": 731082752,
+    "processes": [
+      {
+        "bytes": 127045632,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137162752,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146784256,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42651648,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 242880512,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:43.2331008Z",
+    "nativeWorkingSet": 127045632
+  },
+  {
+    "treeWorkingSet": 731234304,
+    "processes": [
+      {
+        "bytes": 128622592,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137187328,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146800640,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42651648,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 241414144,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:44.5749771Z",
+    "nativeWorkingSet": 128622592
+  },
+  {
+    "treeWorkingSet": 729047040,
+    "processes": [
+      {
+        "bytes": 130269184,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137187328,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146808832,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42651648,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 237572096,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:45.9081926Z",
+    "nativeWorkingSet": 130269184
+  },
+  {
+    "treeWorkingSet": 730607616,
+    "processes": [
+      {
+        "bytes": 131899392,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137187328,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146812928,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42594304,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 237555712,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:47.2467029Z",
+    "nativeWorkingSet": 131899392
+  },
+  {
+    "treeWorkingSet": 735211520,
+    "processes": [
+      {
+        "bytes": 133476352,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137191424,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146825216,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42594304,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 240566272,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:48.6200552Z",
+    "nativeWorkingSet": 133476352
+  },
+  {
+    "treeWorkingSet": 734474240,
+    "processes": [
+      {
+        "bytes": 135049216,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137191424,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146825216,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42594304,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 238256128,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:49.9729100Z",
+    "nativeWorkingSet": 135049216
+  },
+  {
+    "treeWorkingSet": 738312192,
+    "processes": [
+      {
+        "bytes": 136527872,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137207808,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146837504,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42594304,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 240586752,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:51.3312676Z",
+    "nativeWorkingSet": 136527872
+  },
+  {
+    "treeWorkingSet": 736202752,
+    "processes": [
+      {
+        "bytes": 138199040,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137207808,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146841600,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42594304,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 236802048,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:52.7046503Z",
+    "nativeWorkingSet": 138199040
+  },
+  {
+    "treeWorkingSet": 735956992,
+    "processes": [
+      {
+        "bytes": 139694080,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137224192,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146849792,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42700800,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 234930176,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:54.0721957Z",
+    "nativeWorkingSet": 139694080
+  },
+  {
+    "treeWorkingSet": 742187008,
+    "processes": [
+      {
+        "bytes": 140972032,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137183232,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146845696,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42635264,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 239992832,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:55.4249202Z",
+    "nativeWorkingSet": 140972032
+  },
+  {
+    "treeWorkingSet": 738643968,
+    "processes": [
+      {
+        "bytes": 140955648,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 137187328,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146857984,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42643456,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 236441600,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:56.7791851Z",
+    "nativeWorkingSet": 140955648
+  },
+  {
+    "treeWorkingSet": 745598976,
+    "processes": [
+      {
+        "bytes": 140972032,
+        "id": 48104,
+        "name": "annotator-desktop.exe"
+      },
+      {
+        "bytes": 139149312,
+        "id": 39996,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 14458880,
+        "id": 45940,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 146853888,
+        "id": 44752,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 42643456,
+        "id": 41696,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 20099072,
+        "id": 4612,
+        "name": "msedgewebview2.exe"
+      },
+      {
+        "bytes": 241422336,
+        "id": 41704,
+        "name": "msedgewebview2.exe"
+      }
+    ],
+    "utc": "2026-10-23T05:17:58.1203259Z",
+    "nativeWorkingSet": 140972032
+  }
+]

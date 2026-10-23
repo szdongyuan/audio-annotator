@@ -3,7 +3,7 @@ export interface Region { mediaId: Id; channelIndex: number; startSeconds: numbe
 export interface MediaDescriptor {
   id: Id; displayName: string; sourceRef: string; sha256: string; byteLength: number;
   sampleRate: number; frameCount: number; channelCount: number; channelLayout: string[] | null;
-  note: string; channelNotes: string[];
+  note: string; channelNotes: string[]; categoryId: Id | null; channelCategoryIds: (Id | null)[];
 }
 export interface Category { id: Id; name: string; color: string }
 export interface Annotation { id: Id; region: Region; categoryId: Id | null; note: string; createdAt: string; updatedAt: string }
@@ -14,9 +14,10 @@ export interface MediaView {
   visibleChannels: number[]; startSeconds: number; endSeconds: number; lowHz: number; highHz: number;
   frequencyMix: number; spectrumKind: 'stft' | 'mel'; gainDb: number; dynamicRangeDb: number; palette: string;
 }
-export interface ViewState { media: Record<Id, MediaView>; activeMediaId: Id | null; compareMediaId: Id | null; linkedTime: boolean }
+export type CompareLayout = 'horizontal' | 'vertical';
+export interface ViewState { compareLayout: CompareLayout; compareSplit: number; media: Record<Id, MediaView>; activeMediaId: Id | null; compareMediaId: Id | null; linkedTime: boolean }
 export interface ProjectDocument {
-  formatVersion: 1; projectId: Id; name: string; revision: number; createdAt: string; updatedAt: string;
+  formatVersion: 2; projectId: Id; name: string; revision: number; createdAt: string; updatedAt: string;
   media: MediaDescriptor[]; categories: Category[]; annotations: Annotation[]; edits: SpectralEdit[];
   analysis: Record<Id, AnalysisSettings>; playbackMix: Record<Id, PlaybackMix>; viewState: ViewState;
   algorithmVersions: { analysis: 1; dsp: 1 };
@@ -25,6 +26,8 @@ export interface ProjectSnapshot { document: ProjectDocument; canUndo: boolean; 
 export type Change =
   | { type: 'importMedia' | 'relinkMedia'; media: MediaDescriptor }
   | { type: 'removeMedia'; mediaId: Id }
+  | { type: 'setMediaCategory'; mediaId: Id; categoryId: Id | null }
+  | { type: 'setChannelCategory'; mediaId: Id; channelIndex: number; categoryId: Id | null }
   | { type: 'updateMediaNote'; mediaId: Id; note: string; mergeKey: string | null }
   | { type: 'updateChannelNote'; mediaId: Id; channelIndex: number; note: string; mergeKey: string | null }
   | { type: 'updateAnnotationNote'; id: Id; note: string; mergeKey: string | null }

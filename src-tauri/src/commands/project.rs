@@ -35,6 +35,7 @@ pub async fn create_project(
 ) -> Result<OpenProject> {
     let media = state.1.clone();
     let analysis = state.2.clone();
+    let folders = state.5.clone();
     let playback = state.3.clone();
     state
         .run(move |s| {
@@ -49,6 +50,10 @@ pub async fn create_project(
             *s = Some(p);
             playback.reset();
             media.reset();
+            folders
+                .lock()
+                .map_err(|_| AppError::invalid("扫描服务不可用"))?
+                .reset();
             analysis.scheduler.reset();
             Ok(result)
         })
@@ -58,6 +63,7 @@ pub async fn create_project(
 pub async fn open_project(state: State<'_, AppState>, path: String) -> Result<OpenProject> {
     let media = state.1.clone();
     let analysis = state.2.clone();
+    let folders = state.5.clone();
     let playback = state.3.clone();
     state
         .run(move |s| {
@@ -79,6 +85,10 @@ pub async fn open_project(state: State<'_, AppState>, path: String) -> Result<Op
             *s = Some(p);
             playback.reset();
             media.reset();
+            folders
+                .lock()
+                .map_err(|_| AppError::invalid("扫描服务不可用"))?
+                .reset();
             analysis.scheduler.reset();
             Ok(result)
         })
@@ -200,6 +210,7 @@ pub async fn save_project_as(
 ) -> Result<OpenProject> {
     let media = state.1.clone();
     let analysis = state.2.clone();
+    let folders = state.5.clone();
     let playback = state.3.clone();
     state
         .run(move |s| {
@@ -210,6 +221,10 @@ pub async fn save_project_as(
             playback.reset();
             p.save_as(Path::new(&path), &project_id, expected_revision)?;
             media.reset();
+            folders
+                .lock()
+                .map_err(|_| AppError::invalid("扫描服务不可用"))?
+                .reset();
             analysis.scheduler.reset();
             Ok(info(p))
         })
@@ -224,6 +239,7 @@ pub async fn close_project(
 ) -> Result<()> {
     let media = state.1.clone();
     let analysis = state.2.clone();
+    let folders = state.5.clone();
     let playback = state.3.clone();
     state
         .run(move |s| {
@@ -244,6 +260,10 @@ pub async fn close_project(
             playback.reset();
             *s = None;
             media.reset();
+            folders
+                .lock()
+                .map_err(|_| AppError::invalid("扫描服务不可用"))?
+                .reset();
             analysis.scheduler.reset();
             Ok(())
         })

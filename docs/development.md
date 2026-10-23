@@ -375,3 +375,17 @@ npm.cmd run tauri -- build --bundles nsis
 分析请求现在先调用 `register_analysis_view(projectId)` 获取 native lease，确认后才请求 tile。`cancel_generation` 只推进已注册 lease 的 generation，不创建 scope；`retire_analysis_view` 取消该 lease 的队列/运行任务并移除活动记录。调度器最多保存 256 个活动 lease，单调计数器跨 reset 保留，已释放或旧运行态的 token 永不复用；未知/已释放 token 的 request/cancel/retire 被拒绝，不维护历史 UUID tombstone。
 
 TileClient 注册采用惰性单次 Promise，注册失败可重试；dispose 同步拒绝旧结果/进度，并在未完成的注册最终返回时释放该 token。dispose 不会为了释放一个从未请求的视图而额外注册。测试覆盖 300 个顺序注册/真实 native tile/释放、256 活动上限、迟到 generation 与结果、独立视图、同 projectId 关闭重开、注册确认前禁止请求，以及 dispose/注册乱序。`npm.cmd run test:desktop` 另包含 300 次实际 UI 文件切换和随后首次分析 MP3 的流程。
+
+## 0.2.0 紧凑工作区与最终验收
+
+六个菜单为文件、编辑、视图、标注、音频、帮助。统一临时 SelectionState 与持久 Annotation/Mask 分离；主菜单、右键和 Delete 共享稳定目标动作层，执行前重读 owner/对象及几何。持久编辑和所有导入恢复入口经过 lifecycle editTail、草稿提交和 CommandQueue；不能另建异步尾队列绕过保存屏障。文件/通道分类是独立 nullable ID，通道数组严格等于通道数，删除类别一次事务清空三层引用。
+
+只读取 formatVersion 2 的本地文档与 portable Manifest，旧格式和未来版本拒绝且不修改源文件，无迁移或兼容 DTO。普通项目打开沿用先保存关闭再打开目标的流程；交换导入失败保留当前会话。普通 recovery/backup 与锁、写失败保护继续保留。
+
+文件夹扫描任务拥有独立 owner/cancel token；不跟随 reparse point，最多 10000 候选/100000 条目，超限不返回部分候选作导入。候选读取页和 native import_media 批次均最多 256，批次必须等 start ack、native finished 和所有已接受发布命令完成；失败 ledger 未决时暂停后续批次。所有恢复途径重读 ledger 后才操作 PCM。
+
+`npm.cmd run test:desktop` 保留原有 project/view-churn/spectral/restart/sharing/recovery 六阶段，随后串行执行 selection、rulers、compact、classification、folder-scan、folder-flow、feedback、format 流程。每个 suite 启动并关闭自有进程；端口占用时失败而不接入未知进程。外窗测量用 Win32 GetWindowRect 对自有 native PID，不能把 EdgeDriver 的 client 尺寸当外窗。隔离 CDP 1.25 缩放仅是模拟，不代表 Windows 125% 系统缩放已验证。
+
+`npm.cmd run perf` 使用真实 600 秒 48kHz 六通道及独立第二音频；预热后采样 40 次缩放、20 次 Alt+左键平移、20 次 Ctrl+滚轮轴混合，测量输入事件→实际 Canvas putImageData→两次 requestAnimationFrame（paint opportunity）。P95 不是显示器光子延迟。记录冷启动导入到双文件八图就绪、取消可见反馈、原音/处理后实际设备各 30 秒的欠载计数，以及每秒采样的 native/WebView2 进程树峰值。性能过程与构建顺序执行。
+
+完整命令及实际结果见 `docs/verification-0.2.0.md`。最终 NSIS 使用正常配置且不含 e2e feature，完成打包后再启动 release 程序做真实系统选择框与 pointer 流程。`licenses/` 包含第三方声明与 MPL 源码；无新依赖时保留现有锁定清单，无需重新抓取许可。交付副本放 `releases/0.2.0`，不覆盖 `releases/0.1.0`；发布包未签名。物理 DPI、新机离线安装/卸载、人工听感、exFAT 没有实际执行时明确保留未验证状态。

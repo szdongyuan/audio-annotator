@@ -1,0 +1,11 @@
+{
+  "method": "Real Tauri e2e binary via owned Selenium/WebView2 IPC; no UI/controller claimed",
+  "checks": [
+    "nonrecursive discovery; 256+4 pages; strict owner/size; no document import; release",
+    "recursive scan; save-as resets owner; old cancel cannot affect next result",
+    "close/open/create owner isolation; inaccessible root terminal failure with no page",
+    "cancel clears unpublished results and release frees active slot",
+    "failed exchange preserves scan; successful exchange replacement invalidates scan"
+  ],
+  "output": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task6-folders\\native-fRI2Ap"
+}

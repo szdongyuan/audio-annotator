@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { AnalysisSettings, MediaView, ViewState, Region, MediaDescriptor } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
+import { clampSplit } from './CompareSplitter';
 import { changeView, defaultView, toggleLinked } from './workspace';
-const blank = (): ViewState => ({ media: {}, activeMediaId: null, compareMediaId: null, linkedTime: false });
+const blank = (): ViewState => ({ media: {}, activeMediaId: null, compareMediaId: null, linkedTime: false, compareLayout: 'horizontal', compareSplit: .5 });
 const noop = () => () => {};
 function reconcile(value: ViewState, media: MediaDescriptor[]): ViewState {
   const ids = new Set(media.map(m => m.id));
@@ -57,6 +58,8 @@ export function useWorkspace(active: ActiveProject | null, selectedId: string | 
   const view = (id: string) => state.media[id] ?? defaultView(media.find(m => m.id === id)!);
   return {
     state, view,
+    layout: (compareLayout: ViewState['compareLayout']) => update({ ...current.current, compareLayout }),
+    split: (compareSplit: number) => update({ ...current.current, compareSplit: clampSplit(compareSplit) }),
     locate: (region: Region) => {
       const target = media.find(m => m.id === region.mediaId); if (!target) return;
       const margin = (region.endSeconds - region.startSeconds) * .25;

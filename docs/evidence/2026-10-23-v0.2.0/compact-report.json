@@ -1,0 +1,899 @@
+{
+  "method": "Owned debug/e2e Tauri WebView2; exact OUTER WebDriver window dimensions (no internal-size compensation); trusted WebDriver pointer and keyboard. Isolated CDP device-scale simulation is explicitly not Windows system DPI.",
+  "project": "D:\\Work\\annotator\\.worktrees\\compact-workspace-v2\\.test-output\\task4-compact\\project-rT2USB",
+  "checks": [
+    {
+      "name": "stereo-outer1280x800",
+      "passed": true,
+      "outer": {
+        "width": 1280,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "inner": [
+        1264,
+        761
+      ],
+      "plotHeights": [
+        236.5,
+        236.5,
+        236.5,
+        236.5
+      ]
+    },
+    {
+      "name": "stereo-outer1920x1080",
+      "passed": true,
+      "outer": {
+        "width": 1920,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "inner": [
+        1904,
+        1041
+      ],
+      "plotHeights": [
+        376.5,
+        376.5,
+        376.5,
+        376.5
+      ]
+    },
+    {
+      "name": "stereo-outer1000x680",
+      "passed": true,
+      "outer": {
+        "width": 1000,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 680
+      },
+      "inner": [
+        984,
+        641
+      ],
+      "plotHeights": [
+        180,
+        180,
+        180,
+        180
+      ]
+    },
+    {
+      "name": "sidebar collapse preserves current selection",
+      "passed": true
+    },
+    {
+      "name": "top annotation menu uses shared selection creation and focuses note",
+      "passed": true
+    },
+    {
+      "name": "top audio mask and edit history use native commands",
+      "passed": true
+    },
+    {
+      "name": "device selector and counters are on demand",
+      "passed": true
+    },
+    {
+      "name": "vertical-outer1000x680",
+      "passed": true,
+      "outer": {
+        "width": 1000,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 680
+      },
+      "inner": [
+        984,
+        641
+      ],
+      "plotHeights": [
+        180,
+        180,
+        180,
+        180
+      ]
+    },
+    {
+      "name": "pointer split, keyboard clamps, orientation retention and save/reopen",
+      "passed": true,
+      "split": 0.6442065491183879
+    },
+    {
+      "name": "top-menu keyboard navigation restores active trigger",
+      "passed": true
+    },
+    {
+      "name": "bundled final guide, current shortcuts, 0.2.0 version and readable notices",
+      "passed": true
+    },
+    {
+      "name": "edge menus remain in viewport",
+      "passed": true
+    },
+    {
+      "name": "isolated125percent-simulation",
+      "passed": true,
+      "outer": {
+        "width": 1280,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "inner": [
+        1011,
+        608
+      ],
+      "plotHeights": [
+        180,
+        180,
+        180,
+        180
+      ]
+    },
+    {
+      "name": "six-plus-six-outer1000x680",
+      "passed": true,
+      "outer": {
+        "width": 1000,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 680
+      },
+      "inner": [
+        984,
+        641
+      ],
+      "plotHeights": [
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180
+      ]
+    },
+    {
+      "name": "independent six-channel scrolling retains full last plots and titles",
+      "passed": true
+    }
+  ],
+  "frames": [
+    {
+      "name": "stereo-outer1280x800",
+      "outer": {
+        "width": 1280,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "driverRect": {
+        "height": 761,
+        "width": 1264,
+        "x": 28,
+        "y": 51
+      },
+      "dpr": 1,
+      "files": [
+        {
+          "clientHeight": 573,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 707,
+            "height": 629,
+            "left": 216,
+            "right": 613,
+            "top": 78,
+            "width": 397,
+            "x": 216,
+            "y": 78
+          },
+          "scrollHeight": 573
+        },
+        {
+          "clientHeight": 573,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 707,
+            "height": 629,
+            "left": 621,
+            "right": 1018,
+            "top": 78,
+            "width": 397,
+            "x": 621,
+            "y": 78
+          },
+          "scrollHeight": 573
+        }
+      ],
+      "innerHeight": 761,
+      "innerWidth": 1264,
+      "pageOverflow": false,
+      "plots": [
+        {
+          "bottom": 414.5,
+          "height": 236.5,
+          "left": 279,
+          "right": 556,
+          "top": 178,
+          "visible": true,
+          "width": 277,
+          "x": 279,
+          "y": 178
+        },
+        {
+          "bottom": 701,
+          "height": 236.5,
+          "left": 279,
+          "right": 556,
+          "top": 464.5,
+          "visible": true,
+          "width": 277,
+          "x": 279,
+          "y": 464.5
+        },
+        {
+          "bottom": 414.5,
+          "height": 236.5,
+          "left": 684,
+          "right": 961,
+          "top": 178,
+          "visible": true,
+          "width": 277,
+          "x": 684,
+          "y": 178
+        },
+        {
+          "bottom": 701,
+          "height": 236.5,
+          "left": 684,
+          "right": 961,
+          "top": 464.5,
+          "visible": true,
+          "width": 277,
+          "x": 684,
+          "y": 464.5
+        }
+      ],
+      "scale": 1,
+      "top": 72,
+      "transport": 48
+    },
+    {
+      "name": "stereo-outer1920x1080",
+      "outer": {
+        "width": 1920,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "driverRect": {
+        "height": 1041,
+        "width": 1904,
+        "x": 28,
+        "y": 51
+      },
+      "dpr": 1,
+      "files": [
+        {
+          "clientHeight": 853,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 987,
+            "height": 909,
+            "left": 238,
+            "right": 930,
+            "top": 78,
+            "width": 692,
+            "x": 238,
+            "y": 78
+          },
+          "scrollHeight": 853
+        },
+        {
+          "clientHeight": 853,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 987,
+            "height": 909,
+            "left": 938,
+            "right": 1630,
+            "top": 78,
+            "width": 692,
+            "x": 938,
+            "y": 78
+          },
+          "scrollHeight": 853
+        }
+      ],
+      "innerHeight": 1041,
+      "innerWidth": 1904,
+      "pageOverflow": false,
+      "plots": [
+        {
+          "bottom": 554.5,
+          "height": 376.5,
+          "left": 301,
+          "right": 873,
+          "top": 178,
+          "visible": true,
+          "width": 572,
+          "x": 301,
+          "y": 178
+        },
+        {
+          "bottom": 981,
+          "height": 376.5,
+          "left": 301,
+          "right": 873,
+          "top": 604.5,
+          "visible": true,
+          "width": 572,
+          "x": 301,
+          "y": 604.5
+        },
+        {
+          "bottom": 554.5,
+          "height": 376.5,
+          "left": 1001,
+          "right": 1573,
+          "top": 178,
+          "visible": true,
+          "width": 572,
+          "x": 1001,
+          "y": 178
+        },
+        {
+          "bottom": 981,
+          "height": 376.5,
+          "left": 1001,
+          "right": 1573,
+          "top": 604.5,
+          "visible": true,
+          "width": 572,
+          "x": 1001,
+          "y": 604.5
+        }
+      ],
+      "scale": 1,
+      "top": 72,
+      "transport": 48
+    },
+    {
+      "name": "stereo-outer1000x680",
+      "outer": {
+        "width": 1000,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 680
+      },
+      "driverRect": {
+        "height": 641,
+        "width": 984,
+        "x": 28,
+        "y": 51
+      },
+      "dpr": 1,
+      "files": [
+        {
+          "clientHeight": 445,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 579,
+            "height": 501,
+            "left": 196,
+            "right": 496,
+            "top": 78,
+            "width": 300,
+            "x": 196,
+            "y": 78
+          },
+          "scrollHeight": 460
+        },
+        {
+          "clientHeight": 445,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 579,
+            "height": 501,
+            "left": 504,
+            "right": 804,
+            "top": 78,
+            "width": 300,
+            "x": 504,
+            "y": 78
+          },
+          "scrollHeight": 460
+        }
+      ],
+      "innerHeight": 641,
+      "innerWidth": 984,
+      "pageOverflow": false,
+      "plots": [
+        {
+          "bottom": 358,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 178,
+          "visible": true,
+          "width": 180,
+          "x": 259,
+          "y": 178
+        },
+        {
+          "bottom": 588,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 408,
+          "visible": false,
+          "width": 180,
+          "x": 259,
+          "y": 408
+        },
+        {
+          "bottom": 358,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 178,
+          "visible": true,
+          "width": 180,
+          "x": 567,
+          "y": 178
+        },
+        {
+          "bottom": 588,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 408,
+          "visible": false,
+          "width": 180,
+          "x": 567,
+          "y": 408
+        }
+      ],
+      "scale": 1,
+      "top": 72,
+      "transport": 48
+    },
+    {
+      "name": "vertical-outer1000x680",
+      "outer": {
+        "width": 1000,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 680
+      },
+      "driverRect": {
+        "height": 641,
+        "width": 984,
+        "x": 28,
+        "y": 51
+      },
+      "dpr": 1,
+      "files": [
+        {
+          "clientHeight": 230,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 364,
+            "height": 286,
+            "left": 196,
+            "right": 750,
+            "top": 78,
+            "width": 554,
+            "x": 196,
+            "y": 78
+          },
+          "scrollHeight": 460
+        },
+        {
+          "clientHeight": 230,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 658,
+            "height": 286,
+            "left": 196,
+            "right": 750,
+            "top": 372,
+            "width": 554,
+            "x": 196,
+            "y": 372
+          },
+          "scrollHeight": 460
+        }
+      ],
+      "innerHeight": 641,
+      "innerWidth": 984,
+      "pageOverflow": false,
+      "plots": [
+        {
+          "bottom": 358,
+          "height": 180,
+          "left": 259,
+          "right": 693,
+          "top": 178,
+          "visible": true,
+          "width": 434,
+          "x": 259,
+          "y": 178
+        },
+        {
+          "bottom": 588,
+          "height": 180,
+          "left": 259,
+          "right": 693,
+          "top": 408,
+          "visible": false,
+          "width": 434,
+          "x": 259,
+          "y": 408
+        },
+        {
+          "bottom": 652,
+          "height": 180,
+          "left": 259,
+          "right": 693,
+          "top": 472,
+          "visible": false,
+          "width": 434,
+          "x": 259,
+          "y": 472
+        },
+        {
+          "bottom": 882,
+          "height": 180,
+          "left": 259,
+          "right": 693,
+          "top": 702,
+          "visible": false,
+          "width": 434,
+          "x": 259,
+          "y": 702
+        }
+      ],
+      "scale": 1,
+      "top": 72,
+      "transport": 48
+    },
+    {
+      "name": "isolated125percent-simulation",
+      "outer": {
+        "width": 1280,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "driverRect": {
+        "height": 761,
+        "width": 1264,
+        "x": 28,
+        "y": 51
+      },
+      "dpr": 1.25,
+      "files": [
+        {
+          "clientHeight": 412,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 546,
+            "height": 468,
+            "left": 196,
+            "right": 496,
+            "top": 78,
+            "width": 300,
+            "x": 196,
+            "y": 78
+          },
+          "scrollHeight": 460
+        },
+        {
+          "clientHeight": 412,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 546,
+            "height": 468,
+            "left": 504,
+            "right": 804,
+            "top": 78,
+            "width": 300,
+            "x": 504,
+            "y": 78
+          },
+          "scrollHeight": 460
+        }
+      ],
+      "innerHeight": 608,
+      "innerWidth": 1011,
+      "pageOverflow": false,
+      "plots": [
+        {
+          "bottom": 358,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 178,
+          "visible": true,
+          "width": 180,
+          "x": 259,
+          "y": 178
+        },
+        {
+          "bottom": 588,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 408,
+          "visible": false,
+          "width": 180,
+          "x": 259,
+          "y": 408
+        },
+        {
+          "bottom": 358,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 178,
+          "visible": true,
+          "width": 180,
+          "x": 567,
+          "y": 178
+        },
+        {
+          "bottom": 588,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 408,
+          "visible": false,
+          "width": 180,
+          "x": 567,
+          "y": 408
+        }
+      ],
+      "scale": 1,
+      "top": 72,
+      "transport": 48
+    },
+    {
+      "name": "six-plus-six-outer1000x680",
+      "outer": {
+        "width": 1000,
+        "pid": 44436,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 680
+      },
+      "driverRect": {
+        "height": 641,
+        "width": 984,
+        "x": 28,
+        "y": 51
+      },
+      "dpr": 1,
+      "files": [
+        {
+          "clientHeight": 445,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 579,
+            "height": 501,
+            "left": 196,
+            "right": 496,
+            "top": 78,
+            "width": 300,
+            "x": 196,
+            "y": 78
+          },
+          "scrollHeight": 1380
+        },
+        {
+          "clientHeight": 445,
+          "controlsFit": true,
+          "header": 54,
+          "rect": {
+            "bottom": 579,
+            "height": 501,
+            "left": 504,
+            "right": 804,
+            "top": 78,
+            "width": 300,
+            "x": 504,
+            "y": 78
+          },
+          "scrollHeight": 1380
+        }
+      ],
+      "innerHeight": 641,
+      "innerWidth": 984,
+      "pageOverflow": false,
+      "plots": [
+        {
+          "bottom": 358,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 178,
+          "visible": true,
+          "width": 180,
+          "x": 259,
+          "y": 178
+        },
+        {
+          "bottom": 588,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 408,
+          "visible": false,
+          "width": 180,
+          "x": 259,
+          "y": 408
+        },
+        {
+          "bottom": 818,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 638,
+          "visible": false,
+          "width": 180,
+          "x": 259,
+          "y": 638
+        },
+        {
+          "bottom": 1048,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 868,
+          "visible": false,
+          "width": 180,
+          "x": 259,
+          "y": 868
+        },
+        {
+          "bottom": 1278,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 1098,
+          "visible": false,
+          "width": 180,
+          "x": 259,
+          "y": 1098
+        },
+        {
+          "bottom": 1508,
+          "height": 180,
+          "left": 259,
+          "right": 439,
+          "top": 1328,
+          "visible": false,
+          "width": 180,
+          "x": 259,
+          "y": 1328
+        },
+        {
+          "bottom": 358,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 178,
+          "visible": true,
+          "width": 180,
+          "x": 567,
+          "y": 178
+        },
+        {
+          "bottom": 588,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 408,
+          "visible": false,
+          "width": 180,
+          "x": 567,
+          "y": 408
+        },
+        {
+          "bottom": 818,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 638,
+          "visible": false,
+          "width": 180,
+          "x": 567,
+          "y": 638
+        },
+        {
+          "bottom": 1048,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 868,
+          "visible": false,
+          "width": 180,
+          "x": 567,
+          "y": 868
+        },
+        {
+          "bottom": 1278,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 1098,
+          "visible": false,
+          "width": 180,
+          "x": 567,
+          "y": 1098
+        },
+        {
+          "bottom": 1508,
+          "height": 180,
+          "left": 567,
+          "right": 747,
+          "top": 1328,
+          "visible": false,
+          "width": 180,
+          "x": 567,
+          "y": 1328
+        }
+      ],
+      "scale": 1,
+      "top": 72,
+      "transport": 48
+    }
+  ],
+  "nativePid": 44436,
+  "windows125": "Actual Windows 125% system display setting not changed or verified; CDP device-scale emulation only."
+}

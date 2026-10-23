@@ -20,7 +20,7 @@ export async function sharingFlow(h, context) {
     if (extension === 'json') {
       await h.until(`document.body.innerText.includes('缺失')`);
       await h.screenshot('json-missing-media');
-      await h.menu('关闭项目'); await h.clickText('打开项目');
+      await h.menu('关闭项目'); await h.menu('打开项目…');
       await h.until(`document.querySelectorAll('.file-pane').length===2`);
     } else await h.screenshot('bundle-roundtrip');
   }

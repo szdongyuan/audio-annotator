@@ -27,6 +27,17 @@ pub enum Change {
     RemoveMedia {
         media_id: String,
     },
+    SetMediaCategory {
+        media_id: String,
+        #[serde(deserialize_with = "super::required_nullable")]
+        category_id: Option<String>,
+    },
+    SetChannelCategory {
+        media_id: String,
+        channel_index: u8,
+        #[serde(deserialize_with = "super::required_nullable")]
+        category_id: Option<String>,
+    },
     UpdateMediaNote {
         media_id: String,
         note: String,

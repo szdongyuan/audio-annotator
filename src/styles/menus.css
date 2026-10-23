@@ -1,0 +1,13 @@
+.main-menu { display:flex; align-items:center; gap:2px; }
+.main-menu > button { border:0; color:#d4cbd7; background:transparent; padding:5px 10px; border-radius:4px; font-size:12px; cursor:pointer; }
+.main-menu > button:hover, .main-menu > button[aria-expanded=true] { background:#3b3030; color:#f1c795; }
+.compare-splitter { background:#24212a; border-radius:3px; cursor:col-resize; touch-action:none; }
+.compare-splitter:hover, .compare-splitter:focus { background:#98714f; }
+.compare-splitter[aria-orientation=horizontal] { cursor:row-resize; }
+.help-dialog { width:min(720px,90vw); max-height:85vh; overflow:auto; border:1px solid #615047; border-radius:9px; padding:22px; color:#ded3df; background:#242127; }
+.help-dialog::backdrop { background:#0008; }
+.help-dialog header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+.help-dialog h2 { font-size:16px; }.help-dialog p,.help-dialog li { font-size:13px; line-height:1.8; margin-bottom:8px; }
+.help-dialog pre { white-space:pre-wrap; overflow-wrap:anywhere; font:11px/1.6 Consolas,monospace; }
+
+.main-menu.is-open { position: relative; z-index: 1001; }
