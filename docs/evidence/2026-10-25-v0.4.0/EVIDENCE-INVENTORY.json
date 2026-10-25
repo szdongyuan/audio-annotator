@@ -1,0 +1,409 @@
+{
+  "taskDate": "2026-10-25",
+  "verificationDates": [
+    "2026-10-25",
+    "2026-10-26"
+  ],
+  "timezone": "Asia/Shanghai",
+  "rawRoot": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue",
+  "preFixArchive": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\pre-fix-fda51b6-741689b6-30e3-4dc2-bb43-870bc81899ed",
+  "fullDesktop": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN",
+  "files": [
+    {
+      "file": ".gitattributes",
+      "source": "Evidence byte-preservation policy",
+      "bytes": 72,
+      "sha256": "d8e23ede08af9072f9a15353329386b85f1f52de3fcd60649e9738e615f25028"
+    },
+    {
+      "file": "desktop-report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\report.json",
+      "bytes": 2195,
+      "sha256": "2a178db61e72d92c0b7bc8b9e7216188a6412125d5d941b221e97a6a6c1940af"
+    },
+    {
+      "file": "desktop/classification-flow/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\classification-flow\\report.json",
+      "bytes": 19107,
+      "sha256": "ad1c9005c27e6e141974aab9395bdd5f86d2978ecffd0ddc22e341da755fd2d4"
+    },
+    {
+      "file": "desktop/collaboration-controls/ui-WPFa3D/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\collaboration-controls\\ui-WPFa3D\\report.json",
+      "bytes": 1986,
+      "sha256": "2f0c041ef85415f738b94eaf40f0173fc4af458a8201e9eef13b8a315e0a8028"
+    },
+    {
+      "file": "desktop/collaboration-layers/two-ui-F2L6fn/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\collaboration-layers\\two-ui-F2L6fn\\report.json",
+      "bytes": 9801,
+      "sha256": "177cdd21ed3c12779a35389979626d6092f8eb49e6adc6e3abf22372317b5871"
+    },
+    {
+      "file": "desktop/collaboration-native/ipc-ikxW4v/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\collaboration-native\\ipc-ikxW4v\\report.json",
+      "bytes": 1598,
+      "sha256": "71614f8eb9fa5fbc94f36fbae770512f4000dac6545f5eaf94ccc7f45c3b36b1"
+    },
+    {
+      "file": "desktop/compact-layout/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\compact-layout\\report.json",
+      "bytes": 19299,
+      "sha256": "0be250732f011b56de27a3ba01f4311d228b98b1b32d4868633149450aab4bea"
+    },
+    {
+      "file": "desktop/default-collaboration/two-default-rbcreX/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\default-collaboration\\two-default-rbcreX\\report.json",
+      "bytes": 2346,
+      "sha256": "7ac867d87c519d7cfe57a23a2ad5f0392c4d4a17979737bc10fadefc5cffef96"
+    },
+    {
+      "file": "desktop/feedback-flow/feedback.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\feedback-flow\\feedback.json",
+      "bytes": 5763,
+      "sha256": "1b83a36d597ed54ca6730c61a3235a93e813e101f6c94ee064fc7841597bcfda"
+    },
+    {
+      "file": "desktop/fidelity/native/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\fidelity\\native\\report.json",
+      "bytes": 38103,
+      "sha256": "5f594a832fe043550f464d0911b9fd5f4aaf5c80b1ad348082c1fc9a5bc8c4c8"
+    },
+    {
+      "file": "desktop/folder-flow/native-UWezgg/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\folder-flow\\native-UWezgg\\report.json",
+      "bytes": 3082,
+      "sha256": "a2746e7673c56d4d5808e8936fa66081c759eb34cbf9671b0bccdd2c3df864d7"
+    },
+    {
+      "file": "desktop/folder-scan/native-iQfwM7/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\folder-scan\\native-iQfwM7\\report.json",
+      "bytes": 739,
+      "sha256": "b4d4899f7bd994b3cc69632dc4cf6b28d75620a117e0bea2943c7784abb628d3"
+    },
+    {
+      "file": "desktop/format-flow/run-tgT6VW/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\format-flow\\run-tgT6VW\\report.json",
+      "bytes": 2503,
+      "sha256": "aba18e60f75576f8dade9fac169d2b668f8eb7b5a27ecd29fd1da360b29c26eb"
+    },
+    {
+      "file": "desktop/interaction/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\interaction\\report.json",
+      "bytes": 31295,
+      "sha256": "b40c660b562713b01ba517f3b57372d3e4e32741e894217ed6743e1b5ba27ac3"
+    },
+    {
+      "file": "desktop/processed/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\processed\\report.json",
+      "bytes": 10073,
+      "sha256": "4ecc35f6080890f8a320c0f17c42223cc192b331c865ee86f55ed3649e35aaac"
+    },
+    {
+      "file": "desktop/rulers-flow/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\rulers-flow\\report.json",
+      "bytes": 142090,
+      "sha256": "9f7845d5e96414fb823fd04682af0b5b480915c7bd9c137a3f2fff187e1276a2"
+    },
+    {
+      "file": "desktop/selection/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\selection\\report.json",
+      "bytes": 10772,
+      "sha256": "9b2cebc9af1492bf72cb3841801246b28daa9b4d25832342cb0258b07d237c54"
+    },
+    {
+      "file": "desktop/sharing/native-w2VYRH/report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\sharing\\native-w2VYRH\\report.json",
+      "bytes": 6402,
+      "sha256": "5138962cc05d0684d23218b25f90a976dead9296636ec551a68153c6b6de0d97"
+    },
+    {
+      "file": "nas-default-report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\nas-saveas-rescue\\two-default-8TrAQJ\\report.json",
+      "bytes": 2240,
+      "sha256": "4def5fe6e551988d5bc98d0edb6802566898137f5b920854d7b72fdbefa093dd"
+    },
+    {
+      "file": "nas-mapping.json",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\nas-mapping.json",
+      "bytes": 124,
+      "sha256": "6a1cccd7e7f7a35093046724a602f7bbccef70bc9f70c58b47b2d28652cd4321"
+    },
+    {
+      "file": "catalog-import-comparison.json",
+      "source": "Generated from the three hashed historical raw reports",
+      "bytes": 5106,
+      "sha256": "be9377dbd17b0a463d88f678959e882508823dd8a31af9d6848184662cd56fbd"
+    },
+    {
+      "file": "historical/readonly-capability-red.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\readonly-capability-red.log",
+      "bytes": 1139,
+      "sha256": "94390639074cb77d4534ce2ab091bf98ed633d1d571d429ccd6b00c8821b436c"
+    },
+    {
+      "file": "historical/readonly-capability-green.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\readonly-capability-green.log",
+      "bytes": 507,
+      "sha256": "37ba099f5cf93db9f0f286ba6e0dbb2256d35162a1bcfdc5b1778ec10d1c5916"
+    },
+    {
+      "file": "historical/nas-stamp-regression-red.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\nas-stamp-regression-red.log",
+      "bytes": 1533,
+      "sha256": "7ad43e509c0014a34b74b3db6cf7c8158d9536934fe8eb25eeb888a94aaec50c"
+    },
+    {
+      "file": "historical/nas-stamp-regression-green.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\nas-stamp-regression-green.log",
+      "bytes": 819,
+      "sha256": "e3964effb1c604b75e624cdb2620080c388d94f741f3f9ee4487ee31d48e2550"
+    },
+    {
+      "file": "historical/nas-stamp-probe.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\nas-stamp-probe.log",
+      "bytes": 1201,
+      "sha256": "ddd7aa7319abb563d76ff52fd7df4a7626599554381471d31614b951b2ee57b0"
+    },
+    {
+      "file": "historical/nas-read-handle-probe.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\nas-read-handle-probe.log",
+      "bytes": 228,
+      "sha256": "a08a95aec08b77830a76a430d47f5ed2e54a714588c12bcc1cee86c5806d0d76"
+    },
+    {
+      "file": "historical/attributes-microbench.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\attributes-microbench.log",
+      "bytes": 561,
+      "sha256": "0379e2c2a7a4d8c1600edb155a4a7b12d4ccaaa42837ec509a32e6c15a89593c"
+    },
+    {
+      "file": "historical/attributes-parity-real-unc.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\attributes-parity-real-unc.log",
+      "bytes": 632,
+      "sha256": "7477955030516988326755611d2aec8b6001c4ae33e00caa3b4709cd43a92f16"
+    },
+    {
+      "file": "historical/folder-result-owner-red.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\folder-result-owner-red.log",
+      "bytes": 1580,
+      "sha256": "861699613121d9194f0ab2cb43241dae0a4558c14a9ca566609533a249950877"
+    },
+    {
+      "file": "historical/folder-result-owner-green.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\folder-result-owner-green.log",
+      "bytes": 255,
+      "sha256": "26a325af60e3e1c21a322b0f25a733e0b5dc8e5111489a501f7cc00b29453e24"
+    },
+    {
+      "file": "historical/catalog-fallback-red.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\catalog-fallback-red.log",
+      "bytes": 1330,
+      "sha256": "a6b69ea2a95522c601aefb5bc26e05293e15c814481d6dc0ff677031ad0b109d"
+    },
+    {
+      "file": "historical/catalog-fallback-green.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\catalog-fallback-green.log",
+      "bytes": 440,
+      "sha256": "2e2c6077a6e4fb1dae297a4fa75d1085a545c049b3006a3a6d9aabf68a99a1ed"
+    },
+    {
+      "file": "historical/classification-semantic1.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\classification-semantic1.log",
+      "bytes": 1263,
+      "sha256": "e437d2a021bfe42a345eac1cdd575b4d497e4627e87b3c9f2da94335d39c8636"
+    },
+    {
+      "file": "historical/classification-semantic2.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\classification-semantic2.log",
+      "bytes": 1263,
+      "sha256": "e437d2a021bfe42a345eac1cdd575b4d497e4627e87b3c9f2da94335d39c8636"
+    },
+    {
+      "file": "fmt-final.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\fmt-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "clippy-final.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\clippy-final.log",
+      "bytes": 180,
+      "sha256": "c840f72ed3d7d6f6fb9721ca69659c72bed5dc3a1e12fb9fec19ca05a90d8c94"
+    },
+    {
+      "file": "workspace-final.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\workspace-final.log",
+      "bytes": 25999,
+      "sha256": "6f41525f0625eb990d1af1276387ef97e3a6d57192d3e6ddfa8859e9c115ff0e"
+    },
+    {
+      "file": "e2e-native-final.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\e2e-native-final.log",
+      "bytes": 6110,
+      "sha256": "c79bb957591df456a2b9b73392d654e3817356cd4c59b4f4aa27749e946e1772"
+    },
+    {
+      "file": "e2e-clippy-final.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\e2e-clippy-final.log",
+      "bytes": 180,
+      "sha256": "33844ebc46c2d1bf77e8ad9f59f3ea68717ce0e57531904943d2edf64c06cccf"
+    },
+    {
+      "file": "frontend-final.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\frontend-final.log",
+      "bytes": 312,
+      "sha256": "821cf2da34764bee580784d027f0bf4c4b71020143237daef6c8f07cc923bbac"
+    },
+    {
+      "file": "typecheck-final.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\typecheck-final.log",
+      "bytes": 93,
+      "sha256": "1cf6c2590d412940241a69ff9be7fffde3adf97133b497b92c551e68c51fc2af"
+    },
+    {
+      "file": "native-red2.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\native-red2.log",
+      "bytes": 2311,
+      "sha256": "4cf476d3e6d77185901a0f489c7d425b86d25d8948f362ec9e2d2924627f0e6d"
+    },
+    {
+      "file": "native-green-guards.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\native-green-guards.log",
+      "bytes": 1389,
+      "sha256": "5e975c10b860ed0d21475422a9e8855aaad162fd769fae52c1baa662d65c913d"
+    },
+    {
+      "file": "frontend-contract.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\frontend-contract.log",
+      "bytes": 389,
+      "sha256": "08c8f5055a73f830bd402aeaafb075071897684b02bfe0f035e0b757b1db9230"
+    },
+    {
+      "file": "desktop-red.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\desktop-red.log",
+      "bytes": 4144,
+      "sha256": "70b6b7442cbda4c0550e0cf4ce93def0a4bae0af10c69c9611cd1b94950a7d70"
+    },
+    {
+      "file": "processed-reopen.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\processed-reopen.log",
+      "bytes": 10949,
+      "sha256": "7865340957632dfef86e4c01d0673fef62fba1b0e1c7fd35638155ee5b7cda12"
+    },
+    {
+      "file": "nsis-build.log",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\nsis-build.log",
+      "bytes": 1978,
+      "sha256": "616ed0f42f5fb57d9215da47015184b3d732bcd81ccec11b648b7c6787f150ba"
+    },
+    {
+      "file": "BUILD-PROVENANCE.json",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\BUILD-PROVENANCE.json",
+      "bytes": 2192,
+      "sha256": "674a6a6d751c3ab0d90662c7f53bb73c29b5b5bd64b9328e5eb542cab71429f8"
+    },
+    {
+      "file": "product-source-manifest.json",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\saveas-rescue\\product-source-manifest.json",
+      "bytes": 49971,
+      "sha256": "de0f1d7d55a4e0bee75e84d883818a7900efa92f8f489cf1865be039217d5d36"
+    },
+    {
+      "file": "readiness-red/processed-report.json",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\desktop-evidence\\desktop-p019gS\\processed\\report.json",
+      "bytes": 2825,
+      "sha256": "ff36f4e94b49a6b872f04c9a141fcddff3eeaac470b5d0b389814902a1730ef7"
+    },
+    {
+      "file": "readiness-red/failure.png",
+      "source": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\.test-output\\default-collaboration-v040\\task5\\desktop-evidence\\desktop-p019gS\\processed\\failure.png",
+      "bytes": 79391,
+      "sha256": "c4cd4fa42e7b66d966df1f7f81d445488d7b7fa4efbccf014e3af012845223ce"
+    },
+    {
+      "file": "formal-release-report.json",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\report.json",
+      "bytes": 2552,
+      "sha256": "36ce541fb4fede2a8abe3e15377106fab0d3ead0bb381e584d477e047550450e"
+    },
+    {
+      "file": "formal/about-040.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\about-040.png",
+      "bytes": 80463,
+      "sha256": "afefe9bcff71c267ea60c91fbd1fa545b483590cdf0a868a7717ef59c7aca4e5"
+    },
+    {
+      "file": "formal/copy-native-picker.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\copy-native-picker.png",
+      "bytes": 103703,
+      "sha256": "5a95338d863e5aa4edd425086faa5ac26d6e840deffaf12ed45bc6caaa0e1c82"
+    },
+    {
+      "file": "formal/create-native-picker.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\create-native-picker.png",
+      "bytes": 1987,
+      "sha256": "194f1fb021074fb244b49ffa55b57006c681760701be40575aaf6d7541215733"
+    },
+    {
+      "file": "formal/default-created-annotated.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\default-created-annotated.png",
+      "bytes": 119201,
+      "sha256": "176d0a52ae62b11856d87af95218c7bd6cf9f63d3cbb4df68500c03cac26cae2"
+    },
+    {
+      "file": "formal/default-personal-copy.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\default-personal-copy.png",
+      "bytes": 112200,
+      "sha256": "39ef1f303cc636a7570e8924a5df9ccf920065154cb1fbbb15184ab74b07f643"
+    },
+    {
+      "file": "formal/import-native-picker.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\import-native-picker.png",
+      "bytes": 78198,
+      "sha256": "e784170a22d7b22b5034f9bf725dd9967451b9254b53602aaadb96fb8033a6ec"
+    },
+    {
+      "file": "formal/peer-native-open-picker.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\peer-native-open-picker.png",
+      "bytes": 77850,
+      "sha256": "0829675fb14dc372e7fcdf597addc802595c80e4f4a27a3ebbaa3ed5d3d6352e"
+    },
+    {
+      "file": "formal/peer-viewonly-native-picker.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\peer-viewonly-native-picker.png",
+      "bytes": 866,
+      "sha256": "477a73eae4c692eafb2062b5985ee30323be72d05c92945e75e705c961dfe8e7"
+    },
+    {
+      "file": "formal/production-viewonly.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\production-viewonly.png",
+      "bytes": 112771,
+      "sha256": "fa5720c3e03d3a7d3c180c9579144f229b845d02b557e43b74d8466913768a5d"
+    },
+    {
+      "file": "formal/reopen-native-picker.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\reopen-native-picker.png",
+      "bytes": 87044,
+      "sha256": "df99e39ddbb54960d80040c560b2951952cc6847d7dd764ca448b50527053dcf"
+    },
+    {
+      "file": "formal/same-author-reopened.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\same-author-reopened.png",
+      "bytes": 118857,
+      "sha256": "adc23dc331a2da8ac3dbc71f1cc528c2ba551f4678145eec332b6e9bae2d3848"
+    },
+    {
+      "file": "formal/same-author-writer-refused.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\same-author-writer-refused.png",
+      "bytes": 113777,
+      "sha256": "1f4cc1425e669c55a01440b23b057e93c29a11ab3d5df3b82c5233144790b77d"
+    },
+    {
+      "file": "formal/share-native-picker.png",
+      "source": "C:\\Users\\DY\\AppData\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\formal-saveas-rescue-huBHRM\\share-native-picker.png",
+      "bytes": 128391,
+      "sha256": "d8313f8d1dc12da540d153aa3ba8daae3057761b827dc9ec74757a6e4507beb8"
+    }
+  ]
+}

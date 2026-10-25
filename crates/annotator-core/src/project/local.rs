@@ -18,6 +18,25 @@ pub struct LocalProject {
     recovery: Option<LoadReport>,
 }
 impl LocalProject {
+    /// The caller loads the repository outside its app mutex, then installs it behind
+    /// the expected-revision barrier. Saved content and live history remain separate.
+    pub fn adopt_shared_catalog(
+        &mut self,
+        id: &str,
+        revision: u64,
+        repo: std::sync::Arc<CollaborationRepository>,
+    ) -> Result<ProjectSnapshot> {
+        self.check(id, revision)?;
+        self.workspace()?.validate_catalog(&repo)?;
+        if self.workspace()?.manifest() == repo.manifest() {
+            return self.snapshot();
+        }
+        let mut session = self.active_session()?.clone();
+        session.adopt_catalog(repo.manifest())?;
+        self.workspace_mut()?.adopt_catalog(repo)?;
+        self.session = Some(session);
+        self.snapshot()
+    }
     /// Native creator-only seed: validation keeps the immutable catalog and actor binding.
     /// The full private document never enters the shared repository.
     pub fn initialize_shared_private(&mut self, document: ProjectDocument) -> Result<()> {
@@ -36,6 +55,9 @@ impl LocalProject {
     ) -> Result<ProjectSnapshot> {
         let current = self.check(id, revision)?.document;
         let workspace = self.workspace()?;
+        if workspace.manifest().format_version == 2 {
+            return Err(AppError::invalid("Format 2 has no guest publication"));
+        }
         if workspace.actor().is_none() {
             return Err(AppError::invalid(
                 "Sign in before publishing guest annotations",
@@ -77,6 +99,15 @@ impl LocalProject {
         local: &Path,
     ) -> Result<Self> {
         let workspace = PrivateWorkspace::open(repo, actor, local)?;
+        Self::from_workspace(workspace)
+    }
+    pub fn open_shared_view_only(
+        repo: std::sync::Arc<CollaborationRepository>,
+        local: &Path,
+    ) -> Result<Self> {
+        Self::from_workspace(PrivateWorkspace::open_view_only(repo, local)?)
+    }
+    fn from_workspace(workspace: PrivateWorkspace) -> Result<Self> {
         let recovery = workspace.recovery_report();
         let session = if recovery.is_some() {
             None
@@ -122,6 +153,24 @@ impl LocalProject {
         change: Change,
     ) -> Result<ProjectSnapshot> {
         if self.is_shared()
+            && self.workspace()?.is_view_only()
+            && !matches!(
+                change,
+                Change::RelinkMedia { .. }
+                    | Change::AddEdit { .. }
+                    | Change::UpdateEdit { .. }
+                    | Change::RemoveEdit { .. }
+                    | Change::SetEditEnabled { .. }
+                    | Change::UpdateAnalysis { .. }
+                    | Change::UpdatePlaybackMix { .. }
+                    | Change::UpdateViewState { .. }
+            )
+        {
+            return Err(AppError::invalid(
+                "View-only identity cannot change shared labels",
+            ));
+        }
+        if self.is_shared()
             && matches!(
                 change,
                 Change::ImportMedia { .. } | Change::RemoveMedia { .. }
@@ -132,9 +181,25 @@ impl LocalProject {
         self.active_session()?.apply_change(id, revision, change)
     }
     pub fn undo(&mut self, id: &str, revision: u64) -> Result<ProjectSnapshot> {
+        if self.is_shared() && self.workspace()?.is_view_only() {
+            let mut session = self.active_session()?.clone();
+            let snapshot = session.undo(id, revision)?;
+            self.workspace()?
+                .authorize_private_document(&snapshot.document)?;
+            self.session = Some(session);
+            return Ok(snapshot);
+        }
         self.active_session()?.undo(id, revision)
     }
     pub fn redo(&mut self, id: &str, revision: u64) -> Result<ProjectSnapshot> {
+        if self.is_shared() && self.workspace()?.is_view_only() {
+            let mut session = self.active_session()?.clone();
+            let snapshot = session.redo(id, revision)?;
+            self.workspace()?
+                .authorize_private_document(&snapshot.document)?;
+            self.session = Some(session);
+            return Ok(snapshot);
+        }
         self.active_session()?.redo(id, revision)
     }
     pub fn export_document(&self) -> Result<ProjectDocument> {

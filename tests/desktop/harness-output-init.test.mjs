@@ -14,11 +14,12 @@ for (const [script, prefix] of [['run-desktop-tests.mjs', 'desktop-'], ['measure
     const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'annotator-output-init-'));
     try {
       await assert.rejects(fs.stat(path.join(scratch, '.test-output')), { code: 'ENOENT' });
+      const initializationEnv={...process.env};delete initializationEnv.ANNOTATOR_DESKTOP_OUTPUT;
       const initialize = () => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e',
         `import fs from 'node:fs/promises'; import path from 'node:path';\n${initialization}\nconsole.log(JSON.stringify({output,project}));`],
-      { cwd: scratch, encoding: 'utf8', windowsHide: true }));
+      { cwd: scratch, env:initializationEnv, encoding: 'utf8', windowsHide: true }));
       const first = initialize();
-      assert.equal(path.dirname(first.output), path.join(scratch, '.test-output', 'fidelity-release'));
+      assert.equal(path.dirname(first.output), path.join(scratch, '.test-output', ...(script==='run-desktop-tests.mjs'?['default-collaboration-v040','task5']:['fidelity-release'])));
       assert.ok(path.basename(first.output).startsWith(prefix));
       assert.equal((await fs.stat(first.project)).isDirectory(), true);
       const sentinel = path.join(first.output, 'previous-evidence.txt');

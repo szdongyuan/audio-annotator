@@ -1,0 +1,68 @@
+{
+  "method": "Same normal production EXE, owned PID and real Win32/UIAutomation inputs/native pickers via scripts/release-ui.ps1; no test IPC or preset picker",
+  "checks": [
+    {
+      "name": "normal production EXE uses physical create/import pickers, automatic local author, copied audio and published UI annotation",
+      "passed": true,
+      "utc": "2026-10-25T17:41:38.210Z",
+      "authorId": "eea0e26b-de70-4a9d-a953-aa2ff4b289e1",
+      "sha256": "25a6a386be6423ee3958eae4897bcb682248fcf92f128652bd928fdf7e51f9c2"
+    },
+    {
+      "name": "actual open picker restores same automatic author, published note and private volume; normal process has no debugging arguments",
+      "passed": true,
+      "utc": "2026-10-25T17:42:18.582Z"
+    },
+    {
+      "name": "second normal process uses same Windows local identity: writer refused, explicit physical-picker view-only shows first author without write controls",
+      "passed": true,
+      "utc": "2026-10-25T17:43:17.591Z",
+      "primaryPid": 17676,
+      "peerPid": 40584
+    },
+    {
+      "name": "physical Save As and share pickers create independent default copy and complete own ZIP, preserving private volume",
+      "passed": true,
+      "utc": "2026-10-25T17:44:00.873Z"
+    },
+    {
+      "name": "same normal production executable reports 0.4.0",
+      "passed": true,
+      "utc": "2026-10-25T17:44:09.284Z"
+    }
+  ],
+  "runtime": {
+    "pid": 17676,
+    "fileVersion": "0.4.0",
+    "productVersion": "0.4.0",
+    "debugArgumentCount": 0
+  },
+  "artifacts": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\target\\release\\annotator-desktop.exe",
+      "bytes": 16595456,
+      "modifiedUtc": "2026-10-25T17:39:49.661Z",
+      "sha256": "9f13130d9cc525244fc0c41530d1ac861c6eb688fccaa59e46c7a718d0be0695",
+      "fileVersion": "0.4.0",
+      "signature": "NotSigned",
+      "productVersion": "0.4.0"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\target\\release\\bundle\\nsis\\Audio Annotator_0.4.0_x64-setup.exe",
+      "bytes": 221903372,
+      "modifiedUtc": "2026-10-25T17:39:49.629Z",
+      "sha256": "56dac820f3167d5e417825082183bd136cdaa4e7f53816bdd95667afb34e0606",
+      "productVersion": "0.4.0",
+      "fileVersion": "0.4.0",
+      "signature": "NotSigned"
+    }
+  ],
+  "absentTestMarkers": [
+    "ANNOTATOR_E2E_PATHS",
+    "ANNOTATOR_E2E_LOCAL_DATA",
+    "ANNOTATOR_E2E_DEBUG_PORT",
+    "No preselected e2e picker path",
+    "--remote-debugging-port=9235",
+    "PROFILE_IMPORT"
+  ]
+}

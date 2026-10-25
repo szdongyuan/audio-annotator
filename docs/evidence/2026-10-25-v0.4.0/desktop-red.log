@@ -1,0 +1,38 @@
+PASS no-account create, folder import stereo/six-channel and distinct automatic local authors
+PASS identical geometry remains two authors; editing own layer leaves foreign layer intact
+PASS foreign catalog polling leaves live document/draft/selection intact; explicit update saves draft and retains history/selection/panes
+PASS private masks, volume and hidden list do not affect other author or public catalog
+PASS fresh process reopens stable DPAPI local author with private state
+PASS optional account is isolated; logout returns original local author
+PASS second writer using same local identity is refused; explicit view-only opens and permits private volume
+TimeoutError: Save As must rescue without persisting the unavailable source
+Wait timed out after 30040ms
+    at D:\Work\annotator\.worktrees\default-collaboration-v040\node_modules\selenium-webdriver\lib\webdriver.js:929:22
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+  remoteStacktrace: ''
+}
+{
+  "output": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\saveas-rescue-red\\two-default-Zkl792",
+  "shared": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\saveas-rescue-red\\two-default-Zkl792\\shared",
+  "method": "Two real Tauri instances, independent localData roots, actual Selenium UI mutations; native picker return queues only. IPC read assertions only.",
+  "checks": [
+    "no-account create, folder import stereo/six-channel and distinct automatic local authors",
+    "identical geometry remains two authors; editing own layer leaves foreign layer intact",
+    "foreign catalog polling leaves live document/draft/selection intact; explicit update saves draft and retains history/selection/panes",
+    "private masks, volume and hidden list do not affect other author or public catalog",
+    "fresh process reopens stable DPAPI local author with private state",
+    "optional account is isolated; logout returns original local author",
+    "second writer using same local identity is refused; explicit view-only opens and permits private volume"
+  ],
+  "catalogAdoption": {
+    "paneBefore": [
+      "stereo.wav"
+    ],
+    "paneAfter": [
+      "stereo.wav"
+    ],
+    "savedActiveMediaId": "0ab3e166-f333-48da-b45d-93f5110e7c14"
+  },
+  "error": "TimeoutError: Save As must rescue without persisting the unavailable source\nWait timed out after 30040ms\n    at D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\node_modules\\selenium-webdriver\\lib\\webdriver.js:929:22\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+  "body": "文件\n编辑\n视图\n标注\n音频\n协作\n帮助\nshared\n保存失败\n本机作者 · 57e21583\n本机未保存\n单文件\n双文件对比\n保存\n导入音频\n分析设置\n音频文件\n2\n显示隐藏音频（1）\nmono16.wav\n1 通道 · 0.100 秒 · 48 kHz\n未分类 · 0 个标注\n从我的列表隐藏\n等待校验\n重新关联\nstereo.wav\n2 通道 · 3.000 秒 · 48 kHz\n未分类 · 1 个标注\n从我的列表隐藏\nCollaboration I/O failed: 拒绝访问。 (os error 5)\nmono16.wav\nstereo.wav\nstereo.wav\n未分类\n⌄\n48 kHz · 3.00 秒 · 2 通道\n▶\n设置\n1\n2\n全部\nSTFT 频谱\n梅尔频谱\n通道 1\n未分类\n⌄\nSTFT 幅度\n0.13 s\n0.5 s\n0.8 s\n1 s\n1.2 s\n1.5 s\n1.77 s\n7.25k\n6k\n5k\n4k\n3k\n2k\n1.5k\n1k\n500\n300\n200\n100\n50\n20\n10\n0\n本机作者 · 60bd6cb6 · 未分类\n本机作者 · 57e21583 · 未分类\n屏蔽 · 启用\n播放\n▾\n标注 ▾\n0\n-100\ndB\n标注与属性\n1 个区域\n区域\n列表\n文件/通道\n作者\n类别\n屏蔽\n混合\n设备\n\nstereo.wav · 通道 1\n\n开始（秒）\n结束（秒）\n下界（Hz）\n上界（Hz）\n区域类别\n未分类\n区域备注\n删除标注\n00:00.000/ 00:03.000\n已停止\n原音\n暂存编辑\nSave the current project first\n重试\n另存我的项目副本…\n关闭提示"
+}

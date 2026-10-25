@@ -174,6 +174,28 @@ it('continues valid files after decoder failure and leaves completed folder resu
   expect(s.controller.items).toEqual(results);
 });
 
+it.each(['zero-candidates', 'cancel-scan'] as const)('keeps prior folder results hidden after a later %s, without hiding a genuine direct import', async outcome => {
+  const s=setup(1);
+  vi.mocked(s.media.release).mockRejectedValueOnce({code:'SaveFailed',message:'owned acknowledgement failure',retryable:true});
+  await s.controller.choose(async()=>'D:/first');s.result();await waitFor(()=>expect(s.media.start).toHaveBeenCalledTimes(1));s.finish(1);
+  await waitFor(()=>expect(s.controller.state).toBe('finished'));s.controller.dismiss();
+  expect(s.controller.ownsCurrentBatch).toBe(true);
+  expect(s.imports.pendingAcknowledgements).toHaveLength(1);
+  await s.controller.choose(async()=>'D:/next');
+  expect(s.controller.ownsCurrentBatch).toBe(true);
+  if(outcome==='zero-candidates'){
+    s.result({checked:1,candidates:0,existing:1});await waitFor(()=>expect(s.controller.state).toBe('finished'));
+  }else{s.controller.cancel();expect(s.controller.state).toBe('cancelled');}
+  s.controller.dismiss();expect(s.controller.state).toBe('idle');expect(s.controller.items).toEqual([]);
+  expect(s.controller.ownsCurrentBatch).toBe(true);
+  // The global acknowledgement panel keeps authority even though folder result rows changed.
+  expect(s.imports.pendingAcknowledgements).toHaveLength(1);await s.imports.retryAcknowledgements();
+  expect(s.imports.pendingAcknowledgements).toHaveLength(0);expect(s.commands.applyChange).toHaveBeenCalledTimes(1);
+  await s.imports.start(['D:/genuine-direct.wav']);expect(s.controller.ownsCurrentBatch).toBe(false);
+  s.finish(2);await s.imports.completed();expect(s.imports.items[0].path).toBe('D:/genuine-direct.wav');
+  expect(s.controller.ownsCurrentBatch).toBe(false);expect(s.commands.applyChange).toHaveBeenCalledTimes(2);
+});
+
 it.each(['start','result'] as const)('rejects late scan %s after same-id save-as owner disposal', async stage => {
   const s = setup(); const ack=deferred<typeof token>();
   if(stage==='start')vi.mocked(s.folder.start).mockReturnValueOnce(ack.promise);
@@ -246,7 +268,7 @@ it.each(['retry-first', 'end-first'] as const)('serializes actual global Retry a
   expect(replace).toHaveBeenCalledOnce(); expect(s.controller.error).toBeNull();
   expect(s.controller.successCount).toBe(order === 'retry-first' ? 1 : 0);
   expect(s.commands.applyChange).toHaveBeenCalledTimes(order === 'retry-first' ? 2 : 1);
-  expect(s.media.release).toHaveBeenCalledTimes(order === 'retry-first' ? 0 : 1);
+  expect(s.media.release).toHaveBeenCalledTimes(1);
 });
 
 it.each(['retry-first', 'end-first'] as const)('serializes project-wide Retry with folder abandonment (%s)', async order => {
@@ -279,4 +301,27 @@ it('keeps the actual global Retry button draft-aware inside shared recovery admi
   await waitFor(() => expect(s.queue.unresolvedFailures).toHaveLength(0));
   expect(s.commands.applyChange).toHaveBeenLastCalledWith(fixture.projectId, fixture.revision, { ...change, note: 'newer draft' });
   expect(s.store.drafts.size).toBe(0); hook.unmount();
+});
+
+it('default writable owners can folder-import; view-only and legacy fixed catalogs cannot',()=>{
+ const a=setup(1);Object.assign(a.owner,{collaboration:{projectFlavor:'default',canImportMedia:true}});expect(a.controller.begin()).toBe(true);a.controller.cancel();
+ const b=setup(1);Object.assign(b.owner,{collaboration:{projectFlavor:'default',canImportMedia:false}});expect(b.controller.begin()).toBe(false);
+ const c=setup(1);Object.assign(c.owner,{collaboration:{projectFlavor:'legacyShared',canImportMedia:false}});expect(c.controller.begin()).toBe(false);
+});
+it('acknowledgement service errors do not turn an accepted folder import into a failed file',async()=>{
+ const s=setup(1);vi.mocked(s.media.release).mockRejectedValueOnce({code:'SaveFailed',message:'release unavailable',retryable:true});await s.controller.choose(async()=>'D:/audio');s.result();await waitFor(()=>expect(s.media.start).toHaveBeenCalled());s.finish(1);await waitFor(()=>expect(s.controller.state).toBe('finished'));expect(s.controller.successCount).toBe(1);expect(s.controller.failedCount).toBe(0);expect(s.controller.pendingAcknowledgements).toHaveLength(1);await s.controller.retry();expect(s.controller.pendingAcknowledgements).toHaveLength(0);
+});
+
+it.each(['folder-folder','folder-direct','direct-folder'] as const)('retained acknowledgement recovery crosses %s result ownership without replaying accepted media',async route=>{
+ const s=setup(1);vi.mocked(s.media.release).mockRejectedValueOnce({code:'SaveFailed',message:'release unavailable',retryable:true});
+ for(const [index,kind] of route.split('-').entries()){
+  if(kind==='folder'){await s.controller.choose(async()=>`D:/audio${index}`);s.result();await waitFor(()=>expect(s.media.start).toHaveBeenCalledTimes(index+1));s.finish(index+1);await waitFor(()=>expect(s.controller.state).toBe('finished'));s.controller.dismiss();}
+  else{await s.imports.start([`D:/direct${index}.wav`]);s.finish(index+1);await s.imports.settled();}
+ }
+ const original=['batch1','00000000-0000-4000-8000-000000001000'];expect(s.imports.pendingAcknowledgements).toHaveLength(1);await s.controller.retry();expect(s.imports.pendingAcknowledgements).toHaveLength(0);expect(vi.mocked(s.media.release).mock.calls.filter(call=>call[0]===original[0])).toEqual([original,original]);expect(s.media.start).toHaveBeenCalledTimes(2);expect(s.commands.applyChange).toHaveBeenCalledTimes(2);
+});
+
+it('Retry from the latest folder batch acknowledges an earlier batch capability without replay',async()=>{
+ const s=setup(257);vi.mocked(s.media.release).mockRejectedValueOnce({code:'SaveFailed',message:'release unavailable',retryable:true});await s.controller.choose(async()=>'D:/audio');s.result();await waitFor(()=>expect(s.media.start).toHaveBeenCalledTimes(1));s.finish(1);await waitFor(()=>expect(s.media.start).toHaveBeenCalledTimes(2));s.finish(2);await waitFor(()=>expect(s.controller.state).toBe('finished'));
+ const old=s.imports.pendingAcknowledgements[0];expect(s.imports.items).not.toContain(old);await s.imports.retry();expect(s.imports.pendingAcknowledgements).toHaveLength(0);expect(s.media.release).toHaveBeenLastCalledWith('batch1','00000000-0000-4000-8000-000000001000');expect(s.media.start).toHaveBeenCalledTimes(2);expect(s.commands.applyChange).toHaveBeenCalledTimes(257);
 });

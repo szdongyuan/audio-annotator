@@ -1,4 +1,5 @@
 //! App-local durable personal projections. No save/capture/ack method accesses the share.
+use super::catalog_workspace::{equivalent, extend_document, validate_extension};
 use super::{atomic, validation::*, *};
 use crate::{
     error::{AppError, ErrorCode, Result},
@@ -56,11 +57,16 @@ pub struct PrivateEnvelope {
     format_version: u32,
     root_key: String,
     manifest_hash: String,
+    // Public descriptor authority must survive private source-path relinks.
+    #[serde(default)]
+    catalog: Option<Vec<PublicMedia>>,
     actor: String,
     pub sequence: u64,
     pub generation: u64,
     pub document: ProjectDocument,
     pub preferences: PlaybackPreferences,
+    #[serde(default)]
+    hidden_media_ids: Vec<String>,
     #[serde(deserialize_with = "crate::model::required_nullable")]
     pub base: Option<Checkpoint>,
     pub confirmed: LayerPayload,
@@ -114,7 +120,13 @@ impl PrivateWorkspace {
         else {
             return Ok(None);
         };
-        if self.envelope.in_flight.is_none() && pending.payload == self.envelope.confirmed {
+        if self.envelope.in_flight.is_none()
+            && equivalent(
+                &pending.payload,
+                &self.envelope.confirmed,
+                self.repo.manifest(),
+            )?
+        {
             let mut next = self.envelope.clone();
             next.pending = None;
             self.commit(next)?;
@@ -161,6 +173,25 @@ impl PrivateWorkspace {
         actor: Option<Arc<AuthorSession>>,
         app_local: &Path,
     ) -> Result<Self> {
+        require(
+            repo.manifest().format_version != 2 || actor.is_some(),
+            "Format 2 requires an author or explicit view-only open",
+        )?;
+        Self::open_inner(repo, actor, app_local, false)
+    }
+    pub fn open_view_only(repo: Arc<CollaborationRepository>, app_local: &Path) -> Result<Self> {
+        require(
+            repo.manifest().format_version == 2,
+            "View-only identity requires format 2",
+        )?;
+        Self::open_inner(repo, None, app_local, true)
+    }
+    fn open_inner(
+        repo: Arc<CollaborationRepository>,
+        actor: Option<Arc<AuthorSession>>,
+        app_local: &Path,
+        view_only: bool,
+    ) -> Result<Self> {
         if let Some(actor) = &actor {
             require(
                 actor.belongs_to(&repo),
@@ -176,7 +207,9 @@ impl PrivateWorkspace {
         let root_key = hash(repo.root().to_string_lossy().as_bytes());
         let actor_id = actor
             .as_ref()
-            .map_or("guest", |a| a.identity().author_id.as_str())
+            .map_or(if view_only { "view-only" } else { "guest" }, |a| {
+                a.identity().author_id.as_str()
+            })
             .to_owned();
         let mut root = app_local;
         for segment in [
@@ -189,10 +222,14 @@ impl PrivateWorkspace {
             atomic::ensure_dir(&root)?;
         }
         let lock = atomic::lock(&root.join(".workspace.lock"))?;
-        let manifest_hash = hash(
-            &serde_json::to_vec(repo.manifest())
-                .map_err(|_| AppError::invalid("Cannot encode manifest"))?,
-        );
+        let manifest_hash = if repo.manifest().format_version == 2 {
+            repo.manifest_identity().to_owned()
+        } else {
+            hash(
+                &serde_json::to_vec(repo.manifest())
+                    .map_err(|_| AppError::invalid("Cannot encode manifest"))?,
+            )
+        };
         let initial = repo.manifest().base_document()?;
         let empty = LayerPayload::from_document(&initial)?;
         let mut envelope = PrivateEnvelope {
@@ -200,11 +237,13 @@ impl PrivateWorkspace {
             format_version: 1,
             root_key,
             manifest_hash,
+            catalog: (repo.manifest().format_version == 2).then(|| repo.manifest().media.clone()),
             actor: actor_id,
             sequence: 0,
             generation: 0,
             document: initial,
             preferences: PlaybackPreferences::default(),
+            hidden_media_ids: vec![],
             base: None,
             confirmed: empty,
             pending: None,
@@ -221,7 +260,17 @@ impl PrivateWorkspace {
                 any_cache = true;
                 let result = atomic::read(&path, MAX_CACHE_BYTES)
                     .and_then(|b| decode::<PrivateEnvelope>(&b, MAX_CACHE_BYTES, CACHE_KIND))
-                    .and_then(|candidate| {
+                    .and_then(|mut candidate| {
+                        if repo.manifest().format_version == 2 {
+                            let mut previous = repo.manifest().clone();
+                            previous.media = candidate.catalog.clone().ok_or_else(|| {
+                                AppError::invalid("Missing private catalog authority")
+                            })?;
+                            validate_envelope(&candidate, &envelope, &previous)?;
+                            validate_extension(&previous, repo.manifest())?;
+                            candidate.catalog = Some(repo.manifest().media.clone());
+                            extend_document(&mut candidate.document, repo.manifest())?;
+                        }
                         validate_envelope(&candidate, &envelope, repo.manifest())?;
                         Ok(candidate)
                     });
@@ -297,6 +346,26 @@ impl PrivateWorkspace {
             "Choose a private recovery checkpoint before editing or publishing",
         )
     }
+    pub(crate) fn adopt_catalog(&mut self, repo: Arc<CollaborationRepository>) -> Result<()> {
+        self.require_ready()?;
+        self.validate_catalog(&repo)?;
+        let mut next = self.envelope.clone();
+        extend_document(&mut next.document, repo.manifest())?;
+        next.catalog = (repo.manifest().format_version == 2).then(|| repo.manifest().media.clone());
+        next.document.revision = increment(next.document.revision)?;
+        self.commit_for_manifest(next, repo.manifest())?;
+        // Keep the admitted capture nonce and author lease: old payloads remain valid.
+        self.repo = repo;
+        Ok(())
+    }
+    pub(crate) fn validate_catalog(&self, repo: &CollaborationRepository) -> Result<()> {
+        require(
+            repo.root() == self.repo.root()
+                && repo.manifest_identity() == self.repo.manifest_identity(),
+            "Catalog repository identity changed",
+        )?;
+        validate_extension(self.repo.manifest(), repo.manifest())
+    }
     pub fn persisted_revision(&self) -> u64 {
         self.recovery
             .as_ref()
@@ -365,8 +434,66 @@ impl PrivateWorkspace {
     pub fn preferences(&self) -> &PlaybackPreferences {
         &self.envelope.preferences
     }
+    pub fn is_view_only(&self) -> bool {
+        self.repo.manifest().format_version == 2 && self.actor.is_none()
+    }
+    pub fn hidden_media_ids(&self) -> &[String] {
+        &self.envelope.hidden_media_ids
+    }
+    /// Private visibility never changes labels, history, catalog membership or exports.
+    pub fn set_media_hidden(&mut self, media_id: &str, hidden: bool) -> Result<()> {
+        self.require_ready()?;
+        require(
+            self.repo.manifest().format_version == 2,
+            "Private hiding requires format 2",
+        )?;
+        require(
+            self.repo.manifest().media.iter().any(|m| m.id == media_id),
+            "Unknown hidden media",
+        )?;
+        let mut ids = self.envelope.hidden_media_ids.clone();
+        ids.retain(|id| id != media_id);
+        if hidden {
+            ids.push(media_id.to_owned());
+        }
+        self.set_hidden_media_ids(ids)
+    }
+    /// Validate and persist the complete private visibility list in one atomic envelope write.
+    /// Duplicate/unknown IDs fail before any durable mutation; ordering is canonical/idempotent.
+    pub fn set_hidden_media_ids(&mut self, mut ids: Vec<String>) -> Result<()> {
+        self.require_ready()?;
+        require(
+            self.repo.manifest().format_version == 2,
+            "Private hiding requires format 2",
+        )?;
+        limit(ids.len() <= super::validation::MAX_MEDIA)?;
+        ids.sort();
+        if ids == self.envelope.hidden_media_ids {
+            return Ok(());
+        }
+        let mut next = self.envelope.clone();
+        next.hidden_media_ids = ids;
+        self.commit(next)
+    }
+    pub(crate) fn authorize_private_document(&self, document: &ProjectDocument) -> Result<()> {
+        if self.is_view_only() {
+            require(
+                equivalent(
+                    &LayerPayload::from_document(document)?,
+                    &self.envelope.confirmed,
+                    self.repo.manifest(),
+                )?,
+                "View-only identity cannot change shared labels",
+            )?;
+        }
+        Ok(())
+    }
     pub fn sync_error(&self) -> Option<&AppError> {
         self.sync_error.as_ref()
+    }
+    /// Captured native lease for bounded catalog publication; never serializable.
+    pub fn author_session(&self) -> Option<Arc<AuthorSession>> {
+        self.actor.clone()
     }
     pub fn actor(&self) -> Option<&AuthorIdentity> {
         self.actor.as_ref().map(|a| a.identity())
@@ -382,6 +509,7 @@ impl PrivateWorkspace {
     }
     pub fn save(&mut self, document: &ProjectDocument) -> Result<()> {
         self.require_ready()?;
+        self.authorize_private_document(document)?;
         require(
             document.revision >= self.envelope.document.revision,
             "Cannot save an older personal document",
@@ -391,7 +519,9 @@ impl PrivateWorkspace {
         next.generation = increment(next.generation)?;
         let payload = LayerPayload::from_document(document)?;
         // An in-flight A must be acknowledged before a saved revert to the old base can publish.
-        next.pending = if payload != next.confirmed || next.in_flight.is_some() {
+        next.pending = if !equivalent(&payload, &next.confirmed, self.repo.manifest())?
+            || next.in_flight.is_some()
+        {
             Some(PendingPayload {
                 generation: next.generation,
                 hash: payload.hash()?,
@@ -402,9 +532,17 @@ impl PrivateWorkspace {
         };
         self.commit(next)
     }
-    fn commit(&mut self, mut next: PrivateEnvelope) -> Result<()> {
+    fn commit(&mut self, next: PrivateEnvelope) -> Result<()> {
+        let repo = self.repo.clone();
+        self.commit_for_manifest(next, repo.manifest())
+    }
+    fn commit_for_manifest(
+        &mut self,
+        mut next: PrivateEnvelope,
+        manifest: &CollaborationManifest,
+    ) -> Result<()> {
         next.sequence = increment(self.envelope.sequence.max(next.sequence))?;
-        validate_envelope(&next, &self.envelope, self.repo.manifest())?;
+        validate_envelope(&next, &self.envelope, manifest)?;
         let bytes = serde_json::to_vec(&next)
             .map_err(|_| AppError::invalid("Cannot encode private workspace"))?;
         limit(bytes.len() <= MAX_CACHE_BYTES)?;
@@ -509,7 +647,11 @@ impl PrivateWorkspace {
         install_payload(&mut next.document, &payload, self.repo.manifest())?;
         next.document.revision = increment(next.document.revision)?;
         next.base = checkpoint;
-        next.confirmed = LayerPayload::from_document(&next.document)?;
+        next.confirmed = if self.repo.manifest().format_version == 2 {
+            payload
+        } else {
+            LayerPayload::from_document(&next.document)?
+        };
         self.commit(next)
     }
     /// Polling may acknowledge our admitted write, but must never replace live session content.
@@ -573,7 +715,11 @@ impl PrivateWorkspace {
         install_payload(&mut next.document, &payload, self.repo.manifest())?;
         next.document.revision = increment(next.document.revision)?;
         next.base = remote.map(AuthorLayer::checkpoint);
-        next.confirmed = LayerPayload::from_document(&next.document)?;
+        next.confirmed = if self.repo.manifest().format_version == 2 {
+            payload
+        } else {
+            LayerPayload::from_document(&next.document)?
+        };
         next.pending = None;
         next.in_flight = None;
         self.commit(next)?;
@@ -600,7 +746,25 @@ fn validate_envelope(
         "Private cache identity mismatch",
     )?;
     limit(e.sequence <= MAX_SAFE_INTEGER && e.generation <= MAX_SAFE_INTEGER)?;
+    require(
+        if manifest.format_version == 2 {
+            e.catalog.as_ref() == Some(&manifest.media)
+        } else {
+            e.catalog.is_none()
+        },
+        "Private catalog authority mismatch",
+    )?;
     e.document.validate()?;
+    if manifest.format_version == 1 {
+        require(
+            e.document
+                .media
+                .iter()
+                .map(|m| &m.id)
+                .eq(manifest.media.iter().map(|m| &m.id)),
+            "Legacy private catalog order changed",
+        )?;
+    }
     require(
         e.document.project_id == manifest.project_id
             && e.document.name == manifest.name
@@ -608,11 +772,13 @@ fn validate_envelope(
             && e.document.media.len() == manifest.media.len(),
         "Private catalog identity mismatch",
     )?;
-    for (local, public) in e.document.media.iter().zip(&manifest.media) {
+    for local in &e.document.media {
         require(
-            local.id == public.id
-                && local.display_name == public.display_name
-                && crate::media::registry::same_identity(local, &public.descriptor()),
+            manifest.media.iter().any(|public| {
+                local.id == public.id
+                    && local.display_name == public.display_name
+                    && crate::media::registry::same_identity(local, &public.descriptor())
+            }),
             "Private media catalog changed",
         )?;
     }
@@ -644,14 +810,34 @@ fn validate_envelope(
         pending.payload.project(manifest)?;
     }
     let current_payload = LayerPayload::from_document(&e.document)?;
+    limit(e.hidden_media_ids.len() <= super::validation::MAX_MEDIA)?;
+    let mut hidden = std::collections::HashSet::new();
+    for id in &e.hidden_media_ids {
+        uuid(id)?;
+        require(
+            hidden.insert(id) && manifest.media.iter().any(|m| &m.id == id),
+            "Invalid hidden media preference",
+        )?;
+    }
+    if manifest.format_version == 2 && e.actor == "view-only" {
+        require(
+            e.base.is_none()
+                && e.pending.is_none()
+                && e.in_flight.is_none()
+                && equivalent(&e.confirmed, &LayerPayload::default(), manifest)?
+                && equivalent(&current_payload, &e.confirmed, manifest)?,
+            "View-only cache contains shared mutations",
+        )?;
+    }
     if let Some(pending) = &e.pending {
         require(
-            pending.generation == e.generation && pending.payload == current_payload,
+            pending.generation == e.generation
+                && equivalent(&pending.payload, &current_payload, manifest)?,
             "Pending does not match latest personal document",
         )?;
     } else {
         require(
-            e.in_flight.is_none() && current_payload == e.confirmed,
+            e.in_flight.is_none() && equivalent(&current_payload, &e.confirmed, manifest)?,
             "Changed personal content is missing its pending checkpoint",
         )?;
     }
@@ -665,11 +851,16 @@ pub(crate) fn install_payload(
     let projected = payload.project(manifest)?;
     document.categories = projected.categories;
     document.annotations = projected.annotations;
-    for (media, labels) in document.media.iter_mut().zip(projected.media) {
-        media.note = labels.note;
-        media.category_id = labels.category_id;
-        media.channel_notes = labels.channel_notes;
-        media.channel_category_ids = labels.channel_category_ids;
+    for media in &mut document.media {
+        let labels = projected
+            .media
+            .iter()
+            .find(|m| m.id == media.id)
+            .ok_or_else(|| AppError::invalid("Missing media labels"))?;
+        media.note = labels.note.clone();
+        media.category_id = labels.category_id.clone();
+        media.channel_notes = labels.channel_notes.clone();
+        media.channel_category_ids = labels.channel_category_ids.clone();
     }
     document.validate()
 }

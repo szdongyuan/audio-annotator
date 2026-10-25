@@ -49,7 +49,8 @@ export async function start(paths, output, executable = path.resolve('target/deb
   const {ports,localDataEnv}=instanceOptions(options),ownedPorts=Object.values(ports),port=ports.driver;
   await assertTestPortsAvailable(ownedPorts);
   const tools = JSON.parse(await fs.readFile('.tools/webdriver.json', 'utf8'));
-  const native = spawn(executable, [], { windowsHide: true, env: { ...process.env, ...(localDataEnv?{ANNOTATOR_E2E_LOCAL_DATA:localDataEnv}:{}), ANNOTATOR_E2E_DEBUG_PORT: String(ports.debug), ANNOTATOR_E2E_PATHS: JSON.stringify(paths), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${ports.debug}`, WEBVIEW2_USER_DATA_FOLDER: path.join(output, `webview-${Date.now()}`) } });
+  const requestedLocal=localDataEnv??path.join(output,'local-data');await fs.mkdir(requestedLocal,{recursive:true});const ownedLocal=await fs.realpath(requestedLocal);
+  const native = spawn(executable, [], { windowsHide: true, env: { ...process.env, ANNOTATOR_E2E_LOCAL_DATA:ownedLocal, ANNOTATOR_E2E_DEBUG_PORT: String(ports.debug), ANNOTATOR_E2E_PATHS: JSON.stringify(paths), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${ports.debug}`, WEBVIEW2_USER_DATA_FOLDER: path.join(output, `webview-${Date.now()}`) } });
   const proc = spawn(tools.tauriDriver, ['--port', String(port), '--native-port', String(ports.native), '--native-driver', tools.edgeDriver], { windowsHide: true });
   let log = ''; proc.stdout.on('data', b => { log += b; }); proc.stderr.on('data', b => { log += b; });
   native.stdout.on('data', b => { log += b; }); native.stderr.on('data', b => { log += b; });
@@ -70,6 +71,8 @@ export async function start(paths, output, executable = path.resolve('target/deb
     evaluate: (script, ...args) => driver.executeScript(script, ...args),
     async until(script, label = script, timeout = 60000) { await driver.wait(async () => !!await driver.executeScript(`return (${script})`), timeout, label, 50); },
     element: selector => driver.findElement(By.css(selector)),
+    async selectMedia(name) { await driver.findElement(By.xpath(`//button[contains(@class,'media-select') and .//strong[normalize-space(.)='${name}']]`)).click(); await h.until(`document.querySelector('.file-pane h2')?.textContent===${JSON.stringify(name)}&&!document.querySelector('.tile-status')`); },
+    async bindSources(names) { await h.until(`document.querySelector('[aria-label="关联原始音频"]')`); for(const name of names) await driver.findElement(By.xpath(`//div[@aria-label='关联原始音频']/div[span[normalize-space(.)='${name}']]/button`)).click(); await h.clickText('校验并导入'); },
     async clickText(text) { const elements = await driver.findElements(By.xpath(`//button[normalize-space(.)='${text}']`)); for (const e of elements) if (await e.isDisplayed()) { await e.click(); return; } throw new Error(`No visible button: ${text}`); },
     async click(selector) { await (await h.element(selector)).click(); },
     async label(label) { await h.click(`[aria-label="${label}"]`); },
@@ -79,7 +82,7 @@ export async function start(paths, output, executable = path.resolve('target/deb
     async screenshot(name) { await fs.writeFile(path.join(output, `${name}.png`), await driver.takeScreenshot(), 'base64'); },
     async drag(selector, a, b) { const e = await h.element(selector); await driver.executeScript('arguments[0].scrollIntoView({block:"nearest"})', e); const r = await e.getRect(); await driver.actions({ async: true }).move({ x: Math.round(r.x + r.width * a[0]), y: Math.round(r.y + r.height * a[1]), origin: 'viewport' }).pause(80).press().move({ x: Math.round(r.x + r.width * b[0]), y: Math.round(r.y + r.height * b[1]), origin: 'viewport', duration: 180 }).release().perform(); },
     async context(selector, point = [.5,.5]) { const e = await h.element(selector), r = await e.getRect(); await driver.actions({ async: true }).move({ x: Math.round(r.x + r.width * point[0]), y: Math.round(r.y + r.height * point[1]), origin: 'viewport' }).press(2).release(2).perform(); },
-    async snapshot(id) { return driver.executeAsyncScript('const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke("get_project_snapshot",{projectId:arguments[0]}).then(done,e=>done({error:e}));', id); },
+    async snapshot(id) { return driver.executeAsyncScript('const done=arguments[arguments.length-1],projectId=arguments[0];window.__TAURI_INTERNALS__.invoke("collaboration_status").then(s=>window.__TAURI_INTERNALS__.invoke("get_project_snapshot",{projectId,...(s.shared?{runtimeNonce:s.runtimeNonce}:{})})).then(done,e=>done({error:e}));', id); },
     async quit() { try { await Promise.race([driver.quit().catch(()=>{}),wait(5000)]); } finally { stop(proc); stop(native); await fs.writeFile(path.join(output, `driver-${native.pid}.log`), log); await waitForTestPortsReleased(ownedPorts); } },
   };
   return h;

@@ -1,0 +1,13 @@
+
+> audio-annotator@0.4.0 test
+> vitest run src/features/project/lifecycle.test.tsx src/features/project/sharedLifecycle.test.tsx
+
+
+ RUN  v4.1.12 D:/Work/annotator/.worktrees/default-collaboration-v040
+
+
+ Test Files  2 passed (2)
+      Tests  28 passed (28)
+   Start at  00:59:25
+   Duration  1.85s (transform 369ms, setup 398ms, import 444ms, tests 892ms, environment 1.05s)
+

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { start } from './harness.mjs';
 
-const parent = path.resolve('.test-output/task6-folders');
+const parent = path.resolve(process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/default-collaboration-v040/task5/desktop-evidence/folder-scan');
 await fs.mkdir(parent, { recursive: true });
 const output = await fs.mkdtemp(path.join(parent, 'native-'));
 const audio = path.join(output, 'audio');
@@ -20,7 +20,7 @@ let h;
 try {
   h = await start({}, output);
   const invoke = async (command, args) => {
-    const result = await h.driver.executeAsyncScript(`const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke(arguments[0],arguments[1]).then(value=>done({ok:true,value}),error=>done({ok:false,error}));`, command, args);
+    const result = await h.driver.executeAsyncScript(`const done=arguments[arguments.length-1];const command=arguments[0],args=arguments[1];window.__TAURI_INTERNALS__.invoke("collaboration_status").then(s=>window.__TAURI_INTERNALS__.invoke(command,{...(s.shared?{runtimeNonce:s.runtimeNonce}:{}),...args,...(args.expected?{expected:{...(s.shared?{runtimeNonce:s.runtimeNonce}:{}),...args.expected}}:{})})).then(value=>done({ok:true,value}),error=>done({ok:false,error}));`, command, args);
     if (!result.ok) throw Object.assign(new Error(JSON.stringify(result.error)), result.error);
     return result.value;
   };
@@ -35,7 +35,7 @@ try {
   };
   const page = token => invoke('folder_scan_page', { token, kind: 'candidates', offset: 0, limit: 256 });
   const opened = await invoke('create_project', { path: project, name: 'folder-native' });
-  const id = opened.snapshot.document.projectId;
+  let id = opened.snapshot.document.projectId;
   let token = await scan(id); let result = await terminal();
   assert.equal(result.type, 'result'); assert.equal(result.counts.candidates, 260); assert.equal(result.counts.skipped, 1);
   assert.equal((await page(token)).candidates.length, 256);
@@ -46,14 +46,14 @@ try {
   await invoke('release_folder_scan', { token }); await assert.rejects(page(token));
   report.checks.push('nonrecursive discovery; 256+4 pages; strict owner/size; no document import; release');
   token = await scan(id, true); result = await terminal(); assert.equal(result.counts.candidates, 261);
-  await invoke('save_project_as', { path: saved, projectId: id, expectedRevision: 0 }); await assert.rejects(page(token));
+  const copied=await invoke('save_project_as', { path: saved, projectId: id, expectedRevision: 0 });id=copied.snapshot.document.projectId; await assert.rejects(page(token));
   const savedToken = await scan(id); await terminal(); assert.notEqual(savedToken.ownerId, token.ownerId);
   await assert.rejects(invoke('cancel_folder_scan', { token })); assert.equal((await page(savedToken)).total, 260);
   report.checks.push('recursive scan; save-as resets owner; old cancel cannot affect next result');
-  await invoke('close_project', { projectId: id, expectedRevision: 0, discard: true }); await assert.rejects(page(savedToken));
-  const reopened = await invoke('open_project', { path: path.join(saved, 'project.json') });
+  await invoke('close_project', { projectId: id, expectedRevision: copied.snapshot.document.revision, discard: true }); await assert.rejects(page(savedToken));
+  const reopened = await invoke('open_project', { path: path.join(saved, 'collaboration.json') });
   token = await scan(reopened.snapshot.document.projectId); await terminal();
-  await invoke('close_project', { projectId: id, expectedRevision: 0, discard: true });
+  await invoke('close_project', { projectId: reopened.snapshot.document.projectId, expectedRevision: reopened.snapshot.document.revision, discard: true });
   const created = await invoke('create_project', { path: next, name: 'new-owner' });
   await assert.rejects(page(token));
   const nextId = created.snapshot.document.projectId;

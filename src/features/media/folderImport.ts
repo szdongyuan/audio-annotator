@@ -20,6 +20,9 @@ export class FolderImportController {
   private result: Extract<FolderEvent, { type: 'result' }> | null = null;
   private offset = 0;
   private batchCompletion: Promise<void> = Promise.resolve();
+  // Presentation ownership outlives result resets: an empty later scan must not
+  // reinterpret the previous folder batch as a direct import. Keep one batch only.
+  private ownedBatch: ImportItem[] | null = null;
   private running: number | null = null;
   private disposed = false;
   private generation = 0;
@@ -34,14 +37,15 @@ export class FolderImportController {
   getVersion = () => this.version;
   private notify() { this.version++; this.listeners.forEach(fn => fn()); }
   get busy() { return ['choosing', 'scanning', 'importing', 'paused'].includes(this.state); }
-  get ownsCurrentBatch() { return !!this.imports.items.length && this.items.includes(this.imports.items[0] as FolderImportItem); }
+  get ownsCurrentBatch() { return !!this.imports.items.length && this.imports.items === this.ownedBatch; }
   get failures() { return this.imports.failures(this.items); }
+  get pendingAcknowledgements(){return this.imports.pendingAcknowledgements.filter(item=>this.items.includes(item as FolderImportItem));}
   get otherFailures() { return this.owner.queue.unresolvedFailures.length - this.failures.length; }
-  get successCount() { this.imports.failures(this.items); return this.items.filter(i => i.state === 'success').length; }
+  get successCount() { this.imports.failures(this.items); return this.items.filter(i => ['success','accepted'].includes(i.state)).length; }
   get failedCount() { return this.counts.failed + this.items.filter(i => i.state === 'failed').length; }
   private valid(generation: number) { return !this.disposed && generation === this.generation && !this.owner.store.editingDisabled && this.busy; }
   begin() {
-    if (this.owner.collaboration || this.disposed || this.busy || this.failures.length || !this.imports.reserve(this)) return false;
+    if (this.owner.collaboration?.canImportMedia===false || this.disposed || this.busy || this.failures.length || !this.imports.reserve(this)) return false;
     this.generation++; this.state = 'choosing'; this.counts = emptyCounts(); this.items = []; this.issues = []; this.error = null; this.root = ''; this.result = null; this.acknowledged = false; this.offset = 0; this.notify(); return true;
   }
   async choose(picker: () => Promise<string | string[] | null>, recursive = false) {
@@ -86,6 +90,7 @@ export class FolderImportController {
         if (!page.candidates.length) throw new Error('Folder scan returned an empty candidate page');
         const starting = this.imports.start(page.candidates.map(c => c.path), undefined, this);
         // start installs its run synchronously, so capture references before any callback/ack awaits.
+        this.ownedBatch = this.imports.items;
         const batch = this.imports.items.map((item, index) => Object.assign(item, { index: this.offset + index }));
         this.items.push(...batch); this.offset += batch.length; this.notify();
         // completed() can unblock on reset even if the native start acknowledgement never arrives.
@@ -94,7 +99,7 @@ export class FolderImportController {
         await this.batchCompletion;
         if (!this.valid(generation)) return;
         if (this.owner.queue.unresolvedFailures.length) { this.state = 'paused'; this.notify(); return; }
-        if (this.imports.error) { this.fail(this.imports.error); return; }
+        if (this.imports.error&&!this.imports.errorIsAcknowledgement) { this.fail(this.imports.error); return; }
       }
       if (this.valid(generation)) { this.state = 'finished'; this.release(); this.imports.unreserve(this); this.notify(); }
     } catch (e) { if (this.valid(generation)) this.fail(e); }

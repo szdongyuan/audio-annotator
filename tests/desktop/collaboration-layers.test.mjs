@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { start, Key, By, wait } from './harness.mjs';
-const parent=path.resolve('.test-output/nas-task5');await fs.mkdir(parent,{recursive:true});
+const parent=path.resolve(process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/default-collaboration-v040/task5/desktop-evidence/collaboration-layers');await fs.mkdir(parent,{recursive:true});
 const output=await fs.mkdtemp(path.join(parent,'two-ui-')),source=path.join(output,'source'),shared=path.join(output,'shared');
 const roots={a:path.join(output,'client-a'),b:path.join(output,'client-b')};
 for(const p of [source,shared,...Object.values(roots)])await fs.mkdir(p);
@@ -15,8 +15,8 @@ bytes.write('RIFF');bytes.writeUInt32LE(bytes.length-8,4);bytes.write('WAVEfmt '
 for(let n=0;n<frames;n++)for(let c=0;c<2;c++)bytes.writeInt16LE(Math.round(10000*Math.sin(2*Math.PI*(c?880:440)*n/rate)),44+n*4+c*2);
 await fs.writeFile(audio,bytes);const originalHash=crypto.createHash('sha256').update(bytes).digest('hex');
 const exportedJson=path.join(output,'alice.annotations.json'),exportedZip=path.join(output,'alice.audioproj.zip');
-const pathsA={'新建项目 · 选择空文件夹':[source],'创建协作副本 · 选择空文件夹':[shared],'打开项目 · 选择 project.json':[path.join(shared,'collaboration.json')],'分享 · 保存到本机':[exportedJson,exportedZip],'':[[audio]]};
-const pathsB={'打开项目 · 选择 project.json':[path.join(shared,'collaboration.json')]};
+const pathsA={'新建项目 · 选择空文件夹':[shared],'创建协作副本 · 选择空文件夹':[shared],'打开项目':[path.join(shared,'collaboration.json')],'分享 · 保存到本机':[exportedJson,exportedZip],'':[[audio]]};
+const pathsB={'打开项目':[path.join(shared,'collaboration.json')]};
 const report={method:'Two independently spawned native Tauri clients with distinct WebDriver/debug ports, WebView and app-local-data roots; all acceptance mutations via UI; IPC read-only',output,checks:[],originalHash};let a,b;
 const check=name=>{report.checks.push(name);console.log('PASS '+name);};
 const read=(h,command,args={})=>h.driver.executeAsyncScript('const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke(arguments[0],arguments[1]).then(done,e=>done({error:e}));',command,args);
@@ -44,14 +44,14 @@ const filter=async(h,name,exclude)=>{await h.menu('作者显示与同步状态�
 const selectOwn=async(h,id)=>{await h.drag(`[data-annotation-id="${id}"]`,[.5,.5],[.5,.5]);await h.until(`document.querySelector('.annotation-inspector')`);};
 try{
  a=await start(pathsA,roots.a,undefined,{exactOuter:true,localDataEnv:roots.a});
- await a.menu('新建项目');await a.until(`document.querySelector('.project-identity')?.textContent.includes('已保存')`);await a.clickText('导入音频');await a.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);await a.clickText('关闭导入结果');await ready(a);
- await a.menu('创建协作副本…');await form(a,'alice','Alice');await a.clickText('创建副本');await actor(a,'Alice');await ready(a);
+ await a.menu('新建项目');await a.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);await a.clickText('导入音频');await a.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);await a.clickText('关闭导入结果');await ready(a);
+ await a.menu('注册项目账号…','协作');await form(a,'alice','Alice');await a.clickText('注册并登录');await actor(a,'Alice');await ready(a);
  b=await start(pathsB,roots.b,undefined,{exactOuter:true,ports:{driver:4455,native:4456,debug:9245},localDataEnv:roots.b});
- await b.menu('打开项目…');await actor(b,'访客');
+ await b.menu('打开项目…');await b.until(`document.querySelector('.collaboration-status')?.textContent.includes('本机作者')`);
  await b.menu('登录…','协作');await form(b,'alice');await b.clickText('登录');
  await b.until(`document.querySelector('.collaboration-dialog [role="alert"]')`);
  assert.match(await b.evaluate(`return document.querySelector('.collaboration-dialog [role="alert"]').textContent`),/already has a writable session/);
- assert.equal((await status(b)).actor,null);assert.equal((await status(a)).actor.displayName,'Alice');
+ assert.equal((await status(b)).identityMode,'local');assert.equal((await status(a)).actor.displayName,'Alice');
  await b.clickText('关闭');check('same-account second native UI writer is rejected while the first writer remains active');
  await b.menu('注册项目账号…','协作');await form(b,'bob','Bob');await b.clickText('注册并登录');await actor(b,'Bob');await ready(b);
  report.pids=[a.nativePid,b.nativePid];assert.notEqual(a.nativePid,b.nativePid);
@@ -100,11 +100,11 @@ try{
  assert.equal((await snapshot(b)).document.edits.length,1);assert.equal((await status(b)).preferences.volume,.22);for(const key of ['edits','viewState','annotations'])assert.deepEqual((await snapshot(a)).document[key],aBeforeB[key]);assert.equal((await status(a)).preferences.volume,.11);check('B also persists a distinct private mask and volume/view without changing A');
  await sync(a);await sync(b);const savedA=(await snapshot(a)).document,savedB=(await snapshot(b)).document;
  await a.menu('关闭项目');await a.quit();a=null;
- a=await start({'打开项目 · 选择 project.json':[path.join(shared,'collaboration.json')]},roots.a,undefined,{exactOuter:true,localDataEnv:roots.a});await a.menu('打开项目…');await actor(a,'访客');await a.menu('登录…','协作');await form(a,'alice');await a.clickText('登录');await actor(a,'Alice');await ready(a);
+ a=await start({'打开项目':[path.join(shared,'collaboration.json')]},roots.a,undefined,{exactOuter:true,localDataEnv:roots.a});await a.menu('打开项目…');await a.until(`document.querySelector('.collaboration-status')?.textContent.includes('本机作者')`);await a.menu('登录…','协作');await form(a,'alice');await a.clickText('登录');await actor(a,'Alice');await ready(a);
  const restored=(await snapshot(a)).document;for(const key of ['annotations','edits','viewState','categories'])assert.deepEqual(restored[key],savedA[key]);assert.equal((await status(a)).preferences.volume,.11);assert.equal((await status(a)).preferences.source,'original');assert.deepEqual((await snapshot(b)).document.annotations,savedB.annotations);check('fresh A native process and login restore own private workspace while B remains independently active');
- await b.menu('关闭项目');await b.quit();b=null;b=await start(pathsB,roots.b,undefined,{exactOuter:true,ports:{driver:4455,native:4456,debug:9245},localDataEnv:roots.b});await b.menu('打开项目…');await actor(b,'访客');await b.menu('登录…','协作');await form(b,'bob');await b.clickText('登录');await actor(b,'Bob');await ready(b);
+ await b.menu('关闭项目');await b.quit();b=null;b=await start(pathsB,roots.b,undefined,{exactOuter:true,ports:{driver:4455,native:4456,debug:9245},localDataEnv:roots.b});await b.menu('打开项目…');await b.until(`document.querySelector('.collaboration-status')?.textContent.includes('本机作者')`);await b.menu('登录…','协作');await form(b,'bob');await b.clickText('登录');await actor(b,'Bob');await ready(b);
  const restoredB=(await snapshot(b)).document;for(const key of ['annotations','edits','viewState','categories'])assert.deepEqual(restoredB[key],savedB[key]);assert.equal((await status(b)).preferences.volume,.22);assert.equal((await status(b)).preferences.source,'processed');check('fresh B native process and login restore B personal settings independently of A');
- const manifest=JSON.parse(await fs.readFile(path.join(shared,'collaboration.json')));assert.equal(crypto.createHash('sha256').update(await fs.readFile(path.join(shared,manifest.media[0].sourceRef))).digest('hex'),originalHash);assert.equal(crypto.createHash('sha256').update(await fs.readFile(audio)).digest('hex'),originalHash);check('source and shared original WAV SHA256 remain exact');
+ const manifest={media:(await snapshot(a)).document.media};assert.equal(crypto.createHash('sha256').update(await fs.readFile(path.join(shared,manifest.media[0].sourceRef))).digest('hex'),originalHash);assert.equal(crypto.createHash('sha256').update(await fs.readFile(audio)).digest('hex'),originalHash);check('source and shared original WAV SHA256 remain exact');
  // Simulate loss of the shared entry only inside this owned fixture. All edits
  // and synchronization still use the real UI; restore even on assertion failure.
  const manifestPath=path.join(shared,'collaboration.json'),offlinePath=path.join(shared,'owned-offline.json');
@@ -123,15 +123,17 @@ try{
  // Instrument only reads/draw calls; unchanged foreign polling must not redraw
  // spectral pixels or reset private playback/analysis authority.
  await ready(a);await wait(250);
- await a.evaluate(`window.__refreshMeasure={draws:0,analysis:0,playback:0,refreshMs:[],calls:[]};const m=window.__refreshMeasure,draw=CanvasRenderingContext2D.prototype.putImageData;CanvasRenderingContext2D.prototype.putImageData=function(...args){m.draws++;return draw.apply(this,args)};const fetch=window.fetch;window.fetch=function(resource,...args){const command=decodeURIComponent(String(resource).split('/').at(-1));m.calls.push(command);if(['request_tile','register_analysis_view'].includes(command))m.analysis++;if(['playback_configure','playback_control'].includes(command))m.playback++;const started=performance.now(),result=fetch.call(this,resource,...args);return ['collaboration_refresh','collaboration_sync'].includes(command)?result.then(value=>{m.refreshMs.push(performance.now()-started);return value}):result};`);
+ await a.evaluate(`window.__refreshMeasure={draws:0,analysis:0,playback:0,syncCompleted:0,refreshMs:[],calls:[]};const m=window.__refreshMeasure,draw=CanvasRenderingContext2D.prototype.putImageData;CanvasRenderingContext2D.prototype.putImageData=function(...args){m.draws++;return draw.apply(this,args)};const fetch=window.fetch;window.fetch=function(resource,...args){const command=decodeURIComponent(String(resource).split('/').at(-1));m.calls.push(command);if(['request_tile','register_analysis_view'].includes(command))m.analysis++;if(['playback_configure','playback_control'].includes(command))m.playback++;const started=performance.now(),result=fetch.call(this,resource,...args);return ['collaboration_refresh','collaboration_sync'].includes(command)?result.then(value=>{m.refreshMs.push(performance.now()-started);if(command==='collaboration_sync')m.syncCompleted++;return value}):result};`);
  const refreshBefore=(await snapshot(a)).document,playbackBefore=await playback(a),refreshStart=performance.now();
- for(let i=0;i<5;i++){await a.menu('保存并同步','协作');await wait(100);}
+ for(let i=0;i<5;i++){await a.driver.wait(async()=>!(await status(a)).busy,10000);await a.menu('保存并同步','协作');await a.until(`window.__refreshMeasure.syncCompleted===${i+1}`,'completed manual sync '+(i+1));}
  await wait(2200);report.twoAuthorRefresh={elapsedMs:performance.now()-refreshStart,iterations:5,...await a.evaluate('return window.__refreshMeasure')};
  assert.equal(report.twoAuthorRefresh.draws,0);assert.equal(report.twoAuthorRefresh.analysis,0);assert.equal(report.twoAuthorRefresh.playback,0);
  assert.ok(report.twoAuthorRefresh.refreshMs.length>=5);
+ assert.equal(report.twoAuthorRefresh.syncCompleted,5);
  assert.ok(report.twoAuthorRefresh.calls.includes('collaboration_status'),'read-only probe verifies live IPC observation');
  assert.deepEqual((await snapshot(a)).document,refreshBefore);assert.equal((await playback(a)).generation,playbackBefore.generation);
  check('five unchanged two-author manual refreshes plus polling preserve private document/playback with zero spectral repaint or analysis requests');
+ const currentSource=await a.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`);await a.select('声音版本',currentSource==='original'?'暂存编辑':'原音');await ready(a);await a.menu('播放整段','音频');await a.driver.wait(async()=>{const p=await playback(a);return p.state==='playing'&&p.consumedFrames>2400;},30000);await a.label('停止');report.positiveProbe=await a.evaluate('return window.__refreshMeasure');assert.ok(report.positiveProbe.draws>0);assert.ok(report.positiveProbe.analysis>0);assert.ok(report.positiveProbe.playback>0);check('positive UI source/playback probe proves drawing, analysis and playback instrumentation is live');
  await a.menu('关闭项目');await b.menu('关闭项目');report.passed=true;
 }catch(error){report.error=error.stack;console.error(error);await a?.screenshot('failure-a').catch(()=>{});await b?.screenshot('failure-b').catch(()=>{});process.exitCode=1;}
 finally{await b?.quit().catch(e=>{report.teardownB=String(e);process.exitCode=1;});await a?.quit().catch(e=>{report.teardownA=String(e);process.exitCode=1;});await fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));}

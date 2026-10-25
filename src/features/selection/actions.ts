@@ -1,3 +1,4 @@
+import { annotationDisabled } from '../collaboration/capabilities';
 import type { Annotation, Region } from '../../bridge/types';
 import { normalizeError } from '../../bridge/client';
 import type { ActiveProject } from '../project/useProjectLifecycle';
@@ -16,6 +17,7 @@ export function selectionActions(owner: ActiveProject, state: SelectionState) {
   const resolve = (target: Selection) => resolveRegion(owner, target);
   const annotate = (target: Selection, categoryId: string | null | undefined, focus?: (id: string) => void) => run(async () => {
     const region = resolve(target); if (!region) return;
+    if(annotationDisabled(owner))return;
     const doc = owner.store.snapshot.document;
     if (categoryId && !doc.categories.some(c => c.id === categoryId)) return;
     const id = target.object?.kind === 'annotation' ? target.object.id : createdAnnotations.get(target);
@@ -52,6 +54,7 @@ export function selectionActions(owner: ActiveProject, state: SelectionState) {
     remove: (target: Selection) => run(async () => {
       if (!target.object || !resolve(target)) return;
       const { kind, id } = target.object;
+      if(kind==='annotation'&&annotationDisabled(owner))return;
       await owner.queue.enqueue(kind === 'annotation' ? { type: 'removeAnnotation', id } : { type: 'removeEdit', id }, { owner: kind === 'annotation' ? 'annotations' : 'masks' });
       state.reconcile(owner.store.snapshot.document);
     }),
@@ -67,6 +70,7 @@ export function selectionActions(owner: ActiveProject, state: SelectionState) {
       if (!latest || !sameRegion(latest, target.region) || !validRegion(owner.store.snapshot.document, region) || !target.object) return;
       const { kind, id } = target.object, doc = owner.store.snapshot.document;
       if (kind === 'annotation') {
+        if(annotationDisabled(owner))return;
         const annotation = doc.annotations.find(a => a.id === id)!;
         await owner.queue.enqueue({ type: 'updateAnnotation', annotation: { ...annotation, region, updatedAt: new Date().toISOString() } }, { owner: 'annotations' });
       } else {

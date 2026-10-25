@@ -1,5 +1,5 @@
 use crate::{
-    commands::project::{info, OpenProject},
+    commands::project::{info_shared, OpenProject},
     state::AppState,
 };
 use annotator_core::{
@@ -24,16 +24,16 @@ pub struct ExchangeTasks {
 }
 impl ExchangeTasks {
     fn begin(&mut self) -> Result<(String, Arc<AtomicBool>)> {
+        self.begin_with(Arc::new(AtomicBool::new(false)))
+    }
+    fn begin_with(&mut self, cancel: Arc<AtomicBool>) -> Result<(String, Arc<AtomicBool>)> {
         if self.current.is_some() {
             return Err(AppError::new(
                 ErrorCode::ResourceLimit,
                 "请等待交换任务结束",
             ));
         }
-        let task = (
-            uuid::Uuid::new_v4().to_string(),
-            Arc::new(AtomicBool::new(false)),
-        );
+        let task = (uuid::Uuid::new_v4().to_string(), cancel);
         self.current = Some(task.clone());
         Ok(task)
     }
@@ -62,6 +62,11 @@ pub enum ExchangeEvent {
         task_id: String,
         phase: String,
         completed: u64,
+    },
+    SourcesRequired {
+        task_id: String,
+        source_sha256: String,
+        media: Vec<super::collaboration::exchange_default::RequiredMedia>,
     },
     Completed {
         task_id: String,
@@ -231,9 +236,15 @@ pub fn import_exchange(
     expected: Option<ExpectedProject>,
     source: String,
     parent: String,
+    bindings: Option<super::collaboration::exchange_default::SourceBindings>,
     on_event: Channel<ExchangeEvent>,
 ) -> Result<String> {
-    let (id, cancel) = begin(&state)?;
+    let permit = state.6.begin(uuid::Uuid::new_v4().to_string())?;
+    let (id, cancel) = state
+        .4
+        .lock()
+        .map_err(|_| AppError::invalid("Exchange unavailable"))?
+        .begin_with(permit.cancel.clone())?;
     let worker_id = id.clone();
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -262,11 +273,12 @@ pub fn import_exchange(
             };
             check_cancel(&cancel)?;
             let mut last = Instant::now() - Duration::from_secs(1);
-            let imported = exchange::import_exchange(
+            let imported = super::collaboration::exchange_default::prepare(
                 Path::new(&source),
                 Path::new(&parent),
+                &state.6.local()?,
+                bindings,
                 &cancel,
-                Limits::default(),
                 |phase, completed| {
                     if last.elapsed() >= Duration::from_millis(100) {
                         last = Instant::now();
@@ -283,7 +295,25 @@ pub fn import_exchange(
                     }
                 },
             )?;
-            let new = LocalProject::open(&imported.path)?;
+            let prepared = match imported {
+                super::collaboration::exchange_default::PreparedImport::SourcesRequired {
+                    source_sha256,
+                    media,
+                } => {
+                    state
+                        .4
+                        .lock()
+                        .map_err(|_| AppError::invalid("Exchange unavailable"))?
+                        .finish(&worker_id);
+                    let _ = on_event.send(ExchangeEvent::SourcesRequired {
+                        task_id: worker_id.clone(),
+                        source_sha256,
+                        media,
+                    });
+                    return Ok(None);
+                }
+                super::collaboration::exchange_default::PreparedImport::Ready(prepared) => prepared,
+            };
             let mut current = state
                 .0
                 .lock()
@@ -300,24 +330,21 @@ pub fn import_exchange(
             {
                 return Err(super::collaboration::runtime::stale());
             }
-            let mut media = state
-                .1
-                .lock()
-                .map_err(|_| AppError::invalid("媒体服务不可用"))?;
-            let opened = info(&new);
-            state.3.reset();
-            media.reset();
-            state
-                .5
-                .lock()
-                .map_err(|_| AppError::invalid("扫描服务不可用"))?
-                .reset();
-            state.2.scheduler.reset();
-            state.6.retire();
+            check_cancel(&permit.cancel)?;
+            super::collaboration::reset_resources(&state)?;
+            let (new, repo) = prepared.commit();
+            let path = new.root().to_string_lossy().into_owned();
+            state.6.install(Some(repo))?;
+            let opened = info_shared(&new, &state.6)?;
             *current = Some(new);
-            Ok((imported.path.to_string_lossy().into_owned(), Some(opened)))
+            Ok(Some((path, Some(opened))))
         })();
-        finish(&state, &worker_id, result, &on_event);
+        drop(permit);
+        match result {
+            Ok(None) => (),
+            Ok(Some(completed)) => finish(&state, &worker_id, Ok(completed), &on_event),
+            Err(error) => finish(&state, &worker_id, Err(error), &on_event),
+        }
     });
     Ok(id)
 }

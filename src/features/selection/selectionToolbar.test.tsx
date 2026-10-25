@@ -171,3 +171,7 @@ it('an accepted asynchronous classification never steals a newer active selectio
   act(() => s.ui().state.select(next)); await act(async () => { release(); await work; }); await s.settle();
   expect(s.owner.store.snapshot.document.annotations).toHaveLength(2); expect(s.ui().selection).toBe(next); s.dispose();
 });
+
+it('view-only floating toolbar permits playback and disables annotation creation',()=>{
+ const s=setup();Object.assign(s.owner,{collaboration:{canWriteAnnotations:false}});s.ready('ready');expect(screen.getByRole('button',{name:'标注'})).toBeDisabled();expect(screen.getByRole('button',{name:/^播放$/})).toBeEnabled();s.dispose();
+});

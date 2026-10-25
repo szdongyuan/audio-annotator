@@ -41,7 +41,7 @@ pub(crate) async fn start(
                 &service,
                 runtime_nonce.as_deref(),
             )?;
-            if project.is_shared() {
+            if !super::collaboration::catalog::can_import(project) {
                 return Err(AppError::invalid("Shared media catalog is immutable"));
             }
             let snapshot = project.snapshot()?;

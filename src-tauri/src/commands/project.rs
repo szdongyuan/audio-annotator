@@ -5,7 +5,6 @@ use annotator_core::{
     project::{LoadReport, LocalProject, ProjectSnapshot, RecoverySource},
 };
 use serde::Serialize;
-use std::path::Path;
 use tauri::State;
 
 #[derive(Serialize)]
@@ -35,6 +34,12 @@ pub(crate) fn info_shared(
     if p.is_shared() {
         let status = super::collaboration::runtime::status(Some(p), service)?;
         opened.collaboration = Some(super::collaboration::runtime::Context {
+            project_flavor: status.project_flavor,
+            identity_mode: status.identity_mode,
+            can_write_annotations: status.can_write_annotations,
+            can_import_media: status.can_import_media,
+            hidden_media_ids: status.hidden_media_ids,
+            catalog_pending: status.catalog_pending,
             runtime_nonce: status.runtime_nonce,
             actor: status.actor,
             preferences: status.preferences,
@@ -51,33 +56,7 @@ pub async fn create_project(
     path: String,
     name: String,
 ) -> Result<OpenProject> {
-    let media = state.1.clone();
-    let analysis = state.2.clone();
-    let folders = state.5.clone();
-    let playback = state.3.clone();
-    let collaboration = state.6.clone();
-    state
-        .run(move |s| {
-            if s.is_some() {
-                return Err(AppError::invalid("请先关闭当前项目"));
-            }
-            let mut media = media
-                .lock()
-                .map_err(|_| AppError::invalid("媒体服务不可用"))?;
-            let p = LocalProject::create(Path::new(&path), name)?;
-            let result = info(&p);
-            collaboration.install(None)?;
-            *s = Some(p);
-            playback.reset();
-            media.reset();
-            folders
-                .lock()
-                .map_err(|_| AppError::invalid("扫描服务不可用"))?
-                .reset();
-            analysis.scheduler.reset();
-            Ok(result)
-        })
-        .await
+    super::collaboration::defaults::create(&state, path, name).await
 }
 #[tauri::command]
 pub async fn open_project(state: State<'_, AppState>, path: String) -> Result<OpenProject> {
@@ -140,6 +119,27 @@ pub async fn apply_change(
     expected_revision: u64,
     change: Change,
 ) -> Result<ProjectSnapshot> {
+    if let Change::ImportMedia { media } = &change {
+        let shared = state
+            .0
+            .lock()
+            .map_err(|_| AppError::invalid("Project unavailable"))?
+            .as_ref()
+            .is_some_and(|p| p.is_shared());
+        if shared {
+            return super::collaboration::catalog::import(
+                &state,
+                super::collaboration::runtime::Expected {
+                    runtime_nonce: runtime_nonce
+                        .ok_or_else(super::collaboration::runtime::stale)?,
+                    project_id,
+                    expected_revision,
+                },
+                media.clone(),
+            )
+            .await;
+        }
+    }
     let collaboration = state.6.clone();
     let media_tasks = state.1.clone();
     let playback = state.3.clone();
@@ -272,35 +272,37 @@ pub async fn save_project_as(
     project_id: String,
     expected_revision: u64,
 ) -> Result<OpenProject> {
-    let media = state.1.clone();
-    let analysis = state.2.clone();
-    let folders = state.5.clone();
-    let playback = state.3.clone();
-    let collaboration = state.6.clone();
-    state
-        .run(move |s| {
-            super::collaboration::runtime::check_mutation(
-                active(s)?,
-                &collaboration,
-                runtime_nonce.as_deref(),
-            )?;
-            let p = active(s)?;
-            let mut media = media
-                .lock()
-                .map_err(|_| AppError::invalid("媒体服务不可用"))?;
-            playback.reset();
-            p.save_as(Path::new(&path), &project_id, expected_revision)?;
-            collaboration.retire();
-            media.reset();
-            folders
-                .lock()
-                .map_err(|_| AppError::invalid("扫描服务不可用"))?
-                .reset();
-            analysis.scheduler.reset();
-            Ok(info(p))
-        })
-        .await
+    super::collaboration::defaults::save_as(
+        &state,
+        runtime_nonce,
+        path,
+        project_id,
+        expected_revision,
+    )
+    .await
 }
+#[tauri::command]
+pub async fn save_project_as_controlled(
+    state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
+    path: String,
+    project_id: String,
+    expected_revision: u64,
+    operation_id: String,
+    on_progress: tauri::ipc::Channel<super::collaboration::CopyProgress>,
+) -> Result<OpenProject> {
+    super::collaboration::defaults::save_as_controlled(
+        &state,
+        runtime_nonce,
+        path,
+        project_id,
+        expected_revision,
+        Some(operation_id),
+        Some(on_progress),
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn close_project(
     state: State<'_, AppState>,

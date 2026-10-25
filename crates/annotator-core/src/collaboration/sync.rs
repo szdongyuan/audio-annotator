@@ -2,11 +2,20 @@ use super::*;
 use crate::error::Result;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct RememberedLayers {
     manifest: CollaborationManifest,
     snapshot: CollaborationSnapshot,
 }
 impl RememberedLayers {
+    /// Extend validation authority only after explicit catalog adoption. Previously
+    /// displayed layers remain intact; callers then install the fresh full snapshot.
+    pub fn adopt_catalog(&mut self, manifest: CollaborationManifest) -> Result<()> {
+        manifest.validate()?;
+        super::catalog_workspace::validate_extension(&self.manifest, &manifest)?;
+        self.manifest = manifest;
+        Ok(())
+    }
     pub fn new(manifest: CollaborationManifest) -> Self {
         Self {
             snapshot: CollaborationSnapshot {

@@ -58,7 +58,7 @@ pub(crate) async fn start(
     let tasks = state.1.clone();
     let task_id = uuid::Uuid::new_v4().to_string();
     let id = task_id.clone();
-    let (generation, cancel, root, expected) = state
+    let (generation, cancel, root, expected, catalog, preparation) = state
         .run(move |s| {
             let project = s
                 .as_ref()
@@ -72,7 +72,7 @@ pub(crate) async fn start(
             if snapshot.document.project_id != project_id {
                 return Err(AppError::invalid("项目身份不匹配"));
             }
-            if project.is_shared() && relink.is_none() {
+            if !super::collaboration::catalog::can_import(project) && relink.is_none() {
                 return Err(AppError::invalid("Shared media catalog is immutable"));
             }
             let expected = relink
@@ -85,18 +85,56 @@ pub(crate) async fn start(
                         .ok_or_else(|| AppError::invalid("未知音频"))
                 })
                 .transpose()?;
-            let (generation, cancel) = tasks
+            let catalog = if project.is_shared() && expected.is_none() {
+                let runtime = service
+                    .current
+                    .lock()
+                    .map_err(|_| super::collaboration::runtime::unavailable())?;
+                Some((
+                    runtime
+                        .repo
+                        .clone()
+                        .ok_or_else(super::collaboration::runtime::stale)?,
+                    runtime.nonce.clone(),
+                ))
+            } else {
+                None
+            };
+            let mut tasks = tasks
                 .lock()
-                .map_err(|_| AppError::invalid("媒体服务不可用"))?
-                .begin(id)?;
-            Ok((generation, cancel, project.root().to_path_buf(), expected))
+                .map_err(|_| AppError::invalid("媒体服务不可用"))?;
+            let (generation, cancel) = tasks.begin(id.clone())?;
+            let preparation = if catalog.is_some() {
+                match service.begin_preparation(id.clone(), cancel.clone()) {
+                    Ok(permit) => Some(permit),
+                    Err(error) => {
+                        tasks.finish(&id);
+                        return Err(error);
+                    }
+                }
+            } else {
+                None
+            };
+            Ok((
+                generation,
+                cancel,
+                project.root().to_path_buf(),
+                expected,
+                catalog,
+                preparation,
+            ))
         })
         .await?;
     let tasks = state.1.clone();
+    let service = state.6.clone();
     let id = task_id.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // A runtime reset cancels this token but only actual worker exit releases admission.
+        let _preparation = preparation;
         // OS temp is independent of the project folder and never becomes project content.
         let cache = std::env::temp_dir().join("audio-annotator-pcm");
+        #[cfg(test)]
+        service.run_hook();
         for (index, raw) in paths.iter().enumerate() {
             if cancel.load(Ordering::Relaxed) {
                 break;
@@ -108,7 +146,7 @@ pub(crate) async fn start(
                 root.join(path)
             };
             let mut last = Instant::now() - Duration::from_secs(1);
-            let result = decode(&path, &cache, &cancel, |phase, completed| {
+            let progress = |phase: &str, completed| {
                 if last.elapsed() >= Duration::from_millis(100) {
                     last = Instant::now();
                     if on_event
@@ -124,22 +162,32 @@ pub(crate) async fn start(
                         cancel.store(true, Ordering::Relaxed);
                     }
                 }
-            })
-            .and_then(|mut decoded| {
-                if let Some(expected) = &expected {
-                    if !same_identity(expected, &decoded.descriptor) {
-                        return Err(AppError::new(
-                            ErrorCode::IdentityMismatch,
-                            "原文件指纹或音频元数据不一致，无法关联",
-                        ));
+            };
+            let result = if let Some((repo, nonce)) = &catalog {
+                repo.prepare_media_with_progress(&path, &cache, &cancel, progress)
+                    .and_then(|prepared| {
+                        annotator_core::media::identity::check_cancel(&cancel)?;
+                        super::collaboration::catalog::store_prepared(
+                            &service, nonce, &id, prepared,
+                        )
+                    })
+            } else {
+                decode(&path, &cache, &cancel, progress).and_then(|mut decoded| {
+                    if let Some(expected) = &expected {
+                        if !same_identity(expected, &decoded.descriptor) {
+                            return Err(AppError::new(
+                                ErrorCode::IdentityMismatch,
+                                "原文件指纹或音频元数据不一致，无法关联",
+                            ));
+                        }
+                        decoded.descriptor.id = expected.id.clone();
                     }
-                    decoded.descriptor.id = expected.id.clone();
-                }
-                tasks
-                    .lock()
-                    .map_err(|_| AppError::invalid("媒体服务不可用"))?
-                    .prepare_for_task(generation, &id, decoded)
-            });
+                    tasks
+                        .lock()
+                        .map_err(|_| AppError::invalid("媒体服务不可用"))?
+                        .prepare_for_task(generation, &id, decoded)
+                })
+            };
             let event = match result {
                 Ok(media) => MediaEvent::Ready {
                     task_id: id.clone(),
@@ -157,6 +205,7 @@ pub(crate) async fn start(
                 if let MediaEvent::Ready { media, .. } = event {
                     if let Ok(mut tasks) = tasks.lock() {
                         tasks.release_for_task(&id, &media.id);
+                        let _ = super::collaboration::catalog::release(&service, &id, &media.id);
                     }
                 }
                 cancel.store(true, Ordering::Relaxed);
@@ -223,7 +272,7 @@ pub fn release_media_import(
         .lock()
         .map_err(|_| AppError::invalid("媒体服务不可用"))?
         .release_for_task(&task_id, &media_id);
-    Ok(())
+    super::collaboration::catalog::release(&state.6, &task_id, &media_id)
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

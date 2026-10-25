@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex,
     },
 };
@@ -16,7 +16,12 @@ type JobSlot = Arc<Mutex<Option<(String, Arc<AtomicBool>)>>>;
 
 pub struct Service {
     pub current: Mutex<Runtime>,
+    pub prepared: Mutex<std::collections::HashMap<String, super::catalog::PendingMedia>>,
+    pub prepared_count: Arc<AtomicUsize>,
+    cleanup: Mutex<Option<std::sync::mpsc::Sender<super::catalog::PendingMedia>>>,
+    cleanup_worker: Mutex<Option<std::thread::JoinHandle<()>>>,
     job: JobSlot,
+    preparation: JobSlot,
     local: Mutex<Option<PathBuf>>,
     #[cfg(test)]
     pub hook: Mutex<Option<Box<dyn FnOnce() + Send>>>,
@@ -25,9 +30,25 @@ pub struct Service {
 }
 impl Default for Service {
     fn default() -> Self {
+        let prepared_count = Arc::new(AtomicUsize::new(0));
+        let count = prepared_count.clone();
+        let (sender, receiver) = std::sync::mpsc::channel::<super::catalog::PendingMedia>();
+        // Queue ownership is bounded by prepared_count (256 across live + retired items).
+        // Slow NAS cleanup never runs under application/runtime authority locks.
+        let cleanup_worker = std::thread::spawn(move || {
+            for item in receiver {
+                drop(item);
+                count.fetch_sub(1, Ordering::AcqRel);
+            }
+        });
         Self {
+            prepared_count,
+            cleanup: Mutex::new(Some(sender)),
+            cleanup_worker: Mutex::new(Some(cleanup_worker)),
             current: Mutex::new(Runtime::default()),
+            prepared: Mutex::new(std::collections::HashMap::new()),
             job: Arc::new(Mutex::new(None)),
+            preparation: Arc::new(Mutex::new(None)),
             local: Mutex::new(None),
             #[cfg(test)]
             hook: Mutex::new(None),
@@ -42,6 +63,8 @@ pub struct Runtime {
     pub layers: Option<RememberedLayers>,
     pub error: Option<AppError>,
     pub updated: Option<u64>,
+    pub catalog_pending: bool,
+    pub deferred: Vec<String>,
 }
 impl Default for Runtime {
     fn default() -> Self {
@@ -51,6 +74,8 @@ impl Default for Runtime {
             layers: None,
             error: None,
             updated: None,
+            catalog_pending: false,
+            deferred: vec![],
         }
     }
 }
@@ -69,6 +94,14 @@ impl Drop for Permit {
     }
 }
 impl Service {
+    pub fn dispose(&self, item: super::catalog::PendingMedia) {
+        if let Ok(cleanup) = self.cleanup.lock() {
+            if let Some(sender) = cleanup.as_ref() {
+                // The dedicated worker only drops native resources and never panics.
+                let _ = sender.send(item);
+            }
+        }
+    }
     #[cfg(test)]
     pub fn run_hook(&self) {
         let hook = self.hook.lock().unwrap().take();
@@ -92,16 +125,40 @@ impl Service {
     pub fn begin(&self, id: String) -> Result<Permit> {
         let mut slot = self.job.lock().map_err(|_| unavailable())?;
         if slot.is_some() {
-            return Err(AppError::new(
+            let mut error = AppError::new(
                 ErrorCode::ResourceLimit,
                 "Collaboration job already running",
-            ));
+            );
+            error.retryable = true;
+            error.details = Some(serde_json::json!({"operationBusy":true}));
+            return Err(error);
         }
         let cancel = Arc::new(AtomicBool::new(false));
         *slot = Some((id.clone(), cancel.clone()));
         Ok(Permit {
             id,
             slot: self.job.clone(),
+            cancel,
+        })
+    }
+    /// Default NAS preparation has a separate lifetime-bound slot so Ready items may
+    /// publish while the admitted batch is still decoding/copying subsequent media.
+    pub fn begin_preparation(&self, id: String, cancel: Arc<AtomicBool>) -> Result<Permit> {
+        let mut slot = self.preparation.lock().map_err(|_| unavailable())?;
+        if slot.is_some() {
+            let mut error = AppError::new(
+                ErrorCode::ResourceLimit,
+                "A previous media preparation worker is still running",
+            );
+            error.retryable = true;
+            error.details =
+                Some(serde_json::json!({"operationBusy":true,"operationKind":"mediaPreparation"}));
+            return Err(error);
+        }
+        *slot = Some((id.clone(), cancel.clone()));
+        Ok(Permit {
+            id,
+            slot: self.preparation.clone(),
             cancel,
         })
     }
@@ -117,17 +174,27 @@ impl Service {
         self.job.lock().map(|j| j.is_some()).unwrap_or(true)
     }
     pub fn retire(&self) {
-        if let Ok(slot) = self.job.lock() {
-            if let Some((_, cancel)) = &*slot {
-                cancel.store(true, Ordering::Relaxed);
+        for job in [&self.job, &self.preparation] {
+            if let Ok(slot) = job.lock() {
+                if let Some((_, cancel)) = &*slot {
+                    cancel.store(true, Ordering::Relaxed);
+                }
             }
         }
         if let Ok(mut runtime) = self.current.lock() {
             *runtime = Runtime::default();
+            if let Ok(mut prepared) = self.prepared.lock() {
+                for (_, item) in prepared.drain() {
+                    self.dispose(item);
+                }
+            }
         }
     }
     pub fn install(&self, repo: Option<Arc<CollaborationRepository>>) -> Result<()> {
         let mut runtime = self.current.lock().map_err(|_| unavailable())?;
+        for (_, item) in self.prepared.lock().map_err(|_| unavailable())?.drain() {
+            self.dispose(item);
+        }
         *runtime = Runtime {
             layers: repo
                 .as_ref()
@@ -136,6 +203,23 @@ impl Service {
             ..Runtime::default()
         };
         Ok(())
+    }
+}
+impl Drop for Service {
+    fn drop(&mut self) {
+        // Service shutdown is outside authority locks; drain the disposal worker before returning.
+        self.cleanup
+            .get_mut()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(worker) = self
+            .cleanup_worker
+            .get_mut()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
+            let _ = worker.join();
+        }
     }
 }
 pub fn unavailable() -> AppError {
@@ -188,7 +272,30 @@ impl Expected {
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum ProjectFlavor {
+    Ordinary,
+    LegacyShared,
+    Default,
+}
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum IdentityMode {
+    Ordinary,
+    Guest,
+    Local,
+    Account,
+    ViewOnly,
+}
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Status {
+    pub project_flavor: ProjectFlavor,
+    pub identity_mode: IdentityMode,
+    pub can_write_annotations: bool,
+    pub can_import_media: bool,
+    pub hidden_media_ids: Vec<String>,
+    pub catalog_pending: bool,
+
     pub format_version: u32,
     pub runtime_nonce: String,
     pub project_id: Option<String>,
@@ -205,6 +312,13 @@ pub struct Status {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Context {
+    pub project_flavor: ProjectFlavor,
+    pub identity_mode: IdentityMode,
+    pub can_write_annotations: bool,
+    pub can_import_media: bool,
+    pub hidden_media_ids: Vec<String>,
+    pub catalog_pending: bool,
+
     pub runtime_nonce: String,
     pub actor: Option<AuthorIdentity>,
     pub preferences: Option<PlaybackPreferences>,
@@ -213,6 +327,27 @@ pub fn status(project: Option<&LocalProject>, service: &Service) -> Result<Statu
     let r = service.current.lock().map_err(|_| unavailable())?;
     let workspace = project.and_then(|p| p.workspace().ok());
     Ok(Status {
+        project_flavor: match workspace {
+            None => ProjectFlavor::Ordinary,
+            Some(w) if w.manifest().format_version == 2 => ProjectFlavor::Default,
+            _ => ProjectFlavor::LegacyShared,
+        },
+        identity_mode: match workspace {
+            None => IdentityMode::Ordinary,
+            Some(w) if w.is_view_only() => IdentityMode::ViewOnly,
+            Some(w) => match w.actor() {
+                None => IdentityMode::Guest,
+                Some(a) if a.normalized_login.starts_with("@local:") => IdentityMode::Local,
+                _ => IdentityMode::Account,
+            },
+        },
+        can_write_annotations: project.is_some() && workspace.is_none_or(|w| !w.is_view_only()),
+        can_import_media: project.is_some()
+            && workspace.is_none_or(|w| w.manifest().format_version == 2 && w.actor().is_some()),
+        hidden_media_ids: workspace
+            .map(|w| w.hidden_media_ids().to_vec())
+            .unwrap_or_default(),
+        catalog_pending: r.catalog_pending,
         format_version: 1,
         runtime_nonce: r.nonce.clone(),
         project_id: project

@@ -1,4 +1,4 @@
-THIRD-PARTY NOTICES — Audio Annotator 0.3.0
+THIRD-PARTY NOTICES — Audio Annotator 0.4.0
 This file does not assign a license to Audio Annotator itself. See the project owner for distribution terms.
 Unmodified Symphonia MPL-2.0 sources are distributed alongside this notice in sources/*.crate. Cargo .crate files are gzip-compressed tar archives.
 Inventory is conservative: Rust build-time and procedural macro dependencies are included even when they do not ship executable code. FFmpeg, Selenium, and all other npm devDependencies are development-only and are not included in the application.

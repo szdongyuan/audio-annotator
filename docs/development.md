@@ -1,12 +1,14 @@
 # 开发与验证
 
-## 0.3.0 NAS 协作
+## 0.4.0 默认协作
 
-用户操作见 [使用说明](user-guide.md#nas-共享标注)：普通项目创建空目录协作副本，打开 collaboration.json 后访客查看或登录项目账号；作者筛选与只读检查独立于本人编辑。共享目录只保存固定媒体清单、账号验证值及按作者发布的不可变标注版本。本机缓存按共享根、项目、作者隔离，包含私人文档及原子同步检查点。保存先落本机，网络失败保留 pending；自己的基线分歧必须显式加载共享版本。个人导出清理屏蔽与他人数据，Save As 保留本人私人操作并生成普通项目。无需服务器，无格式迁移；实际文件权限仍由 NAS ACL 管理。
+新建、另存和交换导入均输出默认共享格式 2，使用 Windows DPAPI CurrentUser 保护的本机身份。公共清单身份固定，catalog 下媒体记录独立不可变；UUID 排序是规范顺序，测试不得假设选择文件的顺序。不同准备项相同音频保留不同 UUID，仅同一能力重试幂等。私人工作区、历史、pending 和 in-flight 随目录追加协调；后台刷新只更新状态及只读层，显式更新经过草稿保存屏障。
 
-验证命令仍为 npm ci / fixtures / typecheck / test / build、cargo fmt / clippy / test --workspace。`npm.cmd run test:desktop` 按顺序保留原 18 个阶段并追加 collaboration-native（实际 IPC 合同）、collaboration-controls 和 collaboration-layers（实际 UI 两实例）。harness 默认 4445/4446/9235，第二实例可用 4455/4456/9245 和独立 localDataEnv；启动拒绝未知监听者，退出只回收自己创建的 PID。ANNOTATOR_E2E_LOCAL_DATA、ANNOTATOR_E2E_DEBUG_PORT 和预设选择器仅编译进 e2e 构建。
+旧普通项目和格式 1 访客作为显式兼容夹具保留。`tests/desktop` 的正常新建流程使用默认项目；原生故障测试与实际 UI 验收分开报告。导入成功项必须显式释放，结构化 operationBusy 重试创建新 Channel。JSON 先返回 sourcesRequired，再提交源摘要及完整绑定；ZIP 一步导入。
 
-`npm.cmd run perf` 先构建 release + e2e，在实际 1920 外窗运行八通道十分钟音频并验证原音/处理后真实设备输出，保留每项及合并 P95≤100ms、零欠载和原有内存预算。两作者刷新另外统计图像写入与分析/播放请求，不把这些合同检查当成物理 NAS 认证。最后必须执行正常 `npm.cmd run tauri -- build --bundles nsis`，无测试 feature/config，再用归属核验的 release-ui.ps1 和真实系统选择器验收同一 EXE。发布保留精确 as-built 输入字节清单，不能用未来提交号代替构建来源。结果与限制见 [0.3.0 验收](verification-0.3.0.md)。
+`npm.cmd run test:desktop` 保留原 21 个阶段并追加 default-collaboration。harness 默认 4445/4446/9235，第二实例 4455/4456/9245，各自使用独立 localDataEnv。禁止连接或终止未知监听者。`ANNOTATOR_DESKTOP_OUTPUT` 可指定证据父目录；唯一输出通过 realpath 转成物理路径，项目验证不会因此绕过 reparse 检查。e2e 选择器与身份目录覆盖只编译进 e2e 构建。
+
+执行 typecheck、完整前端测试/build、cargo fmt/clippy/test --workspace（包含容量测试）及完整桌面套件。无改动轮询检查像素写入、分析请求与播放配置，并用正向探针验证计数有效；既有长音频性能数据单独标注历史背景。最后无 e2e/config override 构建 NSIS，以归属核验的 release-ui.ps1、真实选择器验证同一生产 EXE。冻结构建输入原始字节与 SHA 清单，不用后续提交号冒充来源。详见 [0.4.0 验收](verification-0.4.0.md)。
 
 ## 当前阶段
 

@@ -22,6 +22,36 @@ function setup() {
   const lifecycle = new ProjectLifecycle(store, queue, { save: async (_, r) => r, close: vi.fn() });
   return { store, queue, lifecycle, path: 'project', apply };
 }
+it('retains an unresolved primary and its selection when an additive catalog sorts earlier, but honors new view authority and runtime', () => {
+  const active = setup(), [earlier, original, compare] = active.store.snapshot.document.media;
+  const initial = active.store.snapshot.document;
+  initial.media = [original, compare]; initial.viewState = { ...initial.viewState, activeMediaId: null, compareMediaId: compare.id };
+  const hook = renderHook(({ owner }) => {
+    const workspace = useWorkspace(owner);
+    const panes = [workspace.state.activeMediaId, workspace.state.compareMediaId].filter((id): id is string => !!id).map(mediaId => ({ mediaId, channels: [0, 1] }));
+    return { workspace, selection: useSelection(owner, workspace.state.activeMediaId, panes) };
+  }, { initialProps: { owner: active } });
+  const selected = { region: { mediaId: original.id, channelIndex: 0, startSeconds: .01, endSeconds: .05, lowHz: 100, highHz: 1000 }, object: null };
+  act(() => hook.result.current.selection.state.select(selected));
+  const adopt = () => active.store.accept({ ...active.store.snapshot, document: { ...active.store.snapshot.document, revision: active.store.snapshot.document.revision + 1, media: [earlier, original, compare], viewState: structuredClone(initial.viewState) } });
+  const select = hook.result.current.workspace.selectPane;
+  act(() => { adopt(); expect(select('compare', original.id)).toBe(false); });
+  expect(hook.result.current.workspace.state).toMatchObject({ activeMediaId: original.id, compareMediaId: compare.id });
+  expect(hook.result.current.selection.selection).toBe(selected);
+  act(adopt); // A later unchanged save/poll snapshot must not undo the retained fallback.
+  act(() => hook.result.current.workspace.selectPane('primary', original.id));
+  expect(hook.result.current.workspace.state.activeMediaId).toBe(original.id);
+  expect(active.store.drafts.size).toBe(0); expect(active.apply).not.toHaveBeenCalled();
+  const next = { ...active };
+  hook.rerender({ owner: next });
+  expect(hook.result.current.workspace.state.activeMediaId).toBe(earlier.id);
+  expect(hook.result.current.selection.selection).toBeNull();
+  act(() => active.store.accept({ ...active.store.snapshot, document: { ...active.store.snapshot.document, viewState: { ...initial.viewState, activeMediaId: original.id } } }));
+  expect(hook.result.current.workspace.state.activeMediaId).toBe(original.id);
+  act(adopt); // Undo restoring a null active ID is new authority and uses its normal fallback.
+  expect(hook.result.current.workspace.state.activeMediaId).toBe(earlier.id);
+  hook.unmount(); active.lifecycle.dispose();
+});
 it('selects each pane independently and rejects both duplicate directions without writing a draft', async () => {
   const active = setup(), hook = renderHook(() => useWorkspace(active));
   act(() => hook.result.current.selectPane('primary', '33333333-3333-4333-8333-333333333333'));

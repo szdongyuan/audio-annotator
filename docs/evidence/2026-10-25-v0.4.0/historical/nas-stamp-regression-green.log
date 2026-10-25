@@ -1,0 +1,10 @@
+   Compiling annotator-core v0.4.0 (D:\Work\annotator\.worktrees\default-collaboration-v040\crates\annotator-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.69s
+     Running tests\collaboration_catalog.rs (target\debug\deps\collaboration_catalog-bf8ba1b803179f4f.exe)
+
+running 1 test
+owned SMB fixture="N:\\AudioAnnotator-verification-408919e9-d667-48c1-a8d6-cd642e27b17d\\stamp-regression-5a641cac-1883-45b7-b17a-e2159d6e79ca"; before=SourceStamp { bytes: 9644, modified: SystemTime { intervals: 134374179498472778 } }; after=SourceStamp { bytes: 9644, modified: SystemTime { intervals: 134374179498472778 } }
+test real_smb_published_stamp_survives_prepared_capability_release ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 1.08s
+

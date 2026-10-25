@@ -8,14 +8,15 @@ export function projectMenuItems({project,onImport,onImportFolder,importDisabled
  return [
   {id:'new',label:'新建项目',disabled:busy,action:()=>{void project.open('create');}},
   {id:'open',label:'打开项目…',disabled:busy,action:()=>{void project.open('open');}},
+  {id:'open-view',label:'只读打开项目…',disabled:busy,action:()=>{void project.open('viewOnly');}},
   {id:'save',label:'保存',disabled:busy||!project.active,action:()=>{void project.save();}},
-  {id:'save-as',label:project.active?.collaboration?'另存我的本机副本…':'另存项目副本…',disabled:busy||!project.active,action:()=>{void project.saveAs();}},
-  {id:'import',label:'导入音频',disabled:busy||!!project.active?.collaboration||importDisabled,action:onImport},
-  {id:'import-folder',label:'导入文件夹…',disabled:busy||!!project.active?.collaboration||importDisabled||!onImportFolder,action:onImportFolder},
+  {id:'save-as',label:'另存我的项目副本…',disabled:busy||!project.active,action:()=>{void project.saveAs();}},
+  {id:'import',label:'导入音频',disabled:busy||project.active?.collaboration?.canImportMedia===false||importDisabled,action:onImport},
+  {id:'import-folder',label:'导入文件夹…',disabled:busy||project.active?.collaboration?.canImportMedia===false||importDisabled||!onImportFolder,action:onImportFolder},
   {id:'import-share',label:'导入分享文件…',disabled:busy||!exchange,action:()=>exchange?.show('import')},
   {id:'export',label:project.active?.collaboration?'导出我的标注 / 项目包…':'分享项目…',disabled:busy||!project.active||!exchange,action:()=>exchange?.show('export')},
-  ...(onCreateCollaboration?[{id:'collaboration-create',label:'创建协作副本…',disabled:busy||!project.active||!!project.active.collaboration,action:onCreateCollaboration}]:[]),
+  ...(onCreateCollaboration&&project.active&&!project.active.collaboration?[{id:'collaboration-create',label:'创建协作副本…',disabled:busy||!project.active||!!project.active.collaboration,action:onCreateCollaboration}]:[]),
   {id:'close',label:'关闭项目',disabled:busy||!project.active,action:()=>{void project.close();}},
  ];
 }
-export function ProjectActions(props:Props){const items=projectMenuItems(props);return <nav className="project-actions" aria-label="项目操作"><button className="button button-quiet" disabled={items[2].disabled} onClick={items[2].action}><Save size={14}/>保存</button><button className="button button-quiet" disabled={items[4].disabled} onClick={items[4].action}><Plus size={14}/>导入音频</button></nav>;}
+export function ProjectActions(props:Props){const items=projectMenuItems(props);return <nav className="project-actions" aria-label="项目操作"><button className="button button-quiet" disabled={items.find(i=>i.id==='save')?.disabled} onClick={items.find(i=>i.id==='save')?.action}><Save size={14}/>保存</button><button className="button button-quiet" disabled={items.find(i=>i.id==='import')?.disabled} onClick={items.find(i=>i.id==='import')?.action}><Plus size={14}/>导入音频</button></nav>;}

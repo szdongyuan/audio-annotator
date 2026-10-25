@@ -1,0 +1,160 @@
+{
+  "output": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\sharing\\native-w2VYRH",
+  "method": "Fresh debug/e2e EXE; owned Selenium/WebView2 pointer and keyboard. Only native picker return paths are injected. UI creates notes/categories/region/mask, saves, exports, imports and plays; read-only native snapshots/tiles/output frames measure results.",
+  "checks": [
+    {
+      "name": "actual UI creates and saves three independent classifications/notes plus processed mask",
+      "beforeEnergy": {
+        "values": {
+          "original": {
+            "1500": -10.457942962646484,
+            "6000": -10.457840919494629
+          },
+          "processed": {
+            "1500": -160,
+            "6000": -10.457840919494629
+          }
+        },
+        "rejectionDb": -149.54205703735352,
+        "retainedDb": 0,
+        "editSignature": "2d444c02b789c8e7710af3e47aa351f8ed40f6a43399fd93e1232a9d49546c89"
+      },
+      "beforePixels": [
+        {
+          "hash": 1544767335,
+          "height": 256,
+          "width": 698
+        },
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        }
+      ]
+    },
+    {
+      "name": "renamed local-copy action switches to independent project, retaining private masks and independent verified audio copies",
+      "originalId": "f9086c17-8006-4ef1-9622-819af83d6748",
+      "copyId": "fb539829-c9c3-481b-9025-5a70bfa46a11",
+      "copy": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\sharing\\native-w2VYRH\\local-copy",
+      "sources": [
+        "media/052823ef-f45d-45e3-8760-c08ce0bb2c31.wav",
+        "media/19a747a3-bf13-436d-82d7-a3737a408943.wav"
+      ]
+    },
+    {
+      "name": "independent bundle import with unavailable original paths preserves own labels and original audio while excluding private masks from processed tiles/canvas, consuming real native output frames",
+      "importedRoot": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\sharing\\native-w2VYRH\\recipient\\imported-8be3826e-e99b-465e-af3c-c1a653f9da09",
+      "importedSources": [
+        {
+          "file": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\sharing\\native-w2VYRH\\recipient\\imported-8be3826e-e99b-465e-af3c-c1a653f9da09\\media\\052823ef-f45d-45e3-8760-c08ce0bb2c31.wav",
+          "sha256": "36540138e71148deb787386568246edb1b23f1292d798705f2a88f61021875c3"
+        },
+        {
+          "file": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\sharing\\native-w2VYRH\\recipient\\imported-8be3826e-e99b-465e-af3c-c1a653f9da09\\media\\19a747a3-bf13-436d-82d7-a3737a408943.wav",
+          "sha256": "43ba3f465645acf0b80b254d3f3bfea3ff0d04beae6d3d83c45aa516653a3d8b"
+        }
+      ],
+      "recipientEnergy": {
+        "values": {
+          "original": {
+            "1500": -10.457942962646484,
+            "6000": -10.457840919494629
+          },
+          "processed": {
+            "1500": -10.457942962646484,
+            "6000": -10.457840919494629
+          }
+        },
+        "rejectionDb": 0,
+        "retainedDb": 0,
+        "editSignature": "3434680d4b7a04a1a2fd05ed341e606e66c9b21ae9f267ddc4790a26aa7c932f"
+      },
+      "recipientPixels": [
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        },
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        }
+      ],
+      "originalPixels": [
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        },
+        {
+          "hash": 1358696954,
+          "height": 256,
+          "width": 698
+        }
+      ],
+      "playing": {
+        "consumedFrames": 3456,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 8,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 14,
+        "mediaId": "052823ef-f45d-45e3-8760-c08ce0bb2c31",
+        "positionSeconds": 0.072,
+        "presentation": {
+          "callbackNanos": 49089700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 3456,
+          "tailNanos": 71089700,
+          "tailNonSilent": true
+        },
+        "projectId": "ccc76246-aca0-43f9-9652-dc58a6040b3e",
+        "startSeconds": 0,
+        "state": "playing",
+        "underrunFrames": 0
+      },
+      "stopped": {
+        "consumedFrames": 7296,
+        "deviceChannels": 2,
+        "deviceName": "Headphones (High Definition Audio Device)",
+        "deviceRate": 48000,
+        "endSeconds": 8,
+        "error": null,
+        "firstSeconds": 0,
+        "generation": 15,
+        "mediaId": "052823ef-f45d-45e3-8760-c08ce0bb2c31",
+        "positionSeconds": 0,
+        "presentation": {
+          "callbackNanos": 129081700,
+          "drained": false,
+          "pendingTailFrames": 1056,
+          "ringExhausted": false,
+          "ringExhaustedNanos": null,
+          "scheduledFrames": 7296,
+          "tailNanos": 151081700,
+          "tailNonSilent": true
+        },
+        "projectId": "ccc76246-aca0-43f9-9652-dc58a6040b3e",
+        "startSeconds": 0,
+        "state": "stopped",
+        "underrunFrames": 0
+      }
+    },
+    {
+      "name": "annotations-only export verifies relocated originals before publishing a default project",
+      "root": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\sharing\\native-w2VYRH\\recipient\\imported-074a2681-00b6-4c28-93b3-65f0c9cac1d6"
+    }
+  ],
+  "passed": true,
+  "restoredHashes": [
+    "36540138e71148deb787386568246edb1b23f1292d798705f2a88f61021875c3",
+    "43ba3f465645acf0b80b254d3f3bfea3ff0d04beae6d3d83c45aa516653a3d8b"
+  ]
+}

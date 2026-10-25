@@ -1,3 +1,4 @@
+import { annotationDisabled } from '../collaboration/capabilities';
 import type { MediaDescriptor, MediaView } from '../../bridge/types';
 import type { MediaStatus } from '../../bridge/media';
 import { useLayoutEffect, useRef, useState } from 'react';
@@ -61,7 +62,7 @@ export function SelectionToolbar({ media, channel, view, status }: { media: Medi
   const reason = status === 'ready' ? '' : status === 'missing' ? '音频文件缺失' : status === 'changed' ? '音频源文件已改变' : '音频尚未就绪';
   const commands = (captured: Selection) => targetCommands(ui!, captured, playback, () => [{ mediaId: media.id, status: latest.current.status }], () => latest.current.ui?.active === ui?.active && sameTarget(latest.current.ui?.state.getActiveSelection() ?? null, captured));
   const open = (kind: 'category' | 'audition', trigger: HTMLElement) => {
-    if (!target || disabled || menuIsOpen()) return;
+    if (!target || disabled || kind==='category'&&annotationDisabled(ui?.active) || menuIsOpen()) return;
     const rect = trigger.getBoundingClientRect(); setMenu({ owner: ui!.active, target, kind, x: rect.left, y: rect.bottom, trigger });
   };
   const items: MenuItem[] = validMenu?.kind === 'category' ? [
@@ -72,7 +73,7 @@ export function SelectionToolbar({ media, channel, view, status }: { media: Medi
     {eligible && <div ref={bar} role="toolbar" aria-label="选区操作" className="selection-toolbar" style={{ ...position, visibility: shown ? 'visible' : 'hidden' }}>
       <button disabled={disabled || !!reason} title={reason || '播放当前选区'} onClick={() => { if (target) commands(target).audition(); }}>播放</button>
       <button aria-label="试听选区版本" aria-haspopup="menu" aria-expanded={validMenu?.kind === 'audition'} disabled={disabled || !!reason} title={reason || '选择本次试听版本'} onClick={e => open('audition', e.currentTarget)}>▾</button>
-      <button aria-label="标注" aria-haspopup="menu" aria-expanded={validMenu?.kind === 'category'} disabled={disabled} onClick={e => open('category', e.currentTarget)}>标注 ▾</button>
+      <button aria-label="标注" aria-haspopup="menu" aria-expanded={validMenu?.kind === 'category'} disabled={disabled||annotationDisabled(ui?.active)} onClick={e => open('category', e.currentTarget)}>标注 ▾</button>
     </div>}
     {validMenu && <Menu items={items} anchor={validMenu} returnFocus={validMenu.trigger} onClose={() => setMenu(null)} />}
   </div>;

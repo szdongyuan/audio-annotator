@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 export async function sharingFlow(h, context) {
   // The integrated runner queues JSON first, then ZIP. Only JSON needs selection.
-  for (const kind of ['仅标注（不含音频）', null]) {
-    await h.menu('分享项目');
-    assert.equal(await (await h.element('[aria-label="完整项目包（含音频）"]')).isSelected(), true);
+  for (const kind of ['我的标注（不含音频）', null]) {
+    await h.menu('导出我的标注 / 项目包');
+    assert.equal(await (await h.element('[aria-label="我的项目包（含音频）"]')).isSelected(), true);
     if (kind) await h.label(kind);
     await h.clickText('选择保存位置…');
     await h.until(`document.querySelector('.exchange-result') && !document.querySelector('.exchange-progress')`); await h.clickText('关闭');
@@ -14,20 +14,17 @@ export async function sharingFlow(h, context) {
   for (const extension of ['json', 'zip']) {
     assert.ok((await fs.stat(path.join(context.output, `share.${extension}`))).size > 100);
     await h.menu('导入分享文件'); await h.clickText('选择交换文件…');
+    if(extension==='json'){await h.bindSources(['six.flac','mono16.wav','stereo.mp3']);}
     await h.until(`document.querySelector('.exchange-result') && !document.querySelector('.exchange-progress')`);
     await h.clickText('关闭');
     const title = await h.evaluate('return document.querySelector(".project-identity").title');
-    const imported = JSON.parse(await fs.readFile(path.join(title, 'project.json')));
+    const manifest = JSON.parse(await fs.readFile(path.join(title, 'collaboration.json')));
+    const imported=(await h.snapshot(manifest.projectId)).document;
     assert.notEqual(imported.projectId, context.id);
     assert.equal(imported.annotations[0].note, context.saved.annotations[0].note);
-    assert.equal(imported.media[0].channelNotes[1], '通道独立备注');
+    assert.equal(imported.media.find(m=>m.id===context.primary.id).channelNotes[1], '通道独立备注');
     assert.equal(imported.categories[0].name, '测试类别');
-    if (extension === 'json') {
-      await h.until(`document.body.innerText.includes('缺失')`);
-      await h.screenshot('json-missing-media');
-      await h.menu('关闭项目'); await h.menu('打开项目…');
-      await h.until(`document.querySelectorAll('.file-pane').length===2`);
-    } else await h.screenshot('bundle-roundtrip');
+    await h.screenshot(`${extension}-default-roundtrip`);
   }
   await h.menu('关闭项目');
 }

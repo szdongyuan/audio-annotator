@@ -105,3 +105,9 @@ it.each(['标注类型','屏蔽选区'])('choosing %s activates a captured inact
  fireEvent.click(screen.getByRole('menuitem',{name:label}));if(label==='标注类型')fireEvent.click(screen.getByRole('menuitem',{name:'未分类'}));
  expect(s.ui().state.getActiveSelection()).not.toBeNull();await act(async()=>{await s.owner.lifecycle.submitDrafts();});s.dispose();
 });
+
+it('view-only region menu disables public mutations and preserves private masking/playback',()=>{
+ const p=props();Object.assign(p.ui.active,{collaboration:{canWriteAnnotations:false}});render(<RegionMenu {...p as unknown as ComponentProps<typeof RegionMenu>}/>);
+ for(const name of ['标注类型','备注','删除标注'])expect(screen.getByRole('menuitem',{name})).toHaveAttribute('aria-disabled','true');
+ expect(screen.getByRole('menuitem',{name:'屏蔽选区'})).toHaveAttribute('aria-disabled','false');expect(screen.getByRole('menuitem',{name:'播放选区'})).toHaveAttribute('aria-disabled','false');
+});

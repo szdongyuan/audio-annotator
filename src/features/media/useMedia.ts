@@ -41,7 +41,7 @@ export function useMedia(active: ActiveProject | null) {
     return () => { disposed = true; clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [active, sourceKey, controller?.busy]);
   const choose = async (target?: MediaDescriptor) => {
-    if (!active || !controller || active.store.editingDisabled || (!target && active.collaboration)) return;
+    if (!active || !controller || active.store.editingDisabled || (!target && active.collaboration?.canImportMedia===false)) return;
     const reservation = {};
     if (!controller.reserve(reservation)) return;
     try {
@@ -56,7 +56,7 @@ export function useMedia(active: ActiveProject | null) {
   const selected = media.find(m => m.id === selectedId) ?? media.find(m => m.id === active?.store.snapshot.document.viewState.activeMediaId) ?? media[0] ?? null;
   return { controller, folder, statuses, selected, selectedId: selected?.id ?? null, setSelectedId, relink, setRelink, error,
     disabled: !active || !controller || active.store.editingDisabled || controller.occupied,
-    chooseFolder: () => { if (!active?.collaboration) folder?.begin(); },
+    chooseFolder: () => { if (active?.collaboration?.canImportMedia!==false) folder?.begin(); },
     choose: () => void choose(), chooseRelink: () => void choose(relink ?? undefined),
     verify: () => { if (relink && controller && !controller.occupied && !active?.store.editingDisabled) { const target = relink; setRelink(null); void controller.start([target.sourceRef], target.id).catch(e => { if (current.current === active) setError(normalizeError(e)); }); } },
   };

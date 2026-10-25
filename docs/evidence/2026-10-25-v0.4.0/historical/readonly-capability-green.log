@@ -1,0 +1,9 @@
+   Compiling annotator-core v0.4.0 (D:\Work\annotator\.worktrees\default-collaboration-v040\crates\annotator-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.22s
+     Running unittests src\lib.rs (target\debug\deps\annotator_core-b85ea479a6578056.exe)
+
+running 1 test
+test collaboration::catalog::import_scan_regression::prepared_placement_identity_handle_cannot_write ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.86s
+

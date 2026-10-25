@@ -1,0 +1,38 @@
+
+> audio-annotator@0.4.0 tauri
+> tauri build --bundles nsis
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm.cmd run build`
+
+> audio-annotator@0.4.0 build
+> npm run typecheck && vite build
+
+
+> audio-annotator@0.4.0 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 2067 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                  0.55 kB │ gzip:   0.36 kB
+dist/assets/index-BndeAp5i.css                  39.52 kB │ gzip:   9.02 kB
+dist/assets/index-C3cH6aU3.js                  480.60 kB │ gzip: 151.91 kB
+dist/assets/THIRD-PARTY-NOTICES-C07Awesy.js  2,708.59 kB │ gzip: 120.34 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 3.44s
+   Compiling annotator-desktop v0.4.0 (D:\Work\annotator\.worktrees\default-collaboration-v040\src-tauri)
+    Finished `release` profile [optimized] target(s) in 40.91s
+       Built application at: D:\Work\annotator\.worktrees\default-collaboration-v040\target\release\annotator-desktop.exe
+        Info Patching D:\Work\annotator\.worktrees\default-collaboration-v040\target\release\annotator-desktop.exe with bundle type information: nsis
+        Info Target: x64
+     Running makensis to produce D:\Work\annotator\.worktrees\default-collaboration-v040\target\release\bundle\nsis\Audio Annotator_0.4.0_x64-setup.exe
+    Finished 1 bundle at:
+        D:\Work\annotator\.worktrees\default-collaboration-v040\target\release\bundle\nsis\Audio Annotator_0.4.0_x64-setup.exe (211.62 MiB)
+

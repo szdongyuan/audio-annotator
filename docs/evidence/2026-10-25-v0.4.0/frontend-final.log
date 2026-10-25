@@ -1,0 +1,13 @@
+
+> audio-annotator@0.4.0 test
+> vitest run
+
+
+ RUN  v4.1.12 D:/Work/annotator/.worktrees/default-collaboration-v040
+
+
+ Test Files  48 passed (48)
+      Tests  393 passed (393)
+   Start at  01:03:31
+   Duration  12.02s (transform 5.69s, setup 15.22s, import 11.33s, tests 32.02s, environment 50.29s)
+

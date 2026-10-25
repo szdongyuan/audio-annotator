@@ -1,0 +1,13 @@
+
+> audio-annotator@0.4.0 test
+> vitest run src/features/spectrogram/paneSelection.test.tsx src/features/spectrogram/ownership.test.tsx src/features/collaboration/defaults.test.tsx
+
+
+ RUN  v4.1.12 D:/Work/annotator/.worktrees/default-collaboration-v040
+
+
+ Test Files  3 passed (3)
+      Tests  17 passed (17)
+   Start at  00:20:51
+   Duration  2.45s (transform 1.01s, setup 648ms, import 1.47s, tests 899ms, environment 1.64s)
+

@@ -1,3 +1,4 @@
+import { annotationDisabled } from '../collaboration/capabilities';
 import type { Annotation, ProjectDocument } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import { normalizeError } from '../../bridge/client';
@@ -19,7 +20,7 @@ export function reconcileContext(doc: ProjectDocument, context: ClassificationTa
   return { mediaId: pane.mediaId, channelIndex };
 }
 export function classifyTarget(owner: ActiveProject, target: ClassificationTarget, categoryId: string | null, current: () => boolean) {
-  if (!current() || owner.store.editingDisabled) return Promise.resolve();
+  if (!current() || annotationDisabled(owner)) return Promise.resolve();
   const captured = { ...target };
   return owner.lifecycle.enqueueEdit(async () => {
     await owner.lifecycle.submitDrafts();

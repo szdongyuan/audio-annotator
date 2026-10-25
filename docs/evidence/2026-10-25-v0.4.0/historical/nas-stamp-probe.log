@@ -1,0 +1,7 @@
+target="\\\\?\\UNC\\192.168.2.100\\项目文件\\AudioAnnotator-verification-408919e9-d667-48c1-a8d6-cd642e27b17d\\stamp-probe-ee9b81c7-18b5-4648-ad06-45f5f94ed329\\media\\5c4291e0-311f-4e6d-8743-06b424c0f34b.wav" published_sha256=192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e
+held-write-clone: bytes=9644 modified_nanos=1792944189975272900 unchanged=true sha256=192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e
+after-drop: bytes=9644 modified_nanos=1792944190100429600 unchanged=false sha256=192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e
+after50ms: bytes=9644 modified_nanos=1792944190100429600 unchanged=false sha256=192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e
+after250ms: bytes=9644 modified_nanos=1792944190100429600 unchanged=false sha256=192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e
+after1250ms: bytes=9644 modified_nanos=1792944190100429600 unchanged=false sha256=192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e
+verify_result=Err(AppError { code: IdentityMismatch, message: "源音频已改变，请重新校验或关联", entity_id: None, retryable: false, details: None })

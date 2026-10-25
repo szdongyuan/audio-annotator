@@ -26,13 +26,13 @@ try {
   await h.evaluate(`window.__rulerEvidence={requests:[],wheels:[]}; const original=window.fetch;
     window.fetch=function(resource,...args){if(String(resource).endsWith('/request_tile'))window.__rulerEvidence.requests.push({url:String(resource),time:performance.now()});return original.call(this,resource,...args)};
     document.addEventListener('wheel',e=>{const r=e.target.closest('.spectrogram-surface')?.getBoundingClientRect();window.__rulerEvidence.wheels.push({trusted:e.isTrusted,ctrl:e.ctrlKey,shift:e.shiftKey,deltaY:e.deltaY,deltaMode:e.deltaMode,prevented:e.defaultPrevented,x:r?(e.clientX-r.left)/r.width:null,y:r?(e.clientY-r.top)/r.height:null})});`);
-  await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.innerText.includes('已保存')`);
-  const id = JSON.parse(await fs.readFile(path.join(project, 'project.json'), 'utf8')).projectId;
-  await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.innerText.includes('导入完成')`); await h.clickText('关闭导入结果');
+  await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.innerText.match(/已保存|已存本机/)`);
+  const id = JSON.parse(await fs.readFile(path.join(project, 'collaboration.json'), 'utf8')).projectId;
+  await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.innerText.includes('导入完成')`); await h.clickText('关闭导入结果');await h.selectMedia('stereo.mp3');
   await h.until(`document.querySelectorAll('canvas').length===2 && !document.querySelector('.tile-status')`);
   await h.drag('.annotation-overlay', [.2, .25], [.6, .7]); await h.context('.annotation-overlay', [.4, .45]); await h.label('标注类型'); await h.clickText('未分类');
   await h.until(`document.querySelector('.annotation-inspector')`);
-  const original = (await h.snapshot(id)).document, media = original.media[0], annotation = original.annotations[0];
+  const original = (await h.snapshot(id)).document, media = original.media.find(m=>m.displayName==='stereo.mp3'), annotation = original.annotations[0];
   const snapshot = async () => { await wait(350); return (await h.snapshot(id)).document; };
   const view = async () => (await snapshot()).viewState.media[media.id];
   // Make the initial default view explicit through a real ruler action before reading persisted state.
@@ -123,7 +123,7 @@ try {
   await h.context('.frequency-ruler'); await h.label('重置频率轴'); await view();
   await h.clickText('双文件对比'); await h.until(`document.querySelectorAll('.file-pane').length===2 && !document.querySelector('.tile-status')`); await h.menu('联动时间轴', '视图');
   await h.context('.time-ruler'); await h.label('重置时间轴');
-  let linked = await snapshot(); const short = linked.media[1]; assert.ok(short.frameCount / short.sampleRate < media.frameCount / media.sampleRate); closeTo(linked.viewState.media[short.id].endSeconds, linked.viewState.media[media.id].endSeconds);
+  let linked = await snapshot(); const short = linked.media.find(m=>m.displayName==='short.wav'); assert.ok(short.frameCount / short.sampleRate < media.frameCount / media.sampleRate); closeTo(linked.viewState.media[short.id].endSeconds, linked.viewState.media[media.id].endSeconds);
   // Saved-region zoom goes through the existing target resolver and shared workspace patch.
   await h.context(`[data-annotation-id="${annotation.id}"]`); await h.label('放大到选区'); linked = await snapshot();
   for (const field of ['startSeconds','endSeconds','lowHz','highHz']) closeTo(linked.viewState.media[media.id][field], annotation.region[field], 1e-8);

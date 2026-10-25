@@ -1,0 +1,316 @@
+{
+  "method": "Two independently spawned native Tauri clients with distinct WebDriver/debug ports, WebView and app-local-data roots; all acceptance mutations via UI; IPC read-only",
+  "output": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\collaboration-layers\\two-ui-F2L6fn",
+  "checks": [
+    "same-account second native UI writer is rejected while the first writer remains active",
+    "independent Alice/Bob native clients create exactly identical physical regions via UI and see separate foreign frames",
+    "foreign list and three-level details remain read-only; keyboard cannot modify own state; regional audition uses personal source",
+    "all/mine/custom visibility does not modify personal annotations or identity",
+    "remote update preserves own note input, selected frame, undo availability and active playback generation/source",
+    "private mask, channel visibility, volume and source changes on A leave B unchanged",
+    "own update/delete/undo never changes other author; open details reject a deleted foreign target",
+    "foreign click and right-click route to read-only details while own author is hidden",
+    "actual UI JSON and ZIP exports contain own annotations only and exclude foreign data, credentials and private masks",
+    "foreign file/channel notes and categories inspect independently; channel Locate reveals only the current private pane",
+    "B also persists a distinct private mask and volume/view without changing A",
+    "fresh A native process and login restore own private workspace while B remains independently active",
+    "fresh B native process and login restore B personal settings independently of A",
+    "source and shared original WAV SHA256 remain exact",
+    "real UI local save remains pending during owned manifest disconnect and publishes after reconnect without changing B",
+    "five unchanged two-author manual refreshes plus polling preserve private document/playback with zero spectral repaint or analysis requests",
+    "positive UI source/playback probe proves drawing, analysis and playback instrumentation is live"
+  ],
+  "originalHash": "25a6a386be6423ee3958eae4897bcb682248fcf92f128652bd928fdf7e51f9c2",
+  "pids": [
+    19624,
+    31636
+  ],
+  "jsonExport": {
+    "formatVersion": 2,
+    "projectId": "47af0350-f9d4-4c22-90f0-968a4e4a79a0",
+    "name": "shared",
+    "revision": 0,
+    "createdAt": "2026-10-25T17:35:58.669Z",
+    "updatedAt": "2026-10-25T17:35:58.669Z",
+    "media": [
+      {
+        "id": "dd8f4bf6-dcf0-4726-935e-abd115244335",
+        "displayName": "stereo-three-seconds.wav",
+        "sha256": "25a6a386be6423ee3958eae4897bcb682248fcf92f128652bd928fdf7e51f9c2",
+        "byteLength": 576044,
+        "sampleRate": 48000,
+        "frameCount": 144000,
+        "channelCount": 2,
+        "channelLayout": null,
+        "note": "Alice file",
+        "channelNotes": [
+          "",
+          "Alice channel"
+        ],
+        "categoryId": "de600d8e-0568-4aae-9b5c-026c602addab",
+        "channelCategoryIds": [
+          null,
+          "de600d8e-0568-4aae-9b5c-026c602addab"
+        ],
+        "mediaPath": null
+      }
+    ],
+    "categories": [
+      {
+        "id": "de600d8e-0568-4aae-9b5c-026c602addab",
+        "name": "Alice category",
+        "color": "#e6a65d"
+      }
+    ],
+    "annotations": [
+      {
+        "id": "bf685755-3075-4baa-a338-c4e29d80aba9",
+        "region": {
+          "mediaId": "dd8f4bf6-dcf0-4726-935e-abd115244335",
+          "channelIndex": 0,
+          "startSeconds": 0.4,
+          "endSeconds": 1.5,
+          "lowHz": 1000,
+          "highHz": 6000
+        },
+        "categoryId": "de600d8e-0568-4aae-9b5c-026c602addab",
+        "note": "Alice typing while Bob changes",
+        "createdAt": "2026-10-25T17:36:07.997Z",
+        "updatedAt": "2026-10-25T17:36:21.468Z"
+      }
+    ],
+    "edits": [],
+    "analysis": {
+      "dd8f4bf6-dcf0-4726-935e-abd115244335": {
+        "window": "hann",
+        "windowSize": 2048,
+        "hopSize": 512,
+        "fftSize": 2048,
+        "melBands": 128
+      }
+    },
+    "playbackMix": {
+      "dd8f4bf6-dcf0-4726-935e-abd115244335": {
+        "soloChannels": [],
+        "mutedChannels": []
+      }
+    },
+    "viewState": {
+      "media": {},
+      "activeMediaId": null,
+      "compareMediaId": null,
+      "linkedTime": false,
+      "compareLayout": "horizontal",
+      "compareSplit": 0.5
+    },
+    "algorithmVersions": {
+      "analysis": 1,
+      "dsp": 1
+    }
+  },
+  "zipExport": {
+    "formatVersion": 2,
+    "projectId": "47af0350-f9d4-4c22-90f0-968a4e4a79a0",
+    "name": "shared",
+    "revision": 0,
+    "createdAt": "2026-10-25T17:35:58.669Z",
+    "updatedAt": "2026-10-25T17:35:58.669Z",
+    "media": [
+      {
+        "id": "dd8f4bf6-dcf0-4726-935e-abd115244335",
+        "displayName": "stereo-three-seconds.wav",
+        "sha256": "25a6a386be6423ee3958eae4897bcb682248fcf92f128652bd928fdf7e51f9c2",
+        "byteLength": 576044,
+        "sampleRate": 48000,
+        "frameCount": 144000,
+        "channelCount": 2,
+        "channelLayout": null,
+        "note": "Alice file",
+        "channelNotes": [
+          "",
+          "Alice channel"
+        ],
+        "categoryId": "de600d8e-0568-4aae-9b5c-026c602addab",
+        "channelCategoryIds": [
+          null,
+          "de600d8e-0568-4aae-9b5c-026c602addab"
+        ],
+        "mediaPath": "media/dd8f4bf6-dcf0-4726-935e-abd115244335"
+      }
+    ],
+    "categories": [
+      {
+        "id": "de600d8e-0568-4aae-9b5c-026c602addab",
+        "name": "Alice category",
+        "color": "#e6a65d"
+      }
+    ],
+    "annotations": [
+      {
+        "id": "bf685755-3075-4baa-a338-c4e29d80aba9",
+        "region": {
+          "mediaId": "dd8f4bf6-dcf0-4726-935e-abd115244335",
+          "channelIndex": 0,
+          "startSeconds": 0.4,
+          "endSeconds": 1.5,
+          "lowHz": 1000,
+          "highHz": 6000
+        },
+        "categoryId": "de600d8e-0568-4aae-9b5c-026c602addab",
+        "note": "Alice typing while Bob changes",
+        "createdAt": "2026-10-25T17:36:07.997Z",
+        "updatedAt": "2026-10-25T17:36:21.468Z"
+      }
+    ],
+    "edits": [],
+    "analysis": {
+      "dd8f4bf6-dcf0-4726-935e-abd115244335": {
+        "window": "hann",
+        "windowSize": 2048,
+        "hopSize": 512,
+        "fftSize": 2048,
+        "melBands": 128
+      }
+    },
+    "playbackMix": {
+      "dd8f4bf6-dcf0-4726-935e-abd115244335": {
+        "soloChannels": [],
+        "mutedChannels": []
+      }
+    },
+    "viewState": {
+      "media": {},
+      "activeMediaId": null,
+      "compareMediaId": null,
+      "linkedTime": false,
+      "compareLayout": "horizontal",
+      "compareSplit": 0.5
+    },
+    "algorithmVersions": {
+      "analysis": 1,
+      "dsp": 1
+    }
+  },
+  "twoAuthorRefresh": {
+    "elapsedMs": 3477.306199999999,
+    "iterations": 5,
+    "analysis": 0,
+    "calls": [
+      "collaboration_status",
+      "get_project_snapshot",
+      "collaboration_status",
+      "playback_status",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "media_status",
+      "collaboration_refresh",
+      "media_status"
+    ],
+    "draws": 0,
+    "playback": 0,
+    "refreshMs": [
+      48.5,
+      56,
+      49,
+      49.700000047683716,
+      48.60000002384186,
+      51
+    ],
+    "syncCompleted": 5
+  },
+  "positiveProbe": {
+    "analysis": 2,
+    "calls": [
+      "collaboration_status",
+      "get_project_snapshot",
+      "collaboration_status",
+      "playback_status",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "collaboration_status",
+      "save_project",
+      "collaboration_status",
+      "collaboration_status",
+      "collaboration_sync",
+      "media_status",
+      "collaboration_refresh",
+      "media_status",
+      "collaboration_status",
+      "get_project_snapshot",
+      "collaboration_status",
+      "playback_status",
+      "cancel_generation",
+      "cancel_generation",
+      "playback_control",
+      "media_status",
+      "request_tile",
+      "request_tile",
+      "collaboration_refresh",
+      "playback_configure",
+      "collaboration_status",
+      "playback_status",
+      "collaboration_status",
+      "playback_status",
+      "media_status",
+      "collaboration_status",
+      "playback_status",
+      "collaboration_status",
+      "playback_status",
+      "playback_control"
+    ],
+    "draws": 33,
+    "playback": 3,
+    "refreshMs": [
+      48.5,
+      56,
+      49,
+      49.700000047683716,
+      48.60000002384186,
+      51,
+      62.39999997615814
+    ],
+    "syncCompleted": 5
+  },
+  "passed": true
+}

@@ -1,3 +1,4 @@
+import { annotationDisabled } from '../collaboration/capabilities';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { classifyTarget, type ClassificationTarget } from './classification';
 import type { Annotation, Change } from '../../bridge/types';
@@ -14,8 +15,8 @@ export function useAnnotations(active: ActiveProject | null, selection?: Selecti
   const select = (id: string | null) => selection ? selection.selectObject('annotation', id) : setFallbackId(id);
   const drafts = useMemo(() => active ? new AnnotationDrafts(active) : null, [active]);
   useEffect(() => { setFallbackId(null); return () => drafts?.dispose(); }, [drafts]);
-  const run = (action: () => Promise<unknown>) => {
-    if (!active || active.store.editingDisabled) return;
+  const run = (action: () => Promise<unknown>,publicWrite=true) => {
+    if (!active || active.store.editingDisabled || publicWrite&&annotationDisabled(active)) return;
     const owner = active;
     void owner.lifecycle.enqueueEdit(async () => { owner.store.assertEditable(); await owner.lifecycle.submitDrafts(); return action(); }).catch(cause => { owner.store.setError(normalizeError(cause)); });
   };
@@ -24,7 +25,7 @@ export function useAnnotations(active: ActiveProject | null, selection?: Selecti
     const annotation = active!.store.snapshot.document.annotations.find(a => a.id === id);
     if (annotation) await active!.queue.enqueue({ type: 'updateAnnotation', annotation: { ...annotation, ...patch, updatedAt: new Date().toISOString() } }, { owner: 'annotations' });
   });
-  const history = (kind: 'undo' | 'redo') => run(async () => { if (active!.store.snapshot[kind === 'undo' ? 'canUndo' : 'canRedo']) await active!.queue[kind]({ owner: 'annotations' }); });
+  const history = (kind: 'undo' | 'redo') => run(async () => { if (active!.store.snapshot[kind === 'undo' ? 'canUndo' : 'canRedo']) await active!.queue[kind]({ owner: 'annotations' }); },false);
   const remove = () => { if (selectedId) run(async () => { if (active!.store.snapshot.document.annotations.some(a => a.id === selectedId)) await active!.queue.enqueue({ type: 'removeAnnotation', id: selectedId }, { owner: 'annotations' }); }); };
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {

@@ -1,0 +1,17 @@
+PASS file category and note remain independent from channels/regions after immediate save
+PASS filename right click exposes the same file category submenu
+PASS main menu and exact properties target comparison channel without changing sidebar or creating a region
+PASS right click channel submenu supports classified/unclassified independently
+PASS three real scopes classify independently
+PASS channel result locates exact comparison channel without region or playback
+PASS file result locates whole-file properties
+PASS hidden current channel falls back to first visible comparison channel
+PASS no visible channels disables current channel classification
+PASS removed comparison context falls back to visible primary channel
+PASS one category deletion clears all three scopes; one undo restores every reference and note
+PASS classification-outer1280x800
+PASS classification-outer1920x1080
+PASS classification-min-pane-long-name
+PASS fresh native process restores all classification notes and project semantics
+PASS json portable semantic roundtrip preserves categories, notes, regions and media metadata, excludes private state
+PASS zip portable semantic roundtrip preserves categories, notes, regions and media metadata, excludes private state

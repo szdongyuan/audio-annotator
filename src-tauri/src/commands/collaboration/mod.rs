@@ -5,3 +5,10 @@ mod creation;
 pub use creation::*;
 #[cfg(test)]
 mod tests;
+
+pub mod catalog;
+pub mod defaults;
+pub mod exchange_default;
+
+#[cfg(test)]
+mod review_fixes;

@@ -1,0 +1,249 @@
+{
+  "method": "Owned native Tauri with actual bundled styles and Win32 outer sizing. Real native import/Channel delivery; inject one apply_change transport failure and hold later ready/finished events to make the concurrent processing state deterministic. Cancel/release/retry forward to native.",
+  "checks": [
+    "Concurrent command failure and remaining processing: distinct panels; cancel and retry centers hit their actual buttons at both outer sizes",
+    "Cancellation calls native and late prepared media is released; failed import stays in ledger",
+    "Dismissal retains failed command; explicit retry imports its original prepared media and clears ledger",
+    "No active feedback leaves zero reserved strip"
+  ],
+  "frames": [
+    {
+      "name": "processing1280",
+      "outer": {
+        "width": 1280,
+        "pid": 45036,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "failure": {
+        "bottom": 286.5,
+        "height": 70.5,
+        "left": 220,
+        "right": 1014,
+        "top": 216,
+        "width": 794,
+        "x": 220,
+        "y": 216
+      },
+      "inner": [
+        1264,
+        761
+      ],
+      "outerControls": [
+        {
+          "reachable": true,
+          "rect": {
+            "bottom": 118,
+            "height": 32,
+            "left": 947,
+            "right": 997,
+            "top": 86,
+            "width": 50,
+            "x": 947,
+            "y": 86
+          },
+          "text": "取消导入"
+        },
+        {
+          "reachable": true,
+          "rect": {
+            "bottom": 278.5,
+            "height": 32,
+            "left": 234,
+            "right": 306.046875,
+            "top": 246.5,
+            "width": 72.046875,
+            "x": 234,
+            "y": 246.5
+          },
+          "text": "重试更改 #1"
+        }
+      ],
+      "progress": {
+        "bottom": 208,
+        "height": 130,
+        "left": 220,
+        "right": 1014,
+        "top": 78,
+        "width": 794,
+        "x": 220,
+        "y": 78
+      }
+    },
+    {
+      "name": "processing1000",
+      "outer": {
+        "width": 1000,
+        "pid": 45036,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 680
+      },
+      "failure": {
+        "bottom": 286.5,
+        "height": 70.5,
+        "left": 200,
+        "right": 754,
+        "top": 216,
+        "width": 554,
+        "x": 200,
+        "y": 216
+      },
+      "inner": [
+        984,
+        641
+      ],
+      "outerControls": [
+        {
+          "reachable": true,
+          "rect": {
+            "bottom": 118,
+            "height": 32,
+            "left": 687,
+            "right": 737,
+            "top": 86,
+            "width": 50,
+            "x": 687,
+            "y": 86
+          },
+          "text": "取消导入"
+        },
+        {
+          "reachable": true,
+          "rect": {
+            "bottom": 278.5,
+            "height": 32,
+            "left": 214,
+            "right": 286.046875,
+            "top": 246.5,
+            "width": 72.046875,
+            "x": 214,
+            "y": 246.5
+          },
+          "text": "重试更改 #1"
+        }
+      ],
+      "progress": {
+        "bottom": 208,
+        "height": 130,
+        "left": 200,
+        "right": 754,
+        "top": 78,
+        "width": 554,
+        "x": 200,
+        "y": 78
+      }
+    },
+    {
+      "name": "cancelled1000",
+      "outer": {
+        "width": 1000,
+        "pid": 45036,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 680
+      },
+      "failure": {
+        "bottom": 286.5,
+        "height": 70.5,
+        "left": 200,
+        "right": 754,
+        "top": 216,
+        "width": 554,
+        "x": 200,
+        "y": 216
+      },
+      "inner": [
+        984,
+        641
+      ],
+      "outerControls": [
+        {
+          "reachable": true,
+          "rect": {
+            "bottom": 118,
+            "height": 32,
+            "left": 601,
+            "right": 651,
+            "top": 86,
+            "width": 50,
+            "x": 601,
+            "y": 86
+          },
+          "text": "查看详情"
+        },
+        {
+          "reachable": true,
+          "rect": {
+            "bottom": 118,
+            "height": 32,
+            "left": 667,
+            "right": 737,
+            "top": 86,
+            "width": 70,
+            "x": 667,
+            "y": 86
+          },
+          "text": "关闭导入结果"
+        },
+        {
+          "reachable": true,
+          "rect": {
+            "bottom": 200,
+            "height": 32,
+            "left": 217,
+            "right": 287,
+            "top": 168,
+            "width": 70,
+            "x": 217,
+            "y": 168
+          },
+          "text": "重试导入确认"
+        },
+        {
+          "reachable": true,
+          "rect": {
+            "bottom": 200,
+            "height": 32,
+            "left": 295,
+            "right": 345,
+            "top": 168,
+            "width": 50,
+            "x": 295,
+            "y": 168
+          },
+          "text": "结束导入"
+        },
+        {
+          "reachable": true,
+          "rect": {
+            "bottom": 278.5,
+            "height": 32,
+            "left": 214,
+            "right": 286.046875,
+            "top": 246.5,
+            "width": 72.046875,
+            "x": 214,
+            "y": 246.5
+          },
+          "text": "重试更改 #1"
+        }
+      ],
+      "progress": {
+        "bottom": 208,
+        "height": 130,
+        "left": 200,
+        "right": 754,
+        "top": 78,
+        "width": 554,
+        "x": 200,
+        "y": 78
+      }
+    }
+  ],
+  "passed": true
+}

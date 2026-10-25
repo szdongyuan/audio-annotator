@@ -1,0 +1,43 @@
+{
+  "recordedUtc": "2026-10-25T17:44:39.797Z",
+  "version": "0.4.0",
+  "mainBase": "ab4c885b072420636d012c6235087f2836c87be0",
+  "taskBase": "26c33585e9d2a407c31e4ff24409dd7e91d02ffd",
+  "sourceDescription": "Default collaboration Tasks1–5, measured catalog snapshot/Windows attribute refinement, sealed SMB copy handles, scoped import feedback/result ownership and resolved primary fallback and unsaved Save As recovery fixes, release versions/help/docs; exact as-built input bytes listed in product-source-manifest.json, captured before normal build. No future commit is claimed as binary input.",
+  "productSourceFiles": 307,
+  "productSourceManifestSha256": "de0f1d7d55a4e0bee75e84d883818a7900efa92f8f489cf1865be039217d5d36",
+  "normalBuildCommand": "npm.cmd run tauri -- build --bundles nsis",
+  "normalBuildExitCode": 0,
+  "buildLogSha256": "616ed0f42f5fb57d9215da47015184b3d732bcd81ccec11b648b7c6787f150ba",
+  "e2eFeature": false,
+  "extraTauriConfig": null,
+  "artifacts": [
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\target\\release\\annotator-desktop.exe",
+      "bytes": 16595456,
+      "modifiedUtc": "2026-10-25T17:39:49.661Z",
+      "sha256": "9f13130d9cc525244fc0c41530d1ac861c6eb688fccaa59e46c7a718d0be0695",
+      "fileVersion": "0.4.0",
+      "signature": "NotSigned",
+      "productVersion": "0.4.0"
+    },
+    {
+      "file": "D:\\Work\\annotator\\.worktrees\\default-collaboration-v040\\target\\release\\bundle\\nsis\\Audio Annotator_0.4.0_x64-setup.exe",
+      "bytes": 221903372,
+      "modifiedUtc": "2026-10-25T17:39:49.629Z",
+      "sha256": "56dac820f3167d5e417825082183bd136cdaa4e7f53816bdd95667afb34e0606",
+      "productVersion": "0.4.0",
+      "fileVersion": "0.4.0",
+      "signature": "NotSigned"
+    }
+  ],
+  "node": "v22.23.3",
+  "rustc": "rustc 1.91.0 (f8297e351 2025-10-28)",
+  "licenseFiles": 31,
+  "mplArchives": 13,
+  "limitations": [
+    "Unsigned",
+    "Physical SMB result is recorded in verification-0.4.0.md; same-host clients only, no separate Windows user or cross-host outage claim",
+    "No manual hearing, physical DPI change, new-machine offline install/uninstall, or physical exFAT validation"
+  ]
+}

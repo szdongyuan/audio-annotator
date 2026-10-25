@@ -12,6 +12,6 @@ beforeEach(() => { project.saveAs.mockClear(); project.closePending = false; });
 it.each([false, true])('uses the same local-copy label and action for save failure (closing: %s)', closing => {
   project.closePending = closing;
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: '另存项目副本…' }));
+  fireEvent.click(screen.getByRole('button', { name: '另存我的项目副本…' }));
   expect(project.saveAs).toHaveBeenCalledOnce();
 });

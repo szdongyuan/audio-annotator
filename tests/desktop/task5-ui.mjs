@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { coordinates } from '../../src/features/spectrogram/coordinates.ts';
 import { Key, wait } from './harness.mjs';
-export const rpc = (h,command,args={}) => h.driver.executeAsyncScript(`const [command,args,done]=arguments;window.__TAURI_INTERNALS__.invoke(command,args).then(done,e=>done({error:e}));`,command,args);
+export const rpc = (h,command,args={}) => h.driver.executeAsyncScript(`const [command,args,done]=arguments;window.__TAURI_INTERNALS__.invoke("collaboration_status").then(s=>window.__TAURI_INTERNALS__.invoke(command,{...(s.shared?{runtimeNonce:s.runtimeNonce}:{}),...args})).then(done,e=>done({error:e}));`,command,args);
 export const playbackStatus = h => rpc(h,'playback_status');
 export async function outputAfter(h, previous) {
  return h.driver.wait(async()=>{const s=await playbackStatus(h);return s.generation>previous&&s.state==='playing'&&s.consumedFrames>2400?s:false;},60000,'actual native output frames',50);
@@ -14,7 +14,7 @@ export async function processedUI(h,projectId,report) {
  await h.clickText('双文件对比');await h.until(`document.querySelectorAll('canvas').length===4&&!document.querySelector('.tile-status')`);
  assert.equal(await h.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`),'processed');
  await h.evaluate(`window.__task5tiles=[];const callbacks=window.__TAURI_INTERNALS__.callbacks,register=callbacks.set;callbacks.set=function(id,callback){return register.call(this,id,function(result){if(result instanceof ArrayBuffer&&result.byteLength>8&&new DataView(result).getUint32(0,false)===0x41543031){const v=new DataView(result),length=v.getUint32(4,true),offset=Math.ceil((8+length)/4)*4,header=JSON.parse(new TextDecoder().decode(new Uint8Array(result,8,length)));window.__task5tiles.push({request:header.request,header,values:Array.from(new Float32Array(result,offset))});}return callback(result);});};`);
- const original=await bitmap(h),doc=(await h.snapshot(projectId)).document,m=doc.media[0];
+ const original=await bitmap(h),doc=(await h.snapshot(projectId)).document,primaryName=await h.evaluate(`return document.querySelector('.file-pane[data-pane="primary"] h2').textContent`),m=doc.media.find(m=>m.displayName===primaryName);assert.ok(m,'actual selected primary media');
  const view=doc.viewState.media[m.id]??{startSeconds:0,endSeconds:2,lowHz:0,highHz:24000,frequencyMix:.65,spectrumKind:'stft'};
  const c=coordinates(view,m.sampleRate/2,1,1),plot='.file-pane[data-pane="primary"] .annotation-overlay';
  await h.drag(plot,[.2,c.hzToY(2100)],[.8,c.hzToY(900)]);
@@ -48,10 +48,15 @@ export async function processedUI(h,projectId,report) {
   auditions.push({workspace,label,status,paused,resumed});await h.label('停止');
  }
  await h.label('循环播放');await h.select('声音版本','暂存编辑');
- await h.clickText('保存');await h.until(`document.querySelector('.project-identity')?.textContent.includes('已保存')`);
+ await h.clickText('保存');await h.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);
  const saved=(await h.snapshot(projectId)).document;
  await h.menu('关闭项目');await h.until(`!document.querySelector('.file-pane')`);await h.menu('打开项目…');await h.until(`document.querySelectorAll('canvas').length===4&&!document.querySelector('.tile-status')`);
- assert.equal(await h.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`),'processed');assert.deepEqual((await h.snapshot(projectId)).document.edits,saved.edits);assert.deepEqual(await bitmap(h),moved);
+ assert.equal(await h.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`),'processed');assert.deepEqual((await h.snapshot(projectId)).document.edits,saved.edits);
+ // Tile readiness precedes the RAF that commits a reopened canvas. Require the
+ // exact previous four bitmaps, rather than treating an arbitrary 200ms as a draw barrier.
+ const reopenStarted=performance.now();report.reopenPixels={expected:moved,samples:[]};let reopenedPixels;
+ await h.driver.wait(async()=>{reopenedPixels=await bitmap(h);report.reopenPixels.samples.push({elapsedMs:performance.now()-reopenStarted,bitmaps:reopenedPixels});return JSON.stringify(reopenedPixels)===JSON.stringify(moved);},10000,'reopened canvases must commit all four exact saved bitmaps',50);
+ assert.deepEqual(reopenedPixels,moved);
  report.checks.push({name:'opposite explicit auditions preserve both graphs/source; pause/resume actual frames; saved mask reconstructs after UI reopen',auditions});
  await h.context('.mask-rect');await h.label('删除屏蔽');await h.until(`!document.querySelector('.mask-rect')`);await bitmap(h);
 }

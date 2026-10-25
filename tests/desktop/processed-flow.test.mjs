@@ -24,20 +24,26 @@ const beforeHash = await hashFile(audio), project = await fs.mkdtemp(path.join(o
 const report = { stage: 'Actual UI processed graphs, audition, save/reopen plus native IPC authority checks', checks: [], sourceSha256: beforeHash };
 let h;
 try {
-  h = await start({ '新建项目 · 选择空文件夹': [project], '打开项目 · 选择 project.json':[path.join(project,'project.json')], '': [[audio, other]] }, output);
-  await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.textContent.includes('已保存')`);
-  await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`); await h.clickText('关闭导入结果');
+  h = await start({ '新建项目 · 选择空文件夹': [project], '打开项目':[path.join(project,'collaboration.json')], '': [[audio, other]] }, output);
+  await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);
+  await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`); await h.clickText('关闭导入结果');await h.selectMedia('dual-tone.wav');
   await h.until(`document.querySelector('canvas')&&!document.querySelector('.tile-status')`);
   await h.screenshot('original-default-ui');
-  const projectId = JSON.parse(await fs.readFile(path.join(project, 'project.json'), 'utf8')).projectId;
+  const projectId = JSON.parse(await fs.readFile(path.join(project, 'collaboration.json'), 'utf8')).projectId;
   await processedUI(h,projectId,report);
   const rpc = async (command, args) => {
-    const result = await h.driver.executeAsyncScript(`const [command,args,done]=arguments;window.__TAURI_INTERNALS__.invoke(command,args).then(value=>done({value}),error=>done({error}));`, command, args);
-    if (result.error) throw result.error;
-    return result.value;
+    // These scalar native-contract requests can race default background publication.
+    // Busy is an admission refusal; retry with a newly read runtime nonce only.
+    for(let attempt=0;attempt<100;attempt++){
+      const result = await h.driver.executeAsyncScript(`const [command,args,done]=arguments;window.__TAURI_INTERNALS__.invoke("collaboration_status").then(s=>window.__TAURI_INTERNALS__.invoke(command,{...(s.shared?{runtimeNonce:s.runtimeNonce}:{}),...args})).then(value=>done({value}),error=>done({error}));`, command, args);
+      if(result.error?.details?.operationBusy){await new Promise(resolve=>setTimeout(resolve,50));continue;}
+      if (result.error) throw result.error;
+      return result.value;
+    }
+    throw Error('Native admission stayed busy: '+command);
   };
   let document = (await h.snapshot(projectId)).document;
-  const media = document.media[0], settings = document.analysis[media.id];
+  const media = document.media.find(m=>m.displayName==='dual-tone.wav'), settings = document.analysis[media.id];
   let viewId = await rpc('register_analysis_view', { projectId });
   const configHash = createHash('sha256').update(['analysis-v1', settings.window, settings.windowSize, settings.hopSize, settings.fftSize, settings.melBands].join('|')).digest('hex');
   const signature = () => createHash('sha256').update(canonicalEdits(media.id, document.edits)).digest('hex');
@@ -45,7 +51,7 @@ try {
   const history = async command => { document = (await rpc(command, { projectId, expectedRevision: document.revision })).document; };
   const request = async (analysisSource = 'processed', editSignature = signature(), patch = {}) => {
     const request = { requestId: randomUUID(), viewId, projectId, mediaId: media.id, generation: 1, analysisSource, processingVersion: 1, editSignature: analysisSource === 'original' ? '' : editSignature, configHash, settings, channelIndex: 0, kind: 'stft', startFrame: 40, frameCount: 8, timeLod: 0, frequencyStart: 0, frequencyCount: 1025, frequencyLod: 0, visible: true, ...patch };
-    const result = await h.driver.executeAsyncScript(`const [request,done]=arguments;const api=window.__TAURI_INTERNALS__,callback=api.transformCallback(()=>{});api.invoke('request_tile',{request,onEvent:'__CHANNEL__:'+callback}).then(buffer=>{const view=new DataView(buffer),length=view.getUint32(4,true),offset=Math.ceil((8+length)/4)*4,header=JSON.parse(new TextDecoder().decode(new Uint8Array(buffer,8,length)));done({header,values:Array.from(new Float32Array(buffer,offset))});},error=>done({error})).finally(()=>api.unregisterCallback(callback));`, request);
+    const result = await h.driver.executeAsyncScript(`const [request,done]=arguments;const api=window.__TAURI_INTERNALS__,callback=api.transformCallback(()=>{});api.invoke('collaboration_status').then(s=>api.invoke('request_tile',{runtimeNonce:s.runtimeNonce,request,onEvent:'__CHANNEL__:'+callback})).then(buffer=>{const view=new DataView(buffer),length=view.getUint32(4,true),offset=Math.ceil((8+length)/4)*4,header=JSON.parse(new TextDecoder().decode(new Uint8Array(buffer,8,length)));done({header,values:Array.from(new Float32Array(buffer,offset))});},error=>done({error})).finally(()=>api.unregisterCallback(callback));`, request);
     if (result.error) throw result.error;
     assert.deepEqual(result.header.request, request);
     return result.values;
@@ -84,10 +90,10 @@ try {
   await history('undo'); assert.deepEqual(await request(), movedValues);
   report.checks.push({ name: 'disable/enable/move/undo/redo/delete restore matching source and cached values', movedSignature });
   await change({ type: 'updateMediaNote', mediaId: media.id, note: 'unrelated note', mergeKey: null });
-  await change({ type: 'addEdit', edit: { ...edit, id: randomUUID(), region: { ...edit.region, mediaId: document.media[1].id } } });
+  await change({ type: 'addEdit', edit: { ...edit, id: randomUUID(), region: { ...edit.region, mediaId: document.media.find(m=>m.id!==media.id).id } } });
   assert.equal(signature(), movedSignature); assert.deepEqual(await request('processed', movedSignature), movedValues);
   await rpc('save_project', { projectId, expectedRevision: document.revision });
-  const saved = JSON.parse(await fs.readFile(path.join(project, 'project.json'), 'utf8'));
+  const saved = (await h.snapshot(projectId)).document;
   assert.equal(saved.formatVersion, 2); assert.deepEqual(saved.edits, document.edits);
   const oldView = viewId;
   await rpc('close_project', { projectId, expectedRevision: document.revision, discard: false });
@@ -97,7 +103,7 @@ try {
   assert.equal(signature(), movedSignature); assert.deepEqual(await request(), movedValues);
   await rpc('retire_analysis_view', { projectId, viewId });
   await assert.rejects(request(), error => error.code === 'Cancelled');
-  assert.equal(await hashFile(audio), beforeHash); assert.equal(document.media[0].sha256, beforeHash);
+  assert.equal(await hashFile(audio), beforeHash); assert.equal(document.media.find(m=>m.displayName==='dual-tone.wav').sha256, beforeHash);
   report.checks.push({ name: 'notes/other-file edits keep signature; normal v2 save/reopen reproduces source; old runtime/retired lease rejected; original WAV SHA256 unchanged' });
   report.passed = true;
 } catch (error) {

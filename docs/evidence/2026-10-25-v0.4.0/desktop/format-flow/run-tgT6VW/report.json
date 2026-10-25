@@ -1,0 +1,40 @@
+{
+  "output": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\format-flow\\run-tgT6VW",
+  "method": "Actual native v2 save and UI open/import rejection. Only picker results injected. Ordinary open saves/closes the old session before attempting the target; no rollback promise.",
+  "checks": [
+    "native save writes complete format 2",
+    "local format 1 rejected; source bytes unchanged",
+    "portable format 1 rejected; source bytes and current owner preserved",
+    "local format 999 rejected; source bytes unchanged",
+    "portable format 999 rejected; source bytes and current owner preserved"
+  ],
+  "sources": [
+    {
+      "version": 1,
+      "local": {
+        "path": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\format-flow\\run-tgT6VW\\local-1\\project.json",
+        "before": "39ba6f33bf6a351aedb6e99bfd0b3cf89491c9cf5ce6c3ae91897d5900d015b6",
+        "after": "39ba6f33bf6a351aedb6e99bfd0b3cf89491c9cf5ce6c3ae91897d5900d015b6"
+      },
+      "portable": {
+        "path": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\format-flow\\run-tgT6VW\\share-1.json",
+        "before": "45b0ab5493061bd9e6086e65da6803a69de4fdfeb7af27b435cf4c04f6c3e64c",
+        "after": "45b0ab5493061bd9e6086e65da6803a69de4fdfeb7af27b435cf4c04f6c3e64c"
+      }
+    },
+    {
+      "version": 999,
+      "local": {
+        "path": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\format-flow\\run-tgT6VW\\local-999\\project.json",
+        "before": "1cf2306976e2517924900a3b226bc5c9d4b7484cdaf52394432c90d5edbe02b0",
+        "after": "1cf2306976e2517924900a3b226bc5c9d4b7484cdaf52394432c90d5edbe02b0"
+      },
+      "portable": {
+        "path": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\format-flow\\run-tgT6VW\\share-999.json",
+        "before": "202c9a76d5b05c03f98c309f2df7e3c30be52a693cc6ffbcb8343c3258849350",
+        "after": "202c9a76d5b05c03f98c309f2df7e3c30be52a693cc6ffbcb8343c3258849350"
+      }
+    }
+  ],
+  "passed": true
+}

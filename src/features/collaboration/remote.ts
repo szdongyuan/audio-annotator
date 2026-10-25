@@ -43,9 +43,11 @@ export function useRemoteInspection(ui: CollaborationUI | null | undefined, work
     const value = resolveRemote(current.current.ui, captured);
     if (value?.annotation && !captured.owner.store.editingDisabled) current.current.playback.playSelection(value.annotation.region);
   };
-  const locate = (captured: RemoteTarget) => {
+  const locate = async (captured: RemoteTarget) => {
     const value = resolveRemote(current.current.ui, captured), w = current.current.workspace;
     if (!value || captured.owner.store.editingDisabled) return;
+    if(w.revealMedia&&!await w.revealMedia(value.media.id))return;
+    if(current.current.ui?.active!==captured.owner)return;
     if (value.media.id !== w.state.activeMediaId && value.media.id !== w.state.compareMediaId) w.selectPane('primary', value.media.id);
     if (value.annotation) w.locate(value.annotation.region);
     else if (value.channelIndex !== undefined) w.patch(value.media.id, { visibleChannels: [...new Set([...w.view(value.media.id).visibleChannels, value.channelIndex])].sort((a, b) => a - b) });

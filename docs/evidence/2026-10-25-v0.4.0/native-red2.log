@@ -1,0 +1,28 @@
+   Compiling annotator-desktop v0.4.0 (D:\Work\annotator\.worktrees\default-collaboration-v040\src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.73s
+     Running unittests src\lib.rs (target\debug\deps\annotator_desktop_lib-5cde1f82732124b1.exe)
+
+running 5 tests
+actual owned source persistence failure: AppError { code: SaveFailed, message: "Collaboration I/O failed: 拒绝访问。 (os error 5)", entity_id: None, retryable: true, details: None }
+
+thread 'commands::collaboration::review_fixes::save_as_rescues_current_document_after_actual_source_persistence_failure' (29824) panicked at src-tauri\src\commands\collaboration\review_fixes.rs:482:8:
+called `Result::unwrap()` on an `Err` value: AppError { code: SaveFailed, message: "Save the current project first", entity_id: None, retryable: false, details: None }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'commands::collaboration::review_fixes::save_as_captures_current_unsaved_document_and_private_state' (41848) panicked at src-tauri\src\commands\collaboration\review_fixes.rs:482:8:
+called `Result::unwrap()` on an `Err` value: AppError { code: SaveFailed, message: "Save the current project first", entity_id: None, retryable: false, details: None }
+test commands::collaboration::review_fixes::save_as_rescues_current_document_after_actual_source_persistence_failure ... FAILED
+test commands::collaboration::review_fixes::save_as_captures_current_unsaved_document_and_private_state ... FAILED
+test commands::collaboration::review_fixes::save_as_progress_can_cancel_without_retiring_source ... ok
+test commands::collaboration::defaults::tests::saved_background_publication_holds_bounded_admission_then_save_as_retries ... ok
+test commands::collaboration::review_fixes::save_as_unsaved_stale_and_changed_during_copy_still_refuse_adoption ... ok
+
+failures:
+
+failures:
+    commands::collaboration::review_fixes::save_as_captures_current_unsaved_document_and_private_state
+    commands::collaboration::review_fixes::save_as_rescues_current_document_after_actual_source_persistence_failure
+
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 41 filtered out; finished in 5.88s
+
+error: test failed, to rerun pass `-p annotator-desktop --lib`

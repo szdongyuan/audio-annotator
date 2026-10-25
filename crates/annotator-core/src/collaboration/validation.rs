@@ -76,7 +76,7 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<CollaborationManifest> {
 impl CollaborationManifest {
     pub fn validate(&self) -> Result<()> {
         require(self.kind == MANIFEST_KIND, "Invalid manifest kind")?;
-        if self.format_version != 1 {
+        if !matches!(self.format_version, 1 | 2) {
             return Err(AppError::new(
                 ErrorCode::UnsupportedVersion,
                 "Unsupported manifest version",

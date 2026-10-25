@@ -35,3 +35,10 @@ it('credentials stay in the form and are cleared immediately on submit',()=>{
  const active=setup(),submit=vi.fn(),ui={dialog:{kind:'register',owner:active},busy:false,cancel:vi.fn(),submit,error:null} as unknown as CollaborationUI;
  render(<IdentityDialog ui={ui}/>);fireEvent.change(screen.getByLabelText('协作账号名'),{target:{value:'alice'}});fireEvent.change(screen.getByLabelText('协作显示名称'),{target:{value:'Alice'}});fireEvent.change(screen.getByLabelText('协作密码'),{target:{value:'password123'}});fireEvent.submit(screen.getByLabelText('协作密码').closest('form')!);expect(submit).toHaveBeenCalledWith({login:'alice',displayName:'Alice',password:'password123'});expect(screen.getByLabelText('协作密码')).toHaveValue('');expect(active.store.drafts.size).toBe(0);expect(localStorage.length).toBe(0);active.lifecycle.dispose();
 });
+
+it('hard resource limits fail once instead of being mistaken for retryable admission',async()=>{
+ const active=setup(),identity=vi.fn().mockRejectedValue({code:'ResourceLimit',message:'catalog limit',retryable:true});
+ const api={status:async()=>({projectId:fixture.projectId,runtimeNonce:'11111111-1111-4111-8111-111111111111',busy:false}),identity,cancel:vi.fn()} as unknown as CollaborationCommands;
+ const project={active,performCollaboration:async(_o:ActiveProject,action:()=>Promise<unknown>)=>active.lifecycle.transitionAfterSave(action)} as unknown as ProjectLifecycleUI;
+ const hook=renderHook(()=>useCollaboration(project,api));await act(()=>hook.result.current.show('login'));act(()=>hook.result.current.submit({login:'alice',displayName:'',password:'password123'}));await waitFor(()=>expect(hook.result.current.error?.message).toBe('catalog limit'));expect(identity).toHaveBeenCalledTimes(1);hook.unmount();active.lifecycle.dispose();
+});

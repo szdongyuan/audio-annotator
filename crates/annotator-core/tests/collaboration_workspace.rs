@@ -81,6 +81,38 @@ fn save(p: &mut LocalProject) {
 }
 
 #[test]
+fn legacy_private_catalog_order_remains_strict() {
+    let mut f = Fixture::new();
+    let mut manifest = f.repo.manifest().clone();
+    let mut second = manifest.media[0].clone();
+    second.id = uuid::Uuid::new_v4().to_string();
+    second.source_ref = format!("media/{}.wav", second.id);
+    fs::write(f.root.join(&second.source_ref), b"fixture").unwrap();
+    manifest.media.push(second);
+    fs::write(
+        f.root.join("collaboration.json"),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    f.repo = Arc::new(CollaborationRepository::open(&f.root).unwrap());
+    let actor = f.actor("order");
+    let mut p = f.open(Some(actor.clone()));
+    let mut document = p.snapshot().unwrap().document;
+    document.media.reverse();
+    assert!(p.workspace_mut().unwrap().save(&document).is_err());
+    let root = p.storage_root().to_owned();
+    drop(p);
+    for name in ["workspace.json", "workspace.recovery.json"] {
+        let path = root.join(name);
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        value["document"]["media"].as_array_mut().unwrap().reverse();
+        fs::write(path, serde_json::to_vec(&value).unwrap()).unwrap();
+    }
+    assert!(LocalProject::open_shared(f.repo.clone(), Some(actor), &f.local).is_err());
+}
+
+#[test]
 fn private_actor_caches_are_isolated_and_locked() {
     let f = Fixture::new();
     let a = f.actor("a");

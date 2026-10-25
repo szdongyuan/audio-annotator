@@ -1,0 +1,325 @@
+{
+  "stage": "Actual UI processed graphs, audition, save/reopen plus native IPC authority checks",
+  "checks": [
+    {
+      "name": "UI Delete accepts mask; actual processed tile and canvas change only selected channel/file",
+      "region": {
+        "channelIndex": 0,
+        "endSeconds": 1.6,
+        "highHz": 2081.458778143964,
+        "lowHz": 892.9974385465096,
+        "mediaId": "f6d2ecc6-6503-4e29-9b48-0f4ee1d5b8e9",
+        "startSeconds": 0.4
+      },
+      "rejectedDb": -160,
+      "original": [
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        }
+      ],
+      "processed": [
+        {
+          "hash": 1953310707,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        }
+      ],
+      "requestCount": 2
+    },
+    {
+      "name": "real UI undo/redo, raw switch, disable/enable, move and delete recompute matching pixels",
+      "moved": [
+        {
+          "hash": 2324051263,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        }
+      ]
+    },
+    {
+      "name": "opposite explicit auditions preserve both graphs/source; pause/resume actual frames; saved mask reconstructs after UI reopen",
+      "auditions": [
+        {
+          "workspace": "暂存编辑",
+          "label": "试听选区原音",
+          "status": {
+            "consumedFrames": 3456,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 9,
+            "mediaId": "f6d2ecc6-6503-4e29-9b48-0f4ee1d5b8e9",
+            "positionSeconds": 0.6474583333333334,
+            "presentation": {
+              "callbackNanos": 49108800,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 3456,
+              "tailNanos": 71108800,
+              "tailNonSilent": true
+            },
+            "projectId": "c7b93be1-85ee-42a8-b0dd-e0ad4254b849",
+            "startSeconds": 0.5754583333333333,
+            "state": "playing",
+            "underrunFrames": 0
+          },
+          "paused": {
+            "consumedFrames": 26257,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 9,
+            "mediaId": "f6d2ecc6-6503-4e29-9b48-0f4ee1d5b8e9",
+            "positionSeconds": 1.1224791666666667,
+            "presentation": {
+              "callbackNanos": 579121400,
+              "drained": false,
+              "pendingTailFrames": 0,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 26257,
+              "tailNanos": 546148434,
+              "tailNonSilent": true
+            },
+            "projectId": "c7b93be1-85ee-42a8-b0dd-e0ad4254b849",
+            "startSeconds": 0.5754583333333333,
+            "state": "paused",
+            "underrunFrames": 0
+          },
+          "resumed": {
+            "consumedFrames": 7296,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 10,
+            "mediaId": "f6d2ecc6-6503-4e29-9b48-0f4ee1d5b8e9",
+            "positionSeconds": 1.2744791666666666,
+            "presentation": {
+              "callbackNanos": 129099000,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 7296,
+              "tailNanos": 151099000,
+              "tailNonSilent": true
+            },
+            "projectId": "c7b93be1-85ee-42a8-b0dd-e0ad4254b849",
+            "startSeconds": 0.5754583333333333,
+            "state": "playing",
+            "underrunFrames": 0
+          }
+        },
+        {
+          "workspace": "原音",
+          "label": "试听选区（应用屏蔽）",
+          "status": {
+            "consumedFrames": 5376,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 13,
+            "mediaId": "f6d2ecc6-6503-4e29-9b48-0f4ee1d5b8e9",
+            "positionSeconds": 0.6874583333333333,
+            "presentation": {
+              "callbackNanos": 89089800,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 5376,
+              "tailNanos": 111089800,
+              "tailNonSilent": true
+            },
+            "projectId": "c7b93be1-85ee-42a8-b0dd-e0ad4254b849",
+            "startSeconds": 0.5754583333333333,
+            "state": "playing",
+            "underrunFrames": 0
+          },
+          "paused": {
+            "consumedFrames": 19776,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 13,
+            "mediaId": "f6d2ecc6-6503-4e29-9b48-0f4ee1d5b8e9",
+            "positionSeconds": 0.9874583333333333,
+            "presentation": {
+              "callbackNanos": 439095400,
+              "drained": false,
+              "pendingTailFrames": 0,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 19776,
+              "tailNanos": 411101600,
+              "tailNonSilent": true
+            },
+            "projectId": "c7b93be1-85ee-42a8-b0dd-e0ad4254b849",
+            "startSeconds": 0.5754583333333333,
+            "state": "paused",
+            "underrunFrames": 0
+          },
+          "resumed": {
+            "consumedFrames": 3456,
+            "deviceChannels": 2,
+            "deviceName": "Headphones (High Definition Audio Device)",
+            "deviceRate": 48000,
+            "endSeconds": 1.7754583333333334,
+            "error": null,
+            "firstSeconds": 0.5754583333333333,
+            "generation": 14,
+            "mediaId": "f6d2ecc6-6503-4e29-9b48-0f4ee1d5b8e9",
+            "positionSeconds": 1.0594583333333334,
+            "presentation": {
+              "callbackNanos": 49122500,
+              "drained": false,
+              "pendingTailFrames": 1056,
+              "ringExhausted": false,
+              "ringExhaustedNanos": null,
+              "scheduledFrames": 3456,
+              "tailNanos": 71122500,
+              "tailNonSilent": true
+            },
+            "projectId": "c7b93be1-85ee-42a8-b0dd-e0ad4254b849",
+            "startSeconds": 0.5754583333333333,
+            "state": "playing",
+            "underrunFrames": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "saved mask uses real processed PCM",
+      "rejectionDb": -149.54205703735352,
+      "retainedDb": 0,
+      "editedSignature": "ea266228962f23994eecd297af62f3c31f9b9f6869612d1340561b471927539a"
+    },
+    {
+      "name": "old/forged/unsupported/unknown identity rejected; raw cache and independent channel preserved"
+    },
+    {
+      "name": "disable/enable/move/undo/redo/delete restore matching source and cached values",
+      "movedSignature": "d24860b004d20e8559fa10a687a84d8d974e553541eed3eb6ee85f69c7fcf2e1"
+    },
+    {
+      "name": "notes/other-file edits keep signature; normal v2 save/reopen reproduces source; old runtime/retired lease rejected; original WAV SHA256 unchanged"
+    }
+  ],
+  "sourceSha256": "421fd350ee28ad3d0d806840a150c78f53e0c8c61ac1ef2c7abd9693c1a191fc",
+  "reopenPixels": {
+    "expected": [
+      {
+        "hash": 2324051263,
+        "height": 256,
+        "width": 285
+      },
+      {
+        "hash": 172644616,
+        "height": 256,
+        "width": 285
+      },
+      {
+        "hash": 172644616,
+        "height": 256,
+        "width": 285
+      },
+      {
+        "hash": 172644616,
+        "height": 256,
+        "width": 285
+      }
+    ],
+    "samples": [
+      {
+        "elapsedMs": 235.5064999999995,
+        "bitmaps": [
+          {
+            "hash": 2324051263,
+            "height": 256,
+            "width": 285
+          },
+          {
+            "hash": 172644616,
+            "height": 256,
+            "width": 285
+          },
+          {
+            "hash": 172644616,
+            "height": 256,
+            "width": 285
+          },
+          {
+            "hash": 172644616,
+            "height": 256,
+            "width": 285
+          }
+        ]
+      }
+    ]
+  },
+  "passed": true
+}

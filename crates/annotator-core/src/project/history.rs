@@ -1,6 +1,6 @@
 use crate::model::ProjectDocument;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct History {
     pub undo: Vec<ProjectDocument>,
     pub redo: Vec<ProjectDocument>,

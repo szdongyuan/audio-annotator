@@ -1,0 +1,9 @@
+files=257 ancestor_checks_per_pass=3855
+round=0 method=symlink_metadata checks=19275 elapsed_us=587354
+round=0 method=GetFileAttributesW checks=19275 elapsed_us=367958
+round=1 method=GetFileAttributesW checks=19275 elapsed_us=370886
+round=1 method=symlink_metadata checks=19275 elapsed_us=582550
+round=2 method=symlink_metadata checks=19275 elapsed_us=613827
+round=2 method=GetFileAttributesW checks=19275 elapsed_us=380790
+round=3 method=GetFileAttributesW checks=19275 elapsed_us=413051
+round=3 method=symlink_metadata checks=19275 elapsed_us=618977

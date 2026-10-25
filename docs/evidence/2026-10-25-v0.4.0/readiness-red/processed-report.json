@@ -1,0 +1,89 @@
+{
+  "stage": "Actual UI processed graphs, audition, save/reopen plus native IPC authority checks",
+  "checks": [
+    {
+      "name": "UI Delete accepts mask; actual processed tile and canvas change only selected channel/file",
+      "region": {
+        "channelIndex": 0,
+        "endSeconds": 1.6,
+        "highHz": 2081.458778143964,
+        "lowHz": 892.9974385465096,
+        "mediaId": "f8e34216-defc-415a-8ac9-7ae89fbb3eb0",
+        "startSeconds": 0.4
+      },
+      "rejectedDb": -160,
+      "original": [
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        }
+      ],
+      "processed": [
+        {
+          "hash": 1953310707,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        }
+      ],
+      "requestCount": 2
+    },
+    {
+      "name": "real UI undo/redo, raw switch, disable/enable, move and delete recompute matching pixels",
+      "moved": [
+        {
+          "hash": 2324051263,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        },
+        {
+          "hash": 172644616,
+          "height": 256,
+          "width": 285
+        }
+      ]
+    }
+  ],
+  "sourceSha256": "421fd350ee28ad3d0d806840a150c78f53e0c8c61ac1ef2c7abd9693c1a191fc",
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    {\n      hash: 2324051263,\n      height: 256,\n      width: 285\n    },\n    {\n+     hash: 1149396421,\n-     hash: 172644616,\n      height: 256,\n      width: 285\n    },\n    {\n+     hash: 1149396421,\n-     hash: 172644616,\n      height: 256,\n      width: 285\n    },\n    {\n+     hash: 1149396421,\n-     hash: 172644616,\n      height: 256,\n      width: 285\n    }\n  ]\n\n    at processedUI (file:///D:/Work/annotator/.worktrees/default-collaboration-v040/tests/desktop/task5-ui.mjs:54:189)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///D:/Work/annotator/.worktrees/default-collaboration-v040/tests/desktop/processed-flow.test.mjs:33:3"
+}

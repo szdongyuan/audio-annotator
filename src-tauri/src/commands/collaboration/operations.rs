@@ -26,6 +26,9 @@ pub fn reset_resources(state: &AppState) -> Result<()> {
 }
 
 pub async fn open(state: &AppState, path: String) -> Result<OpenProject> {
+    open_mode(state, path, false).await
+}
+pub async fn open_mode(state: &AppState, path: String, view_only: bool) -> Result<OpenProject> {
     let state = state.clone();
     let permit = state.6.begin(uuid::Uuid::new_v4().to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -67,7 +70,25 @@ pub async fn open(state: &AppState, path: String) -> Result<OpenProject> {
         } else {
             None
         };
+        if view_only
+            && repo
+                .as_ref()
+                .is_none_or(|r| r.manifest().format_version != 2)
+        {
+            return Err(AppError::invalid(
+                "Explicit view-only opening requires a default project",
+            ));
+        }
         let project = match &repo {
+            Some(repo) if repo.manifest().format_version == 2 => {
+                if view_only {
+                    LocalProject::open_shared_view_only(repo.clone(), &state.6.local()?)?
+                } else {
+                    let identity = LocalIdentity::load_or_create(&state.6.local()?)?;
+                    let actor = Arc::new(repo.login_local(&identity)?);
+                    LocalProject::open_shared(repo.clone(), Some(actor), &state.6.local()?)?
+                }
+            }
             Some(repo) => LocalProject::open_shared(repo.clone(), None, &state.6.local()?)?,
             None => {
                 let canonical = root
@@ -161,7 +182,7 @@ pub async fn refresh(state: &AppState, expected: Expected) -> Result<Status> {
         check_cancel(&permit.cancel)?;
         let prepare_error = prior_sync_error && capture.is_err();
         let publication = capture.and_then(|c| c.map(PublicationCapture::publish).transpose());
-        let remote = repo.snapshot();
+        let remote = repo.snapshot_with_catalog();
         #[cfg(test)]
         {
             let hook = state.6.after_io.lock().unwrap().take();
@@ -188,6 +209,12 @@ pub async fn refresh(state: &AppState, expected: Expected) -> Result<Status> {
         }
         match remote {
             Ok(remote) => {
+                runtime.catalog_pending = remote.catalog_update_available;
+                let mut remote = remote;
+                let deferred_ids =
+                    super::catalog::retain_deferred(runtime.layers.as_ref(), &mut remote);
+                runtime.deferred = deferred_ids.clone();
+                let remote = remote.snapshot;
                 // Reconcile only metadata when the read agrees with our new acknowledgement.
                 // Never overwrite the live unsaved C using the envelope saved as B.
                 if let Some(actor) = actor {
@@ -198,7 +225,7 @@ pub async fn refresh(state: &AppState, expected: Expected) -> Result<Status> {
                     {
                         if let Some(e) = &own.error {
                             runtime.error = Some(e.clone());
-                        } else {
+                        } else if !deferred_ids.contains(&own.identity.author_id) {
                             project
                                 .workspace_mut()?
                                 .observe_remote(own.layer.as_ref())?;
@@ -221,7 +248,14 @@ pub async fn refresh(state: &AppState, expected: Expected) -> Result<Status> {
                         .as_millis() as u64,
                 );
             }
-            Err(e) => runtime.error = Some(e),
+            Err(e) => {
+                if e.details.as_ref().is_some_and(|d| {
+                    d.get("catalogUpdateRequired") == Some(&serde_json::Value::Bool(true))
+                }) {
+                    runtime.catalog_pending = true;
+                }
+                runtime.error = Some(e);
+            }
         }
         drop(runtime);
         drop(permit);
@@ -328,6 +362,41 @@ pub async fn identity(
             }
             IdentityAction::Login { login, password } => {
                 Some(Arc::new(repo.login(&login, &password)?))
+            }
+            IdentityAction::Logout if repo.manifest().format_version == 2 => {
+                let local = LocalIdentity::load_or_create(&state.6.local()?)?;
+                // Reuse the lease if already the automatic actor.
+                let existing = {
+                    let current = state.0.lock().map_err(|_| runtime::unavailable())?;
+                    let p = current.as_ref().ok_or_else(runtime::stale)?;
+                    expected.check(
+                        p,
+                        &*state.6.current.lock().map_err(|_| runtime::unavailable())?,
+                        true,
+                    )?;
+                    p.workspace()?
+                        .author_session()
+                        .filter(|a| a.identity().normalized_login == local.login_name())
+                };
+                if existing.is_some() {
+                    let current = state.0.lock().map_err(|_| runtime::unavailable())?;
+                    let p = current.as_ref().ok_or_else(runtime::stale)?;
+                    expected.check(
+                        p,
+                        &*state.6.current.lock().map_err(|_| runtime::unavailable())?,
+                        true,
+                    )?;
+                    check_cancel(&permit.cancel)?;
+                    // The workspace lease, history, pending publication and private state are
+                    // already the desired identity. Reopening would contend with our own lease.
+                    let opened = info_shared(p, &state.6)?;
+                    drop(permit);
+                    return Ok(Transition {
+                        opened,
+                        status: runtime::status(current.as_ref(), &state.6)?,
+                    });
+                }
+                Some(Arc::new(repo.login_local(&local)?))
             }
             IdentityAction::Logout => None,
         };

@@ -8,6 +8,8 @@ export async function selectionFlow(h, context) {
   await h.clickText('类别'); await h.input('类别名称', '选区测试'); await h.clickText('添加类别');
   await h.until(`document.querySelector('.category-row')`);
   const before = (await h.snapshot(context.id)).document;
+  const primaryName=await h.evaluate(`return document.querySelector('.file-pane h2').textContent`),primaryId=before.media.find(m=>m.displayName===primaryName)?.id;
+  assert.ok(primaryId,'the actual visible primary pane has a catalog identity');
   await h.drag('.annotation-overlay', [.2,.25], [.6,.7]);
   assert.equal((await h.snapshot(context.id)).document.annotations.length, before.annotations.length, 'drawing stays temporary');
   const temporaryStyle = () => h.evaluate(`const e=document.querySelector('.is-temporary');return e?{left:e.style.left,top:e.style.top,width:e.style.width,height:e.style.height,active:e.classList.contains('is-selected'),handles:e.querySelectorAll('.region-handle').length}:null`);
@@ -55,18 +57,22 @@ export async function selectionFlow(h, context) {
   await h.drag('.annotation-overlay', [.65,.2], [.9,.6]);
   await h.drag('.annotation-overlay', [.65,.2], [.9,.6]);
   await h.label('循环播放');
-  const playbackStatus = () => h.driver.executeAsyncScript('const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke("playback_status",{}).then(done);');
-  const awaitNativeOutput = (mediaId, priorGeneration) => h.driver.wait(async () => {
-    const status = await playbackStatus();
-    return status.mediaId === mediaId && status.generation > priorGeneration && status.consumedFrames > 4800 && status.deviceChannels > 0 && status.state === 'playing' ? status : false;
-  }, 60000, 'new native generation must consume actual device frames', 50);
+  const playbackStatus = () => h.driver.executeAsyncScript('const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke("collaboration_status").then(s=>window.__TAURI_INTERNALS__.invoke("playback_status",{runtimeNonce:s.runtimeNonce})).then(done,e=>done({error:e}));');
+  const awaitNativeOutput = async (mediaId, priorGeneration) => {
+    let lastStatus;
+    try{return await h.driver.wait(async () => {
+      const status = lastStatus = await playbackStatus();
+      return status.mediaId === mediaId && status.generation > priorGeneration && status.consumedFrames > 4800 && status.deviceChannels > 0 && status.state === 'playing' ? status : false;
+    }, 60000, 'new native generation must consume actual device frames', 50);}
+    catch(error){throw Error(`${error.message}; context=${JSON.stringify({mediaId,priorGeneration,privateActiveMediaId:before.viewState.activeMediaId,primaryName,primaryId,lastStatus})}`);}
+  };
   const played = [];
   for (const label of ['试听选区原音', '试听选区（应用屏蔽）']) {
     const priorGeneration = (await playbackStatus()).generation;
     await h.context('.annotation-overlay', [.8,.4]); await h.label(label);
-    const status = await awaitNativeOutput(before.media[0].id, priorGeneration);
+    const status = await awaitNativeOutput(primaryId, priorGeneration);
     assert.equal(await h.evaluate('return document.querySelector("select[aria-label=声音版本]").value'), 'processed', 'explicit audition preserves workspace source');
-    assert.equal(status.underrunFrames, 0); played.push({ label, status });
+    assert.equal(status.underrunFrames, 0); played.push({ label, expectedMediaId:primaryId, privateActiveMediaId:before.viewState.activeMediaId, primaryName, status });
     await h.label('停止');
   }
   assert.equal((await h.snapshot(context.id)).document.annotations.length, 1);
@@ -93,11 +99,11 @@ export async function selectionFlow(h, context) {
   await h.until(`document.activeElement?.getAttribute('aria-label')==='区域备注'`);
   await h.input('区域备注', '来自对比面板');
   doc = (await h.snapshot(context.id)).document;
-  const compared = doc.annotations.find(a => a.region.mediaId === before.media[1].id);
+  const compared = doc.annotations.find(a => a.region.mediaId === before.media.find(m=>m.id!==primaryId).id);
   assert.ok(compared); assert.equal(compared.note, '来自对比面板');
   const priorCompareGeneration = (await playbackStatus()).generation;
   await h.context(second, [.4,.45]); await h.label('试听选区（应用屏蔽）');
-  const comparePlayback = await awaitNativeOutput(before.media[1].id, priorCompareGeneration); assert.equal(comparePlayback.underrunFrames, 0); await h.label('停止');
+  const comparePlayback = await awaitNativeOutput(before.media.find(m=>m.id!==primaryId).id, priorCompareGeneration); assert.equal(comparePlayback.underrunFrames, 0); await h.label('停止');
   await h.context(second, [.4,.45]); await h.label('屏蔽选区'); await h.until(`document.querySelector('.mask-rect.is-selected')`);
   await h.context(second, [.4,.45]); await h.label('重叠对象'); await h.label('未分类标注 2');
   await h.context(second, [.4,.45]); await h.label('删除标注');
@@ -136,10 +142,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const report = { method: 'Owned native Tauri process, official tauri-driver and EdgeDriver; native picker paths only use the e2e feature. Edits use WebDriver pointer/keyboard.', output };
   let h;
   try {
-    h = await start(paths, output); await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.innerText.includes('已保存')`);
-    const id = JSON.parse(await fs.readFile(path.join(project, 'project.json'), 'utf8')).projectId;
+    h = await start(paths, output); await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.innerText.match(/已保存|已存本机/)`);
+    const id = JSON.parse(await fs.readFile(path.join(project, 'collaboration.json'), 'utf8')).projectId;
     await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.innerText.includes('导入完成')`); await h.clickText('关闭导入结果'); await h.until(`document.querySelector('canvas') && !document.querySelector('.tile-status')`);
-    report.evidence = await selectionFlow(h, { id }); report.passed = true;
+    await h.selectMedia('stereo.mp3');report.evidence = await selectionFlow(h, { id }); report.passed = true;
   } catch (error) { report.error = error.stack; process.exitCode = 1; await h?.screenshot('failure').catch(() => {}); }
   finally { await h?.quit(); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2)); }
 }

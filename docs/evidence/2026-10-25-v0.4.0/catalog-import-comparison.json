@@ -1,0 +1,171 @@
+{
+  "method": "Actual optimized e2e Selenium workload; temporary native phase timers removed before final checks",
+  "limitation": "Historical measurements predate SMB read-only handles, import/fallback UI fixes and unsaved Save As rescue; not timed final artifact.",
+  "comparisons": [
+    {
+      "label": "baseline",
+      "source": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\optimized-import-CR0zpf\\report.json",
+      "sourceSha256": "fa5f431bab1b2fbfafe5cdd52bc5eaf4d866e140ea95cf64febf400b3243188e",
+      "count": 257,
+      "totalBytes": 998188,
+      "wallMs": 296118,
+      "scaling": [
+        {
+          "low": 1,
+          "high": 32,
+          "samples": 32,
+          "publicationUs": 113776.34375,
+          "reloadUs": 49346.25,
+          "workspaceUs": 7109.125,
+          "totalUs": 170345.4375
+        },
+        {
+          "low": 33,
+          "high": 64,
+          "samples": 32,
+          "publicationUs": 289589.3125,
+          "reloadUs": 135372.03125,
+          "workspaceUs": 10104.03125,
+          "totalUs": 435302.25
+        },
+        {
+          "low": 65,
+          "high": 128,
+          "samples": 64,
+          "publicationUs": 554278.984375,
+          "reloadUs": 261447.46875,
+          "workspaceUs": 27043.671875,
+          "totalUs": 843166.109375
+        },
+        {
+          "low": 129,
+          "high": 192,
+          "samples": 64,
+          "publicationUs": 873566.046875,
+          "reloadUs": 431946.59375,
+          "workspaceUs": 15288.125,
+          "totalUs": 1321450.515625
+        },
+        {
+          "low": 193,
+          "high": 257,
+          "samples": 65,
+          "publicationUs": 1218619.9538461538,
+          "reloadUs": 593078.0461538462,
+          "workspaceUs": 12638.584615384616,
+          "totalUs": 1825218.7692307692
+        }
+      ]
+    },
+    {
+      "label": "verifiedSnapshot",
+      "source": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\optimized-import-b7Xdx0\\report.json",
+      "sourceSha256": "f5d7119810dcfc6854ce69c5fb99afeb57c4455c88162aa5af1cfc83a3dc24be",
+      "count": 257,
+      "totalBytes": 998188,
+      "wallMs": 116909,
+      "scaling": [
+        {
+          "low": 1,
+          "high": 32,
+          "samples": 32,
+          "publicationUs": 65597.5625,
+          "reloadUs": 0.375,
+          "workspaceUs": 5027.40625,
+          "totalUs": 70748.0625
+        },
+        {
+          "low": 33,
+          "high": 64,
+          "samples": 32,
+          "publicationUs": 155795.9375,
+          "reloadUs": 0.03125,
+          "workspaceUs": 4978.40625,
+          "totalUs": 161006.84375
+        },
+        {
+          "low": 65,
+          "high": 128,
+          "samples": 64,
+          "publicationUs": 277367.515625,
+          "reloadUs": 0,
+          "workspaceUs": 7549.015625,
+          "totalUs": 285334.203125
+        },
+        {
+          "low": 129,
+          "high": 192,
+          "samples": 64,
+          "publicationUs": 457108.59375,
+          "reloadUs": 0.0625,
+          "workspaceUs": 14248.140625,
+          "totalUs": 472014.65625
+        },
+        {
+          "low": 193,
+          "high": 257,
+          "samples": 65,
+          "publicationUs": 619036.1076923077,
+          "reloadUs": 0,
+          "workspaceUs": 17252.56923076923,
+          "totalUs": 637238.4615384615
+        }
+      ]
+    },
+    {
+      "label": "snapshotAndAttributes",
+      "source": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\optimized-import-eLSL4A\\report.json",
+      "sourceSha256": "8c72e39c926af762db919cd766a8314e82fcecf58ecc13713fb8d28ae8593106",
+      "count": 257,
+      "totalBytes": 998188,
+      "wallMs": 89006,
+      "scaling": [
+        {
+          "low": 1,
+          "high": 32,
+          "samples": 32,
+          "publicationUs": 45511.75,
+          "reloadUs": 0,
+          "workspaceUs": 4680.21875,
+          "totalUs": 50314.125
+        },
+        {
+          "low": 33,
+          "high": 64,
+          "samples": 32,
+          "publicationUs": 106290.59375,
+          "reloadUs": 0,
+          "workspaceUs": 4760.5,
+          "totalUs": 111292.28125
+        },
+        {
+          "low": 65,
+          "high": 128,
+          "samples": 64,
+          "publicationUs": 195975.015625,
+          "reloadUs": 0,
+          "workspaceUs": 11136.15625,
+          "totalUs": 207530.609375
+        },
+        {
+          "low": 129,
+          "high": 192,
+          "samples": 64,
+          "publicationUs": 320963.796875,
+          "reloadUs": 0,
+          "workspaceUs": 13749.46875,
+          "totalUs": 335392.125
+        },
+        {
+          "low": 193,
+          "high": 257,
+          "samples": 65,
+          "publicationUs": 436182.6,
+          "reloadUs": 0,
+          "workspaceUs": 21098.153846153848,
+          "totalUs": 458230.0307692308
+        }
+      ]
+    }
+  ]
+}

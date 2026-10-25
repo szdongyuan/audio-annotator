@@ -1,0 +1,97 @@
+{
+  "method": "Selenium → official tauri-driver → matching Microsoft EdgeDriver → actual Tauri executable. Native picker paths are preselected in the e2e feature; UI workflows use WebDriver pointer/keyboard. Folder-scan separately tests native IPC contracts; targeted transport/Channel failure injections are identified in suite reports. No store mutation substitutes for UI acceptance. Subjective listening and physical picker interaction are separate release checks.",
+  "checks": [
+    {
+      "name": "project",
+      "passed": true
+    },
+    {
+      "name": "view-churn",
+      "passed": true,
+      "switches": 300,
+      "mountedChannelOwners": 450,
+      "freshNativeAnalysis": true
+    },
+    {
+      "name": "spectral",
+      "passed": true
+    },
+    {
+      "name": "restart",
+      "passed": true
+    },
+    {
+      "name": "sharing",
+      "passed": true
+    },
+    {
+      "name": "recovery",
+      "passed": true
+    },
+    {
+      "name": "selection-flow",
+      "passed": true
+    },
+    {
+      "name": "rulers-flow",
+      "passed": true
+    },
+    {
+      "name": "compact-layout",
+      "passed": true
+    },
+    {
+      "name": "classification-flow",
+      "passed": true
+    },
+    {
+      "name": "folder-scan",
+      "passed": true
+    },
+    {
+      "name": "folder-flow",
+      "passed": true
+    },
+    {
+      "name": "feedback-flow",
+      "passed": true
+    },
+    {
+      "name": "format-flow",
+      "passed": true
+    },
+    {
+      "name": "fidelity-flow",
+      "passed": true
+    },
+    {
+      "name": "processed-flow",
+      "passed": true
+    },
+    {
+      "name": "interaction-flow",
+      "passed": true
+    },
+    {
+      "name": "sharing-flow",
+      "passed": true
+    },
+    {
+      "name": "collaboration-native",
+      "passed": true
+    },
+    {
+      "name": "collaboration-controls",
+      "passed": true
+    },
+    {
+      "name": "collaboration-layers",
+      "passed": true
+    },
+    {
+      "name": "default-collaboration",
+      "passed": true
+    }
+  ],
+  "output": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN"
+}

@@ -274,8 +274,36 @@ it('Save As drains a command accepted before transition and captures its complet
   const newer = { ...snapshot, document: { ...snapshot.document, revision: 1, name: 'newer native snapshot' } };
   vi.mocked(api.saveAs).mockResolvedValueOnce({ snapshot: newer, path: 'C:/new', persistedRevision: 1, recovery: null });
   await act(async () => { complete(newer); await edit; await saving; });
-  expect(api.saveAs).toHaveBeenCalledWith('C:/project', fixture.projectId, 1);
+  expect(api.saveAs).toHaveBeenCalledWith('C:/project', fixture.projectId, 1,expect.objectContaining({operationId:expect.any(String),onProgress:expect.any(Function)}));
   expect(hook.result.current.active!.store.snapshot.document.name).toBe('newer native snapshot');
+  hook.unmount();
+});
+
+it('Save As submits a newer pending draft after a source save failure without requiring persistence again', async () => {
+  const { api, commands, hook } = uiSetup();
+  await act(async () => { await hook.result.current.open('open'); });
+  const source = hook.result.current.active!, mediaId = fixture.media[0].id;
+  vi.mocked(commands.applyChange).mockImplementation(async (_id, revision, change) => ({
+    ...source.store.snapshot, document: { ...source.store.snapshot.document, revision: revision + 1,
+      media: source.store.snapshot.document.media.map(m => change.type === 'updateMediaNote' && m.id === change.mediaId ? { ...m, note: change.note } : m) },
+  }));
+  vi.mocked(api.save).mockRejectedValue({ code: 'SaveFailed', message: 'owned source unavailable', retryable: true });
+  await act(async () => { await source.queue.enqueue({ type: 'updateMediaNote', mediaId, note: 'first unsaved', mergeKey: null }); await hook.result.current.save(); });
+  expect(source.lifecycle.status).toBe('failed'); expect(source.store.persistedRevision).toBe(0);
+  source.lifecycle.registerDraft('rescue-note', async () => {
+    await source.queue.enqueue({ type: 'updateMediaNote', mediaId, note: source.store.drafts.get('rescue-note')!, mergeKey: null }, { draftKey: 'rescue-note' });
+  });
+  act(() => source.store.setDraft('rescue-note', 'newer pending draft'));
+  vi.mocked(api.saveAs).mockImplementation(async (_path, id, revision) => {
+    expect(id).toBe(fixture.projectId); expect(revision).toBe(2);
+    expect(source.store.drafts.size).toBe(0); expect(source.store.editingDisabled).toBe(true);
+    return { snapshot: structuredClone(source.store.snapshot), path: 'C:/rescued', persistedRevision: revision, recovery: null };
+  });
+  await act(async () => { await hook.result.current.saveAs(); });
+  expect(api.save).toHaveBeenCalledTimes(1); expect(api.saveAs).toHaveBeenCalledTimes(1);
+  expect(hook.result.current.active!.path).toBe('C:/rescued');
+  expect(hook.result.current.active!.store.snapshot.document.media[0].note).toBe('newer pending draft');
+  expect(source.store.persistedRevision).toBe(0); expect(source.store.editingDisabled).toBe(true);
   hook.unmount();
 });
 

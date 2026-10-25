@@ -1,0 +1,380 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.56s
+     Running unittests src\lib.rs (target\debug\deps\annotator_core-735ea1e30214718c.exe)
+
+running 9 tests
+test collaboration::local_identity::tests::dpapi_ciphertext_contains_no_plaintext_credentials ... ok
+test exchange::export::tests::publication_refuses_a_target_created_during_write_and_cleans_only_its_temp ... ok
+test exchange::export::tests::publication_cleans_partial_and_cancelled_files_and_moves_complete_bytes ... ok
+test exchange::limits::tests::rejects_an_index_that_does_not_end_at_the_end_record ... ok
+test collaboration::atomic::attribute_tests::canonical_attribute_checks_match_metadata_and_reject_reparse_ancestors ... ok
+test collaboration::atomic::attribute_tests::attribute_fallback_preserves_owned_access_denied_errors ... ok
+test collaboration::local_identity::tests::persisted_identity_and_public_project_snapshots_never_expose_secret ... ok
+test collaboration::catalog::import_scan_regression::prepared_placement_identity_handle_cannot_write ... ok
+test collaboration::catalog::import_scan_regression::new_catalog_import_performs_one_verified_catalog_scan ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+
+     Running tests\analysis_jobs.rs (target\debug\deps\analysis_jobs-fd762ae748fbeab8.exe)
+
+running 9 tests
+test configuration_keys_cover_identity_and_analysis_but_not_view_style ... ok
+test visible_jobs_precede_background_queue_and_old_generations_never_run ... ok
+test scheduler_reset_invalidates_same_project_runtime_and_panics_do_not_kill_workers ... ok
+test tile_averages_linear_power_and_clips_physical_tail ... ok
+test scheduler_bounds_workers_queue_cancels_only_view_and_drops_late_results ... ok
+test frequency_lod_uses_power_and_mel_tiles_keep_triangle_geometry ... ok
+test disk_lru_refreshes_on_memory_hits_and_never_deletes_noncache_files ... ok
+test cache_is_bounded_lru_persistent_and_recovers_corruption ... ok
+test reopening_relative_media_rehydrates_without_changing_document_path_and_rejects_changed_source ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\analysis_owners.rs (target\debug\deps\analysis_owners-f45eb54624baa196.exe)
+
+running 3 tests
+test retirement_and_reset_cancel_late_results_without_affecting_other_views ... ok
+test live_leases_are_bounded_and_unknown_cancel_never_allocates ... ok
+test more_than_256_sequentially_disposed_views_keep_accepting_work ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\collaboration_catalog.rs (target\debug\deps\collaboration_catalog-40ed08c9841ebd70.exe)
+
+running 24 tests
+test catalog_subprocess ... ignored, isolated subprocess worker
+test changed_source_and_no_clobber_are_rejected ... ok
+test catalog_growth_preserves_old_payload_and_stages_complete_new_layers ... ok
+test copy_and_publication_failures_leave_no_visible_record_and_lost_ack_keeps_media ... ok
+test malformed_records_changed_old_media_and_limits_fail_closed ... ok
+test append_is_verified_idempotent_and_does_not_change_manifest_identity ... ok
+test catalog_growth_between_capture_and_author_read_is_deferred_not_corrupt ... ok
+test real_smb_published_stamp_survives_prepared_capability_release ... ignored, requires an explicitly supplied owned SMB fixture parent in ANNOTATOR_NAS_TEST_ROOT
+test continuously_growing_catalog_has_a_bounded_retryable_snapshot_result ... ok
+test disappearing_temporary_entries_are_ignored_but_committed_entries_remain_strict ... ok
+test capabilities_are_project_bound_and_cancellation_never_publishes ... ok
+test published_catalog_snapshot_matches_fresh_read_and_revalidates_later_appends ... ok
+test partial_files_and_orphan_media_are_invisible_but_reparse_catalog_is_rejected ... ok
+test same_capability_recovers_owned_orphan_after_record_and_rollback_failures ... ok
+test source_changes_and_cancellation_during_copy_clean_only_owned_staging ... ok
+test published_catalog_snapshot_rejects_changed_known_record_before_new_publication ... ok
+test aggregate_catalog_bytes_are_bounded_before_loading_all_records ... ok
+test orphan_recovery_rechecks_cancellation_source_and_project_authority ... ok
+test staged_capability_retains_decoded_pcm_and_identity_for_native_ready_event ... ok
+test same_capability_recovers_interrupted_placement_but_rejects_replaced_target ... ok
+test empty_default_stable_identity_and_strict_versions ... ok
+test real_process_independent_appends_and_crashed_commit_lock_release ... ok
+test stale_view_keeps_known_media_authors_syncing_and_unknown_media_is_corruption ... ok
+test catalog_collection_limit_and_record_versions_are_enforced has been running for over 60 seconds
+test catalog_collection_limit_and_record_versions_are_enforced ... ok
+
+test result: ok. 22 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 62.49s
+
+     Running tests\collaboration_catalog_workspace.rs (target\debug\deps\collaboration_catalog_workspace-49b387b6511f9b48.exe)
+
+running 13 tests
+test hidden_media_is_private_durable_and_not_a_catalog_or_export_filter ... ok
+test v2_author_cannot_use_legacy_guest_merge ... ok
+test reopen_rejects_replaced_public_source_path_even_after_private_relink ... ok
+test clean_adoption_stays_saved_and_remembered_layers_accept_new_catalog ... ok
+test hidden_preferences_and_view_only_cache_are_validated_on_reopen ... ok
+test adoption_preserves_a_in_flight_b_saved_c_live_and_history_relinks_preferences ... ok
+test recovery_candidates_expand_but_still_require_explicit_choice ... ok
+test unchanged_catalog_adoption_is_idempotent_and_stale_barriers_still_fail ... ok
+test deterministic_uuid_insertion_before_old_media_preserves_labels_and_redo ... ok
+test failed_adoption_keeps_live_history_and_ack_then_reopens_with_recovery_gate ... ok
+test reopening_adds_defaults_without_rewriting_confirmed_or_republishing_empty_labels ... ok
+test adopted_catalog_cannot_substitute_existing_metadata_or_project_identity ... ok
+test v2_view_only_is_explicit_and_guards_every_public_mutation_and_direct_save ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.61s
+
+     Running tests\collaboration_defaults.rs (target\debug\deps\collaboration_defaults-81a7546af3fba5b0.exe)
+
+running 3 tests
+test stable_identity_is_encrypted_and_distinct_between_roots ... ok
+test corrupt_or_undecryptable_identity_is_never_replaced ... ok
+test concurrent_initialization_returns_one_persisted_identity ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests\collaboration_repository.rs (target\debug\deps\collaboration_repository-970f218f10dce024.exe)
+
+running 20 tests
+test projection_revalidates_public_manifest_at_api_boundary ... ok
+test public_payload_round_trip_excludes_all_personal_fields ... ok
+test cancellation_after_partial_write_cleans_only_its_temporary ... ok
+test external_credentials_are_strict_and_bounded_before_verification ... ok
+test strict_json_rejects_duplicate_fields ... ok
+test strict_manifest_rejects_private_fields_and_versions ... ok
+test strict_manifest_round_trip ... ok
+test subprocess_worker ... ignored, invoked in isolated child processes by the parent integration tests
+test account_count_and_collection_limits_are_explicit ... ok
+test fault_and_cancel_cleanup_is_owned_and_ack_loss_is_idempotent ... ok
+test paths_reparse_points_and_manifest_mutation_are_rejected ... ok
+test history_retention_is_sixteen_own_confirmed_versions ... ok
+test oversized_author_is_independent_from_other_visible_authors ... ok
+test newest_corruption_is_reported_per_author_without_rollback ... ok
+test tampered_layers_versions_sizes_and_enumeration_fail_closed ... ok
+test independent_authors_preserve_identical_regions_and_retry_acknowledgement ... ok
+test real_process_lock_contention_and_abrupt_exit_release ... ok
+test real_process_no_clobber_registration_and_independent_author_publication ... ok
+test accounts_are_project_scoped_normalized_and_password_verified ... ok
+test aggregate_loaded_layers_cannot_exceed_sixty_four_mib ... ok
+
+test result: ok. 19 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 20.53s
+
+     Running tests\collaboration_workspace.rs (target\debug\deps\collaboration_workspace-bd812379225db5be.exe)
+
+running 26 tests
+test all_private_write_faults_recover_complete_envelopes_and_never_lose_saved_data ... ok
+test failed_identity_preparation_keeps_old_session_and_rejects_cross_root_capability ... ok
+test failed_discard_suppression_requires_choice_and_recovers_full_accepted_checkpoint ... ok
+test guest_copy_is_explicit_remapped_atomic_and_undoable ... ok
+test explicit_remote_load_preserves_latest_unsaved_private_operations ... ok
+test foreign_refresh_keeps_last_verified_layers_on_corrupt_missing_and_regressed_heads ... ok
+test disk_inventory_proves_private_save_does_not_touch_share ... ok
+test divergent_base_retains_local_and_explicit_load_resets_own_history ... ok
+test private_cache_rejects_pending_removed_from_changed_document ... ok
+test explicit_recovery_preserves_inflight_a_and_newer_b_after_lost_ack ... ok
+test legacy_private_catalog_order_remains_strict ... ok
+test malformed_cache_recovers_from_valid_copy_and_rejects_invalid_identity_pending_and_versions ... ok
+test reparse_cache_parent_cannot_create_private_directories_on_share ... ok
+test shared_save_as_rejects_junction_alias_before_any_write ... ok
+test guest_channel_conflicts_reject_whole_merge_without_history_changes ... ok
+test omitted_remote_empty_labels_do_not_turn_private_settings_into_public_changes ... ok
+test admitted_worker_keeps_author_lease_and_stale_ack_cannot_touch_reopened_cache ... ok
+test local_save_and_capture_continue_with_shared_directory_unavailable ... ok
+test lost_ack_with_newer_saved_b_restarts_and_reconciles_a_without_duplicate_revision ... ok
+test private_only_changes_and_same_payload_in_flight_never_create_extra_revision ... ok
+test shared_export_is_sanitized_and_save_as_is_personal_ordinary_v2 ... ok
+test publication_a_in_flight_preserves_saved_b_and_private_state_across_restart ... ok
+test shared_save_as_rejects_root_and_descendants_before_any_write ... ok
+test discarded_failed_shared_saves_never_reappear_and_accepted_pending_survives ... ok
+test native_guards_keep_foreign_entities_out_of_personal_history_and_catalog_immutable ... ok
+test private_actor_caches_are_isolated_and_locked ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.19s
+
+     Running tests\document.rs (target\debug\deps\document-2b7ccf0380c239f3.exe)
+
+running 13 tests
+test revision_exhaustion_and_unknown_entities_leave_document_and_history_unchanged ... ok
+test changes_are_atomic_and_history_revisions_only_increase ... ok
+test annotation_editor_boundary_sequence_keeps_notes_and_rejected_history_atomic ... ok
+test playback_mix_validates_deduplicates_and_media_removal_is_undoable ... ok
+test text_merges_only_for_the_same_target_and_preferences_survive_undo ... ok
+test shared_fixture_round_trips_and_rejects_invalid_documents ... ok
+test classification_commands_are_independent_atomic_and_category_removal_undoes_once ... ok
+test view_changes_persist_outside_content_history_and_channel_bounds_use_the_target_media ... ok
+test malformed_settings_metadata_ids_and_unknown_fields_are_rejected ... ok
+test nullable_document_fields_are_required_keys ... ok
+test only_v2_documents_are_supported ... ok
+test every_content_change_is_serializable_and_undoable ... ok
+test strict_versioned_reads_reject_missing_unknown_and_invalid_fields ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\dsp.rs (target\debug\deps\dsp-45b76e275a3ea051.exe)
+
+running 12 tests
+test mixing_solo_then_mute_layouts_and_output_safety ... ok
+test unusual_rate_pairs_are_rejected_before_large_fft_allocation ... ok
+test invalid_versions_ranges_nonfinite_and_empty_are_explicit ... ok
+test resampler_drains_nonzero_final_filter_tail_and_keeps_output_finite ... ok
+test ten_minute_six_channel_source_renders_a_seek_without_full_file_reads ... ok
+test raised_cosine_widths_union_disabled_narrow_and_physical_edges ... ok
+test visual_stft_settings_do_not_change_processing ... ok
+test identity_exact_length_short_boundaries_dc_nyquist_and_no_mutation ... ok
+test rubato_block_resampling_duration_frequency_delay_tail_and_partition_invariance ... ok
+test overlap_is_max_union_and_channels_are_isolated ... ok
+test dual_tone_mask_selection_and_sources ... ok
+test arbitrary_blocks_and_seeks_have_global_stft_phase_and_bounded_reads ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.46s
+
+     Running tests\exchange.rs (target\debug\deps\exchange-3e5422a612317a16.exe)
+
+running 13 tests
+test portable_v2_rejects_missing_nullable_fields_unknown_fields_and_local_paths ... ok
+test bundle_preserves_original_bytes_and_fails_missing_sources_atomically ... ok
+test json_preserves_all_semantics_without_source_paths_and_imports_missing_media ... ok
+test source_mutation_during_copy_never_publishes_partial_package ... ok
+test export_refuses_changed_missing_and_existing_targets_and_cancel_never_publishes ... ok
+test limits_use_actual_stream_counts_and_cancel_cleans_owned_staging_only ... ok
+test rejects_unknown_versions_fields_dangling_references_and_bounds ... ok
+test portable_v1_and_future_versions_are_explicitly_unsupported ... ok
+test zip_roundtrip_matches_every_semantic_field_and_original_bytes ... ok
+test zip64_index_is_validated_without_large_test_files ... ok
+test zip_rejects_fingerprint_metadata_unknown_fields_and_unlisted_files ... ok
+test bundle_two_formats_reimports_without_validation_cache ... ok
+test hostile_paths_case_collisions_links_and_limits_leave_only_input_files ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests\folder_scan.rs (target\debug\deps\folder_scan-56c62a549c884623.exe)
+
+running 7 tests
+test cancellation_has_its_own_signal_and_terminal_results_release_storage ... ok
+test unresolved_existing_sources_are_reported_and_hardlinks_remain_distinct ... ok
+test limits_cancel_and_root_failure_never_return_partial_results ... ok
+test recursive_extensions_stable_order_and_relative_existing_paths ... ok
+test child_permission_failure_continues_and_issue_storage_is_bounded ... ok
+test real_ntfs_junction_is_not_followed ... ok
+test task_pages_reset_and_release_are_bounded_and_owner_checked ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.16s
+
+     Running tests\media.rs (target\debug\deps\media-5ae4960c4550805f.exe)
+
+running 12 tests
+test known_pcm_size_checks_available_space_before_decoding ... ok
+test relink_preserves_current_notes_and_rejects_different_identity ... ok
+test release_is_scoped_to_the_task_that_prepared_the_descriptor ... ok
+test stale_preparations_cannot_publish_after_runtime_replacement ... ok
+test malformed_and_cancelled_never_publish_pcm ... ok
+test streaming_hash_checks_original_bytes_and_changed_source_aborts ... ok
+test pcm_ranges_identity_and_source_changes_are_checked ... ok
+test contradictory_or_reserved_wav_masks_are_rejected_without_decoder_repairs ... ok
+test analysis_and_playback_share_one_pcm_retention_budget ... ok
+test mp3_frame_count_comes_from_actual_packets_not_bitrate_estimates ... ok
+test wav_layout_requires_an_explicit_valid_mask_and_preserves_sample_order ... ok
+test real_formats_decode_with_distinct_channels_and_exact_frames ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests\persistence.rs (target\debug\deps\persistence-1406d039e1410d62.exe)
+
+running 16 tests
+test create_never_overwrites_an_existing_project ... ok
+test explicit_discard_does_not_require_a_valid_primary ... ok
+test invalid_checksum_and_foreign_recovery_are_never_offered ... ok
+test corruption_offers_verified_backup_without_overwriting_main ... ok
+test classifications_and_compare_preferences_survive_save_and_reopen ... ok
+test recovery_requires_a_choice_and_keep_primary_survives_reopen ... ok
+test local_session_save_failure_keeps_memory_and_close_requires_saved_revision ... ok
+test explicit_recovery_publishes_selected_revision_and_reopens ... ok
+test save_as_preserves_history_and_rebases_relative_media_in_undo ... ok
+test save_reopen_preserves_mix_and_os_lock_releases ... ok
+test valid_checksum_from_another_project_is_not_a_recovery_candidate ... ok
+test unsupported_primary_is_rejected_without_changing_project_or_recovery_bytes ... ok
+test explicit_discard_closes_despite_persistent_recovery_write_failures ... ok
+test every_failed_boundary_keeps_primary_and_exposes_newer_recovery ... ok
+test oversized_encoding_is_rejected_before_any_existing_file_changes ... ok
+test large_but_supported_envelope_remains_readable ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.46s
+
+     Running tests\playback_state.rs (target\debug\deps\playback_state-6e29d09a0f9a7eb2.exe)
+
+running 18 tests
+test counted_device_clock_only_advances_on_consumption ... ok
+test callback_timestamp_publication_is_required_even_after_ring_exhaustion ... ok
+test delayed_output_sink_keeps_stream_until_the_nonzero_tail_is_presented ... ok
+test natural_end_stays_at_end_and_replay_starts_at_beginning ... ok
+test nonfinite_and_clipping_are_sanitized ... ok
+test pause_retains_buffer_and_clock ... ok
+test play_pause_resume_stop_preserves_session_start ... ok
+test ring_exhaustion_does_not_mean_device_presentation ... ok
+test ring_is_bounded_and_reuses_consumed_slots ... ok
+test obsolete_generation_never_outputs_queued_audio ... ok
+test seek_clamps_to_exact_selection_bounds ... ok
+test selection_loop_clock_retains_original_source_coordinates ... ok
+test switching_source_cancels_old_buffer_before_new_source_is_ready ... ok
+test underrun_does_not_advance_source_clock ... ok
+test wasapi_padding_and_retired_frames_bound_the_scheduled_tail ... ok
+test sub_device_frame_loop_is_rejected_without_infinite_production ... ok
+test resampled_renderer_finishes_at_exact_source_frame_and_seeks_without_old_filter_tail ... ok
+test real_selection_renderer_loops_both_sources_on_original_channel_and_exact_bounds ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\processed_analysis.rs (target\debug\deps\processed_analysis-d9c75f49526d3a7c.exe)
+
+running 3 tests
+test original_and_processed_cache_identities_never_alias_and_geometry_is_authoritative ... ok
+test random_access_head_tail_overlap_reuse_and_cancellation_are_bounded ... ok
+test processed_tiles_match_independent_dsp_then_stft_for_masks_channels_and_large_windows ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.34s
+
+     Running tests\spectra.rs (target\debug\deps\spectra-01919d29a3274a54.exe)
+
+running 3 tests
+test dc_nyquist_short_tail_and_hop_are_not_doubled_or_extended ... ok
+test mel_uses_fixed_triangles_normalized_by_weight_sum_and_energy_compensation ... ok
+test tones_have_fixed_window_normalized_amplitude_and_physical_bins ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\annotator_desktop_lib-5cde1f82732124b1.exe)
+
+running 46 tests
+test commands::collaboration::creation::tests::owned_cleanup_preserves_a_replacement_at_an_owned_file_path ... ok
+test commands::analysis::tests::processed_authority_rejects_forgery_and_edit_during_work_or_cache_publication ... ok
+test commands::analysis::tests::native_service_reopens_without_relink_preserves_document_and_checks_current_identity ... ok
+test commands::collaboration::defaults::tests::retired_default_creation_rolls_back_its_target ... ok
+test commands::collaboration::creation::tests::unadopted_copy_rolls_back_only_owned_files_after_releasing_author_lease ... ok
+test commands::collaboration::defaults::tests::default_copy_preserves_media_ids_and_personal_state ... ok
+test commands::collaboration::creation::tests::real_media_copy_cancellation_failure_and_private_export_boundaries ... ok
+test commands::collaboration::creation::tests::creator_copy_publishes_manifest_last_and_preserves_source ... ok
+test commands::collaboration::defaults::tests::parallel_actor_imports_and_post_commit_retirement_report_durable_identity ... ok
+test commands::collaboration::defaults::tests::catalog_import_and_poll_requires_explicit_adoption ... ok
+test commands::collaboration::review_fixes::failed_catalog_layer_validation_does_not_commit_document_or_runtime ... ok
+test commands::collaboration::defaults::tests::prepared_import_events_folder_scan_and_retired_runtime_are_safe ... ok
+test commands::collaboration::defaults::tests::saved_background_publication_holds_bounded_admission_then_save_as_retries ... ok
+test commands::collaboration::runtime::tests::retired_jobs_keep_the_single_flight_slot_until_the_worker_exits ... ok
+test commands::collaboration::review_fixes::local_logout_is_a_workspace_preserving_noop ... ok
+test commands::collaboration::review_fixes::adoption_catalog_race_retains_last_good_layer_and_pending_flag ... ok
+test commands::collaboration::tests::explicit_default_view_only_does_not_silently_open_a_legacy_guest_writer ... ok
+test commands::collaboration::tests::delayed_publication_never_replaces_unsaved_c_with_saved_b ... ok
+test commands::collaboration::review_fixes::imported_commit_snapshot_defers_later_foreign_append_until_explicit_adoption ... ok
+test commands::collaboration::review_fixes::retired_default_preparation_holds_admission_until_worker_exits ... ok
+test commands::collaboration::tests::native_requests_reject_renderer_credential_and_owner_injection ... ok
+test commands::collaboration::tests::guest_copy_uses_native_cache_and_preferences_and_nonces_follow_identity ... ok
+test commands::collaboration::tests::old_runtime_worker_and_cancelled_identity_cannot_adopt_after_retirement ... ok
+test commands::collaboration::tests::ordinary_missing_primary_still_opens_valid_recovery ... ok
+test commands::collaboration::defaults::tests::default_create_reopen_identity_switch_and_explicit_view_only ... ok
+test commands::collaboration::review_fixes::save_as_progress_can_cancel_without_retiring_source ... ok
+test commands::collaboration::tests::shared_catalog_rejects_async_scan_import_and_forged_local_change ... ok
+test commands::collaboration::tests::delayed_previous_actor_playback_capture_and_control_cannot_touch_new_identity ... ok
+test commands::exchange::tests::authority_requires_saved_current_identity_and_revision ... ok
+test commands::exchange::tests::task_cancellation_is_independent_and_single_terminal_slot ... ok
+test commands::folders::tests::background_channel_reports_terminal_without_holding_project_lock ... ok
+test commands::playback::tests::native_document_changes_only_cancel_audio_inputs_for_active_media ... ok
+test commands::playback::tests::native_ended_status_waits_for_presentation_but_stop_cancels_immediately ... ok
+test commands::playback::tests::native_pause_stop_and_reset_use_counted_output_and_invalidate_old_callbacks ... ok
+test commands::playback::tests::prebuffer_completion_preserves_stopped_and_paused_transport_intent ... ok
+test commands::collaboration::tests::local_capture_failure_stays_visible_and_guest_has_no_network_pending ... ok
+test commands::collaboration::exchange_default::tests::annotation_sources_are_required_then_verified_before_default_publication ... ok
+test commands::collaboration::review_fixes::save_as_captures_current_unsaved_document_and_private_state ... ok
+test commands::collaboration::tests::unknown_shared_json_and_subdirectory_open_never_write_project_locks ... ok
+test commands::collaboration::tests::own_external_change_requires_explicit_load_without_replacing_live_history ... ok
+test commands::collaboration::tests::published_old_worker_cannot_update_new_runtime_or_release_its_slot_early ... ok
+test commands::collaboration::review_fixes::save_as_rescues_current_document_after_actual_source_persistence_failure ... ok
+test commands::collaboration::review_fixes::batch_hidden_ids_validate_and_persist_once_then_copy_together ... ok
+test commands::collaboration::tests::offline_and_corrupt_layers_keep_last_good_and_reconnect_publishes_pending ... ok
+test commands::collaboration::tests::independent_native_identities_are_private_and_status_has_no_credentials ... ok
+test commands::collaboration::review_fixes::save_as_unsaved_stale_and_changed_during_copy_still_refuse_adoption ... ok
+
+test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.52s
+
+     Running unittests src\main.rs (target\debug\deps\annotator_desktop-5cf711583eb6d20c.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests annotator_core
+
+running 2 tests
+test crates\annotator-core\src\collaboration\local_identity.rs - collaboration::local_identity::LocalIdentity (line 12) - compile fail ... ok
+test crates\annotator-core\src\collaboration\local_identity.rs - collaboration::local_identity::LocalIdentity (line 16) - compile fail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+   Doc-tests annotator_desktop_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

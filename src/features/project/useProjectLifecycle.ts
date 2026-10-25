@@ -1,3 +1,6 @@
+import { admitted, suspendRefresh } from '../collaboration/admission';
+import { retryAdmission } from '../../bridge/admission';
+import { collaborationClient, type CopyProgress } from '../../bridge/collaboration';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CommandQueue, type ProjectCommands } from '../../app/commands';
 import { ProjectStore } from '../../app/store';
@@ -24,6 +27,8 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
   const [error, setError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
   const occupied = useRef(false);
+  const [copyProgress,setCopyProgress]=useState<CopyProgress|null>(null);
+  const copyOperation=useRef<{id:string;cancelled:boolean}|null>(null);
   const deferredClose = useRef(false);
   const closeWindow = useRef<() => void>(() => {});
   const [closePending, setClosePending] = useState(false);
@@ -40,9 +45,15 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
     if (opened.snapshot) {
       const store = new ProjectStore(opened.snapshot, opened.persistedRevision);
       const runtime = opened.collaboration ? createRuntimeCommands(opened.collaboration.runtimeNonce) : undefined;
-      const queue = new CommandQueue(store, runtime?.project ?? commands);
+      let owner:ActiveProject;
+      const base=runtime?.project??commands;
+      const queue = new CommandQueue(store, {...base,applyChange:async(id,revision,change)=>{
+        if(change.type!=='importMedia')return base.applyChange(id,revision,change);
+        const resume=await suspendRefresh(owner.lifecycle);
+        try{return await admitted(owner,()=>base.applyChange(id,revision,change),()=>current.current===owner&&mounted.current);}finally{resume?.();}
+      }});
       const lifecycle = new ProjectLifecycle(store, queue, runtime?.projects ?? api);
-      const owner: ActiveProject = { store, queue, lifecycle, path: opened.path, ...(opened.collaboration ? { collaboration: Object.freeze(opened.collaboration), commands: runtime } : {}) };
+      owner = { store, queue, lifecycle, path: opened.path, ...(opened.collaboration ? { collaboration: Object.freeze(opened.collaboration), commands: runtime } : {}) };
       if (opened.collaboration) Object.assign(owner, { preferences: new PreferenceDraft(owner) });
       current.current = owner;
     }
@@ -71,9 +82,9 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
     continuation.current = null; setClosePending(false);
     await next();
   }, [api]);
-  const open = (kind: 'create' | 'open') => operation(async () => {
-    const path = await api.choose(kind);
-    if (path) await finishCurrent(async () => adopt(await api[kind](path)));
+  const open = (kind: 'create' | 'open' | 'viewOnly') => operation(async () => {
+    const path = await api.choose(kind==='viewOnly'?'open':kind);
+    if(path){const resume=await suspendRefresh(current.current?.lifecycle);try{await finishCurrent(async()=>adopt(await retryAdmission(()=>kind==='viewOnly'?(api.openViewOnly??localProjects.openViewOnly)(path):api[kind](path),{valid:()=>mounted.current})));}finally{resume?.();}}
   });
   const save = () => operation(async () => { await current.current?.lifecycle.save(); });
   const saveAs = () => operation(async () => {
@@ -81,12 +92,18 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
     if (!project) return;
     const path = await api.choose('saveAs');
     if (!path) return;
-    await project.lifecycle.transition(async () => {
+    const op={id:crypto.randomUUID(),cancelled:false};copyOperation.current=op;
+    setCopyProgress({operationId:op.id,phase:'准备复制',completed:0});
+    const resume=await suspendRefresh(project.lifecycle);
+    let copyError:unknown;
+    try{await project.lifecycle.transition(async () => {
       const { projectId, revision } = project.store.snapshot.document;
-      const opened = await (project.commands?.projects ?? api).saveAs(path, projectId, revision);
+      let opened:OpenedProject;
+      try{opened = await admitted(project,()=>(project.commands?.projects ?? api).saveAs(path,projectId,revision,{operationId:op.id,onProgress:p=>{if(mounted.current&&copyOperation.current===op)setCopyProgress(p);}}),()=>!op.cancelled&&current.current===project&&mounted.current);}catch(cause){copyError=cause;return;}
       // Admission stays frozen through native publication and retirement of this runtime.
       adopt(opened);
-    });
+    });}finally{resume?.();copyOperation.current=null;setCopyProgress(null);}
+    if(copyError)throw copyError;
     if (continuation.current) await finishCurrent(continuation.current);
   });
   const close = () => operation(() => finishCurrent(async () => {}));
@@ -94,6 +111,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
   const performExchange = async (action: (expected: ExpectedProject | null) => Promise<OpenedProject | null>) => {
     if (occupied.current || pendingRecovery.current) throw { code: 'InvalidInput', message: '请先完成当前项目操作', retryable: true } satisfies AppError;
     occupied.current = true; setBusy(true);
+    const resume=await suspendRefresh(current.current?.lifecycle);
     try {
       const project = current.current;
       const acknowledgedError = project?.lifecycle.error;
@@ -103,7 +121,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
         // The lifecycle has acknowledged this save; dismiss only the same error mirrored outside it.
         setError(previous => previous === acknowledgedError ? null : previous);
         try {
-          const opened = await action(doc ? { projectId: doc.projectId, expectedRevision: doc.revision, ...(project?.collaboration ? { runtimeNonce: project.collaboration.runtimeNonce } : {}) } : null);
+          const opened = await admitted(project,()=>action(doc ? { projectId: doc.projectId, expectedRevision: doc.revision, ...(project?.collaboration ? { runtimeNonce: project.collaboration.runtimeNonce } : {}) } : null),()=>mounted.current&&current.current===project);
           if (opened) adopt(opened);
         } catch (cause) { exchangeError = cause; }
       };
@@ -111,6 +129,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
       // Archive/cancellation failures belong to the exchange dialog, not the saved project's ledger.
       if (exchangeError) throw exchangeError;
     } finally {
+      resume?.();
       occupied.current = false; setBusy(false);
       if (deferredClose.current) { deferredClose.current = false; queueMicrotask(() => closeWindow.current()); }
     }
@@ -126,7 +145,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
         if (!mounted.current || current.current !== owner) return;
         if (result.opened.collaboration?.runtimeNonce === owner.collaboration?.runtimeNonce) {
           if (!result.opened.snapshot) throw new Error('Missing personal copy result');
-          owner.store.accept(result.opened.snapshot);
+          if(result.opened.snapshot.document.revision!==owner.store.snapshot.document.revision||result.opened.snapshot.canUndo!==owner.store.snapshot.canUndo||result.opened.snapshot.canRedo!==owner.store.snapshot.canRedo)owner.store.accept(result.opened.snapshot);
           owner.store.markPersisted(result.opened.snapshot.document.projectId,result.opened.persistedRevision);
         } else adopt(result.opened);
       });
@@ -155,11 +174,12 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
   }, [api]);
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; current.current?.lifecycle.dispose(); };
+    return () => { mounted.current = false;const op=copyOperation.current;if(op){op.cancelled=true;void collaborationClient.cancel(op.id).catch(()=>{});} current.current?.lifecycle.dispose(); };
   }, []);
   return {
     active, recovery, busy, editingDisabled: active?.store.editingDisabled ?? true,
     error: error ?? active?.lifecycle.error ?? null, closePending,
+    copyProgress,cancelCopy:()=>{const op=copyOperation.current;if(op){op.cancelled=true;void collaborationClient.cancel(op.id).catch(e=>setError(normalizeError(e)));}},
     open, save, saveAs, close, performExchange, performCollaboration,
     recover: (source: RecoverySource | null) => operation(async () => adopt(await recoveryCommands.current.recover(source))),
     cancelRecovery: () => operation(async () => { await recoveryCommands.current.cancelRecovery(); pendingRecovery.current = false; setRecovery(null); }),

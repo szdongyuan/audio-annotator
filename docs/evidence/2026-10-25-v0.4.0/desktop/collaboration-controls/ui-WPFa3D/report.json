@@ -1,0 +1,50 @@
+{
+  "method": "Fresh debug/e2e Tauri application; owned Selenium pointer/keyboard controls and native picker queues; IPC is read-only assertion only",
+  "output": "C:\\Users\\DY\\AppData\\Local\\Packages\\OpenAI.Codex_2p2nqsd0c76g0\\LocalCache\\Local\\AudioAnnotatorVerification\\default-collaboration-v040\\desktop-fIzupN\\collaboration-controls\\ui-WPFa3D",
+  "checks": [
+    "default create/import through File menu, optional credentials form, verified copied media and working analysis",
+    "logout saves account preferences and restores local-author defaults",
+    "failed login preserves local identity and personal categories",
+    "registered actor starts isolated; own category is undoable without copying local author labels",
+    "compact author filters and explicit personal-only export scope",
+    "Alice private preferences restore after local/Bob transitions",
+    "default collaboration.json opens local author; reopen/login restores private preferences and working analysis",
+    "shared-version load requires explicit confirmation, retires history and preserves private preferences",
+    "personal Save As creates default project with only current identity document"
+  ],
+  "frames": [
+    {
+      "name": "identity-1280x800",
+      "outer": {
+        "width": 1280,
+        "pid": 31888,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 800
+      },
+      "header": 32,
+      "height": 761,
+      "overflow": false,
+      "toolbar": 40,
+      "width": 1264
+    },
+    {
+      "name": "identity-1920x1080",
+      "outer": {
+        "width": 1920,
+        "pid": 31888,
+        "y": 20,
+        "method": "Win32 GetWindowRect on owned native PID",
+        "x": 20,
+        "height": 1080
+      },
+      "header": 32,
+      "height": 1041,
+      "overflow": false,
+      "toolbar": 40,
+      "width": 1904
+    }
+  ],
+  "originalSha256": "192d1008c5d0f6d58a9f917d27eee6dcebe3992501f2c994750f4601ba79d34e"
+}

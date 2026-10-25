@@ -16,7 +16,7 @@ import { SaveIndicator } from '../features/project/SaveIndicator';
 import type { ProjectLifecycleUI } from '../features/project/useProjectLifecycle';
 import type { MediaUI } from '../features/media/useMedia';
 import { MediaList } from '../features/media/MediaList';
-import { ImportProgress } from '../features/media/ImportProgress';
+import { ImportAcknowledgements, ImportProgress } from '../features/media/ImportProgress';
 import { FolderImportDialog } from '../features/media/FolderImportDialog';
 import { FolderImportProgress } from '../features/media/FolderImportProgress';
 import { MediaAssociation } from '../features/exchange/MediaAssociation';
@@ -55,7 +55,8 @@ function IconButton({ icon: Icon, label, className = '', ...props }: IconButtonP
 export function AppShell({ project, mediaUI, exchange, collaboration }: { collaboration?: CollaborationUI; project?: ProjectLifecycleUI; mediaUI?: MediaUI; exchange?: ExchangeUI }) {
   const [mediaOpen, setMediaOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
-  const workspace = useWorkspace(project?.active ?? null);
+  const hiddenMediaIds=collaboration?.controller?.status?.hiddenMediaIds??project?.active?.collaboration?.hiddenMediaIds??[];
+  const workspace = useWorkspace(project?.active ?? null,hiddenMediaIds,collaboration?async id=>{await collaboration.hideMedia(id,false);}:undefined);
   const selected = project?.active?.store.snapshot.document.media.find(m => m.id === workspace.state.activeMediaId);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const panes = [selected?.id, workspace.state.compareMediaId].filter((id): id is string => !!id && !!project?.active?.store.snapshot.document.media.some(m => m.id === id)).map(mediaId => ({ mediaId, channels: workspace.view(mediaId).visibleChannels }));
@@ -94,11 +95,11 @@ export function AppShell({ project, mediaUI, exchange, collaboration }: { collab
         <span className="toolbar-divider" />
         <div className="segmented-control" aria-label="工作区模式">
           <button className={`segment ${!workspace.state.compareMediaId ? 'is-current' : ''}`} disabled={!selected || project?.active?.store.editingDisabled} onClick={() => workspace.compare(null)}><Square size={14} />单文件</button>
-          <button className={`segment ${workspace.state.compareMediaId ? 'is-current' : ''}`} disabled={(project?.active?.store.snapshot.document.media.length ?? 0) < 2 || project?.active?.store.editingDisabled} onClick={() => workspace.compare(project?.active?.store.snapshot.document.media.find(m => m.id !== selected?.id)?.id ?? null)}><ScanLine size={14} />双文件对比</button>
+          <button className={`segment ${workspace.state.compareMediaId ? 'is-current' : ''}`} disabled={workspace.visibleMedia.length < 2 || project?.active?.store.editingDisabled} onClick={() => workspace.compare(workspace.visibleMedia.find(m => m.id !== selected?.id)?.id ?? null)}><ScanLine size={14} />双文件对比</button>
         </div>
       </div>
       <AnnotationTools ui={annotations} />
-      {project && <ProjectActions project={project} onImport={mediaUI?.choose} importDisabled={mediaUI?.disabled || !!project.active?.collaboration} exchange={exchange} />}
+      {project && <ProjectActions project={project} onImport={mediaUI?.choose} importDisabled={mediaUI?.disabled || project.active?.collaboration?.canImportMedia===false} exchange={exchange} />}
       <div className="toolbar-group toolbar-end">
         <button data-analysis-trigger={selected?.id} className="button button-quiet analysis-settings" disabled={!selected || project?.active?.store.editingDisabled} onClick={() => setSettingsId(settingsId === selected?.id ? null : selected?.id ?? null)}><SlidersHorizontal size={16} /><span>分析设置</span></button>
         <span className="toolbar-divider" />
@@ -109,12 +110,14 @@ export function AppShell({ project, mediaUI, exchange, collaboration }: { collab
 
     <div className="workspace">
       {mediaOpen && <aside id="media-panel" className="media-panel panel" aria-label="音频列表">
-        <MediaList catalogLocked={!!project?.active?.collaboration} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => workspace.selectPane('primary', id)} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
+        <MediaList hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => workspace.selectPane('primary', id)} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
       </aside>}
 
       <main className="analysis-workspace" aria-label="音频分析工作区">
         <div className="workspace-feedback" aria-label="工作区操作反馈">
+          {collaboration?.error&&!collaboration.dialog&&<p role="alert">{collaboration.error.message}</p>}
           {mediaUI?.error && <p className="media-error" role="alert">{mediaUI.error.message}</p>}
+          {mediaUI?.controller && <ImportAcknowledgements controller={mediaUI.controller} />}
           {mediaUI?.controller && !mediaUI.folder?.ownsCurrentBatch && <ImportProgress controller={mediaUI.controller} />}
           {mediaUI?.folder && <FolderImportProgress controller={mediaUI.folder} />}
           {mediaUI && <MediaAssociation active={project?.active ?? null} media={mediaUI} />}
@@ -124,7 +127,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration }: { collab
           <div className="empty-content">
             <div className="audio-emblem" aria-hidden="true"><AudioLines size={46} strokeWidth={1.25} /><span /></div>
             <h2>{project?.active ? '导入音频开始标注' : '音频标注'}</h2>
-            {project?.active ? <button className="button button-accent import-button" disabled={(mediaUI?.disabled ?? true) || !!project?.active?.collaboration} onClick={mediaUI?.choose}><Upload size={17} />导入音频文件</button> : <div className="empty-actions"><button className="button button-accent" disabled={!project || project.busy} onClick={() => void project?.open('create')}>新建项目</button><button className="button" disabled={!project || project.busy} onClick={() => void project?.open('open')}>打开项目…</button></div>}
+            {project?.active ? <button className="button button-accent import-button" disabled={(mediaUI?.disabled ?? true) || project?.active?.collaboration?.canImportMedia===false} onClick={mediaUI?.choose}><Upload size={17} />导入音频文件</button> : <div className="empty-actions"><button className="button button-accent" disabled={!project || project.busy} onClick={() => void project?.open('create')}>新建项目</button><button className="button" disabled={!project || project.busy} onClick={() => void project?.open('open')}>打开项目…</button></div>}
             <div className="format-list"><span>WAV</span><span>FLAC</span><span>MP3</span></div>
           </div>
         </div>}
@@ -137,13 +140,14 @@ export function AppShell({ project, mediaUI, exchange, collaboration }: { collab
         <div className="property-section inspector-content">
           {inspectorTab === 'authors' && collaboration && <RemoteList ui={collaboration} inspect={remote.inspect} />}
           {inspectorTab === 'region' && <AnnotationInspector ui={annotations} annotation={selectedAnnotation} />}
-          {inspectorTab === 'list' && doc && <AnnotationList doc={doc} selectedId={annotations.selectedId} onLocate={result => {
+          {inspectorTab === 'list' && doc && <AnnotationList doc={doc} selectedId={annotations.selectedId} onLocate={async result => {
+            if(!await workspace.revealMedia(result.mediaId))return;
             if (result.mediaId !== selected?.id && result.mediaId !== workspace.state.compareMediaId) workspace.selectPane('primary', result.mediaId);
             if (result.scope === 'region') { annotations.select(result.annotation.id); workspace.locate(result.annotation.region); setInspectorTab('region'); }
             else { selection.state.select(null); const channelIndex = result.scope === 'channel' ? result.channelIndex : null; if (channelIndex !== null) workspace.patch(result.mediaId, { visibleChannels: [...new Set([...workspace.view(result.mediaId).visibleChannels, channelIndex])].sort((a, b) => a - b) }); selection.state.interact({ mediaId: result.mediaId, channelIndex }); setInspectorTab('notes'); }
           }} />}
           {inspectorTab === 'notes' && <NotesEditor ui={annotations} media={doc?.media.find(m => m.id === selection.context?.mediaId) ?? selected ?? null} channelIndex={selection.context?.channelIndex ?? null} />}
-          {inspectorTab === 'masks' && <EditList ui={masks} onLocate={edit => { masks.select(edit.id); if (edit.region.mediaId !== selected?.id && edit.region.mediaId !== workspace.state.compareMediaId) workspace.selectPane('primary', edit.region.mediaId); workspace.locate(edit.region); }} />}
+          {inspectorTab === 'masks' && <EditList ui={masks} onLocate={async edit => { if(!await workspace.revealMedia(edit.region.mediaId))return;masks.select(edit.id); if (edit.region.mediaId !== selected?.id && edit.region.mediaId !== workspace.state.compareMediaId) workspace.selectPane('primary', edit.region.mediaId); workspace.locate(edit.region); }} />}
           {inspectorTab === 'mix' && playback.media && <ChannelMixer media={playback.media} mix={playback.mix} disabled={project?.active?.store.editingDisabled ?? true} onChange={playback.updateMix} />}
           {inspectorTab === 'devices' && <TransportDevices ui={playback} />}
           {inspectorTab === 'categories' && <CategoryManager key={project?.active?.collaboration?.runtimeNonce ?? project?.active?.path} ui={annotations} />}

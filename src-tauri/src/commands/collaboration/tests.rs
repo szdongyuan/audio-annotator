@@ -648,3 +648,17 @@ fn local_capture_failure_stays_visible_and_guest_has_no_network_pending() {
     assert!(status.pending);
     assert_eq!(status.error.unwrap().code, ErrorCode::SaveFailed);
 }
+
+#[test]
+fn explicit_default_view_only_does_not_silently_open_a_legacy_guest_writer() {
+    let fixture = Fixture::new();
+    let state = AppState::default();
+    state.6.set_local(fixture.root.join("local-a")).unwrap();
+    assert!(tauri::async_runtime::block_on(open_mode(
+        &state,
+        fixture.root.join("shared").to_string_lossy().into(),
+        true
+    ))
+    .is_err());
+    assert!(state.0.lock().unwrap().is_none());
+}

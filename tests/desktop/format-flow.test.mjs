@@ -4,7 +4,8 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { start } from './harness.mjs';
 
-const output = await fs.mkdtemp(path.resolve('.test-output/task8-format-'));
+const parent=path.resolve(process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/default-collaboration-v040/task5/desktop-evidence/format');await fs.mkdir(parent,{recursive:true});
+const output = await fs.mkdtemp(path.join(parent,'run-'));
 const project = path.join(output, 'project'); await fs.mkdir(project);
 const json = path.join(output, 'v2.annotations.json');
 const sources = [];
@@ -14,7 +15,7 @@ for (const version of [1, 999]) {
 }
 const paths = {
   '新建项目 · 选择空文件夹': [project],
-  '打开项目 · 选择 project.json': sources.flatMap(s => [s.local, path.join(project, 'project.json')]),
+  '打开项目': sources.flatMap(s => [s.local, path.join(project, 'collaboration.json')]),
   '': [[path.resolve('tests/fixtures/audio/stereo24.wav')]],
   '分享 · 保存到本机': [json],
   '导入标注文件或完整项目包': sources.map(s => s.portable),
@@ -25,14 +26,15 @@ const hash = async file => createHash('sha256').update(await fs.readFile(file)).
 let h;
 try {
   h = await start(paths, output);
-  await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.textContent.includes('已保存')`);
+  await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);
   await h.menu('导入音频'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`); await h.clickText('关闭导入结果');
-  await h.menu('保存'); await h.until(`document.querySelector('.project-identity')?.textContent.includes('已保存')`);
-  const saved = JSON.parse(await fs.readFile(path.join(project, 'project.json'), 'utf8'));
+  await h.menu('保存'); await h.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);
+  const manifest = JSON.parse(await fs.readFile(path.join(project, 'collaboration.json'), 'utf8'));
+  const saved=(await h.snapshot(manifest.projectId)).document;
   assert.equal(saved.formatVersion, 2); assert.equal(saved.media[0].categoryId, null); assert.deepEqual(saved.media[0].channelCategoryIds, [null, null]);
   assert.equal(saved.viewState.compareLayout, 'horizontal'); assert.equal(saved.viewState.compareSplit, .5);
   report.checks.push('native save writes complete format 2');
-  await h.menu('分享项目'); await h.label('仅标注（不含音频）'); await h.clickText('选择保存位置…'); await h.until(`document.querySelector('.exchange-result')`); await h.clickText('关闭');
+  await h.menu('导出我的标注 / 项目包'); await h.label('我的标注（不含音频）'); await h.clickText('选择保存位置…'); await h.until(`document.querySelector('.exchange-result')`); await h.clickText('关闭');
   const portable = JSON.parse(await fs.readFile(json, 'utf8')); assert.equal(portable.formatVersion, 2);
   for (const source of sources) {
     await fs.writeFile(source.local, JSON.stringify({ ...saved, formatVersion: source.version }));

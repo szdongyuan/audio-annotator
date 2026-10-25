@@ -1,3 +1,4 @@
+import { annotationDisabled } from '../collaboration/capabilities';
 import { useState, useSyncExternalStore } from 'react';
 import type { Change, MediaDescriptor } from '../../bridge/types';
 import { ClassificationControl } from './ClassificationControl';
@@ -7,7 +8,7 @@ export function NoteField({ ui, draftKey, label, note, change }: { ui: Annotatio
   useSyncExternalStore(active.lifecycle.subscribe, active.lifecycle.getVersion);
   const [mergeKey, setMergeKey] = useState(() => crypto.randomUUID());
   const draft = ui.drafts!.read(draftKey), value = draft && 'note' in draft ? draft.note : note;
-  return <label className="note-field">{label}<textarea aria-label={label} value={value} rows={3} disabled={active.store.editingDisabled}
+  return <label className="note-field">{label}<textarea aria-label={label} value={value} rows={3} disabled={annotationDisabled(active)}
     onFocus={() => setMergeKey(crypto.randomUUID())} onChange={e => ui.drafts!.write(draftKey, change(e.target.value, mergeKey))}
     onBlur={() => { void ui.drafts!.submit(draftKey).catch(() => {}); }} placeholder="记录观察与想法…" /></label>;
 }

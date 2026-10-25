@@ -65,7 +65,7 @@ dependencies = [
 
 [[package]]
 name = "annotator-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "argon2",
  "chrono",
@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "annotator-desktop"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "annotator-core",
  "serde",

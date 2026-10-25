@@ -1,0 +1,35 @@
+
+ RUN  v4.1.12 D:/Work/annotator/.worktrees/default-collaboration-v040
+
+ ❯ src/features/media/folderImport.test.tsx (29 tests | 2 failed | 27 skipped) 308ms
+   × keeps prior folder results hidden after a later zero-candidates, without hiding a genuine direct import 157ms
+   × keeps prior folder results hidden after a later cancel-scan, without hiding a genuine direct import 149ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/features/media/folderImport.test.tsx > keeps prior folder results hidden after a later zero-candidates, without hiding a genuine direct import
+ FAIL  src/features/media/folderImport.test.tsx > keeps prior folder results hidden after a later cancel-scan, without hiding a genuine direct import
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/features/media/folderImport.test.tsx:185:41
+    183|   expect(s.imports.pendingAcknowledgements).toHaveLength(1);
+    184|   await s.controller.choose(async()=>'D:/next');
+    185|   expect(s.controller.ownsCurrentBatch).toBe(true);
+       |                                         ^
+    186|   if(outcome==='zero-candidates'){
+    187|     s.result({checked:1,candidates:0,existing:1});await waitFor(()=>ex…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 27 skipped (29)
+   Start at  23:51:59
+   Duration  1.46s (transform 241ms, setup 193ms, import 270ms, tests 308ms, environment 519ms)
+

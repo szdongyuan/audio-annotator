@@ -33,10 +33,10 @@ export async function spectralFlow(h, context) {
   assert.match(await h.evaluate('return document.querySelector(".playback-counters").textContent'), /欠载 0/);
   await h.label('停止');
   await h.clickText('保存');
-  await h.until(`document.querySelector('.project-identity')?.innerText.includes('已保存')`);
+  await h.until(`document.querySelector('.project-identity')?.innerText.match(/已保存|已存本机/)`);
   context.saved = (await h.snapshot(context.id)).document;
-  assert.equal(context.saved.media[0].note, '文件独立备注');
-  assert.equal(context.saved.media[0].channelNotes[1], '通道独立备注');
+  assert.equal(context.saved.media.find(m=>m.id===context.primary.id).note, '文件独立备注');
+  assert.equal(context.saved.media.find(m=>m.id===context.primary.id).channelNotes[1], '通道独立备注');
   assert.equal(context.saved.annotations[0].note, '区域独立备注');
   assert.equal(context.saved.categories.length, 1);
   await h.menu('关闭项目'); await h.until(`document.querySelector('.project-identity').textContent.includes('音频标注')`);

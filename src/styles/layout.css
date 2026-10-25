@@ -225,3 +225,8 @@
 
 .file-pane { position: relative; }
 .file-pane .analysis-popover { right: 8px; top: 56px; width: min(340px, calc(100% - 16px)); max-height: calc(100% - 64px); }
+/* Keep recovery controls visible while detailed file results scroll. */
+.direct-import-progress { display: flex; flex-direction: column; overflow: hidden; }
+.direct-import-progress > div { flex-shrink: 0; }
+.direct-import-progress > .import-progress-details { display: block; min-height: 0; overflow: auto; flex: 1 1 auto; }
+.direct-import-progress > .import-recovery-actions { gap: 8px; }

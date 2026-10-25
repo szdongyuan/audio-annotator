@@ -13,11 +13,34 @@ pub struct ProjectSnapshot {
     pub can_redo: bool,
 }
 
+#[derive(Clone)]
 pub struct ProjectSession {
     document: ProjectDocument,
     history: History,
 }
 impl ProjectSession {
+    pub(super) fn adopt_catalog(
+        &mut self,
+        manifest: &crate::collaboration::CollaborationManifest,
+    ) -> Result<()> {
+        for document in std::iter::once(&mut self.document)
+            .chain(&mut self.history.undo)
+            .chain(&mut self.history.redo)
+        {
+            crate::collaboration::catalog_workspace::extend_document(document, manifest)?;
+        }
+        if self.document.revision >= validation::MAX_SAFE_INTEGER {
+            return Err(AppError::new(
+                ErrorCode::ResourceLimit,
+                "Revision limit reached",
+            ));
+        }
+        // Catalog growth is not a content edit. Keep timestamps equal to the saved
+        // projection when there was no live draft before adoption.
+        self.document.revision += 1;
+        self.history.break_merge();
+        Ok(())
+    }
     pub(super) fn replace_content(
         &mut self,
         mut document: ProjectDocument,

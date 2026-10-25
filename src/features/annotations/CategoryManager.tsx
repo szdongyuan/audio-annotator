@@ -1,3 +1,4 @@
+import { annotationDisabled } from '../collaboration/capabilities';
 import { useState } from 'react';
 import type { Category } from '../../bridge/types';
 import type { AnnotationUI } from './useAnnotations';
@@ -5,7 +6,7 @@ import { categoryReferences } from './classification';
 export function CategoryManager({ ui }: { ui: AnnotationUI }) {
   const [editing, setEditing] = useState<Category | null>(null), [name, setName] = useState(''), [color, setColor] = useState('#e6a65d'), [pendingDelete, setPendingDelete] = useState<Category | null>(null);
   if (!ui.active) return null;
-  const doc = ui.active.store.snapshot.document, disabled = ui.active.store.editingDisabled;
+  const doc = ui.active.store.snapshot.document, disabled = annotationDisabled(ui.active);
   const duplicate = doc.categories.some(c => c.id !== editing?.id && c.name.trim() === name.trim());
   const count = categoryReferences(doc, pendingDelete?.id ?? '');
   return <div className="category-manager"><div className="category-rows">{doc.categories.map(c => <div key={c.id} className="category-row"><i style={{ background: c.color }} /><span>{c.name}</span><button aria-label={`编辑类别 ${c.name}`} disabled={disabled} onClick={() => { setEditing(c); setName(c.name); setColor(c.color); }}>编辑</button><button aria-label={`删除类别 ${c.name}`} disabled={disabled} onClick={() => setPendingDelete(c)}>删除</button></div>)}</div>

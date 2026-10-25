@@ -17,9 +17,12 @@ use std::{
 };
 
 pub struct CollaborationRepository {
-    root: PathBuf,
-    manifest: CollaborationManifest,
-    manifest_hash: String,
+    pub(super) root: PathBuf,
+    pub(super) manifest: CollaborationManifest,
+    pub(super) manifest_hash: String,
+    pub(super) catalog_revision: Option<CatalogRevision>,
+    // Exact bounded record hashes from this verified snapshot; never an authority cache.
+    pub(super) catalog_record_hashes: Vec<(String, String)>,
 }
 /// Native-only capability: no Deserialize, public constructor, Clone, or caller-selected author path.
 pub struct AuthorSession {
@@ -56,10 +59,18 @@ impl ReadBudget {
 }
 impl CollaborationRepository {
     pub fn open(root: &Path) -> Result<Self> {
+        Self::open_catalog_interleaved(root, |_| Ok(()))
+    }
+    /// Same reader with a deterministic boundary after directory entry enumeration.
+    pub fn open_catalog_interleaved(
+        root: &Path,
+        mut after_entry: impl FnMut(&Path) -> Result<()>,
+    ) -> Result<Self> {
         atomic::safe_existing(root)?;
         let root = root.canonicalize().map_err(atomic::io)?;
         let bytes = atomic::read(&root.join("collaboration.json"), MAX_LAYER_BYTES)?;
-        let manifest = parse_manifest(&bytes)?;
+        let loaded = super::catalog::load(&root, &bytes, &mut after_entry)?;
+        let manifest = loaded.manifest;
         for name in ["accounts", "annotations", "media"] {
             let path = root.join(name);
             atomic::safe_existing(&path)?;
@@ -76,6 +87,8 @@ impl CollaborationRepository {
             root,
             manifest,
             manifest_hash: hash(&bytes),
+            catalog_revision: loaded.revision,
+            catalog_record_hashes: loaded.record_hashes,
         };
         repo.accounts()?;
         Ok(repo)
@@ -86,7 +99,7 @@ impl CollaborationRepository {
     pub fn manifest(&self) -> &CollaborationManifest {
         &self.manifest
     }
-    fn authority(&self) -> Result<()> {
+    pub(super) fn authority(&self) -> Result<()> {
         let bytes = atomic::read(&self.root.join("collaboration.json"), MAX_LAYER_BYTES)?;
         require(
             hash(&bytes) == self.manifest_hash,
@@ -117,7 +130,9 @@ impl CollaborationRepository {
             let name = name
                 .to_str()
                 .ok_or_else(|| AppError::invalid("Invalid account filename"))?;
-            if name == ".registration.lock" || (name.starts_with('.') && name.ends_with(".tmp")) {
+            if matches!(name, ".registration.lock" | ".local-registration.lock")
+                || (name.starts_with('.') && name.ends_with(".tmp"))
+            {
                 continue;
             }
             require(
@@ -140,6 +155,18 @@ impl CollaborationRepository {
         Ok(accounts)
     }
     pub fn register(&self, login: &str, display: &str, password: &str) -> Result<AuthorIdentity> {
+        require(
+            !accounts::normalized_login(login)?.starts_with(super::local_identity::LOCAL_PREFIX),
+            "Reserved local identity account name",
+        )?;
+        self.register_internal(login, display, password)
+    }
+    fn register_internal(
+        &self,
+        login: &str,
+        display: &str,
+        password: &str,
+    ) -> Result<AuthorIdentity> {
         self.authority()?;
         let login = accounts::normalized_login(login)?;
         // Short, account-registration-only lock bounds simultaneous additions; never used for author publication.
@@ -186,11 +213,33 @@ impl CollaborationRepository {
         self.session_authority(&session)?;
         Ok(session)
     }
+    /// Registers only after the local credential capability has been durably persisted.
+    pub fn login_local(&self, identity: &LocalIdentity) -> Result<AuthorSession> {
+        self.authority()?;
+        let path = self
+            .root
+            .join("accounts")
+            .join(accounts::filename(identity.login_name()));
+        if !path.try_exists().map_err(atomic::io)? {
+            // Serialize local auto-registration, including the check, across processes.
+            let _lock = super::local_identity::short_lock(
+                &self.root.join("accounts/.local-registration.lock"),
+            )?;
+            if !path.try_exists().map_err(atomic::io)? {
+                self.register_internal(
+                    identity.login_name(),
+                    identity.display_name(),
+                    &identity.secret,
+                )?;
+            }
+        }
+        self.login(identity.login_name(), &identity.secret)
+    }
     fn author_dir(&self, author: &str) -> Result<PathBuf> {
         uuid(author)?;
         Ok(self.root.join("annotations").join(author))
     }
-    fn session_authority(&self, session: &AuthorSession) -> Result<()> {
+    pub(super) fn session_authority(&self, session: &AuthorSession) -> Result<()> {
         require(
             session.root == self.root && session.project_id == self.manifest.project_id,
             "Authenticated capability belongs to another project",
@@ -390,6 +439,30 @@ impl CollaborationRepository {
         Ok(())
     }
     pub fn snapshot(&self) -> Result<CollaborationSnapshot> {
+        if self.manifest.format_version == 2 {
+            let mut result = self.snapshot_with_catalog()?;
+            // Legacy snapshot consumers retain their last verified layer on this explicit
+            // deferred condition; catalog-aware callers receive the complete staged payload.
+            for layer in result.deferred_authors {
+                if let Some(author) = result
+                    .snapshot
+                    .authors
+                    .iter_mut()
+                    .find(|a| a.identity.author_id == layer.author_id)
+                {
+                    let mut error = AppError::new(
+                        ErrorCode::RevisionConflict,
+                        "New shared media is available; update the catalog to view this author layer",
+                    );
+                    error.details = Some(serde_json::json!({"catalogUpdateRequired":true}));
+                    author.error = Some(error);
+                }
+            }
+            return Ok(result.snapshot);
+        }
+        self.snapshot_loaded()
+    }
+    pub(super) fn snapshot_loaded(&self) -> Result<CollaborationSnapshot> {
         self.authority()?;
         let accounts = self.accounts()?;
         let mut authors = Vec::new();

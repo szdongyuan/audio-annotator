@@ -5,7 +5,7 @@ import fixture from '../../tests/fixtures/document-v2.json';
 const id='11111111-1111-4111-8111-111111111111';
 const actor={authorId:id,normalizedLogin:'alice',displayName:'Alice',createdAt:'2026-10-23T00:00:00Z'};
 const preferences={volume:.75,deviceId:null,loopEnabled:false,source:'processed'};
-export const statusFixture=()=>({formatVersion:1,runtimeNonce:id,projectId:id,shared:true,actor,preferences,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:null,error:null,snapshot:{projectId:id,authors:[]}});
+export const statusFixture=()=>({formatVersion:1,runtimeNonce:id,projectId:id,shared:true,projectFlavor:'legacyShared' as const,identityMode:'account' as const,canWriteAnnotations:true,canImportMedia:false,hiddenMediaIds:[],catalogPending:false,actor,preferences,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:null,error:null,snapshot:{projectId:id,authors:[]}});
 function documentStatus(document:ProjectDocument){
  const payload={categories:document.categories,annotations:document.annotations,mediaLabels:document.media.map(m=>({mediaId:m.id,note:m.note,channelNotes:m.channelNotes,categoryId:m.categoryId,channelCategoryIds:m.channelCategoryIds}))};
  const layer={kind:'audio-annotator-author-layer',formatVersion:1,projectId:document.projectId,authorId:id,revision:1,parent:null,hash:'a'.repeat(64),payload};
@@ -18,7 +18,7 @@ describe('collaboration boundary',()=>{
   parseProjectDocument(document);
   const status=documentStatus(document),layer=status.snapshot.authors[0].layer;
   expect(new TextEncoder().encode(JSON.stringify(layer)).length).toBeLessThan(16*1024*1024);
-  const wire=JSON.parse(JSON.stringify({opened:{snapshot:{document,canUndo:false,canRedo:false},path:'shared',persistedRevision:document.revision,recovery:null,collaboration:{runtimeNonce:id,actor,preferences}},status}));
+  const wire=JSON.parse(JSON.stringify({opened:{snapshot:{document,canUndo:false,canRedo:false},path:'shared',persistedRevision:document.revision,recovery:null,collaboration:{runtimeNonce:id,projectFlavor:'legacyShared' as const,identityMode:'account' as const,canWriteAnnotations:true,canImportMedia:false,hiddenMediaIds:[],catalogPending:false,actor,preferences}},status}));
   expect(parseCollaborationStatus(wire.status,document).snapshot?.authors[0].layer?.payload).toEqual(layer.payload);
   expect(parseTransition(wire).opened.snapshot?.document).toEqual(document);
  });
@@ -43,7 +43,7 @@ describe('collaboration boundary',()=>{
  });
  it('accepts native shared context and status without changing project documents',()=>{
   expect(parseCollaborationStatus(statusFixture()).actor?.displayName).toBe('Alice');
-  expect(parseSharedContext({runtimeNonce:id,actor,preferences}).runtimeNonce).toBe(id);
+  expect(parseSharedContext({runtimeNonce:id,projectFlavor:'legacyShared' as const,identityMode:'account' as const,canWriteAnnotations:true,canImportMedia:false,hiddenMediaIds:[],catalogPending:false,actor,preferences}).runtimeNonce).toBe(id);
  });
  it('rejects versions, unknown fields, credentials and unbounded collections',()=>{
   for(const patch of [{formatVersion:2},{password:'secret'},{actor:{...actor,passwordHash:'hash'}},{preferences:{...preferences,volume:2}},{snapshot:{projectId:id,authors:Array(129).fill({identity:actor,layer:null,error:null})}}])expect(()=>parseCollaborationStatus({...statusFixture(),...patch})).toThrow();

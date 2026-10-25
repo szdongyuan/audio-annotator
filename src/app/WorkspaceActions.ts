@@ -1,3 +1,4 @@
+import { annotationDisabled } from '../features/collaboration/capabilities';
 import { collaborationMenu } from '../features/collaboration/CollaborationMenu';
 import type { CollaborationUI } from '../features/collaboration/useCollaboration';
 import { classificationMenu } from '../features/annotations/classification';
@@ -33,10 +34,10 @@ export function workspaceMenus({collaboration,project,mediaUI,exchange,annotatio
    {id:'undo',label:'撤销',disabled:disabled||!owner?.store.snapshot.canUndo,action:()=>annotations.history('undo')},
    {id:'redo',label:'重做',disabled:disabled||!owner?.store.snapshot.canRedo,action:()=>annotations.history('redo')},
    {id:'clear',label:'清除当前选区',disabled:regionDisabled,action:guard(selection.cancel)},
-   ...(target?.object?[{id:'remove',label:target.object.kind==='annotation'?'删除标注':'删除屏蔽',disabled:regionDisabled,action:()=>{void selection.actions?.remove(target);}}]:[])]},
+   ...(target?.object?[{id:'remove',label:target.object.kind==='annotation'?'删除标注':'删除屏蔽',disabled:regionDisabled||target.object.kind==='annotation'&&annotationDisabled(owner),action:()=>{void selection.actions?.remove(target);}}]:[])]},
   {id:'view',label:'视图',items:[
    {id:'single',label:'单文件',checked:!workspace.state.compareMediaId,disabled:disabled||!media,action:()=>workspace.compare(null)},
-   {id:'compare',label:'双文件对比',disabled:disabled||(doc?.media.length??0)<2,children:doc?.media.map(m=>({id:m.id,label:m.displayName,checked:workspace.state.compareMediaId===m.id,action:()=>workspace.compare(m.id)}))},
+   {id:'compare',label:'双文件对比',disabled:disabled||(workspace.visibleMedia??doc?.media??[]).length<2,children:(workspace.visibleMedia??doc?.media)?.map(m=>({id:m.id,label:m.displayName,checked:workspace.state.compareMediaId===m.id,action:()=>workspace.compare(m.id)}))},
    ...(['horizontal','vertical'] as const).map(layout=>({id:layout,label:layout==='horizontal'?'左右对比':'上下对比',checked:workspace.state.compareLayout===layout,disabled:disabled||!workspace.state.compareMediaId,action:()=>workspace.layout(layout)})),
    {id:'linked',label:'联动时间轴',checked:workspace.state.linkedTime,disabled:disabled||!workspace.state.compareMediaId,action:()=>workspace.link(!workspace.state.linkedTime)},
    {id:'files',label:'音频列表',checked:mediaOpen,action:toggleMedia}, {id:'properties',label:'属性面板',checked:propertiesOpen,action:toggleProperties},
@@ -46,9 +47,9 @@ export function workspaceMenus({collaboration,project,mediaUI,exchange,annotatio
    {id:'kind',label:'频谱类型',disabled:disabled||!media,children:([{id:'stft',label:'STFT 频谱'},{id:'mel',label:'梅尔频谱'}] as const).map(k=>({...k,checked:view?.spectrumKind===k.id,action:()=>patch({spectrumKind:k.id})}))},
    {id:'settings',label:'分析 / 显示设置…',disabled:disabled||!media,action:()=>{if(media)settings(media.id);}}]},
   {id:'annotation',label:'标注',items:[
-   {id:'category',label:'标注类型',disabled:regionDisabled,children:[{id:'none',label:'未分类',action:()=>{if(target)void selection.actions?.classify(target,null);}},...(doc?.categories??[]).map(c=>({id:c.id,label:c.name,action:()=>{if(target)void selection.actions?.classify(target,c.id);}}))]},
-   {id:'note',label:'备注',disabled:regionDisabled,action:()=>{if(target)void selection.actions?.note(target,focusNote);}},
-   ...(doc ? [classificationMenu(doc, media ? { mediaId: media.id, channelIndex: null } : null, annotations.classify, '当前文件分类', disabled), classificationMenu(doc, media && view && (selection.context?.channelIndex ?? view.visibleChannels[0]) !== undefined ? { mediaId: media.id, channelIndex: selection.context?.channelIndex ?? view.visibleChannels[0] } : null, annotations.classify, '当前通道分类', disabled)] : []),
+   {id:'category',label:'标注类型',disabled:regionDisabled||annotationDisabled(owner),children:[{id:'none',label:'未分类',action:()=>{if(target)void selection.actions?.classify(target,null);}},...(doc?.categories??[]).map(c=>({id:c.id,label:c.name,action:()=>{if(target)void selection.actions?.classify(target,c.id);}}))]},
+   {id:'note',label:'备注',disabled:regionDisabled||annotationDisabled(owner),action:()=>{if(target)void selection.actions?.note(target,focusNote);}},
+   ...(doc ? [classificationMenu(doc, media ? { mediaId: media.id, channelIndex: null } : null, annotations.classify, '当前文件分类', annotationDisabled(owner)), classificationMenu(doc, media && view && (selection.context?.channelIndex ?? view.visibleChannels[0]) !== undefined ? { mediaId: media.id, channelIndex: selection.context?.channelIndex ?? view.visibleChannels[0] } : null, annotations.classify, '当前通道分类', annotationDisabled(owner))] : []),
    {id:'categories',label:'类别管理',disabled,action:()=>inspector('categories')}, {id:'list',label:'标注列表',disabled,action:()=>inspector('list')}]},
   {id:'audio',label:'音频',items:[
    {id:'toggle',label:playback.playing?'暂停':'播放',disabled:disabled||!playback.media,action:guard(playback.toggle)},

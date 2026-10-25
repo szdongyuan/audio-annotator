@@ -1,3 +1,4 @@
+import { annotationDisabled } from '../collaboration/capabilities';
 import type { Change } from '../../bridge/types';
 import { normalizeError } from '../../bridge/client';
 import type { ActiveProject } from '../project/useProjectLifecycle';
@@ -11,6 +12,7 @@ export class AnnotationDrafts {
     const value = this.active.store.drafts.get(key); return value ? JSON.parse(value) as Change : undefined;
   }
   write(key: string, change: Change) {
+    if(annotationDisabled(this.active))return;
     if (!this.registrations.has(key)) this.registrations.set(key, this.active.lifecycle.registerDraft(key, () => this.submit(key)));
     this.active.store.setDraft(key, JSON.stringify(change));
   }

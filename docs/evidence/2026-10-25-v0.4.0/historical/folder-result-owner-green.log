@@ -1,0 +1,9 @@
+
+ RUN  v4.1.12 D:/Work/annotator/.worktrees/default-collaboration-v040
+
+
+ Test Files  2 passed (2)
+      Tests  46 passed (46)
+   Start at  23:52:16
+   Duration  6.02s (transform 437ms, setup 401ms, import 593ms, tests 5.01s, environment 1.07s)
+

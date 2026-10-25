@@ -1,0 +1,22 @@
+   Compiling annotator-core v0.4.0 (D:\Work\annotator\.worktrees\default-collaboration-v040\crates\annotator-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.09s
+     Running tests\collaboration_catalog.rs (target\debug\deps\collaboration_catalog-bf8ba1b803179f4f.exe)
+
+running 1 test
+owned SMB fixture="N:\\AudioAnnotator-verification-408919e9-d667-48c1-a8d6-cd642e27b17d\\stamp-regression-a2687d78-18ad-49ed-937a-e61f90ff1f4e"; before=SourceStamp { bytes: 9644, modified: SystemTime { intervals: 134374179123164951 } }; after=SourceStamp { bytes: 9644, modified: SystemTime { intervals: 134374179124367203 } }
+
+thread 'real_smb_published_stamp_survives_prepared_capability_release' (38040) panicked at crates\annotator-core\tests\collaboration_catalog.rs:886:5:
+assertion `left == right` failed: releasing the identity capability must not change a published source stamp
+  left: SourceStamp { bytes: 9644, modified: SystemTime { intervals: 134374179123164951 } }
+ right: SourceStamp { bytes: 9644, modified: SystemTime { intervals: 134374179124367203 } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test real_smb_published_stamp_survives_prepared_capability_release ... FAILED
+
+failures:
+
+failures:
+    real_smb_published_stamp_survives_prepared_capability_release
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 23 filtered out; finished in 1.14s
+
+error: test failed, to rerun pass `-p annotator-core --test collaboration_catalog`

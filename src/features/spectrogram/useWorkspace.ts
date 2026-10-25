@@ -5,31 +5,40 @@ import { clampSplit } from './CompareSplitter';
 import { changeView, defaultView, toggleLinked } from './workspace';
 const blank = (): ViewState => ({ media: {}, activeMediaId: null, compareMediaId: null, linkedTime: false, compareLayout: 'horizontal', compareSplit: .5 });
 const noop = () => () => {};
-function reconcile(value: ViewState, media: MediaDescriptor[]): ViewState {
-  const ids = new Set(media.map(m => m.id));
-  const activeMediaId = value.activeMediaId && ids.has(value.activeMediaId) ? value.activeMediaId : media[0]?.id ?? null;
-  const compareMediaId = value.compareMediaId && ids.has(value.compareMediaId) && value.compareMediaId !== activeMediaId ? value.compareMediaId : null;
+function reconcile(value: ViewState, media: MediaDescriptor[],hidden:readonly string[]=[]): ViewState {
+  const ids = new Set(media.map(m => m.id)),visible=media.filter(m=>!hidden.includes(m.id)),visibleIds=new Set(visible.map(m=>m.id));
+  const activeMediaId = value.activeMediaId && visibleIds.has(value.activeMediaId) ? value.activeMediaId : visible[0]?.id ?? null;
+  const compareMediaId = value.compareMediaId && visibleIds.has(value.compareMediaId) && value.compareMediaId !== activeMediaId ? value.compareMediaId : null;
   return { ...value, media: Object.fromEntries(Object.entries(value.media).filter(([id]) => ids.has(id))), activeMediaId, compareMediaId, linkedTime: !!compareMediaId && value.linkedTime };
 }
 /** View drafts share the project's close/save flush and serialized mutation queue. */
 export type PanePosition = 'primary' | 'compare';
-export function useWorkspace(active: ActiveProject | null) {
+export function useWorkspace(active: ActiveProject | null,hidden:readonly string[]=[],reveal?:(id:string)=>Promise<void>) {
+  const hiddenKey=hidden.join('|'),hiddenRef=useRef(hidden),seenHidden=useRef(hiddenKey);if(seenHidden.current!==hiddenKey){seenHidden.current=hiddenKey;hiddenRef.current=hidden;}
   const snapshot = useSyncExternalStore(active?.store.subscribe ?? noop, () => active?.store.snapshot);
   const [state, setState] = useState<ViewState>(() => active?.store.snapshot.document.viewState ?? blank());
   const current = useRef(state), timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const binding = useRef<ActiveProject | null>(active);
+  const reconciledSource = useRef<{ owner: ActiveProject; value: string } | null>(null);
+  const resolveView = (value: ViewState, media: MediaDescriptor[]) => {
+    // A null saved primary is an unresolved default, not a request to switch on
+    // every catalog append. Retain its resolved pane only for unchanged authority.
+    const sameSource = reconciledSource.current?.owner === active && reconciledSource.current.value === JSON.stringify(value);
+    return reconcile(sameSource && value.activeMediaId === null ? { ...value, activeMediaId: current.current.activeMediaId } : value, media, hiddenRef.current);
+  };
   const [duplicatePane, setDuplicatePane] = useState<PanePosition | null>(null);
   const duplicateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const draftKey = 'spectrogram-view';
   const submit = async () => {
     if (!active || !active.store.drafts.has(draftKey)) return;
     clearTimeout(timer.current);
-    const value = reconcile(JSON.parse(active.store.drafts.get(draftKey)!) as ViewState, active.store.snapshot.document.media);
+    const value = reconcile(JSON.parse(active.store.drafts.get(draftKey)!) as ViewState, active.store.snapshot.document.media,hiddenRef.current);
     active.store.setDraft(draftKey, JSON.stringify(value));
     await active.queue.enqueue({ type: 'updateViewState', viewState: value }, { draftKey });
   };
   useEffect(() => {
-    binding.current = active;
+    binding.current = active;hiddenRef.current=hidden;
+    reconciledSource.current = null;
     setDuplicatePane(null);
     current.current = active?.store.snapshot.document.viewState ?? blank(); setState(current.current);
     const unregister = active?.lifecycle.registerDraft(draftKey, submit);
@@ -40,10 +49,12 @@ export function useWorkspace(active: ActiveProject | null) {
   useEffect(() => {
     if (!active || !snapshot) return;
     const pending = active.store.drafts.get(draftKey);
-    const next = reconcile(pending ? JSON.parse(pending) as ViewState : snapshot.document.viewState, snapshot.document.media);
+    const source = pending ? JSON.parse(pending) as ViewState : snapshot.document.viewState;
+    const next = resolveView(source, snapshot.document.media);
+    reconciledSource.current = { owner: active, value: JSON.stringify(source) };
     current.current = next; setState(next);
     if (pending && JSON.stringify(next) !== pending && !active.store.editingDisabled) active.store.setDraft(draftKey, JSON.stringify(next));
-  }, [active, snapshot]);
+  }, [active, snapshot,hiddenKey]);
   const update = (next: ViewState) => {
     if (!active || binding.current !== active || active.store.editingDisabled) return;
     current.current = next; setState(next);
@@ -53,10 +64,10 @@ export function useWorkspace(active: ActiveProject | null) {
   const selectPane = (pane: PanePosition, id: string | null) => {
     if (!active || binding.current !== active || active.store.editingDisabled) return false;
     const media = active.store.snapshot.document.media;
-    if (id === null && pane === 'primary' || id !== null && !media.some(m => m.id === id)) return false;
+    if (id === null && pane === 'primary' || id !== null && (!media.some(m => m.id === id)||hiddenRef.current.includes(id))) return false;
     // Menu callbacks may outlive a render or run before snapshot effects settle.
     const pending = active.store.drafts.get(draftKey);
-    const latest = reconcile(pending ? JSON.parse(pending) as ViewState : active.store.snapshot.document.viewState, media);
+    const latest = resolveView(pending ? JSON.parse(pending) as ViewState : active.store.snapshot.document.viewState, media);
     const other: PanePosition = pane === 'primary' ? 'compare' : 'primary';
     if (id && id === (other === 'primary' ? latest.activeMediaId : latest.compareMediaId)) {
       clearTimeout(duplicateTimer.current); setDuplicatePane(other);
@@ -64,7 +75,7 @@ export function useWorkspace(active: ActiveProject | null) {
       return false;
     }
     const key = pane === 'primary' ? 'activeMediaId' : 'compareMediaId';
-    if (latest[key] === id) return true;
+    if (latest[key] === id){current.current=latest;setState(latest);return true;}
     let next = { ...latest, [key]: id };
     if (!next.compareMediaId) next = toggleLinked(next, media, false);
     else if (next.linkedTime) next = toggleLinked(next, media, true);
@@ -73,7 +84,8 @@ export function useWorkspace(active: ActiveProject | null) {
   const media = active?.store.snapshot.document.media ?? [];
   const view = (id: string) => state.media[id] ?? defaultView(media.find(m => m.id === id)!);
   return {
-    state, view, selectPane, duplicatePane,
+    state, view, selectPane, duplicatePane,visibleMedia:media.filter(m=>!hiddenRef.current.includes(m.id)),
+    revealMedia:async(id:string)=>{if(!active||binding.current!==active)return false;if(hiddenRef.current.includes(id)){if(!reveal)return false;try{await reveal(id);}catch{return false;}if(binding.current!==active)return false;hiddenRef.current=hiddenRef.current.filter(hidden=>hidden!==id);}return true;},
     layout: (compareLayout: ViewState['compareLayout']) => update({ ...current.current, compareLayout }),
     split: (compareSplit: number) => update({ ...current.current, compareSplit: clampSplit(compareSplit) }),
     locate: (region: Region) => {

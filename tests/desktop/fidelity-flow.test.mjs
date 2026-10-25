@@ -14,13 +14,13 @@ const audio=path.join(output,'multitone-chirp-pulse.wav'),second=path.join(outpu
 const project=await fs.mkdtemp(path.join(output,'project-'));const report={baseline,fixture:'Synthetic 48kHz, 4s, six channels; unchanged default analysis/palette/gain. Not user audio.',checks:[]};let h;
 try{
  h=await start({'新建项目 · 选择空文件夹':[project],'':[[audio,second]]},output,undefined,{exactOuter:true});
- await h.menu('新建项目');await h.until(`document.querySelector('.project-identity')?.textContent.includes('已保存')`);
- await h.clickText('导入音频');await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);await h.clickText('关闭导入结果');await h.until(`document.querySelectorAll('canvas').length===2&&!document.querySelector('.tile-status')`);
+ await h.menu('新建项目');await h.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);
+ await h.clickText('导入音频');await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);await h.clickText('关闭导入结果');await h.selectMedia('multitone-chirp-pulse.wav');await h.until(`document.querySelectorAll('canvas').length===2&&!document.querySelector('.tile-status')`);
  for(const [width,height] of [[1280,800],[1920,1080]]){h.nativeRect({width,height});await wait(500);await h.until(`!document.querySelector('.tile-status')`);const metrics=await h.evaluate(`return [...document.querySelectorAll('canvas')].map(c=>{const r=c.getBoundingClientRect();return {css:[r.width,r.height],backing:[c.width,c.height],dpr:devicePixelRatio}})`);report.checks.push({outer:h.nativeRect(),metrics});await h.screenshot(`outer${width}x${height}`);}
 
  if(!baseline){
-  const projectId=JSON.parse(await fs.readFile(path.join(project,'project.json'),'utf8')).projectId;
-  const document=(await h.snapshot(projectId)).document,media=document.media[0],settings=document.analysis[media.id];
+  const projectId=JSON.parse(await fs.readFile(path.join(project,'collaboration.json'),'utf8')).projectId;
+  const document=(await h.snapshot(projectId)).document,media=document.media.find(m=>m.displayName==='multitone-chirp-pulse.wav'),settings=document.analysis[media.id];
   const view={startSeconds:0,endSeconds:4,lowHz:0,highHz:24000,frequencyMix:.65,spectrumKind:'stft',palette:'ember',gainDb:0,dynamicRangeDb:100};
   report.analysis=settings;
   const targets=await(await fetch('http://127.0.0.1:9235/json/list')).json(),page=targets.find(t=>t.type==='page');const ws=new WebSocket(page.webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));let sequence=0;
@@ -41,12 +41,12 @@ try{
   const dimensions=expanded.plots[0].backing,c=coordinates(view,24000,...dimensions);
   const points=[];for(const t of [.25,1.99,256*512/48000-.003,256*512/48000+.003,3.99])for(const hz of [250,1000,1125,8000]){const x=Math.floor(c.secondsToX(t)),y=Math.floor(c.hzToY(hz));points.push({x,y,seconds:c.xToSeconds(x+.5),hz:c.yToHz(y+.5)});}
   const reference=await h.driver.executeAsyncScript(`const [projectId,mediaId,settings,points,done]=arguments;
-   (async()=>{const api=window.__TAURI_INTERNALS__,viewId=await api.invoke('register_analysis_view',{projectId}),callback=api.transformCallback(()=>{});try{
+   (async()=>{const api=window.__TAURI_INTERNALS__,runtimeNonce=(await api.invoke('collaboration_status')).runtimeNonce,viewId=await api.invoke('register_analysis_view',{projectId,runtimeNonce}),callback=api.transformCallback(()=>{});try{
     const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(['analysis-v1',settings.window,settings.windowSize,settings.hopSize,settings.fftSize,settings.melBands].join('|')))),x=>x.toString(16).padStart(2,'0')).join('');
-    const tiles=[];for(const startFrame of [0,256]){const request={requestId:crypto.randomUUID(),viewId,projectId,mediaId,generation:1,analysisSource:'original',processingVersion:1,editSignature:'',configHash:hash,settings,channelIndex:0,kind:'stft',startFrame,frameCount:Math.min(256,375-startFrame),timeLod:0,frequencyStart:0,frequencyCount:1025,frequencyLod:0,visible:true};const buffer=await api.invoke('request_tile',{request,onEvent:'__CHANNEL__:'+callback});const length=new DataView(buffer).getUint32(4,true),offset=Math.ceil((8+length)/4)*4;tiles.push(new Float32Array(buffer,offset));}
+    const tiles=[];for(const startFrame of [0,256]){const request={requestId:crypto.randomUUID(),viewId,projectId,mediaId,generation:1,analysisSource:'original',processingVersion:1,editSignature:'',configHash:hash,settings,channelIndex:0,kind:'stft',startFrame,frameCount:Math.min(256,375-startFrame),timeLod:0,frequencyStart:0,frequencyCount:1025,frequencyLod:0,visible:true};const buffer=await api.invoke('request_tile',{runtimeNonce,request,onEvent:'__CHANNEL__:'+callback});const length=new DataView(buffer).getUint32(4,true),offset=Math.ceil((8+length)/4)*4;tiles.push(new Float32Array(buffer,offset));}
     const value=(frame,bin)=>10**(tiles[frame<256?0:1][(frame%256)*1025+bin]/10),canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');
     return points.map(p=>{const f=p.seconds*48000/settings.hopSize,b=p.hz*settings.fftSize/48000,f0=Math.min(374,Math.floor(f)),f1=Math.min(374,f0+1),b0=Math.floor(b),b1=Math.min(1024,b0+1),u=f0===f1?0:f-f0,v=b-b0;const power=(value(f0,b0)*(1-v)+value(f0,b1)*v)*(1-u)+(value(f1,b0)*(1-v)+value(f1,b1)*v)*u;return {...p,db:10*Math.log10(Math.max(1e-16,power)),rgba:Array.from(ctx.getImageData(p.x,p.y,1,1).data)};});
-   }finally{await api.invoke('retire_analysis_view',{projectId,viewId});api.unregisterCallback(callback);}})().then(done,e=>done({error:String(e)}));`,projectId,media.id,settings,points);
+   }finally{await api.invoke('retire_analysis_view',{projectId,viewId,runtimeNonce});api.unregisterCallback(callback);}})().then(done,e=>done({error:String(e)}));`,projectId,media.id,settings,points);
   assert.ok(!reference.error,JSON.stringify(reference));const lut=paletteLut('ember');let maxColorError=0;for(const p of reference){const index=Math.round(Math.max(0,Math.min(1,(p.db+100)/100))*255)*4;maxColorError=Math.max(maxColorError,...p.rgba.map((v,k)=>Math.abs(v-lut[index+k])));}assert.equal(maxColorError,0);report.checks.push({name:'native numeric reference at physical centers, pulse, tile seam and tail',maxColorError,points:reference});
   await h.label('展开属性面板');
   // Real pointer annotation and ruler positions share the same seconds/Hz mapping.

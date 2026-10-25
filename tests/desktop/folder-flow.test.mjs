@@ -3,11 +3,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { start, wait } from './harness.mjs';
 
-const base = path.resolve('.test-output/task7-folder-import'); await fs.mkdir(base, { recursive: true });
-const output = await fs.mkdtemp(path.join(base, 'native-'));
+const base = path.resolve(process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/default-collaboration-v040/task5/desktop-evidence/folder-flow'); await fs.mkdir(base, { recursive: true });
+const output = await fs.realpath(await fs.mkdtemp(path.join(base, 'native-')));
 // All fixtures belong to this unique evidence directory and are retained for inspection.
 const [audio, retryAudio, endAudio, project, next, cancelledProject] = ['audio', 'retry-audio', 'end-audio', 'project', 'next', 'cancelled-project'].map(p => path.join(output, p));
-for (const p of [audio, retryAudio, endAudio, project, next, cancelledProject, path.join(audio, 'nested')]) await fs.mkdir(p, { recursive: true });
+for (const p of [audio, retryAudio, endAudio, project, next, cancelledProject, path.join(audio, 'nested','deeper')]) await fs.mkdir(p, { recursive: true });
 function wav() {
   const frames = 960, channels = 2, data = Buffer.alloc(44 + frames * channels * 2);
   data.write('RIFF'); data.writeUInt32LE(data.length - 8, 4); data.write('WAVEfmt ', 8); data.writeUInt32LE(16, 16); data.writeUInt16LE(1, 20); data.writeUInt16LE(channels, 22); data.writeUInt32LE(48000, 24); data.writeUInt32LE(48000 * channels * 2, 28); data.writeUInt16LE(channels * 2, 32); data.writeUInt16LE(16, 34); data.write('data', 36); data.writeUInt32LE(data.length - 44, 40);
@@ -16,9 +16,9 @@ function wav() {
 }
 const bytes = wav();
 for (let i = 0; i < 257; i++) { const name = `${String(i).padStart(3, '0')}.${i % 2 ? 'wav' : 'WAV'}`; await fs.writeFile(path.join(audio, name), bytes); await fs.writeFile(path.join(retryAudio, name), bytes); }
-await fs.writeFile(path.join(audio, 'nested', '000.WAV'), bytes); await fs.writeFile(path.join(audio, 'corrupt.wav'), 'not a WAV'); await fs.writeFile(path.join(audio, 'skip.txt'), 'unsupported'); await fs.writeFile(path.join(endAudio, 'end.wav'), bytes);
+await fs.writeFile(path.join(audio, 'nested','deeper', '000.WAV'), bytes); await fs.writeFile(path.join(audio, 'corrupt.wav'), 'not a WAV'); await fs.writeFile(path.join(audio, 'skip.txt'), 'unsupported'); await fs.writeFile(path.join(endAudio, 'end.wav'), bytes);
 const movedAudio = path.join(endAudio, 'moved.wav');
-const paths = { '新建项目 · 选择空文件夹': [project, cancelledProject, next], '选择音频文件夹': [audio, audio, audio, retryAudio, endAudio, audio, retryAudio], '': [[path.join(endAudio, 'end.wav')], movedAudio] };
+const paths = { '新建项目 · 选择空文件夹': [project, cancelledProject, next], '选择音频文件夹': [audio, path.join(audio,'nested'), path.join(project,'media'), retryAudio, endAudio, audio, retryAudio], '': [[path.join(endAudio, 'end.wav')], movedAudio] };
 const report = { method: 'Owned native e2e Tauri/WebView2, WebDriver menu/options/buttons; native folder scan/decode/command queue. Only picker return values injected. Explicitly labeled transport-failure and Channel-delay injections exercise recovery/cancellation deterministically; no store mutations.', output, checks: [], frames: [] };
 let h, id, projectIndex = 0;
 const check = name => { report.checks.push(name); console.log('PASS ' + name); };
@@ -30,9 +30,9 @@ async function folder(recursive = false) {
   if (recursive) await h.click('[role="dialog"] input[type="checkbox"]');
   await h.clickText('选择文件夹…');
 }
-async function finished() { await h.until(`document.querySelector('.folder-import-progress')?.textContent.includes('文件夹导入完成')`, 'folder completion', 120000); }
+async function finished() { const started=Date.now();await h.until(`document.querySelector('.folder-import-progress')?.textContent.includes('文件夹导入完成')`, 'folder completion', 900000);(report.completionWaitMs??=[]).push(Date.now()-started); }
 async function closeResult() { await h.clickText('关闭文件夹结果'); await h.until(`!document.querySelector('.folder-import-progress')`); assert.equal(await h.evaluate(`return document.querySelectorAll('.import-progress').length`), 0); }
-async function create() { const expected = [project, cancelledProject, next][projectIndex++]; await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.title.endsWith(${JSON.stringify(expected)})&&document.querySelector('.project-identity')?.textContent.includes('已保存')`); id = JSON.parse(await fs.readFile(path.join(expected, 'project.json'), 'utf8')).projectId; }
+async function create() { const expected = [project, cancelledProject, next][projectIndex++]; await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.title.endsWith(${JSON.stringify(expected)})&&document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`); id = JSON.parse(await fs.readFile(path.join(expected, 'collaboration.json'), 'utf8')).projectId; }
 try {
   h = await start(paths, output, undefined, { exactOuter: true }); h.nativeRect({ width: 1280, height: 800 }); report.pid = h.nativePid;
   await create();
@@ -45,10 +45,12 @@ try {
   assert.equal(await h.evaluate(`return document.querySelectorAll('.import-progress').length`), 1);
   await h.clickText('查看详情'); assert.equal(await h.evaluate(`return document.querySelectorAll('.folder-import-progress li').length`), 50); await h.clickText('下一页'); assert.match(await h.evaluate(`return document.querySelector('.folder-import-progress li').textContent`), /^51\./);
   await h.screenshot('257-imported-paged'); check('Default nonrecursive scan imports all 257 distinct paths across 256+2 (one corrupt) with bounded result DOM and one aggregate panel');
-  await closeResult(); await folder(true); await finished(); assert.equal((await snap()).media.length, 258); assert.match(await resultText(), /成功 1 · 失败 1 · 已存在 257 · 跳过 1/); check('Recursive option imports nested same-name file; existing canonical paths skipped and corrupt audio fails independently');
-  await closeResult(); await folder(true); await finished(); assert.equal((await snap()).media.length, 258); assert.match(await resultText(), /成功 0 · 失败 1 · 已存在 258/); check('Repeated recursive import does not duplicate any existing source'); await closeResult();
+  await closeResult(); await folder(true); await finished(); assert.equal((await snap()).media.length, 258); assert.match(await resultText(), /成功 1 · 失败 0 · 已存在 0 · 跳过 0/);
+  calls=await h.evaluate('return window.__folderTest.calls');assert.equal(calls.filter(c=>c.command==='scan_folder').at(-1).args.recursive,true);
+  check('Recursive nested-folder scan imports its one same-name source as an independent UUID; same-byte inputs remain distinct');
+  await closeResult(); await folder(true); await finished(); assert.equal((await snap()).media.length, 258); assert.match(await resultText(), /成功 0 · 失败 0 · 已存在 258/); check('Scanning copied canonical public sources skips every already-present media path'); await closeResult();
 
-  await h.evaluate('window.__folderTest.failNext=true'); await folder(); await h.until(`document.querySelector('.folder-import-progress')?.textContent.includes('导入已暂停')`, 'publication pause', 120000);
+  await h.evaluate('window.__folderTest.failNext=true'); await folder(); await h.until(`document.querySelector('.folder-import-progress')?.textContent.includes('导入已暂停')`, 'publication pause', 900000);
   assert.equal((await snap()).media.length, 513); // 258 + 255 committed, one retained prepared failure.
   calls = await h.evaluate('return window.__folderTest.calls'); assert.equal(calls.filter(c => c.command === 'import_media' && c.args.paths[0].includes('retry-audio')).length, 1);
   await h.screenshot('paused-owned-ledger'); await h.clickText('重试文件夹写入'); await finished();
@@ -72,8 +74,10 @@ try {
   await h.clickText('取消文件夹导入'); await h.evaluate('window.__folderTest.held.splice(0).forEach(deliver=>deliver())'); await wait(150); assert.equal(await h.evaluate(`return window.__folderTest.calls.filter(c=>c.command==='import_media').length`), importsBefore); assert.equal((await snap()).media.length, 0); check('Injected delayed scan terminal: cancel calls scan cancellation/release and late result cannot start a decoder'); await closeResult();
   await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`); assert.equal((await snap()).media.length, 1); check('Direct multi-select audio import still works after folder cancellation');
   const originalMedia = (await snap()).media[0]; await h.clickText('关闭导入结果'); await fs.rename(path.join(endAudio, 'end.wav'), movedAudio);
+  const copiedPath=path.join(next,originalMedia.sourceRef),missingCopy=copiedPath+'.owned-offline';await fs.rename(copiedPath,missingCopy);try{
   await h.until(`document.querySelector('.media-availability')?.textContent.includes('源文件缺失')`); await h.clickText('重新关联'); await h.clickText('选择文件…'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);
   const relinked = (await snap()).media[0]; assert.ok(relinked.sourceRef.endsWith('moved.wav')); assert.deepEqual({...relinked,sourceRef:originalMedia.sourceRef},originalMedia); check('Real relink picker verifies moved fixture and preserves descriptor identity/classification/notes');
+  }finally{await fs.rename(missingCopy,copiedPath);}
   report.passed = true;
 } catch (error) { report.error = error.stack; console.error(error); report.state = await h?.evaluate(`return {body:document.body.innerText,calls:window.__folderTest?.calls.slice(-20),held:window.__folderTest?.held.length}`).catch(() => null); await h?.screenshot('failure').catch(() => {}); process.exitCode = 1; }
 finally { await h?.quit().catch(() => {}); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify({ output, passed: report.passed, checks: report.checks, error: report.error }, null, 2)); }

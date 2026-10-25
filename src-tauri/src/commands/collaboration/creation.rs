@@ -6,16 +6,17 @@ use crate::{commands::project::info_shared, state::AppState};
 use annotator_core::{
     collaboration::*,
     error::{AppError, Result},
-    model::ProjectDocument,
     project::LocalProject,
 };
+use annotator_core::{error::ErrorCode, media::identity::check_cancel};
+#[cfg(test)]
 use annotator_core::{
-    error::ErrorCode,
     media::{
         decode::decode,
-        identity::{check_cancel, fingerprint, SourceStamp},
+        identity::{fingerprint, SourceStamp},
         registry::same_identity,
     },
+    model::ProjectDocument,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -36,25 +37,37 @@ fn io(e: std::io::Error) -> AppError {
 }
 
 // Track exact paths. Cleanup never recursively removes a target directory or unknown entries.
-struct Owned {
-    files: Vec<PathBuf>,
+pub(crate) struct Owned {
+    files: Vec<(PathBuf, fs::File)>,
     dirs: Vec<PathBuf>,
     keep: bool,
 }
 impl Owned {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             files: vec![],
             dirs: vec![],
             keep: false,
         }
     }
-    fn dir(&mut self, p: &Path) -> Result<()> {
+    pub(crate) fn keep(&mut self) {
+        self.keep = true;
+    }
+    pub(crate) fn own_parent(&mut self, path: PathBuf) {
+        self.dirs.insert(0, path);
+    }
+    pub(crate) fn record_file(&mut self, path: PathBuf) -> Result<()> {
+        let handle = fs::File::open(&path).map_err(io)?;
+        atomic::verify_lock_path(&path, &handle)?;
+        self.files.push((path, handle));
+        Ok(())
+    }
+    pub(crate) fn dir(&mut self, p: &Path) -> Result<()> {
         fs::create_dir(p).map_err(io)?;
         self.dirs.push(p.into());
         Ok(())
     }
-    fn inventory(&mut self, root: &Path) -> Result<()> {
+    pub(crate) fn inventory(&mut self, root: &Path) -> Result<()> {
         for entry in fs::read_dir(root).map_err(io)? {
             let path = entry.map_err(io)?.path();
             atomic::safe_existing(&path)?;
@@ -62,7 +75,7 @@ impl Owned {
                 self.dirs.push(path.clone());
                 self.inventory(&path)?;
             } else {
-                self.files.push(path);
+                self.record_file(path)?;
             }
         }
         Ok(())
@@ -71,8 +84,11 @@ impl Owned {
 impl Drop for Owned {
     fn drop(&mut self) {
         if !self.keep {
-            for p in self.files.iter().rev() {
-                let _ = fs::remove_file(p);
+            for (path, handle) in self.files.drain(..).rev() {
+                if atomic::verify_lock_path(&path, &handle).is_ok() {
+                    let _ = fs::remove_file(&path);
+                }
+                drop(handle);
             }
             for p in self.dirs.iter().rev() {
                 let _ = fs::remove_dir(p);
@@ -81,13 +97,13 @@ impl Drop for Owned {
     }
 }
 // Field order releases the private cache and author lease before rollback touches owned files.
-struct PreparedCopy {
-    project: LocalProject,
-    repo: Arc<CollaborationRepository>,
-    owned: Owned,
+pub(crate) struct PreparedCopy {
+    pub(crate) project: LocalProject,
+    pub(crate) repo: Arc<CollaborationRepository>,
+    pub(crate) owned: Owned,
 }
 impl PreparedCopy {
-    fn commit(self) -> (LocalProject, Arc<CollaborationRepository>) {
+    pub(crate) fn commit(self) -> (LocalProject, Arc<CollaborationRepository>) {
         let Self {
             project,
             repo,
@@ -98,6 +114,7 @@ impl PreparedCopy {
     }
 }
 
+#[cfg(test)]
 fn copy_project(
     document: &ProjectDocument,
     source: &Path,
@@ -165,7 +182,7 @@ fn copy_project(
             .create_new(true)
             .open(&copied)
             .map_err(io)?;
-        staged.files.push(copied.clone());
+        staged.record_file(copied.clone())?;
         let mut input = fs::File::open(&path).map_err(io)?;
         let mut buffer = [0u8; 65536];
         let mut count = 0;
@@ -208,7 +225,7 @@ fn copy_project(
         None,
         Some(cancel),
     )?;
-    staged.files.push(stage.join("collaboration.json"));
+    staged.record_file(stage.join("collaboration.json"))?;
     let preparation = (|| {
         let repo = CollaborationRepository::open(&stage)?;
         repo.register(
@@ -254,7 +271,7 @@ fn copy_project(
         None,
         Some(cancel),
     )?;
-    published.files.push(target.join("collaboration.json"));
+    published.record_file(target.join("collaboration.json"))?;
     let repo = Arc::new(CollaborationRepository::open(&target)?);
     // Capabilities are bound to the canonical root. Authenticate again after relocation.
     let actor = Arc::new(repo.login(&credentials.login, &credentials.password)?);
@@ -278,7 +295,12 @@ fn copy_project(
         owned: published,
     })
 }
-fn transfer(from: &Path, to: &Path, owned: &mut Owned, cancel: &AtomicBool) -> Result<()> {
+pub(crate) fn transfer(
+    from: &Path,
+    to: &Path,
+    owned: &mut Owned,
+    cancel: &AtomicBool,
+) -> Result<()> {
     for entry in fs::read_dir(from).map_err(io)? {
         check_cancel(cancel)?;
         let entry = entry.map_err(io)?;
@@ -294,7 +316,7 @@ fn transfer(from: &Path, to: &Path, owned: &mut Owned, cancel: &AtomicBool) -> R
                 .create_new(true)
                 .open(&dest)
                 .map_err(io)?;
-            owned.files.push(dest);
+            owned.record_file(dest)?;
             let mut block = [0u8; 65536];
             loop {
                 check_cancel(cancel)?;
@@ -329,10 +351,18 @@ pub async fn collaboration_create(
     expected: Expected,
     operation_id: String,
     target: String,
-    credentials: Credentials,
+    credentials: Option<Credentials>,
     on_progress: Channel<CopyProgress>,
 ) -> Result<Transition> {
     let permit = state.6.begin(operation_id.clone())?;
+    if let Some(Credentials {
+        login,
+        display_name,
+        password,
+    }) = credentials
+    {
+        drop((login, display_name, password));
+    }
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let permit = permit;
@@ -351,12 +381,11 @@ pub async fn collaboration_create(
         };
         let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
         let mut last_phase = String::new();
-        let prepared = copy_project(
+        let prepared = super::defaults::copy(
             &document,
             &root,
             Path::new(&target),
             &state.6.local()?,
-            &credentials,
             &permit.cancel,
             |phase, completed| {
                 if last.elapsed() < std::time::Duration::from_millis(100) && phase == last_phase {
@@ -400,6 +429,20 @@ pub async fn collaboration_create(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn owned_cleanup_preserves_a_replacement_at_an_owned_file_path() {
+        let root = std::env::temp_dir().join(format!("owned-cleanup-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let file = root.join("owned");
+        fs::write(&file, b"ours").unwrap();
+        let mut owned = Owned::new();
+        owned.record_file(file.clone()).unwrap();
+        fs::remove_file(&file).unwrap();
+        fs::write(&file, b"foreign").unwrap();
+        drop(owned);
+        assert_eq!(fs::read(&file).unwrap(), b"foreign");
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn creator_copy_publishes_manifest_last_and_preserves_source() {
         let root = std::env::temp_dir().join(format!("nas-create-{}", uuid::Uuid::new_v4()));

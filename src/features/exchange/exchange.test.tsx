@@ -8,6 +8,7 @@ import type { LocalProjectCommands, OpenedProject } from '../../bridge/projects'
 import { parseProjectDocument } from '../../bridge/types';
 import type { ProjectCommands } from '../../app/commands';
 import { useExchange } from './useExchange';
+import { mediaDialogs } from '../../bridge/media';
 import { exchangeClient, exchangeDialogs, type ExchangeEvent } from '../../bridge/exchange';
 import type { ProjectLifecycleUI } from '../project/useProjectLifecycle';
 afterEach(()=>vi.useRealTimers());
@@ -73,4 +74,25 @@ it('exchange drains admitted edits and drafts, saves, freezes admission, and ret
  await act(async()=>{await expect(result.current.performExchange(external)).rejects.toMatchObject({code:'SaveFailed'});});expect(external).not.toHaveBeenCalled();expect(result.current.active).toBe(active);expect(active.store.editingDisabled).toBe(false);
  const imported={...opened,path:'new',snapshot:{...opened.snapshot!,document:{...doc,projectId:'00000000-0000-4000-8000-000000000088'}}};
  await act(async()=>result.current.performExchange(async()=>imported));expect(result.current.active?.path).toBe('new');expect(result.current.active?.store.snapshot.document.projectId).toBe(imported.snapshot.document.projectId);expect(active.store.editingDisabled).toBe(true);expect(api.close).not.toHaveBeenCalled();unmount();
+});
+
+it('JSON sourcesRequired preserves the active owner and continues with fresh expected revision and corrected bindings',async()=>{
+ const source=vi.spyOn(exchangeDialogs,'source').mockResolvedValue('D:/share.json'),parent=vi.spyOn(exchangeDialogs,'parent').mockResolvedValue('D:/imports'),choose=vi.spyOn(mediaDialogs,'choose').mockResolvedValue('D:/correct.wav');
+ const media=fixture.media.map(({id,displayName,sha256,byteLength,sampleRate,frameCount,channelCount,channelLayout})=>({id,displayName,sha256,byteLength,sampleRate,frameCount,channelCount,channelLayout}));let revision=0;
+ const owner={} as never,adopt=vi.fn();const project={active:owner,performExchange:async(action:Parameters<ProjectLifecycleUI['performExchange']>[0])=>{const opened=await action({projectId:fixture.projectId,expectedRevision:revision++});if(opened)adopt(opened);}} as unknown as ProjectLifecycleUI;
+ const start=vi.spyOn(exchangeClient,'start').mockImplementation(async(request,receive)=>{if(!request.bindings)receive({type:'sourcesRequired',taskId:'preflight',sourceSha256:'a'.repeat(64),media});else receive({type:'failed',taskId:'binding',error:{code:'MissingMedia',message:'wrong file',retryable:true}});return request.bindings?'binding':'preflight';});
+ const hook=renderHook(()=>useExchange(project));await act(async()=>hook.result.current.startImport());expect(adopt).not.toHaveBeenCalled();expect(hook.result.current.sources?.media).toEqual(media);
+ await act(async()=>hook.result.current.chooseSource(media[0].id));await act(async()=>hook.result.current.continueImport());
+ expect(start.mock.calls[1][0]).toMatchObject({expected:{expectedRevision:1},bindings:{sourceSha256:'a'.repeat(64),media:[{mediaId:media[0].id,path:'D:/correct.wav'}]}});expect(hook.result.current.error?.message).toBe('wrong file');expect(hook.result.current.sources?.media).toEqual(media);expect(adopt).not.toHaveBeenCalled();
+ await act(async()=>hook.result.current.onCancel());expect(hook.result.current.sources).toBeNull();hook.unmount();source.mockRestore();parent.mockRestore();choose.mockRestore();start.mockRestore();
+});
+
+it('changed JSON source can restart preflight and only verified completion adopts a default project',async()=>{
+ const source=vi.spyOn(exchangeDialogs,'source').mockResolvedValue('D:/share.json'),parent=vi.spyOn(exchangeDialogs,'parent').mockResolvedValue('D:/imports'),choose=vi.spyOn(mediaDialogs,'choose').mockResolvedValue('D:/correct.wav');
+ const media=fixture.media.map(({id,displayName,sha256,byteLength,sampleRate,frameCount,channelCount,channelLayout})=>({id,displayName,sha256,byteLength,sampleRate,frameCount,channelCount,channelLayout}));let digest='a'.repeat(64),fail=true;
+ const opened={snapshot:{document:parseProjectDocument(structuredClone(fixture)),canUndo:false,canRedo:false},persistedRevision:0,path:'D:/imports/new',recovery:null,collaboration:{runtimeNonce:'11111111-1111-4111-8111-111111111111',actor:{authorId:'11111111-1111-4111-8111-111111111111',normalizedLogin:'local',displayName:'本机作者',createdAt:'2026-10-25T00:00:00Z'},preferences:null,projectFlavor:'default',identityMode:'local',canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false}} as OpenedProject;
+ const adopt=vi.fn(),project={active:null,performExchange:async(action:Parameters<ProjectLifecycleUI['performExchange']>[0])=>{const result=await action(null);if(result)adopt(result);}} as unknown as ProjectLifecycleUI;
+ const start=vi.spyOn(exchangeClient,'start').mockImplementation(async(request,receive)=>{if(!request.bindings)receive({type:'sourcesRequired',taskId:crypto.randomUUID(),sourceSha256:digest,media});else if(fail)receive({type:'failed',taskId:crypto.randomUUID(),error:{code:'InvalidArchive',message:'exchange source changed',retryable:true}});else receive({type:'completed',taskId:crypto.randomUUID(),path:opened.path,opened});return 'ack';});
+ const hook=renderHook(()=>useExchange(project));await act(async()=>hook.result.current.startImport());await act(async()=>hook.result.current.chooseSource(media[0].id));await act(async()=>hook.result.current.continueImport());expect(adopt).not.toHaveBeenCalled();expect(hook.result.current.sources?.sourceSha256).toBe(digest);
+ digest='b'.repeat(64);fail=false;await act(async()=>hook.result.current.startImport());expect(hook.result.current.bindings).toEqual({});await act(async()=>hook.result.current.chooseSource(media[0].id));await act(async()=>hook.result.current.continueImport());expect(adopt).toHaveBeenCalledTimes(1);expect(adopt.mock.calls[0][0].collaboration).toMatchObject({projectFlavor:'default',identityMode:'local'});expect(start.mock.calls.at(-1)![0].bindings?.sourceSha256).toBe(digest);expect(hook.result.current.sources).toBeNull();hook.unmount();source.mockRestore();parent.mockRestore();choose.mockRestore();start.mockRestore();
 });

@@ -1,0 +1,4 @@
+
+> audio-annotator@0.4.0 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+

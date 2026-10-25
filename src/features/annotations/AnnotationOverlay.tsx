@@ -1,3 +1,4 @@
+import { annotationDisabled } from '../collaboration/capabilities';
 import { useEffect, useRef, useState, type PointerEvent, type CSSProperties } from 'react';
 import type { MediaDescriptor, MediaView, Region } from '../../bridge/types';
 import { coordinates } from '../spectrogram/coordinates';
@@ -67,7 +68,7 @@ export function AnnotationOverlay({ media, channel, view }: { media: MediaDescri
       title={label} className={`annotation-rect ${selection.object?.kind === 'mask' ? 'mask-rect' : ''} ${selected ? 'is-selected' : ''} ${!selection.object ? 'is-temporary' : ''} ${!selected && !selection.object ? 'is-inactive' : ''} ${enabled ? '' : 'is-disabled'}`}
       style={{ ...rectStyle(r), '--region-color': color, zIndex: selected ? 2 : 1 } as CSSProperties}>
       {low - high >= 24 && <span className="annotation-label">{label}</span>}
-      {selected && handles.map(h => <i key={h} data-handle={h} className={`region-handle handle-${h}`} />)}
+      {selected && (selection.object?.kind!=='annotation'||!annotationDisabled(ui.active)) && handles.map(h => <i key={h} data-handle={h} className={`region-handle handle-${h}`} />)}
     </div>;
   };
   return <div ref={host} className="annotation-overlay" aria-label={`通道 ${channel + 1} 标注图层`} onPointerDown={e => {
@@ -82,6 +83,7 @@ export function AnnotationOverlay({ media, channel, view }: { media: MediaDescri
     const visibleActive = active && (ownVisible || active.object?.kind !== 'annotation');
     const kind = gestureKind(e.button, e.altKey, handle, activeHit, !!visibleActive && !hit && !contains(candidate, p) && !foreign);
     if (kind === 'pan' || !kind) return;
+    if(target?.object?.kind==='annotation'&&annotationDisabled(ui.active)&&(kind==='move'||kind==='resize')){ui.state.select(target);return;}
     if (!target && (activeHit || handle)) { ui.state.reconcile(ui.active!.store.snapshot.document); return; }
     e.preventDefault(); e.stopPropagation(); e.currentTarget.closest<HTMLElement>('.spectrogram-surface')?.focus(); e.currentTarget.setPointerCapture(e.pointerId);
     if (kind === 'deactivate') ui.state.deactivate();

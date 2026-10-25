@@ -25,7 +25,7 @@ pub(crate) fn io(error: std::io::Error) -> AppError {
     error.retryable = true;
     error
 }
-fn is_link(metadata: &fs::Metadata) -> bool {
+pub(crate) fn is_link(metadata: &fs::Metadata) -> bool {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
@@ -36,14 +36,60 @@ fn is_link(metadata: &fs::Metadata) -> bool {
         metadata.file_type().is_symlink()
     }
 }
+#[cfg(windows)]
+fn reparse_attribute(path: &Path) -> Option<bool> {
+    use std::{
+        os::windows::ffi::OsStrExt,
+        path::{Component, Prefix},
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileAttributesW, FILE_ATTRIBUTE_REPARSE_POINT, INVALID_FILE_ATTRIBUTES,
+    };
+    // Only verbatim absolute paths have identical spelling for std and Win32 here.
+    // In particular, retain std's normalization/error handling for ordinary paths.
+    let mut components = path.components();
+    let prefix = match components.next()? {
+        Component::Prefix(prefix) => prefix.kind(),
+        _ => return None,
+    };
+    if !matches!(prefix, Prefix::VerbatimDisk(_) | Prefix::VerbatimUNC(_, _))
+        || !matches!(components.next(), Some(Component::RootDir))
+        || components
+            .clone()
+            .any(|part| !matches!(part, Component::Normal(_)))
+    {
+        return None;
+    }
+    // GetFileAttributesW cannot query a share root (ERROR_BAD_NETPATH).
+    if matches!(prefix, Prefix::VerbatimUNC(_, _)) && components.next().is_none() {
+        return None;
+    }
+    let mut wide: Vec<_> = path.as_os_str().encode_wide().collect();
+    if wide.contains(&0) {
+        return None;
+    }
+    wide.push(0);
+    // The buffer is NUL terminated and lives throughout the call. This API reports
+    // the named link's own attributes, not its target's attributes.
+    let attributes = unsafe { GetFileAttributesW(wide.as_ptr()) };
+    (attributes != INVALID_FILE_ATTRIBUTES)
+        .then_some(attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0)
+}
+
 pub fn safe_existing(path: &Path) -> Result<()> {
     // Check every existing ancestor, including the caller-supplied root before canonicalizing it.
     for part in path.ancestors() {
         if part.as_os_str().is_empty() {
             continue;
         }
-        let metadata = fs::symlink_metadata(part).map_err(io)?;
-        require(!is_link(&metadata), "Symlink/reparse paths are forbidden")?;
+        #[cfg(windows)]
+        let link = reparse_attribute(part)
+            .map(Ok)
+            .unwrap_or_else(|| fs::symlink_metadata(part).map(|metadata| is_link(&metadata)))
+            .map_err(io)?;
+        #[cfg(not(windows))]
+        let link = is_link(&fs::symlink_metadata(part).map_err(io)?);
+        require(!link, "Symlink/reparse paths are forbidden")?;
     }
     Ok(())
 }
@@ -116,7 +162,8 @@ pub(crate) fn lock(path: &Path) -> Result<File> {
     safe_existing(path)?;
     Ok(file)
 }
-pub(crate) fn verify_lock_path(path: &Path, held: &File) -> Result<()> {
+/// Verify an exact held file identity before native owned-file cleanup.
+pub fn verify_lock_path(path: &Path, held: &File) -> Result<()> {
     safe_existing(path)?;
     let current = File::open(path).map_err(io)?;
     #[cfg(windows)]
@@ -216,7 +263,7 @@ pub fn publish_new(
     result
 }
 #[cfg(windows)]
-fn no_replace(source: &Path, target: &Path) -> std::io::Result<()> {
+pub(crate) fn no_replace(source: &Path, target: &Path) -> std::io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
     let from: Vec<_> = source.as_os_str().encode_wide().chain(Some(0)).collect();
@@ -229,9 +276,118 @@ fn no_replace(source: &Path, target: &Path) -> std::io::Result<()> {
     }
 }
 #[cfg(not(windows))]
-fn no_replace(source: &Path, target: &Path) -> std::io::Result<()> {
+pub(crate) fn no_replace(source: &Path, target: &Path) -> std::io::Result<()> {
     // Hard-link creation is atomic and fails if the destination exists; rename would overwrite.
     fs::hard_link(source, target)?;
     fs::remove_file(source)?;
     File::open(target.parent().unwrap())?.sync_all()
+}
+
+#[cfg(all(test, windows))]
+mod attribute_tests {
+    use super::*;
+    use std::os::windows::ffi::OsStringExt;
+    #[test]
+    fn attribute_fallback_preserves_owned_access_denied_errors() {
+        if let Some(path) = std::env::var_os("ANNOTATOR_ATTRIBUTE_DENIED_FILE") {
+            let path = Path::new(&path);
+            let old = fs::symlink_metadata(path).unwrap_err();
+            assert_eq!(old.kind(), std::io::ErrorKind::PermissionDenied);
+            assert_eq!(reparse_attribute(path), None);
+            assert!(safe_existing(path).is_err());
+            return;
+        }
+        let root = std::env::temp_dir().join(format!("attribute-dacl-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let file = fs::canonicalize(&root).unwrap().join("owned-denied-file");
+        fs::write(&file, b"owned fixture").unwrap();
+        let script = r#"
+$ErrorActionPreference='Stop'
+$p=Split-Path -Parent $env:ANNOTATOR_ATTRIBUTE_FIXTURE
+$original=Get-Acl -LiteralPath $p
+$sddl=$original.Sddl
+try {
+    $denied=Get-Acl -LiteralPath $p
+    $sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $rule=[System.Security.AccessControl.FileSystemAccessRule]::new($sid,[System.Security.AccessControl.FileSystemRights]::ReadAndExecute,[System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit,[System.Security.AccessControl.PropagationFlags]::None,[System.Security.AccessControl.AccessControlType]::Deny)
+    $denied.AddAccessRule($rule)
+    Set-Acl -LiteralPath $p -AclObject $denied
+    $env:ANNOTATOR_ATTRIBUTE_DENIED_FILE=$env:ANNOTATOR_ATTRIBUTE_FIXTURE
+    & $env:ANNOTATOR_ATTRIBUTE_TEST_EXE --exact collaboration::atomic::attribute_tests::attribute_fallback_preserves_owned_access_denied_errors --nocapture
+    if($LASTEXITCODE -ne 0){throw 'Denied-file characterization failed'}
+} finally {
+    Set-Acl -LiteralPath $p -AclObject $original
+    if((Get-Acl -LiteralPath $p).Sddl -ne $sddl){throw 'Exact owned DACL restoration failed'}
+}
+"#;
+        let result = std::process::Command::new("pwsh")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .env("ANNOTATOR_ATTRIBUTE_FIXTURE", &file)
+            .env(
+                "ANNOTATOR_ATTRIBUTE_TEST_EXE",
+                std::env::current_exe().unwrap(),
+            )
+            .output()
+            .unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        assert!(
+            result.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    #[test]
+    fn canonical_attribute_checks_match_metadata_and_reject_reparse_ancestors() {
+        let root = std::env::temp_dir().join(format!("attribute-parity-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        let unicode = root.join("原始音频-é-🎵");
+        fs::create_dir(&unicode).unwrap();
+        let file = unicode.join("source.wav");
+        fs::write(&file, b"sample").unwrap();
+        let long = (0..12).fold(unicode.clone(), |p, _| p.join("long-directory-segment"));
+        fs::create_dir_all(&long).unwrap();
+        fs::write(long.join("leaf"), b"sample").unwrap();
+        for path in [&file, &long.join("leaf")] {
+            for part in path.ancestors() {
+                assert_eq!(
+                    reparse_attribute(part),
+                    Some(is_link(&fs::symlink_metadata(part).unwrap())),
+                    "{part:?}"
+                );
+            }
+            safe_existing(path).unwrap();
+        }
+        assert_eq!(reparse_attribute(&root.join("absent")), None);
+        assert!(safe_existing(&root.join("absent")).is_err());
+        assert_eq!(reparse_attribute(Path::new("relative")), None);
+        assert_eq!(reparse_attribute(Path::new(r"C:\Windows")), None);
+        assert_eq!(reparse_attribute(Path::new(r"\\?\UNC\server\share\")), None);
+        // A real SMB root can be supplied by the Windows release verification run.
+        if let Some(unc) = std::env::var_os("ANNOTATOR_ATTRIBUTE_UNC_ROOT") {
+            let unc = Path::new(&unc);
+            assert_eq!(reparse_attribute(unc), None);
+            let baseline = unc
+                .ancestors()
+                .filter(|p| !p.as_os_str().is_empty())
+                .all(|p| fs::symlink_metadata(p).is_ok_and(|metadata| !is_link(&metadata)));
+            assert_eq!(safe_existing(unc).is_ok(), baseline);
+        }
+        let nul = std::ffi::OsString::from_wide(&[92, 92, 63, 92, 67, 58, 92, 0, 120]);
+        assert_eq!(reparse_attribute(Path::new(&nul)), None);
+        assert!(safe_existing(Path::new(&nul)).is_err());
+        let junction = root.join("alias");
+        let result = std::process::Command::new("pwsh").args(["-NoProfile", "-NonInteractive", "-Command", "New-Item -ItemType Junction -Path $env:ANNOTATOR_PARITY_LINK -Target $env:ANNOTATOR_PARITY_TARGET -ErrorAction Stop | Out-Null"]).env("ANNOTATOR_PARITY_LINK", &junction).env("ANNOTATOR_PARITY_TARGET", &unicode).output().unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(reparse_attribute(&junction), Some(true));
+        assert!(safe_existing(&junction).is_err());
+        assert!(safe_existing(&junction.join("source.wav")).is_err());
+        fs::remove_dir(&junction).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+    }
 }
