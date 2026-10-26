@@ -6,15 +6,19 @@ import type { AppError, MediaDescriptor } from '../../bridge/types';
 import { MediaImportController } from './imports';
 import { FolderImportController } from './folderImport';
 import { folderClient } from '../../bridge/folders';
+import { sourceClient } from '../../bridge/sourceImport';
+import { SourceImportController } from './sourceImport';
 const none = () => () => {};
 const zero = () => 0;
 export function useMedia(active: ActiveProject | null) {
   const current = useRef(active); current.current = active;
-  const [binding, setBinding] = useState<{ owner: ActiveProject; controller: MediaImportController; folder: FolderImportController } | null>(null);
+  const [binding, setBinding] = useState<{ owner: ActiveProject; controller: MediaImportController; folder: FolderImportController; source: SourceImportController } | null>(null);
   const controller = binding?.owner === active ? binding?.controller ?? null : null;
   const folder = binding?.owner === active ? binding?.folder ?? null : null;
+  const source = binding?.owner === active ? binding?.source ?? null : null;
   useSyncExternalStore(controller?.subscribe ?? none, controller?.getVersion ?? zero);
   useSyncExternalStore(folder?.subscribe ?? none, folder?.getVersion ?? zero);
+  useSyncExternalStore(source?.subscribe ?? none, source?.getVersion ?? zero);
   const [statuses, setStatuses] = useState<MediaStatus[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [relink, setRelink] = useState<MediaDescriptor | null>(null);
@@ -22,9 +26,10 @@ export function useMedia(active: ActiveProject | null) {
   useEffect(() => {
     const next = active ? new MediaImportController(active.store, active.queue, active.commands?.media ?? mediaClient, active.lifecycle) : null;
     const nextFolder = active && next ? new FolderImportController(active, next, active.commands?.folders ?? folderClient) : null;
-    setBinding(active && next && nextFolder ? { owner: active, controller: next, folder: nextFolder } : null);
+    const nextSource = active && next ? new SourceImportController(active, next, active.commands?.sources ?? sourceClient) : null;
+    setBinding(active && next && nextFolder && nextSource ? { owner: active, controller: next, folder: nextFolder, source: nextSource } : null);
     setStatuses([]); setSelectedId(active?.store.snapshot.document.viewState.activeMediaId ?? null); setRelink(null); setError(null);
-    return () => { nextFolder?.dispose(); next?.dispose(); };
+    return () => { nextSource?.dispose(); nextFolder?.dispose(); next?.dispose(); };
   }, [active]);
   const sourceKey = active?.store.snapshot.document.media.map(m => `${m.id}:${m.sha256}:${m.sourceRef}`).join('|');
   useEffect(() => {
@@ -54,9 +59,11 @@ export function useMedia(active: ActiveProject | null) {
   };
   const media = active?.store.snapshot.document.media ?? [];
   const selected = media.find(m => m.id === selectedId) ?? media.find(m => m.id === active?.store.snapshot.document.viewState.activeMediaId) ?? media[0] ?? null;
-  return { controller, folder, statuses, selected, selectedId: selected?.id ?? null, setSelectedId, relink, setRelink, error,
+  return { controller, folder, source, statuses, selected, selectedId: selected?.id ?? null, setSelectedId, relink, setRelink, error,
     disabled: !active || !controller || active.store.editingDisabled || controller.occupied,
     chooseFolder: () => { if (active?.collaboration?.canImportMedia!==false) folder?.begin(); },
+    sourceDisabled: !active?.collaboration || active.collaboration.projectFlavor !== 'default' || !active.collaboration.canImportMedia,
+    chooseSourceFolder: () => { source?.begin('folder'); }, chooseSourceZip: () => { source?.begin('zip'); },
     choose: () => void choose(), chooseRelink: () => void choose(relink ?? undefined),
     verify: () => { if (relink && controller && !controller.occupied && !active?.store.editingDisabled) { const target = relink; setRelink(null); void controller.start([target.sourceRef], target.id).catch(e => { if (current.current === active) setError(normalizeError(e)); }); } },
   };

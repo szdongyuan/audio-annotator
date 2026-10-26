@@ -4,7 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { parseAppError, parseChange, type AppError, type MediaDescriptor } from './types';
 
 export type MediaEvent =
-  | { type: 'progress'; taskId: string; index: number; path: string; phase: string; completed: number }
+  | { type: 'progress'; taskId: string; index: number; path: string; phase: 'extract' | 'hashing' | 'decoding' | 'copyMedia'; completed: number }
   | { type: 'ready'; taskId: string; index: number; media: MediaDescriptor }
   | { type: 'failed'; taskId: string; index: number; path: string; error: AppError }
   | { type: 'finished'; taskId: string; cancelled: boolean };

@@ -29,7 +29,7 @@ export function workspaceMenus({collaboration,project,mediaUI,exchange,annotatio
  const reset=()=>{if(media)patch({startSeconds:0,endSeconds:Math.min(10,timeLimit),lowHz:0,highHz:media.sampleRate/2});};
  const ready=!!region&&mediaUI?.statuses.some(s=>s.mediaId===region.mediaId&&s.status==='ready');
  return [
-  {id:'file',label:'文件',items:project?projectMenuItems({project,onImport:mediaUI?.choose,onImportFolder:mediaUI?.chooseFolder,importDisabled:mediaUI?.disabled,exchange,onCreateCollaboration:collaboration?()=>void collaboration.show('create'):undefined}):[{id:'new',label:'新建项目',disabled:true}]},
+  {id:'file',label:'文件',items:project?projectMenuItems({project,onImport:mediaUI?.choose,onImportFolder:mediaUI?.chooseSourceFolder,onImportZip:mediaUI?.chooseSourceZip,sourceDisabled:mediaUI?.sourceDisabled,importDisabled:mediaUI?.disabled,exchange,onCreateCollaboration:collaboration?()=>void collaboration.show('create'):undefined}):[{id:'new',label:'新建项目',disabled:true}]},
   {id:'edit',label:'编辑',items:[
    {id:'undo',label:'撤销',disabled:disabled||!owner?.store.snapshot.canUndo,action:()=>annotations.history('undo')},
    {id:'redo',label:'重做',disabled:disabled||!owner?.store.snapshot.canRedo,action:()=>annotations.history('redo')},

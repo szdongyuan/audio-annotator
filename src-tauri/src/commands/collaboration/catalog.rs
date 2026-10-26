@@ -18,13 +18,32 @@ use std::sync::Arc;
 pub struct PendingMedia {
     nonce: String,
     task: String,
-    prepared: Arc<PreparedCatalogMedia>,
+    prepared: Arc<RetainedMedia>,
+}
+struct RetainedMedia {
+    prepared: PreparedCatalogMedia,
+    _source: Option<annotator_core::media::import_source::StagedAudio>,
+}
+impl std::ops::Deref for RetainedMedia {
+    type Target = PreparedCatalogMedia;
+    fn deref(&self) -> &Self::Target {
+        &self.prepared
+    }
 }
 pub fn store_prepared(
     service: &Service,
     nonce: &str,
     task: &str,
     prepared: PreparedCatalogMedia,
+) -> Result<MediaDescriptor> {
+    store_prepared_source(service, nonce, task, prepared, None)
+}
+pub fn store_prepared_source(
+    service: &Service,
+    nonce: &str,
+    task: &str,
+    prepared: PreparedCatalogMedia,
+    source: Option<annotator_core::media::import_source::StagedAudio>,
 ) -> Result<MediaDescriptor> {
     let runtime = service.current.lock().map_err(|_| runtime::unavailable())?;
     if runtime.nonce != nonce {
@@ -56,7 +75,10 @@ pub fn store_prepared(
         PendingMedia {
             nonce: nonce.into(),
             task: task.into(),
-            prepared: Arc::new(prepared),
+            prepared: Arc::new(RetainedMedia {
+                prepared,
+                _source: source,
+            }),
         },
     );
     Ok(descriptor)

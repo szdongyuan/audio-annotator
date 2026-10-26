@@ -119,6 +119,15 @@ pub async fn apply_change(
     expected_revision: u64,
     change: Change,
 ) -> Result<ProjectSnapshot> {
+    apply(&state, runtime_nonce, project_id, expected_revision, change).await
+}
+pub(crate) async fn apply(
+    state: &AppState,
+    runtime_nonce: Option<String>,
+    project_id: String,
+    expected_revision: u64,
+    change: Change,
+) -> Result<ProjectSnapshot> {
     if let Change::ImportMedia { media } = &change {
         let shared = state
             .0
@@ -128,7 +137,7 @@ pub async fn apply_change(
             .is_some_and(|p| p.is_shared());
         if shared {
             return super::collaboration::catalog::import(
-                &state,
+                state,
                 super::collaboration::runtime::Expected {
                     runtime_nonce: runtime_nonce
                         .ok_or_else(super::collaboration::runtime::stale)?,

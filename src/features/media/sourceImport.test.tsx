@@ -1,0 +1,93 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import fixture from '../../../tests/fixtures/document-v2.json';
+import { ProjectStore } from '../../app/store';
+import { CommandQueue, type ProjectCommands } from '../../app/commands';
+import { parseProjectDocument } from '../../bridge/types';
+import type { SourceCommands, SourceEvent } from '../../bridge/sourceImport';
+import type { MediaCommands, MediaEvent } from '../../bridge/media';
+import { ProjectLifecycle } from '../project/lifecycle';
+import { MediaImportController } from './imports';
+import { SourceImportController } from './sourceImport';
+import { SourceImportDialog } from './SourceImportDialog';
+import { MediaList } from './MediaList';
+import { ImportAcknowledgements } from './ImportProgress';
+import { SourceImportProgress } from './SourceImportProgress';
+const cleanup:(()=>void)[]=[];afterEach(()=>cleanup.splice(0).forEach(f=>f()));
+const nonce='11111111-1111-4111-8111-111111111111';
+function setup(count=257){
+ const store=new ProjectStore({document:parseProjectDocument(structuredClone(fixture)),canUndo:false,canRedo:false});
+ const commands:ProjectCommands={applyChange:vi.fn(async(_id,rev,change)=>{const s=structuredClone(store.snapshot);s.document.revision=rev+1;if(change.type==='importMedia')s.document.media.push(change.media);return s;}),getSnapshot:vi.fn(),undo:vi.fn(),redo:vi.fn()};
+ const queue=new CommandQueue(store,commands), lifecycle=new ProjectLifecycle(store,queue,{save:vi.fn(async(_id,r)=>r),close:vi.fn()});
+ const owner={store,queue,lifecycle,path:'D:/project'};
+ const token={runtimeNonce:nonce,projectId:fixture.projectId,taskId:nonce};
+ const counts={checked:count,candidates:count,skipped:0,issues:0,selectedBytes:count*20};
+ let scan!:(e:SourceEvent)=>void;const callbacks:((e:MediaEvent)=>void)[]=[];
+ const api:SourceCommands={start:vi.fn(async(_id,_config,receive)=>{scan=receive;receive({type:'result',token,counts});return token;}),page:vi.fn(async(_t,offset,limit=256)=>({counts,issues:[],candidates:Array.from({length:Math.min(limit,count-offset)},(_,i)=>({index:offset+i,sourceIndex:0,sourceName:'a.zip',relativePath:`record${offset+i}/audio/CH2.wav`,displayName:`a.zip/record${offset+i}/audio/CH2.wav`,byteLength:20,logicalPosition:1}))})),cancel:vi.fn(async()=>{}),release:vi.fn(async()=>{}),batch:vi.fn(async(_token,_indices,receive)=>{callbacks.push(receive);return `batch${callbacks.length}`;})};
+ const media:MediaCommands={start:vi.fn(),cancel:vi.fn(async()=>{}),release:vi.fn(async()=>{}),status:vi.fn(async()=>[])};
+ const imports=new MediaImportController(store,queue,media,lifecycle), c=new SourceImportController(owner,imports,api);
+ cleanup.push(()=>{c.dispose();imports.dispose();lifecycle.dispose();});
+ const preview=async()=>{c.begin('zip');await c.choose(async()=>['D:/a.zip']);await c.scan();await waitFor(()=>expect(c.state).toBe('preview'));};
+ const finish=(batch:number,ready=true)=>{const indices=vi.mocked(api.batch).mock.calls[batch-1][1];if(ready)indices.forEach((_,i)=>callbacks[batch-1]({type:'ready',taskId:`batch${batch}`,index:i,media:{...fixture.media[0],id:`00000000-0000-4000-8000-${String(batch*1000+i).padStart(12,'0')}`}}));callbacks[batch-1]({type:'finished',taskId:`batch${batch}`,cancelled:false});};
+ return {c,api,media,imports,commands,queue,store,token,counts,preview,finish,scan:(e:SourceEvent)=>scan(e)};
+}
+it('previews early results without import, then imports 257 in bounded sequential batches',async()=>{
+ const s=setup();await s.preview();expect(s.api.batch).not.toHaveBeenCalled();expect(s.imports.occupied).toBe(true);
+ void s.c.importAll();await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(1));expect(vi.mocked(s.api.batch).mock.calls[0][1]).toHaveLength(256);
+ s.finish(1);await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(2));expect(vi.mocked(s.api.batch).mock.calls[1][1]).toEqual([256]);s.finish(2);
+ await waitFor(()=>expect(s.c.state).toBe('finished'));expect(s.c.items[256].index).toBe(256);expect(s.media.start).not.toHaveBeenCalled();expect(s.api.release).toHaveBeenCalledWith(s.token);
+});
+it('invalidates preview on rule change and ignores retired scan events',async()=>{const s=setup(1);await s.preview();await s.c.configure({...s.c.config.rules,include:['*/CH1','*/CH2'],includeSecond:false});expect(s.c.state).toBe('choosing');await s.c.importAll();expect(s.api.batch).not.toHaveBeenCalled();s.scan({type:'result',token:s.token,counts:s.counts});expect(s.c.state).toBe('choosing');expect(s.api.release).toHaveBeenCalled();});
+it('keeps failed preview release visible and retryable before rescanning',async()=>{const s=setup(1);await s.preview();vi.mocked(s.api.release).mockRejectedValueOnce(new Error('release failed'));await s.c.configure({...s.c.config.rules,includeSecond:false});expect(s.c.releasePending).toBe(true);expect(s.c.error).toBeTruthy();await s.c.scan();expect(s.api.start).toHaveBeenCalledTimes(2);await waitFor(()=>expect(s.c.state).toBe('preview'));});
+it('pauses next batch for publication or acknowledgement failure and retries retained owners',async()=>{const s=setup();await s.preview();vi.mocked(s.media.release).mockRejectedValueOnce(new Error('ack failed'));void s.c.importAll();await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(1));s.finish(1);await waitFor(()=>expect(s.c.state).toBe('paused'));expect(s.api.batch).toHaveBeenCalledTimes(1);await s.c.retry();await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(2));s.finish(2);await waitFor(()=>expect(s.c.state).toBe('finished'));});
+it('project replacement cancels and ignores delayed work; picker cancellation retains configuration',async()=>{const s=setup(1);s.c.begin('zip');await s.c.choose(async()=>null);expect(s.c.state).toBe('choosing');expect(s.api.start).not.toHaveBeenCalled();await s.c.choose(async()=>['D:/a.zip']);await s.c.scan();await waitFor(()=>expect(s.c.state).toBe('preview'));s.c.dispose();s.scan({type:'result',token:s.token,counts:s.counts});expect(s.api.batch).not.toHaveBeenCalled();expect(s.api.release).toHaveBeenCalled();});
+it('renders compact editable presets, second route, pattern syntax and explicit preview import',async()=>{
+ const s=setup(1);s.c.begin('zip');render(<SourceImportDialog controller={s.c} picker={async()=>['D:/a.zip','D:/b.zip']} />);
+ fireEvent.change(screen.getByLabelText('规则预设'),{target:{value:'jingcheng'}});await waitFor(()=>expect(screen.getByLabelText('导入第二路音频')).toBeChecked());
+ fireEvent.click(screen.getByLabelText('导入第二路音频'));expect(s.c.config.rules.includeSecond).toBe(false);
+ fireEvent.change(screen.getByLabelText('包含路径'),{target:{value:'*/CH1, */CH2'}});expect(s.c.config.rules.include).toEqual(['*/CH1','*/CH2']);
+ fireEvent.click(screen.getByText('选择 ZIP…'));await waitFor(()=>expect(s.c.config.paths).toHaveLength(2));
+ await act(()=>s.c.scan());await waitFor(()=>expect(screen.getByText('导入 1 个音频')).toBeEnabled());expect(s.api.batch).not.toHaveBeenCalled();
+ expect(screen.getByTitle('a.zip/record0/audio/CH2.wav')).toBeVisible();
+});
+it('shows record identity and filename with full searchable accessible structured name',()=>{
+ const name='very-long-common-archive.zip/records/record-unique-102/audio/CH2.wav';
+ render(<MediaList media={[{...fixture.media[0],displayName:name}]} annotations={[]} statuses={[]} selectedId={null} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);
+ expect(screen.getByRole('button',{name})).toHaveAttribute('title',name);expect(screen.getByText('record-unique-102')).toBeVisible();expect(screen.getByText('CH2.wav')).toBeVisible();
+ fireEvent.change(screen.getByLabelText('搜索音频'),{target:{value:'very-long-common-archive'}});expect(screen.getByRole('button',{name})).toBeVisible();
+});
+it('does not resurrect a cancelled scan when start acknowledgement rejects late',async()=>{const s=setup(1);let reject!:(e:unknown)=>void;vi.mocked(s.api.start).mockImplementation(()=>new Promise((_r,j)=>{reject=j;}));s.c.begin('zip');await s.c.choose(async()=>['D:/a.zip']);const scanning=s.c.scan();await waitFor(()=>expect(s.api.start).toHaveBeenCalled());await s.c.cancel();reject(new Error('late transport'));await scanning;expect(s.c.state).toBe('cancelled');});
+it('keeps authoritative final counts when a late progress event arrives',async()=>{const s=setup(1);await s.preview();s.scan({type:'progress',token:s.token,counts:{...s.counts,candidates:8}});expect(s.c.counts.candidates).toBe(1);});
+it('pauses publication failure and explicitly discards only its retained items',async()=>{const s=setup(257);await s.preview();vi.mocked(s.commands.applyChange).mockRejectedValueOnce({code:'SaveFailed',message:'disk full',retryable:true});void s.c.importAll();await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(1));s.finish(1);await waitFor(()=>expect(s.c.state).toBe('paused'));expect(s.api.batch).toHaveBeenCalledTimes(1);expect(s.c.failures.length).toBeGreaterThan(0);await s.c.end();expect(s.c.failures).toHaveLength(0);expect(s.api.release).toHaveBeenCalled();});
+it('keeps failed scan configuration for retry and never publishes a source-change error',async()=>{const s=setup(1);s.c.begin('zip');await s.c.choose(async()=>['D:/a.zip']);vi.mocked(s.api.start).mockRejectedValueOnce({code:'ResourceLimit',message:'worker draining',retryable:true});await s.c.scan();expect(s.c.state).toBe('failed');expect(s.c.config.paths).toEqual(['D:/a.zip']);await s.c.scan();await waitFor(()=>expect(s.c.state).toBe('preview'));vi.mocked(s.api.batch).mockRejectedValueOnce({code:'IdentityMismatch',message:'source changed; rescan',retryable:false});await s.c.importAll();expect(s.c.state).toBe('failed');expect(s.c.error?.code).toBe('IdentityMismatch');expect(s.commands.applyChange).not.toHaveBeenCalled();});
+it('loads bounded preview pages and ignores an obsolete delayed page',async()=>{const s=setup();await s.preview();await s.c.loadPage(50);expect(s.c.page?.candidates[0].index).toBe(50);let resolve!:(p:Awaited<ReturnType<SourceCommands['page']>>)=>void;vi.mocked(s.api.page).mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));const loading=s.c.loadPage(100);await s.c.configure({...s.c.config.rules,include:['*/CH2']});resolve({counts:s.counts,candidates:[],issues:[]});await loading;expect(s.c.page).toBeNull();expect(s.c.state).toBe('choosing');});
+it('saves and deletes custom rules through the dialog while preserving builtins',()=>{const s=setup(1);s.c.begin('folder');render(<SourceImportDialog controller={s.c}/>);fireEvent.change(screen.getByLabelText('新规则名称'),{target:{value:'本机 CH 规则'}});fireEvent.click(screen.getByText('保存'));expect(screen.getByRole('option',{name:'本机 CH 规则'})).toBeInTheDocument();fireEvent.click(screen.getByText('删除'));expect(screen.queryByRole('option',{name:'本机 CH 规则'})).not.toBeInTheDocument();fireEvent.change(screen.getByLabelText('规则预设'),{target:{value:'generic'}});expect(screen.getByText('删除')).toBeDisabled();});
+it('retains failed release of a late cancelled Ready for explicit acknowledgement retry',async()=>{const s=setup(1);await s.preview();void s.c.importAll();await waitFor(()=>expect(s.api.batch).toHaveBeenCalled());await s.c.cancel();vi.mocked(s.media.release).mockRejectedValueOnce(new Error('release unavailable'));s.finish(1);await s.imports.settled();expect(s.imports.pendingAcknowledgements).toHaveLength(1);await s.imports.retryAcknowledgements();expect(s.imports.pendingAcknowledgements).toHaveLength(0);expect(s.commands.applyChange).not.toHaveBeenCalled();});
+it('retries the exact retired token when its delayed acknowledgement release fails beside a new preview',async()=>{
+ const s=setup(1);let acknowledge!:(t:typeof s.token)=>void;vi.mocked(s.api.start).mockImplementationOnce(()=>new Promise(r=>{acknowledge=r;}));s.c.begin('zip');await s.c.choose(async()=>['D:/old.zip']);const old=s.c.scan();await waitFor(()=>expect(s.api.start).toHaveBeenCalled());await s.c.cancel();
+ const fresh={...s.token,taskId:'44444444-4444-4444-8444-444444444444'};vi.mocked(s.api.start).mockImplementationOnce(async(_id,_config,receive)=>{receive({type:'result',token:fresh,counts:s.counts});return fresh;});await s.preview();
+ vi.mocked(s.api.release).mockRejectedValueOnce(new Error('old release failed'));acknowledge(s.token);await old;expect(s.c.releasePending).toBe(true);await s.c.retryRelease();expect(vi.mocked(s.api.release).mock.calls.at(-1)?.[0]).toEqual(s.token);expect(s.c.canImport).toBe(true);
+});
+it('rechecks publication barriers after a delayed next-batch page returns',async()=>{const s=setup();await s.preview();const original=vi.mocked(s.api.page).getMockImplementation()!;let resolve!:(p:Awaited<ReturnType<SourceCommands['page']>>)=>void;vi.mocked(s.api.page).mockImplementation((...args)=>args[1]===256?new Promise(r=>{resolve=r;}):original(...args));void s.c.importAll();await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(1));s.finish(1);await waitFor(()=>expect(resolve).toBeDefined());vi.mocked(s.commands.applyChange).mockRejectedValueOnce({code:'SaveFailed',message:'another edit failed',retryable:true});await s.queue.enqueue({type:'updateMediaNote',mediaId:fixture.media[0].id,note:'pending',mergeKey:null},{owner:'annotations'}).catch(()=>{});resolve(await original(s.token,256,256));await waitFor(()=>expect(s.c.state).toBe('paused'));expect(s.api.batch).toHaveBeenCalledTimes(1);});
+it('releases a cancelled source reservation after shared acknowledgement retry and admits new direct/source imports',async()=>{
+ const s=setup(1);await s.preview();vi.mocked(s.media.release).mockRejectedValueOnce(new Error('ack unavailable'));
+ void s.c.importAll();await waitFor(()=>expect(s.api.batch).toHaveBeenCalled());s.finish(1);await waitFor(()=>expect(s.c.state).toBe('paused'));
+ await s.c.cancel();expect(s.imports.occupied).toBe(true);
+ render(<><ImportAcknowledgements controller={s.imports}/><SourceImportProgress controller={s.c}/></>);
+ fireEvent.click(screen.getByRole('button',{name:'重试导入确认'}));await waitFor(()=>expect(s.imports.pendingAcknowledgements).toHaveLength(0));
+ fireEvent.click(screen.getByRole('button',{name:'关闭结果'}));expect(s.c.state).toBe('idle');expect(s.imports.occupied).toBe(false);
+ vi.mocked(s.media.start).mockImplementationOnce(async(_id,_paths,receive)=>{receive({type:'finished',taskId:'direct',cancelled:false});return 'direct';});
+ await s.imports.start(['D:/direct.wav']);await s.imports.completed();expect(s.media.start).toHaveBeenCalledOnce();expect(s.c.begin('folder')).toBe(true);
+});
+it('reconciles cancelled source reservation after project-wide publication retry',async()=>{
+ const s=setup(1);await s.preview();vi.mocked(s.commands.applyChange).mockRejectedValueOnce({code:'SaveFailed',message:'disk full',retryable:true});
+ void s.c.importAll();await waitFor(()=>expect(s.api.batch).toHaveBeenCalled());s.finish(1);await waitFor(()=>expect(s.c.state).toBe('paused'));await s.c.cancel();
+ expect(s.imports.occupied).toBe(true);const failure=s.queue.unresolvedFailures[0];await s.queue.retry(failure.id);
+ await waitFor(()=>expect(s.imports.pendingAcknowledgements).toHaveLength(0));await waitFor(()=>expect(s.imports.occupied).toBe(false));s.c.dismiss();expect(s.c.begin('zip')).toBe(true);
+});
+it('retains reservation through choosing, preview, active publication and failed preview release',async()=>{
+ const s=setup(1);s.c.begin('zip');await s.imports.retryAcknowledgements();expect(s.imports.occupied).toBe(true);await s.c.choose(async()=>['D:/a.zip']);await s.c.scan();await waitFor(()=>expect(s.c.state).toBe('preview'));await s.imports.retryAcknowledgements();expect(s.imports.occupied).toBe(true);
+ const apply=vi.mocked(s.commands.applyChange).getMockImplementation()!;let resume!:()=>void;vi.mocked(s.commands.applyChange).mockImplementationOnce(async(...args)=>{await new Promise<void>(r=>{resume=r;});return apply(...args);});void s.c.importAll();await waitFor(()=>expect(s.api.batch).toHaveBeenCalled());s.finish(1);await waitFor(()=>expect(resume).toBeDefined());
+ vi.mocked(s.api.release).mockRejectedValueOnce(new Error('preview release unavailable'));await s.c.cancel();s.c.dismiss();expect(s.c.state).toBe('cancelled');expect(s.imports.occupied).toBe(true);await s.c.retryRelease();s.c.dismiss();expect(s.c.state).toBe('cancelled');expect(s.imports.occupied).toBe(true);
+ resume();await s.imports.settled();await waitFor(()=>expect(s.imports.occupied).toBe(false));s.c.dismiss();expect(s.c.state).toBe('idle');
+});

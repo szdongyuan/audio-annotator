@@ -16,6 +16,7 @@ type JobSlot = Arc<Mutex<Option<(String, Arc<AtomicBool>)>>>;
 
 pub struct Service {
     pub current: Mutex<Runtime>,
+    pub sources: Mutex<crate::commands::source_import::Registry>,
     pub prepared: Mutex<std::collections::HashMap<String, super::catalog::PendingMedia>>,
     pub prepared_count: Arc<AtomicUsize>,
     cleanup: Mutex<Option<std::sync::mpsc::Sender<super::catalog::PendingMedia>>>,
@@ -43,6 +44,7 @@ impl Default for Service {
         });
         Self {
             prepared_count,
+            sources: Mutex::new(Default::default()),
             cleanup: Mutex::new(Some(sender)),
             cleanup_worker: Mutex::new(Some(cleanup_worker)),
             current: Mutex::new(Runtime::default()),
@@ -174,6 +176,9 @@ impl Service {
         self.job.lock().map(|j| j.is_some()).unwrap_or(true)
     }
     pub fn retire(&self) {
+        if let Ok(mut sources) = self.sources.lock() {
+            sources.reset();
+        }
         for job in [&self.job, &self.preparation] {
             if let Ok(slot) = job.lock() {
                 if let Some((_, cancel)) = &*slot {
@@ -191,6 +196,7 @@ impl Service {
         }
     }
     pub fn install(&self, repo: Option<Arc<CollaborationRepository>>) -> Result<()> {
+        self.sources.lock().map_err(|_| unavailable())?.reset();
         let mut runtime = self.current.lock().map_err(|_| unavailable())?;
         for (_, item) in self.prepared.lock().map_err(|_| unavailable())?.drain() {
             self.dispose(item);

@@ -117,7 +117,7 @@ export async function standaloneSharing() {
     assert.notEqual(id, saved.projectId); assert.deepEqual(semantics(copied), semantics(saved));
     for(const m of copied.media)assert.equal(await hashFile(path.resolve(copy,m.sourceRef)),m.sha256);assert.deepEqual(await actualTileEnergy(h,copied),beforeEnergy);
     assert.equal(await fs.stat(path.join(copy, 'media')).then(() => true, () => false), true);
-    await h.click('.file-heading h2'); await h.input('音频备注', '文件备注：副本独立编辑'); await save(h);
+    await h.selectMedia('dual-tone.wav'); await h.click('.file-heading h2'); await h.input('音频备注', '文件备注：副本独立编辑'); await save(h);
     copied = (await h.snapshot(id)).document;
     assert.equal(copied.media.find(m=>m.displayName==='dual-tone.wav').note, '文件备注：副本独立编辑');
     assert.equal(saved.media.find(m=>m.displayName==='dual-tone.wav').note,'文件备注：完整分享');

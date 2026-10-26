@@ -256,6 +256,19 @@ impl PreparedCatalogMedia {
     pub fn media(&self) -> &PublicMedia {
         &self.media
     }
+    /// Set a native-derived name before the capability is exposed to consumers.
+    pub fn with_display_name(mut self, name: String) -> Result<Self> {
+        require(
+            !name.trim().is_empty() && name.chars().count() <= 1024,
+            "Invalid media display name",
+        )?;
+        Arc::get_mut(&mut self.decoded)
+            .ok_or_else(|| AppError::invalid("Prepared media already exposed"))?
+            .descriptor
+            .display_name = name.clone();
+        self.media.display_name = name;
+        Ok(self)
+    }
     /// Use before emitting Ready: descriptor, pending item and committed record share this UUID.
     /// The source binding is still the original import path; after commit native rebinds its
     /// registry entry to the returned PublicMedia descriptor and the shared source path.

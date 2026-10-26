@@ -19,6 +19,8 @@ import { MediaList } from '../features/media/MediaList';
 import { ImportAcknowledgements, ImportProgress } from '../features/media/ImportProgress';
 import { FolderImportDialog } from '../features/media/FolderImportDialog';
 import { FolderImportProgress } from '../features/media/FolderImportProgress';
+import { SourceImportDialog } from '../features/media/SourceImportDialog';
+import { SourceImportProgress } from '../features/media/SourceImportProgress';
 import { MediaAssociation } from '../features/exchange/MediaAssociation';
 import type { ExchangeUI } from '../features/exchange/useExchange';
 import { AnnotationContext, useAnnotations } from '../features/annotations/useAnnotations';
@@ -118,8 +120,9 @@ export function AppShell({ project, mediaUI, exchange, collaboration }: { collab
           {collaboration?.error&&!collaboration.dialog&&<p role="alert">{collaboration.error.message}</p>}
           {mediaUI?.error && <p className="media-error" role="alert">{mediaUI.error.message}</p>}
           {mediaUI?.controller && <ImportAcknowledgements controller={mediaUI.controller} />}
-          {mediaUI?.controller && !mediaUI.folder?.ownsCurrentBatch && <ImportProgress controller={mediaUI.controller} />}
+          {mediaUI?.controller && !mediaUI.folder?.ownsCurrentBatch && !mediaUI.source?.ownsCurrentBatch && <ImportProgress controller={mediaUI.controller} />}
           {mediaUI?.folder && <FolderImportProgress controller={mediaUI.folder} />}
+          {mediaUI?.source && <SourceImportProgress controller={mediaUI.source} />}
           {mediaUI && <MediaAssociation active={project?.active ?? null} media={mediaUI} />}
           <AnnotationFailure ui={annotations} />
         </div>
@@ -158,6 +161,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration }: { collab
 
     <TransportBar ui={playback} />
     {mediaUI?.folder?.state === 'choosing' && <FolderImportDialog controller={mediaUI.folder} />}
+    {mediaUI?.source?.open && <SourceImportDialog controller={mediaUI.source} />}
     {helpTopic && <HelpDialog topic={helpTopic} onClose={() => setHelpTopic(null)} />}
     <RegionMenu ui={selection} playback={playback} workspace={workspace} statuses={mediaUI?.statuses ?? []} focusNote={focusNote} />
     {remote.selected && <RemoteInspector target={remote.selected} value={remote.value} close={remote.close} play={remote.play} locate={remote.locate} />}

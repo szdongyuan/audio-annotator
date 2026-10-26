@@ -43,6 +43,26 @@ pub enum MediaEvent {
     },
 }
 
+enum Inputs {
+    Paths(Vec<String>),
+    Sources(super::source_import::Token, Vec<usize>),
+}
+pub(crate) async fn start_sources(
+    state: &AppState,
+    token: super::source_import::Token,
+    indices: Vec<usize>,
+    on_event: Channel<MediaEvent>,
+) -> Result<String> {
+    start_inner(
+        state,
+        Some(token.runtime_nonce.clone()),
+        token.project_id.clone(),
+        Inputs::Sources(token, indices),
+        None,
+        on_event,
+    )
+    .await
+}
 pub(crate) async fn start(
     state: &AppState,
     runtime_nonce: Option<String>,
@@ -51,14 +71,36 @@ pub(crate) async fn start(
     relink: Option<String>,
     on_event: Channel<MediaEvent>,
 ) -> Result<String> {
-    if paths.is_empty() || paths.len() > 256 {
+    start_inner(
+        state,
+        runtime_nonce,
+        project_id,
+        Inputs::Paths(paths),
+        relink,
+        on_event,
+    )
+    .await
+}
+async fn start_inner(
+    state: &AppState,
+    runtime_nonce: Option<String>,
+    project_id: String,
+    inputs: Inputs,
+    relink: Option<String>,
+    on_event: Channel<MediaEvent>,
+) -> Result<String> {
+    let count = match &inputs {
+        Inputs::Paths(p) => p.len(),
+        Inputs::Sources(_, i) => i.len(),
+    };
+    if count == 0 || count > 256 {
         return Err(AppError::invalid("请选择 1–256 个音频文件"));
     }
     let service = state.6.clone();
     let tasks = state.1.clone();
     let task_id = uuid::Uuid::new_v4().to_string();
     let id = task_id.clone();
-    let (generation, cancel, root, expected, catalog, preparation) = state
+    let (generation, cancel, root, expected, catalog, preparation, paths, sources) = state
         .run(move |s| {
             let project = s
                 .as_ref()
@@ -75,6 +117,42 @@ pub(crate) async fn start(
             if !super::collaboration::catalog::can_import(project) && relink.is_none() {
                 return Err(AppError::invalid("Shared media catalog is immutable"));
             }
+            let (paths, sources) = {
+                let registry = service
+                    .sources
+                    .lock()
+                    .map_err(|_| super::collaboration::runtime::unavailable())?;
+                match inputs {
+                    Inputs::Paths(paths) => {
+                        if registry.active() {
+                            return Err(AppError::invalid("请先关闭当前导入预览"));
+                        }
+                        (paths, None)
+                    }
+                    Inputs::Sources(token, indices) => {
+                        if !project.is_shared()
+                            || !super::collaboration::catalog::can_import(project)
+                        {
+                            return Err(AppError::invalid("可配置导入需要可写的格式 2 项目"));
+                        }
+                        let scan = registry.result(&token)?;
+                        let mut seen = std::collections::HashSet::new();
+                        let paths = indices
+                            .iter()
+                            .map(|i| {
+                                if !seen.insert(*i) {
+                                    return Err(AppError::invalid("重复候选索引"));
+                                }
+                                scan.candidates()
+                                    .get(*i)
+                                    .map(|c| c.display_name.clone())
+                                    .ok_or_else(|| AppError::invalid("候选音频索引越界"))
+                            })
+                            .collect::<Result<Vec<_>>>()?;
+                        (paths, Some((scan, indices)))
+                    }
+                }
+            };
             let expected = relink
                 .map(|id| {
                     snapshot
@@ -122,6 +200,8 @@ pub(crate) async fn start(
                 expected,
                 catalog,
                 preparation,
+                paths,
+                sources,
             ))
         })
         .await?;
@@ -129,8 +209,7 @@ pub(crate) async fn start(
     let service = state.6.clone();
     let id = task_id.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        // A runtime reset cancels this token but only actual worker exit releases admission.
-        let _preparation = preparation;
+        // A runtime reset cancels this token; admission stays held through all preparation work.
         // OS temp is independent of the project folder and never becomes project content.
         let cache = std::env::temp_dir().join("audio-annotator-pcm");
         #[cfg(test)]
@@ -146,7 +225,7 @@ pub(crate) async fn start(
                 root.join(path)
             };
             let mut last = Instant::now() - Duration::from_secs(1);
-            let progress = |phase: &str, completed| {
+            let mut progress = |phase: &str, completed| {
                 if last.elapsed() >= Duration::from_millis(100) {
                     last = Instant::now();
                     if on_event
@@ -163,31 +242,53 @@ pub(crate) async fn start(
                     }
                 }
             };
-            let result = if let Some((repo, nonce)) = &catalog {
-                repo.prepare_media_with_progress(&path, &cache, &cancel, progress)
-                    .and_then(|prepared| {
-                        annotator_core::media::identity::check_cancel(&cancel)?;
-                        super::collaboration::catalog::store_prepared(
-                            &service, nonce, &id, prepared,
-                        )
-                    })
-            } else {
-                decode(&path, &cache, &cancel, progress).and_then(|mut decoded| {
-                    if let Some(expected) = &expected {
-                        if !same_identity(expected, &decoded.descriptor) {
-                            return Err(AppError::new(
-                                ErrorCode::IdentityMismatch,
-                                "原文件指纹或音频元数据不一致，无法关联",
-                            ));
-                        }
-                        decoded.descriptor.id = expected.id.clone();
-                    }
-                    tasks
-                        .lock()
-                        .map_err(|_| AppError::invalid("媒体服务不可用"))?
-                        .prepare_for_task(generation, &id, decoded)
+            let staged = if let Some((scan, indices)) = &sources {
+                scan.stage(indices[index], &std::env::temp_dir(), &cancel, |n| {
+                    progress("extract", n)
                 })
+                .map(Some)
+            } else {
+                Ok(None)
             };
+            let result = staged.and_then(|staged| {
+                let path = staged.as_ref().map_or(path.as_path(), |s| s.path());
+                if let Some((repo, nonce)) = &catalog {
+                    repo.prepare_media_with_progress(path, &cache, &cancel, progress)
+                        .and_then(|prepared| {
+                            let prepared = if sources.is_some() {
+                                prepared.with_display_name(raw.clone())?
+                            } else {
+                                prepared
+                            };
+                            annotator_core::media::identity::check_cancel(&cancel)?;
+                            if staged.is_some() {
+                                super::collaboration::catalog::store_prepared_source(
+                                    &service, nonce, &id, prepared, staged,
+                                )
+                            } else {
+                                super::collaboration::catalog::store_prepared(
+                                    &service, nonce, &id, prepared,
+                                )
+                            }
+                        })
+                } else {
+                    decode(path, &cache, &cancel, progress).and_then(|mut decoded| {
+                        if let Some(expected) = &expected {
+                            if !same_identity(expected, &decoded.descriptor) {
+                                return Err(AppError::new(
+                                    ErrorCode::IdentityMismatch,
+                                    "原文件指纹或音频元数据不一致，无法关联",
+                                ));
+                            }
+                            decoded.descriptor.id = expected.id.clone();
+                        }
+                        tasks
+                            .lock()
+                            .map_err(|_| AppError::invalid("媒体服务不可用"))?
+                            .prepare_for_task(generation, &id, decoded)
+                    })
+                }
+            });
             let event = match result {
                 Ok(media) => MediaEvent::Ready {
                     task_id: id.clone(),
@@ -215,6 +316,8 @@ pub(crate) async fn start(
         if let Ok(mut tasks) = tasks.lock() {
             tasks.finish(&id);
         }
+        // Finished is the next-batch barrier, including a synchronous channel callback.
+        drop(preparation);
         let _ = on_event.send(MediaEvent::Finished {
             task_id: id,
             cancelled: cancel.load(Ordering::Relaxed),
@@ -267,12 +370,15 @@ pub fn release_media_import(
     task_id: String,
     media_id: String,
 ) -> Result<()> {
+    release(&state, &task_id, &media_id)
+}
+pub(crate) fn release(state: &AppState, task_id: &str, media_id: &str) -> Result<()> {
     state
         .1
         .lock()
         .map_err(|_| AppError::invalid("媒体服务不可用"))?
-        .release_for_task(&task_id, &media_id);
-    super::collaboration::catalog::release(&state.6, &task_id, &media_id)
+        .release_for_task(task_id, media_id);
+    super::collaboration::catalog::release(&state.6, task_id, media_id)
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

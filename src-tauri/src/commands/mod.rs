@@ -5,3 +5,4 @@ pub mod folders;
 pub mod media;
 pub mod playback;
 pub mod project;
+pub mod source_import;

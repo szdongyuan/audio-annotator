@@ -4,6 +4,14 @@ import net from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
 import { Builder, By, Key, until } from 'selenium-webdriver';
 export { By, Key };
+// A renderer update can detach a menu item between lookup and native click.
+// Reacquire only that failed click; never retry other interaction errors.
+export async function clickFresh(find) {
+  for (let attempt=0;attempt<3;attempt++) {
+    try { await (await find()).click(); return; }
+    catch (error) { if(error.name!=='StaleElementReferenceError'||attempt===2)throw error; }
+  }
+}
 export const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const portOccupied = port => new Promise(resolve => { const socket=net.connect({host:'127.0.0.1',port});socket.setTimeout(500);socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',()=>resolve(false));socket.once('timeout',()=>{socket.destroy();resolve(false);}); });
 export function instanceOptions(options = {}) {
@@ -71,14 +79,14 @@ export async function start(paths, output, executable = path.resolve('target/deb
     evaluate: (script, ...args) => driver.executeScript(script, ...args),
     async until(script, label = script, timeout = 60000) { await driver.wait(async () => !!await driver.executeScript(`return (${script})`), timeout, label, 50); },
     element: selector => driver.findElement(By.css(selector)),
-    async selectMedia(name) { await driver.findElement(By.xpath(`//button[contains(@class,'media-select') and .//strong[normalize-space(.)='${name}']]`)).click(); await h.until(`document.querySelector('.file-pane h2')?.textContent===${JSON.stringify(name)}&&!document.querySelector('.tile-status')`); },
+    async selectMedia(name) { await driver.findElement(By.xpath(`//button[contains(@class,'media-select') and @aria-label='${name}']`)).click(); await h.until(`document.querySelector('.file-pane h2')?.textContent===${JSON.stringify(name)}&&!document.querySelector('.tile-status')`); },
     async bindSources(names) { await h.until(`document.querySelector('[aria-label="关联原始音频"]')`); for(const name of names) await driver.findElement(By.xpath(`//div[@aria-label='关联原始音频']/div[span[normalize-space(.)='${name}']]/button`)).click(); await h.clickText('校验并导入'); },
     async clickText(text) { const elements = await driver.findElements(By.xpath(`//button[normalize-space(.)='${text}']`)); for (const e of elements) if (await e.isDisplayed()) { await e.click(); return; } throw new Error(`No visible button: ${text}`); },
     async click(selector) { await (await h.element(selector)).click(); },
-    async label(label) { await h.click(`[aria-label="${label}"]`); },
+    async label(label) { await clickFresh(async()=>{ const menu=await driver.findElements(By.css(`[role="menu"] [aria-label="${label}"]`)); for(const item of menu)if(await item.isDisplayed())return item; return h.element(`[aria-label="${label}"]`); }); },
     async input(label, text) { const e = await h.element(`[aria-label="${label}"]`); await e.click(); await e.sendKeys(Key.CONTROL, 'a', Key.NULL, text, Key.TAB); },
     async select(label, text) { const e = await h.element(`select[aria-label="${label}"]`); await e.findElement(By.xpath(`.//option[normalize-space(.)='${text}']`)).click(); },
-    async menu(text, group='文件') { await (await driver.findElement(By.xpath(`//nav[@role='menubar']/button[normalize-space(.)='${group}']`))).click(); await (await driver.findElement(By.xpath(`//div[@role='menu']/button[starts-with(@aria-label,'${text}')]`))).click(); },
+    async menu(text, group='文件') { await clickFresh(()=>driver.findElement(By.xpath(`//nav[@role='menubar']/button[normalize-space(.)='${group}']`))); await clickFresh(()=>driver.findElement(By.xpath(`//div[@role='menu']/button[starts-with(@aria-label,'${text}')]`))); },
     async screenshot(name) { await fs.writeFile(path.join(output, `${name}.png`), await driver.takeScreenshot(), 'base64'); },
     async drag(selector, a, b) { const e = await h.element(selector); await driver.executeScript('arguments[0].scrollIntoView({block:"nearest"})', e); const r = await e.getRect(); await driver.actions({ async: true }).move({ x: Math.round(r.x + r.width * a[0]), y: Math.round(r.y + r.height * a[1]), origin: 'viewport' }).pause(80).press().move({ x: Math.round(r.x + r.width * b[0]), y: Math.round(r.y + r.height * b[1]), origin: 'viewport', duration: 180 }).release().perform(); },
     async context(selector, point = [.5,.5]) { const e = await h.element(selector), r = await e.getRect(); await driver.actions({ async: true }).move({ x: Math.round(r.x + r.width * point[0]), y: Math.round(r.y + r.height * point[1]), origin: 'viewport' }).press(2).release(2).perform(); },

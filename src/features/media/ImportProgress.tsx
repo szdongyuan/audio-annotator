@@ -1,6 +1,6 @@
 import type { MediaImportController } from './imports';
 import { useState, useSyncExternalStore } from 'react';
-const labels = { waiting: '等待导入', hashing: '校验指纹', decoding: '解码音频', publishing: '写入项目', accepted:'已接收 · 等待更新列表', success: '已导入', failed: '失败', cancelled: '已取消' };
+const labels = { waiting: '等待导入', extracting: '提取音频', hashing: '校验指纹', decoding: '解码音频', publishing: '写入项目', accepted:'已接收 · 等待更新列表', success: '已导入', failed: '失败', cancelled: '已取消' };
 export function ImportProgress({ controller }: { controller: MediaImportController }) {
   const [dismissed, setDismissed] = useState<unknown>(null);
   const [expanded, setExpanded] = useState(false);
@@ -22,7 +22,7 @@ export function ImportAcknowledgements({ controller }: { controller: MediaImport
   const [recovering, setRecovering] = useState(false);
   const pending = controller.pendingAcknowledgements.filter(item => item.ackError);
   if (!pending.length) return null;
-  return <section className="import-progress" aria-label="导入确认"><div><span>{pending.length} 项音频已导入，等待确认</span><button className="button button-quiet" disabled={controller.busy || recovering} onClick={() => {
+  return <section className="import-progress" aria-label="导入确认"><div><span>{pending.length} 项音频等待释放确认</span><button className="button button-quiet" disabled={controller.busy || recovering} onClick={() => {
     setRecovering(true);
     void controller.retryAcknowledgements().catch(() => {}).finally(() => setRecovering(false));
   }}>重试导入确认</button></div></section>;

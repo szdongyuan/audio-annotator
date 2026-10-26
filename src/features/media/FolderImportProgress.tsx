@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from 'react';
 import type { FolderImportController } from './folderImport';
 
 const labels = { idle: '', choosing: '', scanning: '正在扫描文件夹', importing: '正在导入文件夹', paused: '导入已暂停 · 请处理写入失败', finished: '文件夹导入完成', cancelled: '文件夹导入已取消', failed: '文件夹导入失败' };
-const itemLabels = { waiting: '等待导入', hashing: '校验指纹', decoding: '解码音频', publishing: '写入项目', accepted:'已接收 · 等待更新列表', success: '已导入', failed: '失败', cancelled: '已取消' };
+const itemLabels = { waiting: '等待导入', extracting: '提取音频', hashing: '校验指纹', decoding: '解码音频', publishing: '写入项目', accepted:'已接收 · 等待更新列表', success: '已导入', failed: '失败', cancelled: '已取消' };
 const issueLabels = { access: '访问失败', unresolvedSource: '已有路径无法解析', existing: '已存在', reparse: '跳过链接', unsupported: '跳过格式' };
 const pageSize = 50;
 export function FolderImportProgress({ controller: c }: { controller: FolderImportController }) {

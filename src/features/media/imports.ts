@@ -7,8 +7,8 @@ import type { AppError } from '../../bridge/types';
 import type { ProjectLifecycle } from '../project/lifecycle';
 
 export interface ImportItem {
-  path: string; state: 'waiting' | 'hashing' | 'decoding' | 'publishing' | 'accepted' | 'success' | 'failed' | 'cancelled'; completed: number;
-  acknowledged?:boolean;ackError?:AppError; releasing?:Promise<void>; error?: AppError; failureId?: number; mediaId?: string; taskId?: string;
+  path: string; state: 'waiting' | 'extracting' | 'hashing' | 'decoding' | 'publishing' | 'accepted' | 'success' | 'failed' | 'cancelled'; completed: number;
+  acknowledged?:boolean;ackError?:AppError; releaseOnly?:boolean; releasing?:Promise<void>; error?: AppError; failureId?: number; mediaId?: string; taskId?: string;
 }
 interface Run {
   items: ImportItem[]; taskId: string | null; ack: boolean; terminal: boolean; stopped: boolean;
@@ -36,7 +36,7 @@ export class MediaImportController {
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getVersion = () => this.version;
   private notify() { this.version++; this.listeners.forEach(fn => fn()); }
-  get pendingAcknowledgements(){return [...this.retained].filter(item=>item.state==='success'&&!item.acknowledged);}
+  get pendingAcknowledgements(){return [...this.retained].filter(item=>(item.state==='success'||item.releaseOnly)&&!item.acknowledged);}
   get errorIsAcknowledgement(){return this.pendingAcknowledgements.some(item=>item.ackError===this.error);}
   get occupied() { return this.busy || this.reservation !== null; }
   reserve(owner: object) {
@@ -44,14 +44,14 @@ export class MediaImportController {
     this.reservation = owner; this.notify(); return true;
   }
   unreserve(owner: object) { if (this.reservation === owner) { this.reservation = null; this.notify(); } }
-  async start(paths: string[], relinkId?: string, reservation?: object) {
+  async start(paths: string[], relinkId?: string, reservation?: object, startRun?: (receive: (event: MediaEvent) => void) => Promise<string>) {
     this.store.assertEditable();
     if (this.disposed || this.busy || (this.reservation && reservation !== this.reservation) || paths.length === 0) return;
     let resolve!: () => void;
     const run: Run = { items: paths.map(path => ({ path, state: 'waiting', completed: 0 })), taskId: null, ack: false, terminal: false, stopped: false, pending: 0, done: new Promise<void>(r => { resolve = r; }), resolve: () => resolve() };
     this.run = run; this.items = run.items; this.busy = true; this.cancelling = false; this.error = null; this.notify();
     try {
-      const taskId = await retryAdmission(()=>this.api.start(this.store.snapshot.document.projectId, paths, event => this.receive(run, event, relinkId), relinkId),{valid:()=>!this.disposed&&!run.stopped&&!this.store.editingDisabled});
+      const taskId = await retryAdmission(()=>startRun ? startRun(event => this.receive(run, event)) : this.api.start(this.store.snapshot.document.projectId, paths, event => this.receive(run, event, relinkId), relinkId),{valid:()=>!this.disposed&&!run.stopped&&!this.store.editingDisabled});
       run.taskId ??= taskId; run.ack = true;
       if (run.stopped || this.disposed || this.store.editingDisabled) void this.api.cancel(taskId).catch(e => this.report(e));
     } catch (e) {
@@ -73,20 +73,20 @@ export class MediaImportController {
   private receive(run: Run, event: MediaEvent, relinkId?: string) {
     run.taskId ??= event.taskId;
     if (event.taskId !== run.taskId) {
-      if (event.type === 'ready') this.track(run, this.api.release(event.taskId, event.media.id));
+      if (event.type === 'ready') this.track(run, this.releaseUnused(event));
       return;
     }
     if (event.type === 'finished') {
       run.terminal = true;
-      for (const item of run.items) if (['waiting', 'hashing', 'decoding'].includes(item.state)) item.state = event.cancelled || run.stopped ? 'cancelled' : 'failed';
+      for (const item of run.items) if (['waiting', 'extracting', 'hashing', 'decoding'].includes(item.state)) item.state = event.cancelled || run.stopped ? 'cancelled' : 'failed';
       this.check(run); return;
     }
     const item = run.items[event.index];
     if (event.type === 'ready' && (!item || run.stopped || run.terminal || this.disposed || this.store.editingDisabled)) {
-      this.track(run, this.api.release(event.taskId, event.media.id)); return;
+      this.track(run, this.releaseUnused(event)); return;
     }
     if (!item || run.stopped || run.terminal || this.disposed) return;
-    if (event.type === 'progress') { item.state = event.phase === 'hashing' ? 'hashing' : 'decoding'; item.completed = event.completed; this.notify(); return; }
+    if (event.type === 'progress') { item.state = event.phase === 'extract' ? 'extracting' : event.phase === 'hashing' ? 'hashing' : 'decoding'; item.completed = event.completed; this.notify(); return; }
     if (event.type === 'failed') { item.error = event.error; item.state = event.error.code === 'Cancelled' ? 'cancelled' : 'failed'; this.notify(); return; }
     this.retained.add(item);item.state = 'publishing'; item.taskId = event.taskId; item.mediaId = event.media.id;
     const owner = `media:${crypto.randomUUID()}` as const;
@@ -97,9 +97,14 @@ export class MediaImportController {
       item.error = normalizeError(e);item.state=this.committed(item.error,item.mediaId)?'accepted':'failed';
       item.failureId = this.queue.unresolvedFailures.find(f => f.owner === owner)?.id;
       // Rejection before queue admission has no retryable prepared-media owner.
-      if (item.failureId === undefined) await this.api.release(event.taskId, event.media.id);
+      if (item.failureId === undefined) { item.releaseOnly = true; await this.acknowledge(item); }
     }));
     this.notify();
+  }
+  private releaseUnused(event: Extract<MediaEvent, { type: 'ready' }>) {
+    const item: ImportItem = { path: event.media.displayName, state: 'cancelled', completed: 0, taskId: event.taskId, mediaId: event.media.id, releaseOnly: true };
+    this.retained.add(item);
+    return this.acknowledge(item);
   }
   private committed(error:AppError|undefined,id?:string){const d=error?.details as {catalogCommitted?:boolean;catalogAdoptionRequired?:boolean;mediaId?:string}|undefined;return d?.catalogCommitted===true&&d.catalogAdoptionRequired===true&&d.mediaId===id;}
   private acknowledge(item:ImportItem):Promise<void>{
@@ -157,7 +162,7 @@ export class MediaImportController {
     const run = this.run;
     if (!run || run.stopped || (!this.busy && run.terminal)) return;
     run.stopped = true; this.cancelling = true;
-    for (const item of run.items) if (['waiting', 'hashing', 'decoding'].includes(item.state)) item.state = 'cancelled';
+    for (const item of run.items) if (['waiting', 'extracting', 'hashing', 'decoding'].includes(item.state)) item.state = 'cancelled';
     if (run.taskId) void this.api.cancel(run.taskId).catch(e => this.report(e));
     this.check(run);
   }
