@@ -1,4 +1,5 @@
 #![cfg(windows)]
+mod support;
 use annotator_core::{
     collaboration::*,
     model::*,
@@ -9,6 +10,7 @@ use std::{
     path::PathBuf,
     sync::{atomic::AtomicBool, Arc},
 };
+use support::*;
 
 struct Fixture {
     root: PathBuf,
@@ -30,7 +32,7 @@ impl Fixture {
         let shared = root.join("shared");
         fs::create_dir(&local).unwrap();
         fs::create_dir(&shared).unwrap();
-        let identity = LocalIdentity::load_or_create(&local).unwrap();
+        let identity = selected(&local).unwrap();
         let (repo, actor) =
             CollaborationRepository::create_default(&shared, "Catalog", &identity).unwrap();
         Self {
@@ -432,9 +434,7 @@ fn v2_view_only_is_explicit_and_guards_every_public_mutation_and_direct_save() {
     forged.media[0].note = "bypass".into();
     assert!(p.workspace_mut().unwrap().save(&forged).is_err());
     assert!(p.initialize_shared_private(forged).is_err());
-    assert!(p
-        .publish_guest(&d.project_id, d.revision, &LayerPayload::default())
-        .is_err());
+
     let mut edit = fixture.edits[0].clone();
     edit.region.media_id = id.clone();
     edit.region.start_seconds = 0.0;
@@ -673,17 +673,6 @@ fn deterministic_uuid_insertion_before_old_media_preserves_labels_and_redo() {
     drop(p);
     let p = LocalProject::open_shared(f.latest(), Some(f.actor.clone()), &f.local).unwrap();
     assert_eq!(media_note(&p, &id), "kept");
-}
-
-#[test]
-fn v2_author_cannot_use_legacy_guest_merge() {
-    let f = Fixture::new();
-    let mut p = f.open();
-    let d = p.snapshot().unwrap().document;
-    assert!(p
-        .publish_guest(&d.project_id, d.revision, &LayerPayload::default())
-        .is_err());
-    assert_eq!(p.snapshot().unwrap().document, d);
 }
 
 #[test]

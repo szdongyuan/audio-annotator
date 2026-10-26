@@ -23,6 +23,7 @@ pub(super) fn empty(
     target: &Path,
     name: &str,
     local: &Path,
+    identity: &profiles::Profile,
     cancel: &AtomicBool,
 ) -> Result<PreparedCopy> {
     atomic::safe_existing(target)?;
@@ -42,18 +43,17 @@ pub(super) fn empty(
     {
         return Err(AppError::invalid("Create outside an existing project"));
     }
-    let identity = LocalIdentity::load_or_create(local)?;
     let mut stage = Owned::new();
     let staging = target.join(format!(".create-{}", uuid::Uuid::new_v4()));
     stage.dir(&staging)?;
-    let result = CollaborationRepository::create_default(&staging, name, &identity);
+    let result = CollaborationRepository::create_default(&staging, name, identity);
     stage.inventory(&staging)?;
     let (repo, actor) = result?;
     drop((repo, actor));
     check_cancel(cancel)?;
     let bytes = fs::read(staging.join("collaboration.json")).map_err(|_| runtime::unavailable())?;
     let mut owned = Owned::new();
-    for name in ["media", "accounts", "annotations", "catalog"] {
+    for name in ["media", "authors", "annotations", "catalog"] {
         owned.dir(&target.join(name))?;
         transfer(&staging.join(name), &target.join(name), &mut owned, cancel)?;
     }
@@ -66,7 +66,7 @@ pub(super) fn empty(
     // Inventory only the exact final file; directories were already recorded.
     owned.record_file(target.join("collaboration.json"))?;
     let repo = Arc::new(CollaborationRepository::open(&target)?);
-    let actor = Arc::new(repo.login_local(&identity)?);
+    let actor = Arc::new(repo.adopt(identity)?);
     let project = LocalProject::open_shared(repo.clone(), Some(actor), local)?;
     Ok(PreparedCopy {
         project,
@@ -79,6 +79,7 @@ pub(super) fn copy(
     source: &Path,
     target: &Path,
     local: &Path,
+    identity: &profiles::Profile,
     cancel: &AtomicBool,
     mut progress: impl FnMut(&str, u64),
 ) -> Result<PreparedCopy> {
@@ -102,13 +103,12 @@ pub(super) fn copy(
     {
         return Err(AppError::invalid("Select an empty directory"));
     }
-    let identity = LocalIdentity::load_or_create(local)?;
     let staging = target.join(format!(".create-{}", uuid::Uuid::new_v4()));
     let mut staged = Owned::new();
     staged.dir(&staging)?;
     let result = (|| {
         let (repo, actor) =
-            CollaborationRepository::create_default(&staging, &document.name, &identity)?;
+            CollaborationRepository::create_default(&staging, &document.name, identity)?;
         for media in &document.media {
             check_cancel(cancel)?;
             let path = Path::new(&media.source_ref);
@@ -142,7 +142,7 @@ pub(super) fn copy(
     }
     let bytes = fs::read(staging.join("collaboration.json")).map_err(|_| runtime::unavailable())?;
     let mut owned = Owned::new();
-    for name in ["media", "accounts", "annotations", "catalog"] {
+    for name in ["media", "authors", "annotations", "catalog"] {
         owned.dir(&target.join(name))?;
         transfer(&staging.join(name), &target.join(name), &mut owned, cancel)?;
     }
@@ -167,7 +167,7 @@ pub(super) fn copy(
     )?;
     owned.record_file(target.join("collaboration.json"))?;
     let repo = Arc::new(CollaborationRepository::open(&target)?);
-    let actor = Arc::new(repo.login_local(&identity)?);
+    let actor = Arc::new(repo.adopt(identity)?);
     let mut project = LocalProject::open_shared(repo.clone(), Some(actor), local)?;
     let mut private = document.clone();
     private.project_id = repo.manifest().project_id.clone();
@@ -256,6 +256,7 @@ pub async fn save_as_controlled(
             &root,
             Path::new(&path),
             &state.6.local()?,
+            &state.6.selected_profile()?,
             &permit.cancel,
             |phase, completed| {
                 if let Some(channel) = on_progress.as_ref() {
@@ -324,7 +325,13 @@ pub async fn create(state: &AppState, path: String, name: String) -> Result<Open
                 .nonce
                 .clone()
         };
-        let prepared = empty(Path::new(&path), &name, &state.6.local()?, &permit.cancel)?;
+        let prepared = empty(
+            Path::new(&path),
+            &name,
+            &state.6.local()?,
+            &state.6.selected_profile()?,
+            &permit.cancel,
+        )?;
         #[cfg(test)]
         state.6.run_hook();
         let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
@@ -784,12 +791,16 @@ mod tests {
             source.root(),
             &root.join("target"),
             &root.join("local"),
+            &annotator_core::collaboration::profiles::Profile::new("Copy").unwrap(),
             &cancel,
             |_, _| {},
         )
         .unwrap()
         .commit();
-        assert_eq!(repo.manifest().format_version, 2);
+        assert_eq!(
+            repo.manifest().format_version,
+            annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
+        );
         assert_ne!(repo.manifest().project_id, d.project_id);
         assert_eq!(copy.snapshot().unwrap().document.edits, n.document.edits);
         assert_eq!(repo.manifest().media[0].id, decoded.descriptor.id);
@@ -995,7 +1006,7 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_value(&status).unwrap()["identityMode"],
-            "local"
+            "profile"
         );
         let actor = status.actor.unwrap().author_id;
         assert!(!root.join("project/project.json").exists());
@@ -1029,16 +1040,14 @@ mod tests {
                 expected_revision: d.revision,
             }
         };
-        tauri::async_runtime::block_on(identity(
-            &state,
-            expected(&state),
-            "register".into(),
-            IdentityAction::Register {
-                login: "alice".into(),
-                display_name: "Alice".into(),
-                password: "password123".into(),
-            },
-        ))
+        tauri::async_runtime::block_on(
+            crate::commands::collaboration::test_profiles::select_named(
+                &state,
+                expected(&state),
+                "register".into(),
+                Some("alice"),
+            ),
+        )
         .unwrap();
         assert_ne!(
             tauri::async_runtime::block_on(super::super::operations::status(&state))
@@ -1048,12 +1057,14 @@ mod tests {
                 .author_id,
             actor
         );
-        tauri::async_runtime::block_on(identity(
-            &state,
-            expected(&state),
-            "logout".into(),
-            IdentityAction::Logout,
-        ))
+        tauri::async_runtime::block_on(
+            crate::commands::collaboration::test_profiles::select_named(
+                &state,
+                expected(&state),
+                "logout".into(),
+                None,
+            ),
+        )
         .unwrap();
         assert_eq!(
             tauri::async_runtime::block_on(super::super::operations::status(&state))
@@ -1092,7 +1103,7 @@ mod tests {
             actor
         );
         drop((other, reopened));
-        let identity_path = root.join("local/local-identity.dpapi");
+        let identity_path = root.join("local/profiles.json");
         fs::write(&identity_path, b"corrupt").unwrap();
         let corrupt = AppState::default();
         corrupt.6.set_local(root.join("local")).unwrap();
@@ -1103,12 +1114,12 @@ mod tests {
         .is_err());
         assert!(corrupt.0.lock().unwrap().is_none());
         assert_eq!(fs::read(&identity_path).unwrap(), b"corrupt");
-        tauri::async_runtime::block_on(open_mode(
+        assert!(tauri::async_runtime::block_on(open_mode(
             &corrupt,
             root.join("project").to_string_lossy().into(),
             true,
         ))
-        .unwrap();
+        .is_err());
         drop(corrupt);
         fs::remove_dir_all(root).unwrap();
     }

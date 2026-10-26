@@ -94,6 +94,7 @@ struct PrivateRecovery {
 pub struct PrivateWorkspace {
     repo: Arc<CollaborationRepository>,
     actor: Option<Arc<AuthorSession>>,
+    actor_display: Option<AuthorIdentity>,
     root: PathBuf,
     _lock: File,
     envelope: PrivateEnvelope,
@@ -174,23 +175,22 @@ impl PrivateWorkspace {
         app_local: &Path,
     ) -> Result<Self> {
         require(
-            repo.manifest().format_version != 2 || actor.is_some(),
-            "Format 2 requires an author or explicit view-only open",
+            actor.is_some(),
+            "A profile or explicit view-only opening is required",
         )?;
-        Self::open_inner(repo, actor, app_local, false)
+        Self::open_inner(repo, actor, app_local)
     }
     pub fn open_view_only(repo: Arc<CollaborationRepository>, app_local: &Path) -> Result<Self> {
         require(
-            repo.manifest().format_version == 2,
-            "View-only identity requires format 2",
+            repo.manifest().format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
+            "Unsupported collaboration format",
         )?;
-        Self::open_inner(repo, None, app_local, true)
+        Self::open_inner(repo, None, app_local)
     }
     fn open_inner(
         repo: Arc<CollaborationRepository>,
         actor: Option<Arc<AuthorSession>>,
         app_local: &Path,
-        view_only: bool,
     ) -> Result<Self> {
         if let Some(actor) = &actor {
             require(
@@ -207,9 +207,7 @@ impl PrivateWorkspace {
         let root_key = hash(repo.root().to_string_lossy().as_bytes());
         let actor_id = actor
             .as_ref()
-            .map_or(if view_only { "view-only" } else { "guest" }, |a| {
-                a.identity().author_id.as_str()
-            })
+            .map_or("view-only", |a| a.identity().author_id.as_str())
             .to_owned();
         let mut root = app_local;
         for segment in [
@@ -222,7 +220,9 @@ impl PrivateWorkspace {
             atomic::ensure_dir(&root)?;
         }
         let lock = atomic::lock(&root.join(".workspace.lock"))?;
-        let manifest_hash = if repo.manifest().format_version == 2 {
+        let manifest_hash = if repo.manifest().format_version
+            == crate::collaboration::CURRENT_COLLABORATION_FORMAT
+        {
             repo.manifest_identity().to_owned()
         } else {
             hash(
@@ -237,7 +237,9 @@ impl PrivateWorkspace {
             format_version: 1,
             root_key,
             manifest_hash,
-            catalog: (repo.manifest().format_version == 2).then(|| repo.manifest().media.clone()),
+            catalog: (repo.manifest().format_version
+                == crate::collaboration::CURRENT_COLLABORATION_FORMAT)
+                .then(|| repo.manifest().media.clone()),
             actor: actor_id,
             sequence: 0,
             generation: 0,
@@ -261,7 +263,9 @@ impl PrivateWorkspace {
                 let result = atomic::read(&path, MAX_CACHE_BYTES)
                     .and_then(|b| decode::<PrivateEnvelope>(&b, MAX_CACHE_BYTES, CACHE_KIND))
                     .and_then(|mut candidate| {
-                        if repo.manifest().format_version == 2 {
+                        if repo.manifest().format_version
+                            == crate::collaboration::CURRENT_COLLABORATION_FORMAT
+                        {
                             let mut previous = repo.manifest().clone();
                             previous.media = candidate.catalog.clone().ok_or_else(|| {
                                 AppError::invalid("Missing private catalog authority")
@@ -318,6 +322,7 @@ impl PrivateWorkspace {
         };
         let mut workspace = Self {
             repo,
+            actor_display: actor.as_ref().map(|a| a.identity().clone()),
             actor,
             root,
             _lock: lock,
@@ -351,7 +356,9 @@ impl PrivateWorkspace {
         self.validate_catalog(&repo)?;
         let mut next = self.envelope.clone();
         extend_document(&mut next.document, repo.manifest())?;
-        next.catalog = (repo.manifest().format_version == 2).then(|| repo.manifest().media.clone());
+        next.catalog = (repo.manifest().format_version
+            == crate::collaboration::CURRENT_COLLABORATION_FORMAT)
+            .then(|| repo.manifest().media.clone());
         next.document.revision = increment(next.document.revision)?;
         self.commit_for_manifest(next, repo.manifest())?;
         // Keep the admitted capture nonce and author lease: old payloads remain valid.
@@ -435,7 +442,8 @@ impl PrivateWorkspace {
         &self.envelope.preferences
     }
     pub fn is_view_only(&self) -> bool {
-        self.repo.manifest().format_version == 2 && self.actor.is_none()
+        self.repo.manifest().format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT
+            && self.actor.is_none()
     }
     pub fn hidden_media_ids(&self) -> &[String] {
         &self.envelope.hidden_media_ids
@@ -444,8 +452,9 @@ impl PrivateWorkspace {
     pub fn set_media_hidden(&mut self, media_id: &str, hidden: bool) -> Result<()> {
         self.require_ready()?;
         require(
-            self.repo.manifest().format_version == 2,
-            "Private hiding requires format 2",
+            self.repo.manifest().format_version
+                == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
+            "Unsupported collaboration format",
         )?;
         require(
             self.repo.manifest().media.iter().any(|m| m.id == media_id),
@@ -463,8 +472,9 @@ impl PrivateWorkspace {
     pub fn set_hidden_media_ids(&mut self, mut ids: Vec<String>) -> Result<()> {
         self.require_ready()?;
         require(
-            self.repo.manifest().format_version == 2,
-            "Private hiding requires format 2",
+            self.repo.manifest().format_version
+                == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
+            "Unsupported collaboration format",
         )?;
         limit(ids.len() <= super::validation::MAX_MEDIA)?;
         ids.sort();
@@ -496,7 +506,17 @@ impl PrivateWorkspace {
         self.actor.clone()
     }
     pub fn actor(&self) -> Option<&AuthorIdentity> {
-        self.actor.as_ref().map(|a| a.identity())
+        self.actor_display.as_ref()
+    }
+    /// Display refresh cannot change the lease, document, history or stable UUID.
+    pub fn refresh_actor_display(&mut self, profile: &profiles::Profile) {
+        if self
+            .actor
+            .as_ref()
+            .is_some_and(|a| a.identity().author_id == profile.author_id)
+        {
+            self.actor_display = Some(profile.clone().into());
+        }
     }
     pub fn inject_fault(&mut self, fault: Option<WorkspaceFault>) {
         self.fault = fault;
@@ -647,7 +667,9 @@ impl PrivateWorkspace {
         install_payload(&mut next.document, &payload, self.repo.manifest())?;
         next.document.revision = increment(next.document.revision)?;
         next.base = checkpoint;
-        next.confirmed = if self.repo.manifest().format_version == 2 {
+        next.confirmed = if self.repo.manifest().format_version
+            == crate::collaboration::CURRENT_COLLABORATION_FORMAT
+        {
             payload
         } else {
             LayerPayload::from_document(&next.document)?
@@ -685,7 +707,7 @@ impl PrivateWorkspace {
         Ok(())
     }
     fn validate_remote(&self, remote: Option<&AuthorLayer>) -> Result<()> {
-        require(self.actor.is_some(), "Guest has no shared author layer")?;
+        require(self.actor.is_some(), "View-only has no author layer")?;
         if let Some(remote) = remote {
             AuthorLayer::parse(
                 &serde_json::to_vec(remote)
@@ -715,7 +737,9 @@ impl PrivateWorkspace {
         install_payload(&mut next.document, &payload, self.repo.manifest())?;
         next.document.revision = increment(next.document.revision)?;
         next.base = remote.map(AuthorLayer::checkpoint);
-        next.confirmed = if self.repo.manifest().format_version == 2 {
+        next.confirmed = if self.repo.manifest().format_version
+            == crate::collaboration::CURRENT_COLLABORATION_FORMAT
+        {
             payload
         } else {
             LayerPayload::from_document(&next.document)?
@@ -747,7 +771,7 @@ fn validate_envelope(
     )?;
     limit(e.sequence <= MAX_SAFE_INTEGER && e.generation <= MAX_SAFE_INTEGER)?;
     require(
-        if manifest.format_version == 2 {
+        if manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT {
             e.catalog.as_ref() == Some(&manifest.media)
         } else {
             e.catalog.is_none()
@@ -819,7 +843,9 @@ fn validate_envelope(
             "Invalid hidden media preference",
         )?;
     }
-    if manifest.format_version == 2 && e.actor == "view-only" {
+    if manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT
+        && e.actor == "view-only"
+    {
         require(
             e.base.is_none()
                 && e.pending.is_none()
@@ -863,63 +889,4 @@ pub(crate) fn install_payload(
         media.channel_category_ids = labels.channel_category_ids.clone();
     }
     document.validate()
-}
-
-/// Build the whole proposed merge before changing the session or history.
-pub(crate) fn merge_guest(
-    current: &ProjectDocument,
-    guest: &LayerPayload,
-    manifest: &CollaborationManifest,
-) -> Result<ProjectDocument> {
-    let guest = guest.project(manifest)?;
-    let mut next = current.clone();
-    let mut remap = std::collections::HashMap::new();
-    for mut category in guest.categories {
-        let id = uuid::Uuid::new_v4().to_string();
-        remap.insert(category.id, id.clone());
-        category.id = id;
-        next.categories.push(category);
-    }
-    let category = |id: Option<String>| -> Option<String> { id.map(|id| remap[&id].clone()) };
-    for mut annotation in guest.annotations {
-        annotation.id = uuid::Uuid::new_v4().to_string();
-        annotation.category_id = category(annotation.category_id);
-        next.annotations.push(annotation);
-    }
-    for (own, foreign) in next.media.iter_mut().zip(guest.media) {
-        merge_note(&mut own.note, foreign.note)?;
-        merge_category(&mut own.category_id, category(foreign.category_id))?;
-        for (own, foreign) in own.channel_notes.iter_mut().zip(foreign.channel_notes) {
-            merge_note(own, foreign)?;
-        }
-        for (own, foreign) in own
-            .channel_category_ids
-            .iter_mut()
-            .zip(foreign.channel_category_ids)
-        {
-            merge_category(own, category(foreign))?;
-        }
-    }
-    next.validate()?;
-    Ok(next)
-}
-fn merge_note(own: &mut String, foreign: String) -> Result<()> {
-    if !foreign.is_empty() {
-        require(
-            own.is_empty() || *own == foreign,
-            "Guest file/channel note conflicts with your layer",
-        )?;
-        *own = foreign;
-    }
-    Ok(())
-}
-fn merge_category(own: &mut Option<String>, foreign: Option<String>) -> Result<()> {
-    if foreign.is_some() {
-        require(
-            own.is_none() || *own == foreign,
-            "Guest file/channel category conflicts with your layer",
-        )?;
-        *own = foreign;
-    }
-    Ok(())
 }

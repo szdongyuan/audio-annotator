@@ -97,9 +97,11 @@ pub fn release(service: &Service, task: &str, media: &str) -> Result<()> {
 }
 pub fn can_import(project: &annotator_core::project::LocalProject) -> bool {
     !project.is_shared()
-        || project
-            .workspace()
-            .is_ok_and(|w| w.manifest().format_version == 2 && w.actor().is_some())
+        || project.workspace().is_ok_and(|w| {
+            w.manifest().format_version
+                == annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
+                && w.actor().is_some()
+        })
 }
 pub async fn import(
     state: &AppState,

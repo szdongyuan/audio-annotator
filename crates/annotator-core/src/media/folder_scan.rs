@@ -350,6 +350,9 @@ impl Default for FolderTasks {
     }
 }
 impl FolderTasks {
+    pub fn has_pending_work(&self) -> bool {
+        self.active.is_some()
+    }
     pub fn begin(&mut self) -> Result<(ScanToken, Arc<AtomicBool>)> {
         if self.active.is_some() {
             return Err(AppError::new(

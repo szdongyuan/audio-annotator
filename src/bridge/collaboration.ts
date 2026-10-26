@@ -1,12 +1,13 @@
+import { parseProfile, type Profile } from './profileMetadata';
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { normalizeError } from './client';
 import { parseOpened, type OpenedProject } from './projects';
 import { parseAppError, parseChange, type Annotation, type AppError, type Category, type ProjectDocument } from './types';
 
-export interface AuthorIdentity { authorId:string; normalizedLogin:string; displayName:string; createdAt:string }
+export type AuthorIdentity = Profile;
 export interface PlaybackPreferences { volume:number; deviceId:string|null; loopEnabled:boolean; source:'original'|'processed' }
-export interface Capabilities { projectFlavor:'ordinary'|'legacyShared'|'default'; identityMode:'ordinary'|'guest'|'local'|'account'|'viewOnly'; canWriteAnnotations:boolean; canImportMedia:boolean; hiddenMediaIds:string[]; catalogPending:boolean }
+export interface Capabilities { projectFlavor:'ordinary'|'default'; identityMode:'ordinary'|'profile'|'viewOnly'; canWriteAnnotations:boolean; canImportMedia:boolean; hiddenMediaIds:string[]; catalogPending:boolean }
 export interface SharedContext extends Capabilities { runtimeNonce:string; actor:AuthorIdentity|null; preferences:PlaybackPreferences|null }
 export interface MediaLabels { mediaId:string; note:string; channelNotes:string[]; categoryId:string|null; channelCategoryIds:(string|null)[] }
 export interface AuthorLayer { kind:'audio-annotator-author-layer'; formatVersion:1; projectId:string; authorId:string; revision:number; parent:{revision:number;hash:string}|null; payload:{categories:Category[];annotations:Annotation[];mediaLabels:MediaLabels[]};hash:string }
@@ -15,8 +16,6 @@ export interface CollaborationSnapshot { projectId:string; authors:AuthorSnapsho
 export interface CollaborationStatus extends SharedContext { formatVersion:1; projectId:string|null; shared:boolean; pending:boolean; recoveryRequired:boolean; busy:boolean; lastSuccessMs:number|null;error:AppError|null;snapshot:CollaborationSnapshot|null }
 export interface Expected { runtimeNonce:string; projectId:string; expectedRevision:number }
 export interface Transition { opened:OpenedProject; status:CollaborationStatus }
-export interface Credentials { login:string; displayName:string; password:string }
-export type IdentityAction={type:'register';login:string;displayName:string;password:string}|{type:'login';login:string;password:string}|{type:'logout'};
 export interface CopyProgress {operationId:string;phase:string;completed:number}
 type Check=(v:unknown)=>void;
 function check(v:unknown):asserts v {if(!v)throw new Error('Invalid collaboration response');}
@@ -41,24 +40,22 @@ const text=(max:number):Check=>v=>check(typeof v==='string'&&v.length<=max&&!v.i
 // its size; account/path restrictions must not impose extra payload semantics.
 const payloadText:Check=v=>check(typeof v==='string');
 const nonempty=(max:number):Check=>v=>{text(max)(v);check((v as string).trim().length>0);};
-const password:Check=v=>{text(512)(v);const value=v as string;check([...value].length>=8&&[...value].length<=128&&new TextEncoder().encode(value).length<=512);};
 const uuid:Check=v=>{text(36)(v);check(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(v as string)&&v!=='00000000-0000-0000-0000-000000000000');};
 const integer:Check=v=>check(Number.isSafeInteger(v)&&(v as number)>=0);
 const bool:Check=v=>check(typeof v==='boolean');
 const nullable=(f:Check):Check=>v=>{if(v!==null)f(v);};
 const array=(max:number,f:Check):Check=>v=>{check(Array.isArray(v)&&v.length<=max);v.forEach(f);};
 const hash:Check=v=>{text(64)(v);check(/^[a-f0-9]{64}$/.test(v as string));};
-const utc:Check=v=>{text(64)(v);check(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(v as string)&&Number.isFinite(Date.parse(v as string)));check(new Date(v as string).toISOString().slice(0,19)===(v as string).slice(0,19));};
-const identity:Check=v=>shape(v,{authorId:uuid,normalizedLogin:nonempty(256),displayName:nonempty(256),createdAt:utc});
-const error:Check=v=>{parseAppError(v);text(16384)(object(v).message);if(object(v).details!==undefined)boundedJson(object(v).details,65536);};
+const identity:Check=v=>{parseProfile(v);};
+export function parseCollaborationError(v:unknown):AppError{parseAppError(v);text(16384)(object(v).message);if(object(v).details!==undefined)boundedJson(object(v).details,65536);return v as AppError;}
+const error:Check=parseCollaborationError;
 export function parseCopyProgress(v:unknown):CopyProgress{shape(v,{operationId:uuid,phase:nonempty(256),completed:integer});return v as CopyProgress;}
 export function parsePreferences(v:unknown):PlaybackPreferences{shape(v,{volume:v=>check(typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=1),deviceId:nullable(text(4096)),loopEnabled:bool,source:v=>check(v==='original'||v==='processed')});return v as PlaybackPreferences;}
-const capabilityFields = {projectFlavor:(v:unknown)=>check(['ordinary','legacyShared','default'].includes(v as string)),identityMode:(v:unknown)=>check(['ordinary','guest','local','account','viewOnly'].includes(v as string)),canWriteAnnotations:bool,canImportMedia:bool,hiddenMediaIds:array(4096,uuid),catalogPending:bool};
+const capabilityFields = {projectFlavor:(v:unknown)=>check(['ordinary','default'].includes(v as string)),identityMode:(v:unknown)=>check(['ordinary','profile','viewOnly'].includes(v as string)),canWriteAnnotations:bool,canImportMedia:bool,hiddenMediaIds:array(4096,uuid),catalogPending:bool};
 function capabilities(c:SharedContext, hasProject=true){
  check(new Set(c.hiddenMediaIds).size===c.hiddenMediaIds.length);
  if(c.projectFlavor==='ordinary')check(c.identityMode==='ordinary'&&c.actor===null&&c.hiddenMediaIds.length===0&&!c.catalogPending&&c.canWriteAnnotations===hasProject&&c.canImportMedia===hasProject);
- else if(c.projectFlavor==='legacyShared')check((c.identityMode==='guest'&&c.actor===null||c.identityMode==='account'&&c.actor!==null)&&c.canWriteAnnotations&&!c.canImportMedia&&c.hiddenMediaIds.length===0&&!c.catalogPending);
- else check((c.identityMode==='viewOnly'&&c.actor===null&&!c.canWriteAnnotations&&!c.canImportMedia)||(['local','account'].includes(c.identityMode)&&c.actor!==null&&c.canWriteAnnotations&&c.canImportMedia));
+ else check((c.identityMode==='viewOnly'&&c.actor===null&&!c.canWriteAnnotations&&!c.canImportMedia)||(c.identityMode==='profile'&&c.actor!==null&&c.canWriteAnnotations&&c.canImportMedia));
 }
 export function parseSharedContext(v:unknown):SharedContext{boundedJson(v,256*1024);shape(v,{runtimeNonce:uuid,actor:nullable(identity),preferences:nullable(parsePreferences),...capabilityFields});capabilities(v as SharedContext);return v as SharedContext;}
 const unique=(ids:string[])=>check(new Set(ids).size===ids.length);
@@ -90,9 +87,7 @@ export const collaborationClient={
  refresh:(e:Expected)=>{expected(e);return call('collaboration_refresh',{expected:e},parseCollaborationStatus);},
  sync:(e:Expected)=>{expected(e);return call('collaboration_sync',{expected:e},parseCollaborationStatus);},
  preferences:(e:Expected,preferences:PlaybackPreferences)=>{expected(e);parsePreferences(preferences);return call('collaboration_preferences',{expected:e,preferences},parseCollaborationStatus);},
- identity:(e:Expected,operationId:string,action:IdentityAction)=>{expected(e);uuid(operationId);shape(action,action.type==='logout'?{type:v=>check(v==='logout')}:action.type==='login'?{type:v=>check(v==='login'),login:nonempty(256),password}:{type:v=>check(v==='register'),login:nonempty(256),displayName:nonempty(256),password});return call('collaboration_identity',{expected:e,operationId,action},parseTransition);},
- create:(e:Expected,operationId:string,target:string,credentials:Credentials|undefined,progress:(p:CopyProgress)=>void)=>{expected(e);uuid(operationId);nonempty(32768)(target);if(credentials)shape(credentials,{login:nonempty(256),displayName:nonempty(256),password});const onProgress=new Channel<unknown>();onProgress.onmessage=v=>{parseCopyProgress(v);if((v as CopyProgress).operationId===operationId)progress(v as CopyProgress);};return call('collaboration_create',{expected:e,operationId,target,credentials,onProgress},parseTransition);},
- publishGuest:(e:Expected,operationId:string)=>{expected(e);uuid(operationId);return call('collaboration_publish_guest',{expected:e,operationId},parseTransition);},
+ create:(e:Expected,operationId:string,target:string,progress:(p:CopyProgress)=>void)=>{expected(e);uuid(operationId);nonempty(32768)(target);const onProgress=new Channel<unknown>();onProgress.onmessage=v=>{parseCopyProgress(v);if((v as CopyProgress).operationId===operationId)progress(v as CopyProgress);};return call('collaboration_create',{expected:e,operationId,target,onProgress},parseTransition);},
  loadShared:(e:Expected,operationId:string)=>{expected(e);uuid(operationId);return call('collaboration_load_shared',{expected:e,operationId},parseTransition);},
  cancel:(operationId:string)=>{uuid(operationId);return call('collaboration_cancel',{operationId},()=>undefined);},
  chooseTarget:async()=>{const p=await open({directory:true,multiple:false,title:'创建协作副本 · 选择空文件夹'});return typeof p==='string'?p:null;},

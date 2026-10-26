@@ -2,7 +2,8 @@ use crate::model::{Annotation, Category, MediaDescriptor};
 use serde::{Deserialize, Serialize};
 pub const MANIFEST_KIND: &str = "audio-annotator-collaboration";
 pub const LAYER_KIND: &str = "audio-annotator-author-layer";
-pub const ACCOUNT_KIND: &str = "audio-annotator-account";
+pub const AUTHOR_KIND: &str = "audio-annotator-author";
+pub const CURRENT_COLLABORATION_FORMAT: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -68,19 +69,17 @@ pub struct LayerPayload {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AuthorIdentity {
     pub author_id: String,
-    pub normalized_login: String,
     pub display_name: String,
     pub created_at: String,
 }
-// Credentials are neither Debug nor part of read snapshots.
+// Public identity metadata; ownership authority is the held writer lease.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AccountRecord {
+pub struct AuthorRecord {
     pub kind: String,
     pub format_version: u32,
     pub project_id: String,
     pub identity: AuthorIdentity,
-    pub password_hash: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

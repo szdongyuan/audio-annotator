@@ -1,5 +1,4 @@
 use super::{
-    accounts,
     atomic::{self, PublishFault},
     validation::*,
     *,
@@ -28,7 +27,7 @@ pub struct CollaborationRepository {
 pub struct AuthorSession {
     root: PathBuf,
     project_id: String,
-    account: AccountRecord,
+    identity: AuthorIdentity,
     _lock: File,
 }
 impl AuthorSession {
@@ -36,7 +35,7 @@ impl AuthorSession {
         self.root == repo.root && self.project_id == repo.manifest.project_id
     }
     pub fn identity(&self) -> &AuthorIdentity {
-        &self.account.identity
+        &self.identity
     }
 }
 fn conflict() -> AppError {
@@ -71,7 +70,7 @@ impl CollaborationRepository {
         let bytes = atomic::read(&root.join("collaboration.json"), MAX_LAYER_BYTES)?;
         let loaded = super::catalog::load(&root, &bytes, &mut after_entry)?;
         let manifest = loaded.manifest;
-        for name in ["accounts", "annotations", "media"] {
+        for name in ["authors", "annotations", "media"] {
             let path = root.join(name);
             atomic::safe_existing(&path)?;
             require(path.is_dir(), "Missing collaboration directory")?;
@@ -90,7 +89,7 @@ impl CollaborationRepository {
             catalog_revision: loaded.revision,
             catalog_record_hashes: loaded.record_hashes,
         };
-        repo.accounts()?;
+        repo.authors()?;
         Ok(repo)
     }
     pub fn root(&self) -> &Path {
@@ -106,22 +105,23 @@ impl CollaborationRepository {
             "Immutable collaboration manifest changed",
         )
     }
-    fn account(&self, login: &str) -> Result<AccountRecord> {
+    fn author(&self, author_id: &str) -> Result<AuthorRecord> {
+        uuid(author_id)?;
         let bytes = atomic::read(
-            &self.root.join("accounts").join(accounts::filename(login)),
-            MAX_ACCOUNT_BYTES,
+            &self.root.join("authors").join(format!("{author_id}.json")),
+            MAX_AUTHOR_BYTES,
         )?;
-        let account = AccountRecord::parse(&bytes, &self.manifest.project_id)?;
+        let record = AuthorRecord::parse(&bytes, &self.manifest.project_id)?;
         require(
-            account.identity.normalized_login == login,
-            "Account filename identity mismatch",
+            record.identity.author_id == author_id,
+            "Author filename identity mismatch",
         )?;
-        Ok(account)
+        Ok(record)
     }
-    fn accounts(&self) -> Result<Vec<AccountRecord>> {
-        let dir = self.root.join("accounts");
+    fn authors(&self) -> Result<Vec<AuthorRecord>> {
+        let dir = self.root.join("authors");
         atomic::safe_existing(&dir)?;
-        let mut accounts = Vec::new();
+        let mut records = Vec::new();
         let mut authors = HashSet::new();
         for (index, entry) in fs::read_dir(&dir).map_err(atomic::io)?.enumerate() {
             limit(index < 256)?;
@@ -129,111 +129,88 @@ impl CollaborationRepository {
             let name = entry.file_name();
             let name = name
                 .to_str()
-                .ok_or_else(|| AppError::invalid("Invalid account filename"))?;
-            if matches!(name, ".registration.lock" | ".local-registration.lock")
-                || (name.starts_with('.') && name.ends_with(".tmp"))
-            {
+                .ok_or_else(|| AppError::invalid("Invalid author filename"))?;
+            if name == ".registration.lock" || (name.starts_with('.') && name.ends_with(".tmp")) {
                 continue;
             }
+            let id = name
+                .strip_suffix(".json")
+                .ok_or_else(|| AppError::invalid("Unknown author directory entry"))?;
+            uuid(id)?;
+            limit(records.len() < MAX_AUTHORS)?;
+            let record = self.author(id)?;
             require(
-                name.ends_with(".json") && name.len() == 69,
-                "Unknown account directory entry",
+                authors.insert(record.identity.author_id.clone()),
+                "Duplicate author identity",
             )?;
-            limit(accounts.len() < MAX_ACCOUNTS)?;
-            let account = AccountRecord::parse(
-                &atomic::read(&entry.path(), MAX_ACCOUNT_BYTES)?,
-                &self.manifest.project_id,
-            )?;
-            require(
-                accounts::filename(&account.identity.normalized_login) == name
-                    && authors.insert(account.identity.author_id.clone()),
-                "Duplicate or mismatched account identity",
-            )?;
-            accounts.push(account);
+            records.push(record);
         }
-        accounts.sort_by(|a, b| a.identity.author_id.cmp(&b.identity.author_id));
-        Ok(accounts)
+        records.sort_by(|a, b| a.identity.author_id.cmp(&b.identity.author_id));
+        Ok(records)
     }
-    pub fn register(&self, login: &str, display: &str, password: &str) -> Result<AuthorIdentity> {
-        require(
-            !accounts::normalized_login(login)?.starts_with(super::local_identity::LOCAL_PREFIX),
-            "Reserved local identity account name",
-        )?;
-        self.register_internal(login, display, password)
-    }
-    fn register_internal(
-        &self,
-        login: &str,
-        display: &str,
-        password: &str,
-    ) -> Result<AuthorIdentity> {
+    /// Adopt the global UUID and hold its project-specific single-writer lease.
+    pub fn adopt(&self, profile: &profiles::Profile) -> Result<AuthorSession> {
+        profile.validate()?;
         self.authority()?;
-        let login = accounts::normalized_login(login)?;
-        // Short, account-registration-only lock bounds simultaneous additions; never used for author publication.
-        let _registration = atomic::lock(&self.root.join("accounts/.registration.lock"))?;
-        let existing = self.accounts()?;
-        require(
-            !existing
-                .iter()
-                .any(|a| a.identity.normalized_login == login),
-            "Account already exists",
-        )?;
-        limit(existing.len() < MAX_ACCOUNTS)?;
-        let account = AccountRecord::create(&self.manifest.project_id, &login, display, password)?;
-        let bytes =
-            serde_json::to_vec(&account).map_err(|_| AppError::invalid("Cannot encode account"))?;
-        limit(bytes.len() <= MAX_ACCOUNT_BYTES)?;
-        self.authority()?;
-        atomic::publish_new(
-            &self.root.join("accounts").join(accounts::filename(&login)),
-            &bytes,
-            None,
-            None,
-        )?;
-        Ok(account.identity)
-    }
-    pub fn login(&self, login: &str, password: &str) -> Result<AuthorSession> {
-        self.authority()?;
-        let login = accounts::normalized_login(login)?;
-        let account = self.account(&login)?;
-        account.verify(password)?;
-        let dir = self.author_dir(&account.identity.author_id)?;
+        let dir = self.author_dir(&profile.author_id)?;
         atomic::ensure_dir(&dir)?;
         let mut lock = atomic::lock(&dir.join(".writer.lock"))?;
-        let lock_token = uuid::Uuid::new_v4().to_string();
         lock.set_len(0).map_err(atomic::io)?;
-        lock.write_all(lock_token.as_bytes()).map_err(atomic::io)?;
+        lock.write_all(uuid::Uuid::new_v4().to_string().as_bytes())
+            .map_err(atomic::io)?;
         lock.sync_all().map_err(atomic::io)?;
         let session = AuthorSession {
             root: self.root.clone(),
             project_id: self.manifest.project_id.clone(),
-            account,
+            identity: profile.clone().into(),
             _lock: lock,
         };
+        self.write_author(profile)?;
         self.session_authority(&session)?;
         Ok(session)
     }
-    /// Registers only after the local credential capability has been durably persisted.
-    pub fn login_local(&self, identity: &LocalIdentity) -> Result<AuthorSession> {
+    pub fn refresh_author(
+        &self,
+        session: &AuthorSession,
+        profile: &profiles::Profile,
+    ) -> Result<()> {
+        self.session_authority(session)?;
+        require(
+            session.identity.author_id == profile.author_id,
+            "Author UUID mismatch",
+        )?;
+        self.write_author(profile)
+    }
+    fn write_author(&self, profile: &profiles::Profile) -> Result<()> {
+        profile.validate()?;
         self.authority()?;
-        let path = self
-            .root
-            .join("accounts")
-            .join(accounts::filename(identity.login_name()));
-        if !path.try_exists().map_err(atomic::io)? {
-            // Serialize local auto-registration, including the check, across processes.
-            let _lock = super::local_identity::short_lock(
-                &self.root.join("accounts/.local-registration.lock"),
-            )?;
-            if !path.try_exists().map_err(atomic::io)? {
-                self.register_internal(
-                    identity.login_name(),
-                    identity.display_name(),
-                    &identity.secret,
-                )?;
-            }
+        let _registration = atomic::short_lock(&self.root.join("authors/.registration.lock"))?;
+        let existing = self.authors()?;
+        let old = existing
+            .iter()
+            .find(|a| a.identity.author_id == profile.author_id);
+        let record = AuthorRecord {
+            kind: AUTHOR_KIND.into(),
+            format_version: 1,
+            project_id: self.manifest.project_id.clone(),
+            identity: profile.clone().into(),
+        };
+        if old == Some(&record) {
+            return Ok(());
         }
-        self.login(identity.login_name(), &identity.secret)
+        limit(old.is_some() || existing.len() < MAX_AUTHORS)?;
+        let bytes =
+            serde_json::to_vec(&record).map_err(|_| AppError::invalid("Cannot encode author"))?;
+        limit(bytes.len() <= MAX_AUTHOR_BYTES)?;
+        let target = self
+            .root
+            .join("authors")
+            .join(format!("{}.json", profile.author_id));
+        self.authority()?;
+        if old.is_none() {
+            return atomic::publish_new(&target, &bytes, None, None);
+        }
+        atomic::replace_metadata(&target, &bytes)
     }
     fn author_dir(&self, author: &str) -> Result<PathBuf> {
         uuid(author)?;
@@ -242,16 +219,13 @@ impl CollaborationRepository {
     pub(super) fn session_authority(&self, session: &AuthorSession) -> Result<()> {
         require(
             session.root == self.root && session.project_id == self.manifest.project_id,
-            "Authenticated capability belongs to another project",
+            "Author capability belongs to another project",
         )?;
         self.authority()?;
-        require(
-            self.account(&session.account.identity.normalized_login)? == session.account,
-            "Authenticated account changed",
-        )?;
+        self.author(&session.identity.author_id)?;
         atomic::verify_lock_path(
             &self
-                .author_dir(&session.account.identity.author_id)?
+                .author_dir(&session.identity.author_id)?
                 .join(".writer.lock"),
             &session._lock,
         )
@@ -344,7 +318,7 @@ impl CollaborationRepository {
     pub fn read_author(&self, author: &str) -> Result<Option<AuthorLayer>> {
         self.authority()?;
         require(
-            self.accounts()?
+            self.authors()?
                 .iter()
                 .any(|a| a.identity.author_id == author),
             "Unknown author",
@@ -378,7 +352,7 @@ impl CollaborationRepository {
             )?;
             digest(&base.hash)?;
         }
-        let author = &session.account.identity.author_id;
+        let author = &session.identity.author_id;
         let mut layer = AuthorLayer {
             kind: LAYER_KIND.into(),
             format_version: 1,
@@ -424,7 +398,7 @@ impl CollaborationRepository {
         Ok(checkpoint)
     }
     fn prune(&self, session: &AuthorSession) -> Result<()> {
-        let author = &session.account.identity.author_id;
+        let author = &session.identity.author_id;
         let revisions = self.revisions(author)?;
         for revision in revisions.iter().take(revisions.len().saturating_sub(16)) {
             self.session_authority(session)?;
@@ -439,7 +413,7 @@ impl CollaborationRepository {
         Ok(())
     }
     pub fn snapshot(&self) -> Result<CollaborationSnapshot> {
-        if self.manifest.format_version == 2 {
+        if self.manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT {
             let mut result = self.snapshot_with_catalog()?;
             // Legacy snapshot consumers retain their last verified layer on this explicit
             // deferred condition; catalog-aware callers receive the complete staged payload.
@@ -464,7 +438,7 @@ impl CollaborationRepository {
     }
     pub(super) fn snapshot_loaded(&self) -> Result<CollaborationSnapshot> {
         self.authority()?;
-        let accounts = self.accounts()?;
+        let accounts = self.authors()?;
         let mut authors = Vec::new();
         let mut budget = ReadBudget::new(MAX_TOTAL_LAYER_BYTES);
         for account in accounts {

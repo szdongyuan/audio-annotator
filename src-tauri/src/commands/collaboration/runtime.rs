@@ -24,10 +24,13 @@ pub struct Service {
     job: JobSlot,
     preparation: JobSlot,
     local: Mutex<Option<PathBuf>>,
+    pub selected: Mutex<Option<String>>,
     #[cfg(test)]
     pub hook: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     #[cfg(test)]
     pub after_io: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    #[cfg(test)]
+    pub list_after_identity: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 impl Default for Service {
     fn default() -> Self {
@@ -52,10 +55,13 @@ impl Default for Service {
             job: Arc::new(Mutex::new(None)),
             preparation: Arc::new(Mutex::new(None)),
             local: Mutex::new(None),
+            selected: Mutex::new(None),
             #[cfg(test)]
             hook: Mutex::new(None),
             #[cfg(test)]
             after_io: Mutex::new(None),
+            #[cfg(test)]
+            list_after_identity: Mutex::new(None),
         }
     }
 }
@@ -124,6 +130,19 @@ impl Service {
             .clone()
             .ok_or_else(|| AppError::invalid("Private data directory unavailable"))
     }
+    pub fn profile_store(&self) -> Result<profiles::ProfileStore> {
+        profiles::ProfileStore::load_or_create(&self.local()?)
+    }
+    pub fn selected_profile(&self) -> Result<profiles::Profile> {
+        let mut selected = self.selected.lock().map_err(|_| unavailable())?;
+        let snapshot = self.profile_store()?.snapshot()?;
+        let id = selected.get_or_insert_with(|| snapshot.last_selected_author_id.clone());
+        snapshot
+            .profiles
+            .into_iter()
+            .find(|p| &p.author_id == id)
+            .ok_or_else(stale)
+    }
     pub fn begin(&self, id: String) -> Result<Permit> {
         let mut slot = self.job.lock().map_err(|_| unavailable())?;
         if slot.is_some() {
@@ -171,6 +190,13 @@ impl Service {
             }
         }
         Ok(())
+    }
+    pub fn preparing(&self) -> Result<bool> {
+        Ok(self
+            .preparation
+            .lock()
+            .map_err(|_| unavailable())?
+            .is_some())
     }
     pub fn busy(&self) -> bool {
         self.job.lock().map(|j| j.is_some()).unwrap_or(true)
@@ -280,16 +306,13 @@ impl Expected {
 #[serde(rename_all = "camelCase")]
 pub enum ProjectFlavor {
     Ordinary,
-    LegacyShared,
     Default,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum IdentityMode {
     Ordinary,
-    Guest,
-    Local,
-    Account,
+    Profile,
     ViewOnly,
 }
 #[derive(Clone, Serialize)]
@@ -331,25 +354,31 @@ pub struct Context {
 }
 pub fn status(project: Option<&LocalProject>, service: &Service) -> Result<Status> {
     let r = service.current.lock().map_err(|_| unavailable())?;
+    status_for_runtime(project, &r, service.busy())
+}
+pub fn status_for_runtime(
+    project: Option<&LocalProject>,
+    r: &Runtime,
+    busy: bool,
+) -> Result<Status> {
     let workspace = project.and_then(|p| p.workspace().ok());
     Ok(Status {
         project_flavor: match workspace {
             None => ProjectFlavor::Ordinary,
-            Some(w) if w.manifest().format_version == 2 => ProjectFlavor::Default,
-            _ => ProjectFlavor::LegacyShared,
+            Some(_) => ProjectFlavor::Default,
         },
         identity_mode: match workspace {
             None => IdentityMode::Ordinary,
             Some(w) if w.is_view_only() => IdentityMode::ViewOnly,
-            Some(w) => match w.actor() {
-                None => IdentityMode::Guest,
-                Some(a) if a.normalized_login.starts_with("@local:") => IdentityMode::Local,
-                _ => IdentityMode::Account,
-            },
+            Some(_) => IdentityMode::Profile,
         },
         can_write_annotations: project.is_some() && workspace.is_none_or(|w| !w.is_view_only()),
         can_import_media: project.is_some()
-            && workspace.is_none_or(|w| w.manifest().format_version == 2 && w.actor().is_some()),
+            && workspace.is_none_or(|w| {
+                w.manifest().format_version
+                    == annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
+                    && w.actor().is_some()
+            }),
         hidden_media_ids: workspace
             .map(|w| w.hidden_media_ids().to_vec())
             .unwrap_or_default(),
@@ -364,7 +393,7 @@ pub fn status(project: Option<&LocalProject>, service: &Service) -> Result<Statu
         preferences: workspace.map(|w| w.preferences().clone()),
         pending: workspace.is_some_and(|w| w.actor().is_some() && w.envelope().pending.is_some()),
         recovery_required: project.is_some_and(|p| p.recovery().is_some()),
-        busy: service.busy(),
+        busy,
         last_success_ms: r.updated,
         error: workspace
             .and_then(|w| w.sync_error().cloned())

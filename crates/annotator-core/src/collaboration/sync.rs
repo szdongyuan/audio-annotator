@@ -80,7 +80,7 @@ impl RememberedLayers {
                 snapshot.authors.push(retained);
             }
         }
-        limit(snapshot.authors.len() <= MAX_ACCOUNTS)?;
+        limit(snapshot.authors.len() <= MAX_AUTHORS)?;
         let mut total = 0usize;
         for author in &snapshot.authors {
             if let Some(layer) = &author.layer {

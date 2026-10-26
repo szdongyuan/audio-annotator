@@ -17,7 +17,7 @@ import { NoteField } from '../annotations/NotesEditor';
 import { usePlayback } from '../playback/usePlayback';
 export function remoteFixture() {
  const store=new ProjectStore({document:structuredClone(fixture) as never,canUndo:true,canRedo:false});
- const identity=(id:string,name:string)=>({authorId:id,normalizedLogin:name,displayName:name,createdAt:'2026-10-23T00:00:00Z'});
+ const identity=(id:string,name:string)=>({authorId:id,displayName:name,createdAt:'2026-10-23T00:00:00Z'});
  const alice=identity('alice','Alice'),bob=identity('bob','Bob');
  const active={store,collaboration:{runtimeNonce:'session',actor:alice,preferences:null}} as ActiveProject;
  const author=(who:typeof alice):AuthorSnapshot=>({identity:who,error:null,layer:{kind:'audio-annotator-author-layer',formatVersion:1,projectId:fixture.projectId,authorId:who.authorId,revision:1,parent:null,hash:'hash',payload:{categories:[{...store.snapshot.document.categories[0],name:who.displayName+' category'}],annotations:structuredClone(store.snapshot.document.annotations),mediaLabels:store.snapshot.document.media.map(m=>({mediaId:m.id,note:who.displayName+' file',channelNotes:Array(m.channelCount).fill(who.displayName+' channel'),categoryId:store.snapshot.document.categories[0].id,channelCategoryIds:Array(m.channelCount).fill(null)}))}}});

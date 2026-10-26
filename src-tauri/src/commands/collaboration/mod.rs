@@ -12,3 +12,6 @@ pub mod exchange_default;
 
 #[cfg(test)]
 mod review_fixes;
+
+#[cfg(test)]
+pub(crate) mod test_profiles;

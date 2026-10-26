@@ -20,10 +20,10 @@ describe('captured runtime authority',()=>{
   invoked.mockClear();await createRuntimeCommands().playback.control('reset');
   expect(invoked).toHaveBeenCalledWith('playback_control',{action:'reset'});
  });
- it('passes passwords exactly, including whitespace, while enforcing native length bounds',async()=>{
+ it('creates collaboration copies using the selected native profile without credentials',async()=>{
   invoked.mockClear();invoked.mockRejectedValue({code:'Cancelled',message:'test boundary',retryable:true});const id='11111111-1111-4111-8111-111111111111';
-  await collaborationClient.identity({runtimeNonce:id,projectId:id,expectedRevision:0},id,{type:'login',login:'alice',password:'        '}).catch(()=>{});
-  expect(invoked).toHaveBeenCalledWith('collaboration_identity',expect.objectContaining({action:{type:'login',login:'alice',password:'        '}}));
+  await collaborationClient.create({runtimeNonce:id,projectId:id,expectedRevision:0},id,'target',()=>{}).catch(()=>{});
+  expect(invoked).toHaveBeenCalledWith('collaboration_create',{expected:{runtimeNonce:id,projectId:id,expectedRevision:0},operationId:id,target:'target',onProgress:expect.anything()});
  });
 });
 

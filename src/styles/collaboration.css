@@ -9,3 +9,7 @@
 .collaboration-dialog{width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto}
 .collaboration-dialog form{display:grid;gap:12px}.collaboration-dialog form>label{display:grid;gap:5px}.collaboration-dialog input:not([type=radio]):not([type=checkbox]){padding:7px 9px;color:inherit;background:var(--surface-base);border:1px solid var(--border);border-radius:4px}
 .collaboration-dialog details{font-size:12px;line-height:1.65}.collaboration-dialog p{line-height:1.65}.collaboration-dialog>.button{margin-right:8px}.author-filter{border:0;padding:0;margin:14px 0;display:grid;gap:8px}.author-filter-modes{display:flex;gap:14px}.author-filter label{display:flex;gap:6px;align-items:center}
+
+.identity-list {list-style:none;padding:0;max-height:45vh;overflow:auto;}
+.identity-list li {padding:10px 0;border-bottom:1px solid var(--border);}
+.identity-list input {width:100%;font-family:monospace;}

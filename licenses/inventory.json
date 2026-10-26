@@ -88,17 +88,6 @@
       ]
     },
     {
-      "name": "argon2",
-      "version": "0.5.3",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/RustCrypto/password-hashes/tree/master/argon2",
-      "kind": "Rust (runtime or build)",
-      "notices": [
-        "LICENSE-APACHE",
-        "LICENSE-MIT"
-      ]
-    },
-    {
       "name": "arrayvec",
       "version": "0.7.8",
       "license": "MIT OR Apache-2.0",
@@ -125,17 +114,6 @@
       "version": "0.23.1",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/marshallpierce/rust-base64",
-      "kind": "Rust (runtime or build)",
-      "notices": [
-        "LICENSE-APACHE",
-        "LICENSE-MIT"
-      ]
-    },
-    {
-      "name": "base64ct",
-      "version": "1.8.3",
-      "license": "Apache-2.0 OR MIT",
-      "repository": "https://github.com/RustCrypto/formats",
       "kind": "Rust (runtime or build)",
       "notices": [
         "LICENSE-APACHE",
@@ -180,17 +158,6 @@
       "version": "2.13.2",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/bitflags/bitflags",
-      "kind": "Rust (runtime or build)",
-      "notices": [
-        "LICENSE-APACHE",
-        "LICENSE-MIT"
-      ]
-    },
-    {
-      "name": "blake2",
-      "version": "0.10.6",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/RustCrypto/hashes",
       "kind": "Rust (runtime or build)",
       "notices": [
         "LICENSE-APACHE",
@@ -1446,17 +1413,6 @@
       ]
     },
     {
-      "name": "password-hash",
-      "version": "0.5.0",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/RustCrypto/traits/tree/master/password-hash",
-      "kind": "Rust (runtime or build)",
-      "notices": [
-        "LICENSE-APACHE",
-        "LICENSE-MIT"
-      ]
-    },
-    {
       "name": "percent-encoding",
       "version": "2.3.2",
       "license": "MIT OR Apache-2.0",
@@ -1619,18 +1575,6 @@
       "repository": "https://github.com/dtolnay/quote",
       "kind": "Rust (runtime or build)",
       "notices": [
-        "LICENSE-APACHE",
-        "LICENSE-MIT"
-      ]
-    },
-    {
-      "name": "rand_core",
-      "version": "0.6.4",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/rust-random/rand",
-      "kind": "Rust (runtime or build)",
-      "notices": [
-        "COPYRIGHT",
         "LICENSE-APACHE",
         "LICENSE-MIT"
       ]
@@ -2182,16 +2126,6 @@
       "version": "0.11.1",
       "license": "MIT",
       "repository": "https://github.com/rapidfuzz/strsim-rs",
-      "kind": "Rust (runtime or build)",
-      "notices": [
-        "LICENSE"
-      ]
-    },
-    {
-      "name": "subtle",
-      "version": "2.6.1",
-      "license": "BSD-3-Clause",
-      "repository": "https://github.com/dalek-cryptography/subtle",
       "kind": "Rust (runtime or build)",
       "notices": [
         "LICENSE"

@@ -89,9 +89,7 @@ fn check(
         return Err(runtime::stale());
     }
     if !p.is_shared() || !super::collaboration::catalog::can_import(p) {
-        return Err(AppError::invalid(
-            "可配置导入需要可写的格式 2 项目；旧项目仍可直接导入音频",
-        ));
+        return Err(AppError::invalid("可配置导入需要可写的协作项目"));
     }
     Ok(())
 }

@@ -7,7 +7,7 @@ test('sequential release runner preserves all original phases and runs all colla
   for (const phase of ['project', 'view-churn', 'spectral', 'restart', 'sharing', 'recovery',
     'selection-flow', 'rulers-flow', 'compact-layout', 'classification-flow', 'folder-scan',
     'folder-flow', 'source-import', 'feedback-flow', 'format-flow', 'fidelity-flow', 'processed-flow',
-    'interaction-flow', 'sharing-flow', 'collaboration-native', 'collaboration-controls', 'collaboration-layers', 'default-collaboration']) {
+    'interaction-flow', 'sharing-flow', 'collaboration-native', 'collaboration-controls', 'collaboration-layers', 'default-collaboration', 'uuid-identities']) {
     assert.ok(source.includes(`'${phase}'`), `missing release phase ${phase}`);
   }
 });

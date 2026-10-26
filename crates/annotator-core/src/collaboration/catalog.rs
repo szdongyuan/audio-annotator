@@ -1,5 +1,5 @@
 //! Immutable v2 metadata plus one immutable record per committed media item.
-use super::{atomic, local_identity::short_lock, validation::*, *};
+use super::{atomic, atomic::short_lock, validation::*, *};
 use crate::{
     error::{AppError, ErrorCode, Result},
     media::{
@@ -30,7 +30,9 @@ struct DefaultManifest {
 impl DefaultManifest {
     fn effective(self) -> Result<CollaborationManifest> {
         require(self.kind == MANIFEST_KIND, "Invalid default manifest kind")?;
-        if self.format_version != 2 || self.catalog_version != 1 {
+        if self.format_version != crate::collaboration::CURRENT_COLLABORATION_FORMAT
+            || self.catalog_version != 1
+        {
             return Err(AppError::new(
                 ErrorCode::UnsupportedVersion,
                 "Unsupported default catalog format",
@@ -38,7 +40,7 @@ impl DefaultManifest {
         }
         let manifest = CollaborationManifest {
             kind: self.kind,
-            format_version: 2,
+            format_version: CURRENT_COLLABORATION_FORMAT,
             project_id: self.project_id,
             name: self.name,
             created_at: self.created_at,
@@ -122,17 +124,10 @@ pub(super) fn load(
     limit(bytes.len() <= MAX_LAYER_BYTES)?;
     let header: Header =
         serde_json::from_slice(bytes).map_err(|_| AppError::invalid("Invalid manifest header"))?;
-    if header.format_version == 1 {
-        return Ok(LoadedCatalog {
-            manifest: parse_manifest(bytes)?,
-            revision: None,
-            record_hashes: vec![],
-        });
-    }
-    if header.format_version != 2 {
+    if header.format_version != crate::collaboration::CURRENT_COLLABORATION_FORMAT {
         return Err(AppError::new(
             ErrorCode::UnsupportedVersion,
-            "Unsupported manifest version",
+            "Unsupported collaboration version; use the prior app or exchange/export workflow",
         ));
     }
     let fixed: DefaultManifest = serde_json::from_slice(bytes)
@@ -313,7 +308,7 @@ impl CollaborationRepository {
     pub fn create_default(
         root: &Path,
         name: &str,
-        identity: &LocalIdentity,
+        identity: &profiles::Profile,
     ) -> Result<(Self, AuthorSession)> {
         atomic::safe_existing(root)?;
         require(
@@ -323,14 +318,14 @@ impl CollaborationRepository {
         let document = crate::model::ProjectDocument::create(name.to_owned())?;
         let fixed = DefaultManifest {
             kind: MANIFEST_KIND.into(),
-            format_version: 2,
+            format_version: CURRENT_COLLABORATION_FORMAT,
             project_id: document.project_id,
             name: document.name,
             created_at: document.created_at,
             catalog_version: 1,
         };
         // Do not recursively remove a caller's root after an error; native owns target cleanup.
-        for dir in ["media", "accounts", "annotations", "catalog"] {
+        for dir in ["media", "authors", "annotations", "catalog"] {
             fs::create_dir(root.join(dir)).map_err(atomic::io)?;
         }
         atomic::publish_new(
@@ -340,7 +335,7 @@ impl CollaborationRepository {
             None,
         )?;
         let repo = Self::open(root)?;
-        let actor = repo.login_local(identity)?;
+        let actor = repo.adopt(identity)?;
         Ok((repo, actor))
     }
     /// Returns a new view without mutating the caller's loaded catalog or author lease.
@@ -399,7 +394,7 @@ impl CollaborationRepository {
     ) -> Result<PreparedCatalogMedia> {
         self.authority()?;
         require(
-            self.manifest.format_version == 2,
+            self.manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
             "Legacy project catalog is immutable",
         )?;
         atomic::safe_existing(source)?;
@@ -552,7 +547,7 @@ impl CollaborationRepository {
     ) -> Result<(PublicMedia, Self)> {
         self.session_authority(session)?;
         require(
-            self.manifest.format_version == 2,
+            self.manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
             "Legacy project catalog is immutable",
         )?;
         require(
@@ -723,7 +718,7 @@ mod import_scan_regression {
             std::env::temp_dir().join(format!("readonly-placement-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(root.join("local")).unwrap();
         fs::create_dir(root.join("project")).unwrap();
-        let identity = LocalIdentity::load_or_create(&root.join("local")).unwrap();
+        let identity = profiles::Profile::new("Test").unwrap();
         let (repo, actor) = CollaborationRepository::create_default(
             &root.join("project"),
             "readonly identity",
@@ -749,7 +744,7 @@ mod import_scan_regression {
         let root = std::env::temp_dir().join(format!("one-catalog-scan-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(root.join("local")).unwrap();
         fs::create_dir(root.join("project")).unwrap();
-        let identity = LocalIdentity::load_or_create(&root.join("local")).unwrap();
+        let identity = profiles::Profile::new("Test").unwrap();
         let (repo, actor) =
             CollaborationRepository::create_default(&root.join("project"), "one scan", &identity)
                 .unwrap();

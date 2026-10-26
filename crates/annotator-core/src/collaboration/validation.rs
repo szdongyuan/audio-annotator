@@ -6,10 +6,10 @@ use crate::{
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
-pub const MAX_ACCOUNTS: usize = 128;
+pub const MAX_AUTHORS: usize = 128;
 pub const MAX_LAYER_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_TOTAL_LAYER_BYTES: usize = 64 * 1024 * 1024;
-pub const MAX_ACCOUNT_BYTES: usize = 4096;
+pub const MAX_AUTHOR_BYTES: usize = 8192;
 pub const MAX_MEDIA: usize = 4096;
 pub const MAX_CATEGORIES: usize = 4096;
 pub const MAX_ANNOTATIONS: usize = 100_000;
@@ -69,17 +69,19 @@ pub(crate) fn decode<T: DeserializeOwned>(bytes: &[u8], max: usize, kind: &str) 
     serde_json::from_slice(bytes).map_err(|_| AppError::invalid("Invalid collaboration structure"))
 }
 pub fn parse_manifest(bytes: &[u8]) -> Result<CollaborationManifest> {
-    let manifest: CollaborationManifest = decode(bytes, MAX_LAYER_BYTES, MANIFEST_KIND)?;
+    limit(bytes.len() <= MAX_LAYER_BYTES)?;
+    let manifest: CollaborationManifest =
+        serde_json::from_slice(bytes).map_err(|_| AppError::invalid("Invalid manifest"))?;
     manifest.validate()?;
     Ok(manifest)
 }
 impl CollaborationManifest {
     pub fn validate(&self) -> Result<()> {
         require(self.kind == MANIFEST_KIND, "Invalid manifest kind")?;
-        if !matches!(self.format_version, 1 | 2) {
+        if self.format_version != CURRENT_COLLABORATION_FORMAT {
             return Err(AppError::new(
                 ErrorCode::UnsupportedVersion,
-                "Unsupported manifest version",
+                "Unsupported collaboration version; use the prior app or exchange/export workflow",
             ));
         }
         limit(self.media.len() <= MAX_MEDIA)?;

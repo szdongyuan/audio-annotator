@@ -12,6 +12,7 @@ import { createRuntimeCommands, type RuntimeCommands } from '../../bridge/runtim
 import type { ExpectedProject } from '../../bridge/exchange';
 import type { SharedContext, Transition } from '../../bridge/collaboration';
 import { PreferenceDraft } from '../collaboration/controller';
+import type { ProfileResponse } from '../../bridge/profiles';
 
 export interface ActiveProject { store: ProjectStore; queue: CommandQueue; lifecycle: ProjectLifecycle; path: string; readonly collaboration?: SharedContext; readonly commands?: RuntimeCommands; readonly preferences?: PreferenceDraft }
 const noopSubscribe = () => () => {};
@@ -156,6 +157,28 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
       if (deferredClose.current) { deferredClose.current = false; queueMicrotask(() => closeWindow.current()); }
     }
   };
+  /** Profile management shares admission with new/open even with no project.
+   * Only a native selection transition replaces the editor. Metadata updates
+   * keep the owner, history, selection, preferences and lease intact. */
+  const performIdentity = async (owner:ActiveProject|null, action:()=>Promise<ProfileResponse|null>, save:boolean) => {
+    if (!mounted.current || occupied.current || current.current!==owner || pendingRecovery.current) throw {code:'InvalidInput',message:'请先完成当前项目操作',retryable:true} satisfies AppError;
+    occupied.current=true;setBusy(true);
+    let resume:(()=>void)|undefined;
+    try {
+      resume=await suspendRefresh(owner?.lifecycle);
+      let result:ProfileResponse|null=null,operationError:unknown;
+      const run=async()=>{
+        try {result=await action();}catch(cause){operationError=cause;return;}
+        if(result?.transition&&mounted.current&&current.current===owner)adopt(result.transition.opened);
+      };
+      if(owner){if(save)await owner.lifecycle.transitionAfterSave(run);else await owner.lifecycle.transition(run);}else await run();
+      if(operationError)throw operationError;
+      return result;
+    } finally {
+      resume?.();occupied.current=false;if(mounted.current)setBusy(false);
+      if(deferredClose.current){deferredClose.current=false;queueMicrotask(()=>{if(mounted.current)closeWindow.current();});}
+    }
+  };
   closeWindow.current = () => {
     if (occupied.current) { deferredClose.current = true; return; }
     void operation(() => finishCurrent(() => api.destroyWindow()));
@@ -180,7 +203,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
     active, recovery, busy, editingDisabled: active?.store.editingDisabled ?? true,
     error: error ?? active?.lifecycle.error ?? null, closePending,
     copyProgress,cancelCopy:()=>{const op=copyOperation.current;if(op){op.cancelled=true;void collaborationClient.cancel(op.id).catch(e=>setError(normalizeError(e)));}},
-    open, save, saveAs, close, performExchange, performCollaboration,
+    open, save, saveAs, close, performExchange, performCollaboration, performIdentity,
     recover: (source: RecoverySource | null) => operation(async () => adopt(await recoveryCommands.current.recover(source))),
     cancelRecovery: () => operation(async () => { await recoveryCommands.current.cancelRecovery(); pendingRecovery.current = false; setRecovery(null); }),
     retry: () => operation(async () => {

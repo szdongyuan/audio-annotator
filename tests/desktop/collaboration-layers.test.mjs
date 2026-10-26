@@ -1,3 +1,4 @@
+import { createIdentity, exportIdentity, importIdentity, profiles } from './identity-helpers.mjs';
 // Two independent native UI clients. IPC below is read-only assertion; all user
 // mutations use real WebDriver controls and native picker queues.
 import assert from 'node:assert/strict';
@@ -15,8 +16,9 @@ bytes.write('RIFF');bytes.writeUInt32LE(bytes.length-8,4);bytes.write('WAVEfmt '
 for(let n=0;n<frames;n++)for(let c=0;c<2;c++)bytes.writeInt16LE(Math.round(10000*Math.sin(2*Math.PI*(c?880:440)*n/rate)),44+n*4+c*2);
 await fs.writeFile(audio,bytes);const originalHash=crypto.createHash('sha256').update(bytes).digest('hex');
 const exportedJson=path.join(output,'alice.annotations.json'),exportedZip=path.join(output,'alice.audioproj.zip');
-const pathsA={'新建项目 · 选择空文件夹':[shared],'创建协作副本 · 选择空文件夹':[shared],'打开项目':[path.join(shared,'collaboration.json')],'分享 · 保存到本机':[exportedJson,exportedZip],'':[[audio]]};
-const pathsB={'打开项目':[path.join(shared,'collaboration.json')]};
+const identityFile=path.join(output,'alice.identity.json');
+const pathsA={'导出当前身份':[identityFile],'新建项目 · 选择空文件夹':[shared],'创建协作副本 · 选择空文件夹':[shared],'打开项目':[path.join(shared,'collaboration.json')],'分享 · 保存到本机':[exportedJson,exportedZip],'':[[audio]]};
+const pathsB={'导入身份':[identityFile],'打开项目':[path.join(shared,'collaboration.json')]};
 const report={method:'Two independently spawned native Tauri clients with distinct WebDriver/debug ports, WebView and app-local-data roots; all acceptance mutations via UI; IPC read-only',output,checks:[],originalHash};let a,b;
 const check=name=>{report.checks.push(name);console.log('PASS '+name);};
 const read=(h,command,args={})=>h.driver.executeAsyncScript('const done=arguments[arguments.length-1];window.__TAURI_INTERNALS__.invoke(arguments[0],arguments[1]).then(done,e=>done({error:e}));',command,args);
@@ -25,7 +27,6 @@ const snapshot=async h=>{const s=await status(h);const value=await read(h,'get_p
 const playback=async h=>read(h,'playback_status',{runtimeNonce:(await status(h)).runtimeNonce});
 const ready=h=>h.until(`document.querySelector('canvas')&&!document.querySelector('.tile-status')`);
 const actor=async(h,name)=>{await h.until(`document.querySelector('.collaboration-status')?.textContent.includes(${JSON.stringify(name)})&&!document.querySelector('.collaboration-dialog')`);assert.equal((await status(h)).actor?.displayName??'访客',name);};
-const form=async(h,login,name)=>{await h.until(`document.querySelector('[aria-label="协作账号名"]')`);await h.input('协作账号名',login);if(name)await h.input('协作显示名称',name);await h.input('协作密码','password123');};
 const sync=async h=>{await h.menu('保存并同步','协作');await h.until(`document.querySelector('.collaboration-status')?.textContent.includes('已同步')`);};
 const tab=(h,name)=>h.driver.findElement(By.xpath(`//button[@role='tab' and normalize-space(.)='${name}']`)).click();
 const region=async(h,name)=>{
@@ -45,15 +46,15 @@ const selectOwn=async(h,id)=>{await h.drag(`[data-annotation-id="${id}"]`,[.5,.5
 try{
  a=await start(pathsA,roots.a,undefined,{exactOuter:true,localDataEnv:roots.a});
  await a.menu('新建项目');await a.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);await a.clickText('导入音频');await a.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);await a.clickText('关闭导入结果');await ready(a);
- await a.menu('注册项目账号…','协作');await form(a,'alice','Alice');await a.clickText('注册并登录');await actor(a,'Alice');await ready(a);
+ const alice=await createIdentity(a,'Alice');await actor(a,'Alice');await ready(a);await exportIdentity(a);
  b=await start(pathsB,roots.b,undefined,{exactOuter:true,ports:{driver:4455,native:4456,debug:9245},localDataEnv:roots.b});
- await b.menu('打开项目…');await b.until(`document.querySelector('.collaboration-status')?.textContent.includes('本机作者')`);
- await b.menu('登录…','协作');await form(b,'alice');await b.clickText('登录');
+ await b.menu('打开项目…');await b.until(`document.querySelector('.collaboration-status')?.textContent.includes('本机身份')`);
+ const beforeConflict=(await profiles(b)).selectedAuthorId;await importIdentity(b);await b.clickText('使用此身份');
  await b.until(`document.querySelector('.collaboration-dialog [role="alert"]')`);
  assert.match(await b.evaluate(`return document.querySelector('.collaboration-dialog [role="alert"]').textContent`),/already has a writable session/);
- assert.equal((await status(b)).identityMode,'local');assert.equal((await status(a)).actor.displayName,'Alice');
- await b.clickText('关闭');check('same-account second native UI writer is rejected while the first writer remains active');
- await b.menu('注册项目账号…','协作');await form(b,'bob','Bob');await b.clickText('注册并登录');await actor(b,'Bob');await ready(b);
+ assert.equal((await profiles(b)).selectedAuthorId,beforeConflict);assert.equal((await status(a)).actor.authorId,alice.authorId);
+ await b.clickText('关闭');check('imported same UUID second native UI writer is rejected while both prior actors remain active');
+ await createIdentity(b,'Bob');await actor(b,'Bob');await ready(b);
  report.pids=[a.nativePid,b.nativePid];assert.notEqual(a.nativePid,b.nativePid);
  const aa=await region(a,'Alice'),bb=await region(b,'Bob');assert.deepEqual(aa.region,bb.region);assert.notEqual(aa.id,bb.id);
  await a.until(`document.querySelectorAll('[data-remote-key]').length===1`);await b.until(`document.querySelectorAll('[data-remote-key]').length===1`);
@@ -100,10 +101,10 @@ try{
  assert.equal((await snapshot(b)).document.edits.length,1);assert.equal((await status(b)).preferences.volume,.22);for(const key of ['edits','viewState','annotations'])assert.deepEqual((await snapshot(a)).document[key],aBeforeB[key]);assert.equal((await status(a)).preferences.volume,.11);check('B also persists a distinct private mask and volume/view without changing A');
  await sync(a);await sync(b);const savedA=(await snapshot(a)).document,savedB=(await snapshot(b)).document;
  await a.menu('关闭项目');await a.quit();a=null;
- a=await start({'打开项目':[path.join(shared,'collaboration.json')]},roots.a,undefined,{exactOuter:true,localDataEnv:roots.a});await a.menu('打开项目…');await a.until(`document.querySelector('.collaboration-status')?.textContent.includes('本机作者')`);await a.menu('登录…','协作');await form(a,'alice');await a.clickText('登录');await actor(a,'Alice');await ready(a);
- const restored=(await snapshot(a)).document;for(const key of ['annotations','edits','viewState','categories'])assert.deepEqual(restored[key],savedA[key]);assert.equal((await status(a)).preferences.volume,.11);assert.equal((await status(a)).preferences.source,'original');assert.deepEqual((await snapshot(b)).document.annotations,savedB.annotations);check('fresh A native process and login restore own private workspace while B remains independently active');
- await b.menu('关闭项目');await b.quit();b=null;b=await start(pathsB,roots.b,undefined,{exactOuter:true,ports:{driver:4455,native:4456,debug:9245},localDataEnv:roots.b});await b.menu('打开项目…');await b.until(`document.querySelector('.collaboration-status')?.textContent.includes('本机作者')`);await b.menu('登录…','协作');await form(b,'bob');await b.clickText('登录');await actor(b,'Bob');await ready(b);
- const restoredB=(await snapshot(b)).document;for(const key of ['annotations','edits','viewState','categories'])assert.deepEqual(restoredB[key],savedB[key]);assert.equal((await status(b)).preferences.volume,.22);assert.equal((await status(b)).preferences.source,'processed');check('fresh B native process and login restore B personal settings independently of A');
+ a=await start({'打开项目':[path.join(shared,'collaboration.json')]},roots.a,undefined,{exactOuter:true,localDataEnv:roots.a});await a.menu('打开项目…');await actor(a,'Alice');await ready(a);
+ const restored=(await snapshot(a)).document;for(const key of ['annotations','edits','viewState','categories'])assert.deepEqual(restored[key],savedA[key]);assert.equal((await status(a)).preferences.volume,.11);assert.equal((await status(a)).preferences.source,'original');assert.deepEqual((await snapshot(b)).document.annotations,savedB.annotations);check('fresh A native process and persisted UUID restore own private workspace while B remains independently active');
+ await b.menu('关闭项目');await b.quit();b=null;b=await start(pathsB,roots.b,undefined,{exactOuter:true,ports:{driver:4455,native:4456,debug:9245},localDataEnv:roots.b});await b.menu('打开项目…');await actor(b,'Bob');await ready(b);
+ const restoredB=(await snapshot(b)).document;for(const key of ['annotations','edits','viewState','categories'])assert.deepEqual(restoredB[key],savedB[key]);assert.equal((await status(b)).preferences.volume,.22);assert.equal((await status(b)).preferences.source,'processed');check('fresh B native process and persisted UUID restore B personal settings independently of A');
  const manifest={media:(await snapshot(a)).document.media};assert.equal(crypto.createHash('sha256').update(await fs.readFile(path.join(shared,manifest.media[0].sourceRef))).digest('hex'),originalHash);assert.equal(crypto.createHash('sha256').update(await fs.readFile(audio)).digest('hex'),originalHash);check('source and shared original WAV SHA256 remain exact');
  // Simulate loss of the shared entry only inside this owned fixture. All edits
  // and synchronization still use the real UI; restore even on assertion failure.

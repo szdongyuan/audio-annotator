@@ -1,3 +1,4 @@
+import type { IdentityController } from '../features/identity/controller';
 import { annotationDisabled } from '../features/collaboration/capabilities';
 import { collaborationMenu } from '../features/collaboration/CollaborationMenu';
 import type { CollaborationUI } from '../features/collaboration/useCollaboration';
@@ -15,8 +16,8 @@ import { duration } from '../features/spectrogram/workspace';
 import { zoomViewport } from '../features/spectrogram/viewport';
 import { resolveRegion } from '../features/selection/actions';
 import type { HelpTopic } from './HelpDialog';
-export function workspaceMenus({collaboration,project,mediaUI,exchange,annotations,selection,workspace,playback,mediaOpen,propertiesOpen,toggleMedia,toggleProperties,settings,inspector,help,focusNote}: {
- collaboration?:CollaborationUI;project?:ProjectLifecycleUI;mediaUI?:MediaUI;exchange?:ExchangeUI;annotations:AnnotationUI;selection:SelectionUI;workspace:WorkspaceUI;playback:PlaybackUI;mediaOpen:boolean;propertiesOpen:boolean;toggleMedia:()=>void;toggleProperties:()=>void;settings:(id:string)=>void;inspector:(tab:string)=>void;help:(topic:HelpTopic)=>void;focusNote:(id:string)=>void;
+export function workspaceMenus({identity,collaboration,project,mediaUI,exchange,annotations,selection,workspace,playback,mediaOpen,propertiesOpen,toggleMedia,toggleProperties,settings,inspector,help,focusNote}: {
+ identity?:IdentityController;collaboration?:CollaborationUI;project?:ProjectLifecycleUI;mediaUI?:MediaUI;exchange?:ExchangeUI;annotations:AnnotationUI;selection:SelectionUI;workspace:WorkspaceUI;playback:PlaybackUI;mediaOpen:boolean;propertiesOpen:boolean;toggleMedia:()=>void;toggleProperties:()=>void;settings:(id:string)=>void;inspector:(tab:string)=>void;help:(topic:HelpTopic)=>void;focusNote:(id:string)=>void;
 }):WorkspaceMenu[]{
  const owner=project?.active,doc=owner?.store.snapshot.document,disabled=!owner||owner.store.editingDisabled;
  const target=selection.selection,region=owner&&target?resolveRegion(owner,target):null;
@@ -59,7 +60,7 @@ export function workspaceMenus({collaboration,project,mediaUI,exchange,annotatio
    ...(['original','processed'] as const).map(source=>({id:'audition-'+source,label:source==='original'?'试听选区原音':'试听选区（应用屏蔽）',disabled:regionDisabled||!ready,action:()=>selection.withTarget(target,r=>playback.playSelection(r,source))})),
    {id:'mask',label:'屏蔽选区',disabled:regionDisabled,action:()=>{if(target)void selection.actions?.mask(target);}},
    {id:'devices',label:'输出设备…',disabled,action:()=>inspector('devices')}, {id:'mix',label:'通道混音',disabled:disabled||!playback.media,action:()=>inspector('mix')}]},
-  ...(collaboration?[collaborationMenu(collaboration)]:[]),
+  ...(collaboration?[collaborationMenu(collaboration,identity,project?.busy)]:[]),
   {id:'help',label:'帮助',items:([{id:'shortcuts',label:'快捷键'},{id:'guide',label:'使用说明'},{id:'about',label:'版本与第三方声明'}] as const).map(t=>({...t,action:()=>help(t.id)}))},
  ];
 }

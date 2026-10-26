@@ -35,7 +35,7 @@ async function folder(recursive = false) {
   if(heldScan)return;
   await h.until("document.querySelector('.source-preview')");
   const count=await h.evaluate("return parseInt(document.querySelector('.source-preview strong').textContent)");
-  if(count)await h.clickText('导入 '+count+' 个音频');
+  if(count){await h.until(`Array.from(document.querySelectorAll('.dialog-actions button')).some(b=>b.textContent==='导入 ${count} 个音频'&&!b.disabled)`,'preview page acknowledged and import enabled');await h.clickText('导入 '+count+' 个音频');}
 }
 async function finished() { const started=Date.now();await h.until(`document.querySelector('.source-import-progress')?.textContent.includes('音频导入完成')`, 'folder completion', 900000);(report.completionWaitMs??=[]).push(Date.now()-started); }
 async function closeResult() { await h.clickText('关闭结果'); await h.until(`!document.querySelector('.source-import-progress')`); assert.equal(await h.evaluate(`return document.querySelectorAll('.import-progress').length`), 0); }

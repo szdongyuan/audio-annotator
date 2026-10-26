@@ -391,3 +391,45 @@ try {
         fs::remove_dir_all(&root).unwrap();
     }
 }
+
+pub(crate) fn short_lock(path: &Path) -> Result<File> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        match lock(path) {
+            Err(error)
+                if error.code == ErrorCode::ProjectLocked
+                    && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10))
+            }
+            result => return result,
+        }
+    }
+}
+
+/// Atomic replacement for bounded mutable metadata; never used for immutable layers/catalogs.
+pub(crate) fn replace_metadata(target: &Path, bytes: &[u8]) -> Result<()> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| AppError::invalid("Missing metadata parent"))?;
+    safe_existing(parent)?;
+    let temporary = parent.join(format!(".metadata.{}.tmp", uuid::Uuid::new_v4()));
+    let mut owned = false;
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(io)?;
+        owned = true;
+        file.write_all(bytes).map_err(io)?;
+        file.sync_all().map_err(io)?;
+        drop(file);
+        safe_existing(target)?;
+        crate::project::store::atomic_replace(&temporary, target).map_err(io)
+    })();
+    if owned && result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}

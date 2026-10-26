@@ -1,3 +1,4 @@
+import type { IdentityController } from '../features/identity/controller';
 import { CollaborationStatus } from '../features/collaboration/CollaborationStatus';
 import { RemoteContext, useRemoteInspection } from '../features/collaboration/remote';
 import { RemoteInspector, RemoteList } from '../features/collaboration/RemoteInspector';
@@ -54,7 +55,7 @@ function IconButton({ icon: Icon, label, className = '', ...props }: IconButtonP
   </button>;
 }
 
-export function AppShell({ project, mediaUI, exchange, collaboration }: { collaboration?: CollaborationUI; project?: ProjectLifecycleUI; mediaUI?: MediaUI; exchange?: ExchangeUI }) {
+export function AppShell({ project, mediaUI, exchange, collaboration, identity }: { identity?:IdentityController; collaboration?: CollaborationUI; project?: ProjectLifecycleUI; mediaUI?: MediaUI; exchange?: ExchangeUI }) {
   const [mediaOpen, setMediaOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const hiddenMediaIds=collaboration?.controller?.status?.hiddenMediaIds??project?.active?.collaboration?.hiddenMediaIds??[];
@@ -80,7 +81,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration }: { collab
   useEffect(() => { if (selection.context && !selection.selection) setInspectorTab('notes'); }, [selection.context, selection.selection]);
   const [helpTopic, setHelpTopic] = useState<HelpTopic | null>(null);
   const focusNote = (id: string) => { setPropertiesOpen(true); setInspectorTab('region'); setNoteFocusId(id); };
-  const menus = workspaceMenus({ collaboration, project, mediaUI, exchange, annotations, selection, workspace, playback, mediaOpen, propertiesOpen,
+  const menus = workspaceMenus({ identity, collaboration, project, mediaUI, exchange, annotations, selection, workspace, playback, mediaOpen, propertiesOpen,
     toggleMedia: () => setMediaOpen(v => !v), toggleProperties: () => setPropertiesOpen(v => !v), settings: setSettingsId,
     inspector: tab => { setPropertiesOpen(true); setInspectorTab(tab); }, help: setHelpTopic, focusNote });
 

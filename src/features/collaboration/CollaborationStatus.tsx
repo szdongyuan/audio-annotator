@@ -10,10 +10,10 @@ export function syncLabel(c:CollaborationController){
  if(authorError)return '部分作者读取异常';
  if(s?.catalogPending)return '有新增音频 · 更新列表后查看';
  if(c.owner.collaboration?.identityMode==='viewOnly')return '只读查看';
- if(!c.owner.collaboration?.actor)return '访客 · 仅存本机';
+ if(!c.owner.collaboration?.actor)return '本机项目';
  return s?.lastSuccessMs?'已同步':'正在同步';
 }
-export function CollaborationStatus({ui}:{ui:CollaborationUI}){if(!ui.controller)return null;return <button className="collaboration-status" disabled={ui.busy} onClick={()=>void ui.show('status')} title={syncLabel(ui.controller)}><span>{ui.active?.collaboration?.actor?.displayName??(ui.active?.collaboration?.identityMode==='viewOnly'?'只读查看':'访客')}</span><span aria-label="协作同步状态">{syncLabel(ui.controller)}</span></button>;}
+export function CollaborationStatus({ui}:{ui:CollaborationUI}){if(!ui.controller)return null;return <button className="collaboration-status" disabled={ui.busy} onClick={()=>void ui.show('status')} title={syncLabel(ui.controller)}><span>{(ui.controller.status?.actor??ui.active?.collaboration?.actor)?.displayName??(ui.active?.collaboration?.identityMode==='viewOnly'?'只读查看':'本机项目')}</span><span aria-label="协作同步状态">{syncLabel(ui.controller)}</span></button>;}
 
 export function copyProgressText(p:CopyProgress){
  if(p.phase==='publishManifest')return `保存项目 · ${p.completed} 个音频`;

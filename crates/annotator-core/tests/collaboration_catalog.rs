@@ -1,10 +1,12 @@
 #![cfg(windows)]
+mod support;
 use annotator_core::{collaboration::*, error::ErrorCode};
 use std::{
     fs,
     path::{Path, PathBuf},
     sync::atomic::AtomicBool,
 };
+use support::*;
 struct Temp(PathBuf);
 impl Temp {
     fn new() -> Self {
@@ -41,7 +43,7 @@ fn wave(path: &Path, value: i16) {
     fs::write(path, b).unwrap();
 }
 fn setup(t: &Temp) -> (CollaborationRepository, AuthorSession) {
-    let id = LocalIdentity::load_or_create(&t.dir("local")).unwrap();
+    let id = selected(&t.dir("local")).unwrap();
     CollaborationRepository::create_default(&t.dir("project"), "Default", &id).unwrap()
 }
 fn prepared(t: &Temp, r: &CollaborationRepository, n: &str, v: i16) -> PreparedCatalogMedia {
@@ -54,28 +56,25 @@ fn prepared(t: &Temp, r: &CollaborationRepository, n: &str, v: i16) -> PreparedC
 fn empty_default_stable_identity_and_strict_versions() {
     let t = Temp::new();
     let (r, a) = setup(&t);
-    assert_eq!(r.manifest().format_version, 2);
+    assert_eq!(r.manifest().format_version, CURRENT_COLLABORATION_FORMAT);
     assert!(r.manifest().media.is_empty());
     let id = a.identity().clone();
     drop(a);
-    let local = LocalIdentity::load_or_create(&t.0.join("local")).unwrap();
+    let local = selected(&t.0.join("local")).unwrap();
     let reopened = CollaborationRepository::open(r.root()).unwrap();
-    assert_eq!(reopened.login_local(&local).unwrap().identity(), &id);
-    let held = reopened.login_local(&local).unwrap();
+    assert_eq!(reopened.adopt(&local).unwrap().identity(), &id);
+    let held = reopened.adopt(&local).unwrap();
     assert_eq!(
-        reopened.login_local(&local).err().unwrap().code,
+        reopened.adopt(&local).err().unwrap().code,
         ErrorCode::ProjectLocked
     );
-    let second = LocalIdentity::load_or_create(&t.dir("second-local")).unwrap();
-    let second_actor = reopened.login_local(&second).unwrap();
+    let second = selected(&t.dir("second-local")).unwrap();
+    let second_actor = reopened.adopt(&second).unwrap();
     assert_ne!(second_actor.identity().author_id, held.identity().author_id);
-    assert!(r
-        .register(local.login_name(), "forged", "password123")
-        .is_err());
     let bytes = fs::read(r.root().join("collaboration.json")).unwrap();
     assert!(parse_manifest(&bytes).is_err());
     let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    value["formatVersion"] = 3.into();
+    value["formatVersion"] = 2.into();
     fs::write(
         r.root().join("collaboration.json"),
         serde_json::to_vec(&value).unwrap(),
@@ -247,8 +246,8 @@ fn catalog_growth_preserves_old_payload_and_stages_complete_new_layers() {
 fn stale_view_keeps_known_media_authors_syncing_and_unknown_media_is_corruption() {
     let t = Temp::new();
     let (r, a) = setup(&t);
-    r.register("other", "Other", "password123").unwrap();
-    let b = r.login("other", "password123").unwrap();
+    seed(&r, "other", "Other").unwrap();
+    let b = r.adopt(&profile("other")).unwrap();
     let p = prepared(&t, &r, "one", 1);
     r.append_media(&a, &p, &AtomicBool::new(false)).unwrap();
     let current = r.reload_catalog().unwrap();
@@ -328,7 +327,7 @@ fn catalog_subprocess() {
         return;
     }
     let repo = CollaborationRepository::open(&root.join("project")).unwrap();
-    let session = repo.login(&role, "password123").unwrap();
+    let session = repo.adopt(&profile(&role)).unwrap();
     let source = root.join(format!("{role}.wav"));
     let cache = root.join(format!("cache-{role}"));
     fs::create_dir(&cache).unwrap();
@@ -345,7 +344,7 @@ fn real_process_independent_appends_and_crashed_commit_lock_release() {
     let t = Temp::new();
     let (r, a) = setup(&t);
     for (i, name) in ["one", "two"].iter().enumerate() {
-        r.register(name, name, "password123").unwrap();
+        seed(&r, name, name).unwrap();
         wave(&t.0.join(format!("{name}.wav")), i as i16);
     }
     let one = child(&t.0, "one");
@@ -859,7 +858,7 @@ fn real_smb_published_stamp_survives_prepared_capability_release() {
     let root = parent.join(format!("stamp-regression-{}", uuid::Uuid::new_v4()));
     fs::create_dir(&root).unwrap(); // Atomic unique fixture; never remove the supplied parent.
     let local = Temp::new();
-    let identity = LocalIdentity::load_or_create(&local.0).unwrap();
+    let identity = selected(&local.0).unwrap();
     let (repo, actor) =
         CollaborationRepository::create_default(&root, "SMB sealed copy", &identity).unwrap();
     let source =

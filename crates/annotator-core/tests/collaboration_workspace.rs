@@ -1,5 +1,7 @@
+mod support;
 use annotator_core::{collaboration::*, model::*, project::LocalProject};
 use std::{fs, path::PathBuf, sync::Arc};
+use support::*;
 
 struct Fixture {
     root: PathBuf,
@@ -14,7 +16,7 @@ impl Fixture {
             &root,
             &local,
             &root.join("media"),
-            &root.join("accounts"),
+            &root.join("authors"),
             &root.join("annotations"),
         ] {
             fs::create_dir(dir).unwrap();
@@ -37,7 +39,7 @@ impl Fixture {
             .collect();
         let manifest = CollaborationManifest {
             kind: MANIFEST_KIND.into(),
-            format_version: 1,
+            format_version: CURRENT_COLLABORATION_FORMAT,
             project_id: doc.project_id,
             name: doc.name,
             created_at: doc.created_at,
@@ -46,20 +48,26 @@ impl Fixture {
         for m in &manifest.media {
             fs::write(root.join(&m.source_ref), b"fixture").unwrap();
         }
-        fs::write(
-            root.join("collaboration.json"),
-            serde_json::to_vec(&manifest).unwrap(),
-        )
-        .unwrap();
+        write_manifest(&root, &manifest);
         let repo = Arc::new(CollaborationRepository::open(&root).unwrap());
         Self { root, local, repo }
     }
     fn actor(&self, name: &str) -> Arc<AuthorSession> {
-        self.repo.register(name, name, "test-password").unwrap();
-        Arc::new(self.repo.login(name, "test-password").unwrap())
+        seed(&self.repo, name, name).unwrap();
+        Arc::new(self.repo.adopt(&profile(name)).unwrap())
     }
     fn open(&self, actor: Option<Arc<AuthorSession>>) -> LocalProject {
-        LocalProject::open_shared(self.repo.clone(), actor, &self.local).unwrap()
+        match actor {
+            Some(actor) => {
+                LocalProject::open_shared(self.repo.clone(), Some(actor), &self.local).unwrap()
+            }
+            None => LocalProject::open_shared(
+                self.repo.clone(),
+                Some(self.actor("fixture-default")),
+                &self.local,
+            )
+            .unwrap(),
+        }
     }
 }
 impl Drop for Fixture {
@@ -78,38 +86,6 @@ fn change(p: &mut LocalProject, c: Change) {
 fn save(p: &mut LocalProject) {
     let d = p.snapshot().unwrap().document;
     p.save(&d.project_id, d.revision).unwrap();
-}
-
-#[test]
-fn legacy_private_catalog_order_remains_strict() {
-    let mut f = Fixture::new();
-    let mut manifest = f.repo.manifest().clone();
-    let mut second = manifest.media[0].clone();
-    second.id = uuid::Uuid::new_v4().to_string();
-    second.source_ref = format!("media/{}.wav", second.id);
-    fs::write(f.root.join(&second.source_ref), b"fixture").unwrap();
-    manifest.media.push(second);
-    fs::write(
-        f.root.join("collaboration.json"),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-    f.repo = Arc::new(CollaborationRepository::open(&f.root).unwrap());
-    let actor = f.actor("order");
-    let mut p = f.open(Some(actor.clone()));
-    let mut document = p.snapshot().unwrap().document;
-    document.media.reverse();
-    assert!(p.workspace_mut().unwrap().save(&document).is_err());
-    let root = p.storage_root().to_owned();
-    drop(p);
-    for name in ["workspace.json", "workspace.recovery.json"] {
-        let path = root.join(name);
-        let mut value: serde_json::Value =
-            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        value["document"]["media"].as_array_mut().unwrap().reverse();
-        fs::write(path, serde_json::to_vec(&value).unwrap()).unwrap();
-    }
-    assert!(LocalProject::open_shared(f.repo.clone(), Some(actor), &f.local).is_err());
 }
 
 #[test]
@@ -243,74 +219,6 @@ fn publication_a_in_flight_preserves_saved_b_and_private_state_across_restart() 
     let bytes = serde_json::to_string(&remote).unwrap();
     assert!(!bytes.contains("local-speaker"));
     assert!(!bytes.contains("edits"));
-}
-
-#[test]
-fn guest_copy_is_explicit_remapped_atomic_and_undoable() {
-    let f = Fixture::new();
-    let actor = f.actor("a");
-    let mut p = f.open(Some(actor));
-    let mut guest = f.open(None);
-    let source = fixture_document();
-    for category in &source.categories {
-        change(
-            &mut guest,
-            Change::AddCategory {
-                category: category.clone(),
-            },
-        );
-    }
-    change(
-        &mut guest,
-        Change::AddAnnotation {
-            annotation: source.annotations[0].clone(),
-        },
-    );
-    change(
-        &mut guest,
-        Change::AddEdit {
-            edit: source.edits[0].clone(),
-        },
-    );
-    save(&mut guest);
-    let payload = LayerPayload::from_document(&guest.snapshot().unwrap().document).unwrap();
-    let d = p.snapshot().unwrap().document;
-    p.publish_guest(&d.project_id, d.revision, &payload)
-        .unwrap();
-    let copied = p.snapshot().unwrap().document;
-    assert_eq!(copied.annotations.len(), 1);
-    assert!(copied.edits.is_empty());
-    assert_ne!(copied.annotations[0].id, source.annotations[0].id);
-    assert_ne!(copied.categories[0].id, source.categories[0].id);
-    assert_eq!(
-        copied.annotations[0].category_id,
-        Some(copied.categories[0].id.clone())
-    );
-    p.undo(&copied.project_id, copied.revision).unwrap();
-    assert!(p.snapshot().unwrap().document.annotations.is_empty());
-    let media = p.snapshot().unwrap().document.media[0].id.clone();
-    change(
-        &mut p,
-        Change::UpdateMediaNote {
-            media_id: media.clone(),
-            note: "owner".into(),
-            merge_key: None,
-        },
-    );
-    change(
-        &mut guest,
-        Change::UpdateMediaNote {
-            media_id: media,
-            note: "guest".into(),
-            merge_key: None,
-        },
-    );
-    let before = p.snapshot().unwrap();
-    let g = LayerPayload::from_document(&guest.snapshot().unwrap().document).unwrap();
-    assert!(p
-        .publish_guest(&before.document.project_id, before.document.revision, &g)
-        .is_err());
-    assert_eq!(p.snapshot().unwrap(), before);
 }
 
 #[test]
@@ -481,9 +389,9 @@ fn admitted_worker_keeps_author_lease_and_stale_ack_cannot_touch_reopened_cache(
         .unwrap();
     drop(p);
     drop(actor);
-    assert!(f.repo.login("a", "test-password").is_err());
+    assert!(f.repo.adopt(&profile("a")).is_err());
     let ack = job.publish().unwrap();
-    let actor = Arc::new(f.repo.login("a", "test-password").unwrap());
+    let actor = Arc::new(f.repo.adopt(&profile("a")).unwrap());
     let mut p = f.open(Some(actor));
     let before = p.workspace().unwrap().envelope().clone();
     assert!(p.workspace_mut().unwrap().acknowledge(ack).is_err());
@@ -641,7 +549,12 @@ fn malformed_cache_recovers_from_valid_copy_and_rejects_invalid_identity_pending
         drop(p);
         fs::write(root.join("workspace.json"), &bytes).unwrap();
         fs::write(root.join("workspace.recovery.json"), &bytes).unwrap();
-        assert!(LocalProject::open_shared(f.repo.clone(), None, &f.local).is_err());
+        assert!(LocalProject::open_shared(
+            f.repo.clone(),
+            Some(f.actor("fixture-default")),
+            &f.local
+        )
+        .is_err());
     }
 }
 
@@ -869,7 +782,10 @@ fn private_cache_rejects_pending_removed_from_changed_document() {
     for name in ["workspace.json", "workspace.recovery.json"] {
         fs::write(root.join(name), serde_json::to_vec(&value).unwrap()).unwrap();
     }
-    assert!(LocalProject::open_shared(f.repo.clone(), None, &f.local).is_err());
+    assert!(
+        LocalProject::open_shared(f.repo.clone(), Some(f.actor("fixture-default")), &f.local)
+            .is_err()
+    );
 }
 
 #[cfg(windows)]
@@ -888,7 +804,10 @@ fn reparse_cache_parent_cannot_create_private_directories_on_share() {
         .unwrap()
         .map(|e| e.unwrap().file_name())
         .collect();
-    assert!(LocalProject::open_shared(f.repo.clone(), None, &f.local).is_err());
+    assert!(
+        LocalProject::open_shared(f.repo.clone(), Some(f.actor("fixture-default")), &f.local)
+            .is_err()
+    );
     let after: Vec<_> = fs::read_dir(&f.root)
         .unwrap()
         .map(|e| e.unwrap().file_name())
@@ -921,54 +840,6 @@ fn explicit_remote_load_preserves_latest_unsaved_private_operations() {
         .unwrap();
     p.load_shared_version(Some(&remote)).unwrap();
     assert_eq!(p.snapshot().unwrap().document.edits.len(), 1);
-}
-
-#[test]
-fn guest_channel_conflicts_reject_whole_merge_without_history_changes() {
-    for category_conflict in [false, true] {
-        let f = Fixture::new();
-        let actor = f.actor("a");
-        let mut p = f.open(Some(actor));
-        let mut guest = LayerPayload::from_document(&fixture_document()).unwrap();
-        let media = guest.media_labels[0].media_id.clone();
-        if category_conflict {
-            let category = fixture_document().categories[0].clone();
-            change(
-                &mut p,
-                Change::AddCategory {
-                    category: category.clone(),
-                },
-            );
-            change(
-                &mut p,
-                Change::SetChannelCategory {
-                    media_id: media.clone(),
-                    channel_index: 0,
-                    category_id: Some(category.id.clone()),
-                },
-            );
-            guest.media_labels[0].channel_category_ids[0] = Some(category.id);
-        } else {
-            change(
-                &mut p,
-                Change::UpdateChannelNote {
-                    media_id: media,
-                    channel_index: 0,
-                    note: "owner channel".into(),
-                    merge_key: None,
-                },
-            );
-        }
-        let before = p.snapshot().unwrap();
-        assert!(p
-            .publish_guest(
-                &before.document.project_id,
-                before.document.revision,
-                &guest
-            )
-            .is_err());
-        assert_eq!(p.snapshot().unwrap(), before);
-    }
 }
 
 fn inventory(root: &std::path::Path) -> Vec<(String, String)> {

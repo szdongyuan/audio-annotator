@@ -1,7 +1,9 @@
+mod support;
 use annotator_core::collaboration::*;
 use annotator_core::{error::ErrorCode, model::ProjectDocument};
 use serde_json::{json, Value};
 use std::{fs, path::PathBuf};
+use support::*;
 
 struct Temp(PathBuf);
 impl Temp {
@@ -10,7 +12,7 @@ impl Temp {
             std::env::temp_dir().join(format!("collaboration-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&root).unwrap();
         fs::create_dir(root.join("media")).unwrap();
-        fs::create_dir(root.join("accounts")).unwrap();
+        fs::create_dir(root.join("authors")).unwrap();
         fs::create_dir(root.join("annotations")).unwrap();
         let manifest = manifest_json();
         for media in manifest["media"].as_array().unwrap() {
@@ -20,11 +22,7 @@ impl Temp {
             )
             .unwrap();
         }
-        fs::write(
-            root.join("collaboration.json"),
-            serde_json::to_vec(&manifest).unwrap(),
-        )
-        .unwrap();
+        write_manifest(&root, &serde_json::from_value(manifest).unwrap());
         Self(root)
     }
     fn repo(&self) -> CollaborationRepository {
@@ -71,46 +69,13 @@ fn public_payload_round_trip_excludes_all_personal_fields() {
 }
 
 #[test]
-fn accounts_are_project_scoped_normalized_and_password_verified() {
-    let temp = Temp::new();
-    let repo = temp.repo();
-    let author = repo
-        .register("  ALIce 中文  ", "Alice", " password123 ")
-        .unwrap();
-    assert_eq!(author.normalized_login, "alice 中文");
-    assert!(repo.register("alice 中文", "Other", "password123").is_err());
-    assert!(repo.login("alice 中文", "password123").is_err());
-    let session = repo.login(" ALICE 中文 ", " password123 ").unwrap();
-    assert_eq!(
-        repo.login("alice 中文", " password123 ")
-            .err()
-            .unwrap()
-            .code,
-        ErrorCode::ProjectLocked
-    );
-    drop(session);
-    assert!(repo.login("alice 中文", " password123 ").is_ok());
-    assert!(!temp.0.join(".project.lock").exists());
-    let files: Vec<_> = fs::read_dir(temp.0.join("accounts"))
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|e| e == "json"))
-        .collect();
-    assert_eq!(files.len(), 1);
-    assert_eq!(files[0].file_stem().unwrap().to_str().unwrap().len(), 64);
-    assert!(!fs::read_to_string(&files[0])
-        .unwrap()
-        .contains(" password123 "));
-}
-
-#[test]
 fn independent_authors_preserve_identical_regions_and_retry_acknowledgement() {
     let temp = Temp::new();
     let repo = temp.repo();
-    let a = repo.register("a", "A", "password-a").unwrap();
-    let b = repo.register("b", "B", "password-b").unwrap();
-    let sa = repo.login("a", "password-a").unwrap();
-    let sb = repo.login("b", "password-b").unwrap();
+    let a = seed(&repo, "a", "A").unwrap();
+    let b = seed(&repo, "b", "B").unwrap();
+    let sa = repo.adopt(&profile("a")).unwrap();
+    let sb = repo.adopt(&profile("b")).unwrap();
     let data = payload();
     let (ra, rb) = std::thread::scope(|scope| {
         let a = scope.spawn(|| repo.publish(&sa, None, &data));
@@ -147,9 +112,9 @@ fn independent_authors_preserve_identical_regions_and_retry_acknowledgement() {
 fn newest_corruption_is_reported_per_author_without_rollback() {
     let temp = Temp::new();
     let repo = temp.repo();
-    let a = repo.register("a", "A", "password-a").unwrap();
-    repo.register("b", "B", "password-b").unwrap();
-    let session = repo.login("a", "password-a").unwrap();
+    let a = seed(&repo, "a", "A").unwrap();
+    seed(&repo, "b", "B").unwrap();
+    let session = repo.adopt(&profile("a")).unwrap();
     let first = repo.publish(&session, None, &payload()).unwrap();
     repo.publish(&session, Some(&first), &payload()).unwrap();
     let path = temp.0.join(format!(
@@ -180,46 +145,32 @@ fn projection_revalidates_public_manifest_at_api_boundary() {
 }
 
 #[test]
-fn external_credentials_are_strict_and_bounded_before_verification() {
+fn external_author_metadata_is_strict_and_bounded() {
     let temp = Temp::new();
     let repo = temp.repo();
-    repo.register("valid", "Valid", "password123").unwrap();
-    let path = fs::read_dir(temp.0.join("accounts"))
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .find(|p| p.extension().is_some_and(|s| s == "json"))
-        .unwrap();
+    let profile = profile("valid");
+    drop(repo.adopt(&profile).unwrap());
+    let path = temp
+        .0
+        .join("authors")
+        .join(format!("{}.json", profile.author_id));
     let original: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    let phc = original["passwordHash"].as_str().unwrap();
-    assert!(phc.starts_with("$argon2id$v=19$m=19456,t=2,p=1$"));
-    for hostile in [
-        phc.replace("m=19456", "m=4294967295"),
-        phc.replace("t=2", "t=99999999"),
-        phc.replace("p=1", "p=8"),
-        phc.replace("v=19", "v=16"),
-        phc.replace("argon2id", "argon2i"),
-        "$argon2id$v=19$m=19456,t=2,p=1$YWJj$YWJj".into(),
-    ] {
-        let mut bad = original.clone();
-        bad["passwordHash"] = json!(hostile);
-        fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
-        assert!(repo.login("valid", "password123").is_err());
-    }
     for (field, value) in [
         ("formatVersion", json!(8)),
-        ("plaintextPassword", json!("password123")),
+        ("passwordHash", json!("retired")),
+        ("projectId", json!(uuid::Uuid::new_v4().to_string())),
     ] {
         let mut bad = original.clone();
         bad[field] = value;
-        assert!(AccountRecord::parse(
+        assert!(AuthorRecord::parse(
             &serde_json::to_vec(&bad).unwrap(),
-            repo.manifest().project_id.as_str()
+            &repo.manifest().project_id
         )
         .is_err());
     }
-    fs::write(&path, vec![b' '; 4097]).unwrap();
+    fs::write(&path, vec![b' '; 8193]).unwrap();
     assert_eq!(
-        repo.login("valid", "password123").err().unwrap().code,
+        repo.adopt(&profile).err().unwrap().code,
         ErrorCode::ResourceLimit
     );
 }
@@ -229,8 +180,8 @@ fn fault_and_cancel_cleanup_is_owned_and_ack_loss_is_idempotent() {
     use atomic::PublishFault;
     let temp = Temp::new();
     let repo = temp.repo();
-    let author = repo.register("a", "A", "password-a").unwrap();
-    let session = repo.login("a", "password-a").unwrap();
+    let author = seed(&repo, "a", "A").unwrap();
+    let session = repo.adopt(&profile("a")).unwrap();
     let dir = temp.0.join("annotations").join(&author.author_id);
     let foreign = dir.join(".foreign.tmp");
     fs::write(&foreign, b"not ours").unwrap();
@@ -272,8 +223,8 @@ fn fault_and_cancel_cleanup_is_owned_and_ack_loss_is_idempotent() {
 fn history_retention_is_sixteen_own_confirmed_versions() {
     let temp = Temp::new();
     let repo = temp.repo();
-    let author = repo.register("a", "A", "password-a").unwrap();
-    let session = repo.login("a", "password-a").unwrap();
+    let author = seed(&repo, "a", "A").unwrap();
+    let session = repo.adopt(&profile("a")).unwrap();
     let other = temp
         .0
         .join("annotations")
@@ -309,8 +260,8 @@ fn history_retention_is_sixteen_own_confirmed_versions() {
 fn tampered_layers_versions_sizes_and_enumeration_fail_closed() {
     let temp = Temp::new();
     let repo = temp.repo();
-    let author = repo.register("a", "A", "password-a").unwrap();
-    let session = repo.login("a", "password-a").unwrap();
+    let author = seed(&repo, "a", "A").unwrap();
+    let session = repo.adopt(&profile("a")).unwrap();
     repo.publish(&session, None, &payload()).unwrap();
     let dir = temp.0.join("annotations").join(&author.author_id);
     let path = dir.join("00000000000000000001.json");
@@ -360,8 +311,8 @@ fn paths_reparse_points_and_manifest_mutation_are_rejected() {
         assert!(parse_manifest(&serde_json::to_vec(&bad).unwrap()).is_err());
     }
     let repo = temp.repo();
-    repo.register("a", "A", "password-a").unwrap();
-    let session = repo.login("a", "password-a").unwrap();
+    seed(&repo, "a", "A").unwrap();
+    let session = repo.adopt(&profile("a")).unwrap();
     let mut bad = manifest_json();
     bad["name"] = json!("changed");
     fs::write(
@@ -370,11 +321,7 @@ fn paths_reparse_points_and_manifest_mutation_are_rejected() {
     )
     .unwrap();
     assert!(repo.publish(&session, None, &payload()).is_err());
-    fs::write(
-        temp.0.join("collaboration.json"),
-        serde_json::to_vec(&manifest_json()).unwrap(),
-    )
-    .unwrap();
+    write_manifest(&temp.0, &serde_json::from_value(manifest_json()).unwrap());
     let media_path = temp.0.join("media");
     let moved = temp.0.join("media-original");
     fs::rename(&media_path, &moved).unwrap();
@@ -455,34 +402,35 @@ fn subprocess_worker() {
     if role == "register" {
         fs::write(root.join(format!("ready-{name}")), b"").unwrap();
         wait_file(&root.join("go"));
-        let login = if name == "one" {
-            "  Shared USER  "
-        } else {
-            "shared user"
-        };
-        let result = repo.register(login, &name, "password123");
+        let result = repo.adopt(&profile("shared user"));
+        // Hold the successful lease until both workers have attempted acquisition.
         fs::write(
             root.join(format!("result-{name}")),
             if result.is_ok() { "ok" } else { "rejected" },
         )
         .unwrap();
+        wait_file(&root.join(if name == "one" {
+            "result-two"
+        } else {
+            "result-one"
+        }));
         return;
     }
     if role == "contend" {
         assert_eq!(
-            repo.login("a", "password-a").err().unwrap().code,
+            repo.adopt(&profile("a")).err().unwrap().code,
             ErrorCode::ProjectLocked
         );
         return;
     }
     if role == "publish" {
-        let session = repo.login(&name, &format!("password-{name}")).unwrap();
+        let session = repo.adopt(&profile(&name)).unwrap();
         fs::write(root.join(format!("ready-{name}")), b"").unwrap();
         wait_file(&root.join("go"));
         repo.publish(&session, None, &payload()).unwrap();
         return;
     }
-    let _session = repo.login("a", "password-a").unwrap();
+    let _session = repo.adopt(&profile("a")).unwrap();
     fs::write(root.join("holder-ready"), b"").unwrap();
     // Parent kills this owned child to prove that OS handle release, not Rust Drop, unlocks it.
     std::thread::sleep(std::time::Duration::from_secs(30));
@@ -492,7 +440,7 @@ fn subprocess_worker() {
 fn real_process_lock_contention_and_abrupt_exit_release() {
     let temp = Temp::new();
     let repo = temp.repo();
-    repo.register("a", "A", "password-a").unwrap();
+    seed(&repo, "a", "A").unwrap();
     let mut holder = child(&temp.0, "hold", "holder");
     wait_file(&temp.0.join("holder-ready"));
     let contender = child(&temp.0, "contend", "contender");
@@ -504,7 +452,7 @@ fn real_process_lock_contention_and_abrupt_exit_release() {
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
-    assert!(repo.login("a", "password-a").is_ok());
+    assert!(repo.adopt(&profile("a")).is_ok());
 }
 
 #[test]
@@ -513,8 +461,8 @@ fn real_process_no_clobber_registration_and_independent_author_publication() {
         let temp = Temp::new();
         let names = if role == "publish" {
             let repo = temp.repo();
-            repo.register("a", "A", "password-a").unwrap();
-            repo.register("b", "B", "password-b").unwrap();
+            seed(&repo, "a", "A").unwrap();
+            seed(&repo, "b", "B").unwrap();
             ["a", "b"]
         } else {
             ["one", "two"]
@@ -578,7 +526,7 @@ fn manifest_json() -> Value {
             m
         })
         .collect();
-    json!({"kind":"audio-annotator-collaboration", "formatVersion":1, "projectId":doc["projectId"], "name":doc["name"], "createdAt":doc["createdAt"], "media":media})
+    json!({"kind":"audio-annotator-collaboration", "formatVersion":3, "projectId":doc["projectId"], "name":doc["name"], "createdAt":doc["createdAt"], "media":media})
 }
 
 #[test]
@@ -616,9 +564,9 @@ fn strict_json_rejects_duplicate_fields() {
 fn oversized_author_is_independent_from_other_visible_authors() {
     let temp = Temp::new();
     let repo = temp.repo();
-    let a = repo.register("a", "A", "password-a").unwrap();
-    repo.register("b", "B", "password-b").unwrap();
-    let session = repo.login("a", "password-a").unwrap();
+    let a = seed(&repo, "a", "A").unwrap();
+    seed(&repo, "b", "B").unwrap();
+    let session = repo.adopt(&profile("a")).unwrap();
     repo.publish(&session, None, &payload()).unwrap();
     let path = temp
         .0
@@ -661,43 +609,40 @@ fn cancellation_after_partial_write_cleans_only_its_temporary() {
 
 #[test]
 fn account_count_and_collection_limits_are_explicit() {
-    use sha2::{Digest, Sha256};
     let temp = Temp::new();
     let repo = temp.repo();
-    repo.register("seed", "Seed", "password123").unwrap();
-    let path = fs::read_dir(temp.0.join("accounts"))
+    seed(&repo, "seed", "Seed").unwrap();
+    let path = fs::read_dir(temp.0.join("authors"))
         .unwrap()
         .map(|e| e.unwrap().path())
         .find(|p| p.extension().is_some_and(|s| s == "json"))
         .unwrap();
     let original: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     for index in 1..128 {
-        let login = format!("account{index}");
+        let _index = index;
         let mut account = original.clone();
-        account["identity"]["normalizedLogin"] = json!(login);
         account["identity"]["authorId"] = json!(uuid::Uuid::new_v4().to_string());
         fs::write(
-            temp.0
-                .join("accounts")
-                .join(format!("{:x}.json", Sha256::digest(login.as_bytes()))),
+            temp.0.join("authors").join(format!(
+                "{}.json",
+                account["identity"]["authorId"].as_str().unwrap()
+            )),
             serde_json::to_vec(&account).unwrap(),
         )
         .unwrap();
     }
     assert_eq!(repo.snapshot().unwrap().authors.len(), 128);
     assert_eq!(
-        repo.register("overflow", "Overflow", "password123")
-            .unwrap_err()
-            .code,
+        seed(&repo, "overflow", "Overflow").unwrap_err().code,
         ErrorCode::ResourceLimit
     );
     let mut too_many = original;
-    too_many["identity"]["normalizedLogin"] = json!("overflow");
     too_many["identity"]["authorId"] = json!(uuid::Uuid::new_v4().to_string());
     fs::write(
-        temp.0
-            .join("accounts")
-            .join(format!("{:x}.json", Sha256::digest(b"overflow"))),
+        temp.0.join("authors").join(format!(
+            "{}.json",
+            too_many["identity"]["authorId"].as_str().unwrap()
+        )),
         serde_json::to_vec(&too_many).unwrap(),
     )
     .unwrap();
@@ -731,8 +676,8 @@ fn aggregate_loaded_layers_cannot_exceed_sixty_four_mib() {
     data.media_labels[0].note = "n".repeat(14 * 1024 * 1024);
     for index in 0..5 {
         let login = format!("author{index}");
-        repo.register(&login, &login, "password123").unwrap();
-        let session = repo.login(&login, "password123").unwrap();
+        seed(&repo, &login, &login).unwrap();
+        let session = repo.adopt(&profile(&login)).unwrap();
         repo.publish(&session, None, &data).unwrap();
     }
     assert_eq!(repo.snapshot().unwrap_err().code, ErrorCode::ResourceLimit);

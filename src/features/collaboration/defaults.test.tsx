@@ -14,17 +14,17 @@ import { ProjectStore } from '../../app/store';
 import { CommandQueue } from '../../app/commands';
 import { ProjectLifecycle } from '../project/lifecycle';
 import type { ActiveProject } from '../project/useProjectLifecycle';
-function owner():ActiveProject{const store=new ProjectStore({document:structuredClone(fixture) as never,canUndo:false,canRedo:false});const queue=new CommandQueue(store,{getSnapshot:async()=>store.snapshot,applyChange:vi.fn(),undo:vi.fn(),redo:vi.fn()});return{store,queue,lifecycle:new ProjectLifecycle(store,queue,{save:async(_id,r)=>r,close:async()=>{}}),path:'shared',collaboration:{runtimeNonce:'11111111-1111-4111-8111-111111111111',actor:null,preferences:null,projectFlavor:'legacyShared',identityMode:'guest',canWriteAnnotations:true,canImportMedia:false,hiddenMediaIds:[],catalogPending:false}};}
+function owner():ActiveProject{const store=new ProjectStore({document:structuredClone(fixture) as never,canUndo:false,canRedo:false});const queue=new CommandQueue(store,{getSnapshot:async()=>store.snapshot,applyChange:vi.fn(),undo:vi.fn(),redo:vi.fn()});return{store,queue,lifecycle:new ProjectLifecycle(store,queue,{save:async(_id,r)=>r,close:async()=>{}}),path:'shared',collaboration:{runtimeNonce:'11111111-1111-4111-8111-111111111111',actor:{authorId:'11111111-1111-4111-8111-111111111111',displayName:'本机身份',createdAt:'2026-10-26T00:00:00Z'},preferences:null,projectFlavor:'default',identityMode:'profile',canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false}};}
 const status=(o:ActiveProject)=>({formatVersion:1,...o.collaboration!,projectId:fixture.projectId,shared:true,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:null,error:null,snapshot:null});
-export const defaults = {projectFlavor:'default' as const,identityMode:'local' as const,canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false};
-const actor={authorId:'22222222-2222-4222-8222-222222222222',normalizedLogin:'local-random',displayName:'本机作者 · ABCD',createdAt:'2026-10-25T00:00:00Z'};
+export const defaults = {projectFlavor:'default' as const,identityMode:'profile' as const,canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false};
+const actor={authorId:'22222222-2222-4222-8222-222222222222',displayName:'本机作者 · ABCD',createdAt:'2026-10-25T00:00:00Z'};
 describe('default projects',()=>{
  it('parses explicit capabilities and rejects unknown/secret fields and invalid hidden lists',()=>{
   const o=owner(),context={...o.collaboration,...defaults,actor};
   expect(parseSharedContext(context)).toEqual(context);
   for(const patch of [{password:'secret'},{unknown:true},{hiddenMediaIds:['invalid']},{hiddenMediaIds:[actor.authorId,actor.authorId]}])expect(()=>parseSharedContext({...context,...patch})).toThrow();
   expect(()=>parseSharedContext({...context,canImportMedia:undefined})).toThrow();
-  expect(parseCollaborationStatus({...status(o),...defaults,actor}).identityMode).toBe('local');o.lifecycle.dispose();
+  expect(parseCollaborationStatus({...status(o),...defaults,actor}).identityMode).toBe('profile');o.lifecycle.dispose();
  });
  it('enables default media and folder imports and hides legacy copy and guest actions',()=>{
   const active=owner();Object.assign(active.collaboration!,defaults,{actor});

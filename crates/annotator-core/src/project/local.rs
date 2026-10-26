@@ -41,30 +41,11 @@ impl LocalProject {
     /// The full private document never enters the shared repository.
     pub fn initialize_shared_private(&mut self, document: ProjectDocument) -> Result<()> {
         if self.workspace()?.actor().is_none() {
-            return Err(AppError::invalid("Creator authentication required"));
+            return Err(AppError::invalid("Creator identity required"));
         }
         self.workspace_mut()?.save(&document)?;
         self.session = Some(ProjectSession::new(document)?);
         Ok(())
-    }
-    pub fn publish_guest(
-        &mut self,
-        id: &str,
-        revision: u64,
-        payload: &crate::collaboration::LayerPayload,
-    ) -> Result<ProjectSnapshot> {
-        let current = self.check(id, revision)?.document;
-        let workspace = self.workspace()?;
-        if workspace.manifest().format_version == 2 {
-            return Err(AppError::invalid("Format 2 has no guest publication"));
-        }
-        if workspace.actor().is_none() {
-            return Err(AppError::invalid(
-                "Sign in before publishing guest annotations",
-            ));
-        }
-        let next = crate::collaboration::merge_guest(&current, payload, workspace.manifest())?;
-        self.active_session()?.replace_content(next)
     }
     pub fn load_shared_version(
         &mut self,

@@ -1,8 +1,4 @@
-use super::{
-    catalog, defaults,
-    operations::{self, IdentityAction},
-    runtime::Expected,
-};
+use super::{catalog, defaults, operations, runtime::Expected};
 use crate::state::AppState;
 use annotator_core::{
     collaboration::*,
@@ -130,14 +126,16 @@ fn local_logout_is_a_workspace_preserving_noop() {
             .snapshot()
             .unwrap();
         let expected = f.expected();
-        let result = tauri::async_runtime::block_on(operations::identity(
-            &f.state,
-            expected.clone(),
-            "logout".into(),
-            IdentityAction::Logout,
-        ))
+        let result = tauri::async_runtime::block_on(
+            crate::commands::collaboration::test_profiles::select_named(
+                &f.state,
+                expected.clone(),
+                "logout".into(),
+                None,
+            ),
+        )
         .unwrap();
-        assert_eq!(result.status.runtime_nonce, expected.runtime_nonce);
+        assert_eq!(result.profiles.runtime_nonce, expected.runtime_nonce);
         assert_eq!(
             serde_json::to_value(
                 f.state
@@ -153,7 +151,14 @@ fn local_logout_is_a_workspace_preserving_noop() {
             serde_json::to_value(before).unwrap()
         );
         if saved {
-            assert_eq!(result.status.preferences.unwrap().volume, 0.24);
+            assert_eq!(
+                tauri::async_runtime::block_on(operations::status(&f.state))
+                    .unwrap()
+                    .preferences
+                    .unwrap()
+                    .volume,
+                0.24
+            );
         }
     }
 }
@@ -162,11 +167,10 @@ fn failed_catalog_layer_validation_does_not_commit_document_or_runtime() {
     let f = Fixture::new();
     f.save_category();
     let repo = f.repo();
-    let authors = (0..MAX_ACCOUNTS)
+    let authors = (0..MAX_AUTHORS)
         .map(|i| AuthorSnapshot {
             identity: AuthorIdentity {
                 author_id: uuid::Uuid::new_v4().to_string(),
-                normalized_login: format!("old-{i}"),
                 display_name: format!("Old {i}"),
                 created_at: repo.manifest().created_at.clone(),
             },
@@ -259,8 +263,8 @@ fn adoption_catalog_race_retains_last_good_layer_and_pending_flag() {
     let f = Fixture::new();
     fs::create_dir(f.root.join("other")).unwrap();
     let repo = f.repo();
-    let local = LocalIdentity::load_or_create(&f.root.join("other")).unwrap();
-    let actor = Arc::new(repo.login_local(&local).unwrap());
+    let local = profiles::Profile::new("Other").unwrap();
+    let actor = Arc::new(repo.adopt(&local).unwrap());
     let initial = repo
         .publish(
             &actor,
@@ -700,6 +704,7 @@ fn batch_hidden_ids_validate_and_persist_once_then_copy_together() {
         f.repo().root(),
         &f.root.join("baseline"),
         &f.root.join("local"),
+        &f.state.6.selected_profile().unwrap(),
         &AtomicBool::new(false),
         |_, _| {},
     )
@@ -810,8 +815,8 @@ fn imported_commit_snapshot_defers_later_foreign_append_until_explicit_adoption(
     f.save_category();
     fs::create_dir(f.root.join("other")).unwrap();
     let repo = f.repo();
-    let other = LocalIdentity::load_or_create(&f.root.join("other")).unwrap();
-    let actor = Arc::new(repo.login_local(&other).unwrap());
+    let other = profiles::Profile::new("Other").unwrap();
+    let actor = Arc::new(repo.adopt(&other).unwrap());
     let initial = repo
         .publish(
             &actor,

@@ -6,3 +6,5 @@ pub mod media;
 pub mod playback;
 pub mod project;
 pub mod source_import;
+
+pub mod profiles;

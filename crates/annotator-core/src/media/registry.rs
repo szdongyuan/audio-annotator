@@ -25,6 +25,9 @@ pub struct MediaTasks {
     pub registry: MediaRegistry,
 }
 impl MediaTasks {
+    pub fn has_pending_work(&self) -> bool {
+        !self.running.is_empty() || !self.pending.is_empty()
+    }
     pub fn generation(&self) -> u64 {
         self.generation
     }

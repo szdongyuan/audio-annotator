@@ -1,3 +1,5 @@
+import { useIdentity } from '../features/identity/useIdentity';
+import { IdentityDialog as ProfileDialog } from '../features/identity/IdentityDialog';
 import { copyProgressText } from '../features/collaboration/CollaborationStatus';
 import { useCollaboration, CollaborationContext } from '../features/collaboration/useCollaboration';
 import { IdentityDialog } from '../features/collaboration/IdentityDialog';
@@ -15,8 +17,9 @@ export function App() {
   const media = useMedia(project.active);
   const exchange = useExchange(project);
   const collaboration = useCollaboration(project);
-  return <CollaborationContext.Provider value={collaboration}><div className="app-root" inert={!!collaboration.dialog || !!exchange.dialog || project.closePending || !!project.recovery || !!media.relink || (!!project.active && project.editingDisabled)}><AppShell project={project} mediaUI={media} exchange={exchange} collaboration={collaboration} /></div>
-    <IdentityDialog ui={collaboration} />
+  const identity = useIdentity(project,collaboration);
+  return <CollaborationContext.Provider value={collaboration}><div className="app-root" inert={!!identity.dialog || !!collaboration.dialog || !!exchange.dialog || project.closePending || !!project.recovery || !!media.relink || (!!project.active && project.editingDisabled)}><AppShell project={project} mediaUI={media} exchange={exchange} collaboration={collaboration} identity={identity} /></div>
+    <IdentityDialog ui={collaboration} /><ProfileDialog controller={identity} />
     {project.copyProgress&&<div className="dialog-backdrop"><section role="dialog" aria-modal="true" aria-label="另存我的项目副本" className="project-dialog"><h2>另存我的项目副本</h2><p role="status"><progress aria-label="副本复制进度"/>{copyProgressText(project.copyProgress)}</p><button className="button" onClick={project.cancelCopy}>取消任务</button></section></div>}
     {exchange.dialog === 'export' && <ExportDialog shared={!!project.active?.collaboration} {...exchange} onStart={exchange.startExport} />}
     {exchange.dialog === 'import' && <ImportDialog {...exchange} onStart={exchange.startImport} />}

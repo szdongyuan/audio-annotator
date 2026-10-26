@@ -25,7 +25,7 @@ impl Fixture {
         let root = std::env::temp_dir().join(format!("nas-native-{}", uuid::Uuid::new_v4()));
         for name in [
             "shared/media",
-            "shared/accounts",
+            "shared/authors",
             "shared/annotations",
             "local-a",
             "local-b",
@@ -35,17 +35,16 @@ impl Fixture {
         let d = ProjectDocument::create("shared".into()).unwrap();
         let manifest = CollaborationManifest {
             kind: MANIFEST_KIND.into(),
-            format_version: 1,
+            format_version: CURRENT_COLLABORATION_FORMAT,
             project_id: d.project_id,
             name: d.name,
             created_at: d.created_at,
             media: vec![],
         };
-        fs::write(
-            root.join("shared/collaboration.json"),
-            serde_json::to_vec(&manifest).unwrap(),
-        )
-        .unwrap();
+        crate::commands::collaboration::test_profiles::write_manifest(
+            &root.join("shared"),
+            &manifest,
+        );
         let repo = Arc::new(CollaborationRepository::open(&root.join("shared")).unwrap());
         Self { root, repo }
     }
@@ -100,15 +99,11 @@ fn edit(state: &AppState, name: &str, save: bool) {
     }
 }
 fn register(state: &AppState, name: &str) {
-    tauri::async_runtime::block_on(identity(
+    tauri::async_runtime::block_on(crate::commands::collaboration::test_profiles::select_named(
         state,
         expected(state),
         uuid::Uuid::new_v4().to_string(),
-        IdentityAction::Register {
-            login: name.into(),
-            display_name: name.into(),
-            password: "password123".into(),
-        },
+        Some(name),
     ))
     .unwrap();
 }
@@ -119,15 +114,15 @@ fn refresh_now(state: &AppState) -> Status {
 #[test]
 fn unknown_shared_json_and_subdirectory_open_never_write_project_locks() {
     let f = Fixture::new();
-    f.repo.register("alice", "Alice", "password123").unwrap();
-    let account = fs::read_dir(f.root.join("shared/accounts"))
+    crate::commands::collaboration::test_profiles::seed(&f.repo, "alice", "Alice").unwrap();
+    let account = fs::read_dir(f.root.join("shared/authors"))
         .unwrap()
         .map(|e| e.unwrap().path())
         .find(|p| p.extension().is_some_and(|e| e == "json"))
         .unwrap();
     for path in [
         account,
-        f.root.join("shared/accounts"),
+        f.root.join("shared/authors"),
         f.root.join("shared/media"),
     ] {
         let state = AppState::default();
@@ -136,7 +131,7 @@ fn unknown_shared_json_and_subdirectory_open_never_write_project_locks() {
             tauri::async_runtime::block_on(open(&state, path.to_string_lossy().into_owned()))
                 .is_err()
         );
-        assert!(!f.root.join("shared/accounts/.project.lock").exists());
+        assert!(!f.root.join("shared/authors/.project.lock").exists());
         assert!(!f.root.join("shared/media/.project.lock").exists());
     }
 }
@@ -187,26 +182,24 @@ fn independent_native_identities_are_private_and_status_has_no_credentials() {
         b.0.lock().unwrap().as_ref().unwrap().storage_root()
     );
     let old = expected(&b);
-    let wrong = tauri::async_runtime::block_on(identity(
-        &b,
-        old.clone(),
-        "wrong".into(),
-        IdentityAction::Login {
-            login: "alice".into(),
-            password: "wrongpass".into(),
-        },
-    ));
+    let wrong = tauri::async_runtime::block_on(
+        crate::commands::collaboration::test_profiles::select_named(
+            &b,
+            old.clone(),
+            "wrong".into(),
+            Some("alice"),
+        ),
+    );
     assert!(wrong.is_err());
     assert_eq!(expected(&b).runtime_nonce, old.runtime_nonce);
-    assert!(tauri::async_runtime::block_on(identity(
-        &b,
-        old,
-        "locked".into(),
-        IdentityAction::Login {
-            login: "alice".into(),
-            password: "password123".into()
-        }
-    ))
+    assert!(tauri::async_runtime::block_on(
+        crate::commands::collaboration::test_profiles::select_named(
+            &b,
+            old,
+            "locked".into(),
+            Some("alice")
+        )
+    )
     .is_err());
 }
 
@@ -275,15 +268,11 @@ fn old_runtime_worker_and_cancelled_identity_cannot_adopt_after_retirement() {
     let worker = a.clone();
     let e = expected(&a);
     let join = std::thread::spawn(move || {
-        tauri::async_runtime::block_on(identity(
+        tauri::async_runtime::block_on(crate::commands::collaboration::test_profiles::select_named(
             &worker,
             e,
             "cancel-me".into(),
-            IdentityAction::Register {
-                login: "alice".into(),
-                display_name: "Alice".into(),
-                password: "password123".into(),
-            },
+            Some("alice"),
         ))
     });
     arrival.recv_timeout(Duration::from_secs(10)).unwrap();
@@ -300,8 +289,8 @@ fn old_runtime_worker_and_cancelled_identity_cannot_adopt_after_retirement() {
         .workspace()
         .unwrap()
         .actor()
-        .is_none());
-    assert!(f.repo.snapshot().unwrap().authors.is_empty());
+        .is_some());
+    assert_eq!(f.repo.snapshot().unwrap().authors.len(), 1);
     let prior = expected(&a);
     a.6.retire();
     a.6.install(Some(f.repo.clone())).unwrap();
@@ -311,8 +300,14 @@ fn old_runtime_worker_and_cancelled_identity_cannot_adopt_after_retirement() {
 #[test]
 fn own_external_change_requires_explicit_load_without_replacing_live_history() {
     let f = Fixture::new();
-    f.repo.register("alice", "Alice", "password123").unwrap();
-    let actor = Arc::new(f.repo.login("alice", "password123").unwrap());
+    crate::commands::collaboration::test_profiles::seed(&f.repo, "alice", "Alice").unwrap();
+    let actor = Arc::new(
+        f.repo
+            .adopt(&crate::commands::collaboration::test_profiles::profile(
+                "alice",
+            ))
+            .unwrap(),
+    );
     let a = AppState::default();
     a.6.set_local(f.root.join("local-a")).unwrap();
     *a.0.lock().unwrap() = Some(
@@ -348,8 +343,7 @@ fn own_external_change_requires_explicit_load_without_replacing_live_history() {
     );
     assert_eq!(status.error.unwrap().code, ErrorCode::RevisionConflict);
     let loaded =
-        tauri::async_runtime::block_on(load_or_guest(&a, expected(&a), "load".into(), false))
-            .unwrap();
+        tauri::async_runtime::block_on(load_shared(&a, expected(&a), "load".into())).unwrap();
     assert_eq!(
         loaded.opened.snapshot.unwrap().document.categories[0].name,
         "external"
@@ -414,7 +408,7 @@ fn offline_and_corrupt_layers_keep_last_good_and_reconnect_publishes_pending() {
 }
 
 #[test]
-fn guest_copy_uses_native_cache_and_preferences_and_nonces_follow_identity() {
+fn profile_selection_preserves_private_cache_preferences_and_nonces() {
     let f = Fixture::new();
     let a = f.state("local-a");
     edit(&a, "guest", true);
@@ -429,6 +423,7 @@ fn guest_copy_uses_native_cache_and_preferences_and_nonces_follow_identity() {
             ..Default::default()
         })
         .unwrap();
+    refresh_now(&a);
     let guest = expected(&a);
     register(&a, "alice");
     assert_ne!(expected(&a).runtime_nonce, guest.runtime_nonce);
@@ -439,27 +434,11 @@ fn guest_copy_uses_native_cache_and_preferences_and_nonces_follow_identity() {
         assert!(super::runtime::check_mutation(p, &a.6, Some(&guest.runtime_nonce)).is_err());
         assert_eq!(p.workspace().unwrap().preferences().volume, 0.75);
     }
-    // Explicit native guest load is one undoable own change; no renderer payload parameter exists.
-    let merged =
-        tauri::async_runtime::block_on(load_or_guest(&a, expected(&a), "guest-copy".into(), true))
-            .unwrap();
-    let merged = merged.opened.snapshot.unwrap();
-    assert_eq!(merged.document.categories[0].name, "guest");
-    {
-        let mut p = a.0.lock().unwrap();
-        let p = p.as_mut().unwrap();
-        let undone = p
-            .undo(&merged.document.project_id, merged.document.revision)
-            .unwrap();
-        assert!(undone.document.categories.is_empty());
-        p.save(&undone.document.project_id, undone.document.revision)
-            .unwrap();
-    }
-    tauri::async_runtime::block_on(identity(
+    tauri::async_runtime::block_on(crate::commands::collaboration::test_profiles::select_named(
         &a,
         expected(&a),
-        "logout".into(),
-        IdentityAction::Logout,
+        "switch-back".into(),
+        None,
     ))
     .unwrap();
     let p = a.0.lock().unwrap();
@@ -477,6 +456,7 @@ fn ordinary_missing_primary_still_opens_valid_recovery() {
     drop(p);
     fs::remove_file(root.join("project.json")).unwrap();
     let a = AppState::default();
+    a.6.set_local(f.root.join("ordinary-local")).unwrap();
     tauri::async_runtime::block_on(open(
         &a,
         root.join("project.json").to_string_lossy().into_owned(),
@@ -485,9 +465,17 @@ fn ordinary_missing_primary_still_opens_valid_recovery() {
     assert!(a.0.lock().unwrap().as_ref().unwrap().recovery().is_some());
 }
 #[test]
-fn shared_catalog_rejects_async_scan_import_and_forged_local_change() {
+fn view_only_catalog_rejects_async_scan_import_and_forged_local_change() {
     let f = Fixture::new();
     let a = f.state("local-a");
+    *a.0.lock().unwrap() = None;
+    a.6.retire();
+    tauri::async_runtime::block_on(open_mode(
+        &a,
+        f.root.join("shared").to_string_lossy().into(),
+        true,
+    ))
+    .unwrap();
     let e = expected(&a);
     let import = tauri::async_runtime::block_on(crate::commands::media::start(
         &a,
@@ -522,11 +510,7 @@ fn shared_catalog_rejects_async_scan_import_and_forged_local_change() {
 #[test]
 fn native_requests_reject_renderer_credential_and_owner_injection() {
     assert!(serde_json::from_value::<Expected>(serde_json::json!({"runtimeNonce":"a", "projectId":"b", "expectedRevision":0,"authorId":"spoof"})).is_err());
-    assert!(serde_json::from_value::<IdentityAction>(
-        serde_json::json!({"type":"login","login":"a","password":"password123","authorId":"spoof"})
-    )
-    .is_err());
-    assert!(serde_json::from_value::<super::creation::Credentials>(serde_json::json!({"login":"a","displayName":"a","password":"password123","passwordHash":"spoof"})).is_err());
+    assert!(serde_json::from_value::<crate::commands::profiles::Expected>(serde_json::json!({"storeRevision":1,"runtimeNonce":"x","project":null,"password":"forbidden"})).is_err());
 }
 
 #[test]
@@ -555,7 +539,18 @@ fn published_old_worker_cannot_update_new_runtime_or_release_its_slot_early() {
     );
     *a.0.lock().unwrap() = None;
     a.6.retire();
-    let guest = LocalProject::open_shared(f.repo.clone(), None, &a.6.local().unwrap()).unwrap();
+    let guest = LocalProject::open_shared(
+        f.repo.clone(),
+        Some(Arc::new(
+            f.repo
+                .adopt(&crate::commands::collaboration::test_profiles::profile(
+                    "replacement",
+                ))
+                .unwrap(),
+        )),
+        &a.6.local().unwrap(),
+    )
+    .unwrap();
     *a.0.lock().unwrap() = Some(guest);
     a.6.install(Some(f.repo.clone())).unwrap();
     assert!(a.6.begin("extra-worker".into()).is_err());
@@ -600,11 +595,11 @@ fn delayed_previous_actor_playback_capture_and_control_cannot_touch_new_identity
     let a = f.state("local-a");
     register(&a, "alice");
     let alice = expected(&a);
-    tauri::async_runtime::block_on(identity(
+    tauri::async_runtime::block_on(crate::commands::collaboration::test_profiles::select_named(
         &a,
         alice.clone(),
         "logout".into(),
-        IdentityAction::Logout,
+        None,
     ))
     .unwrap();
     register(&a, "bob");
@@ -627,13 +622,13 @@ fn delayed_previous_actor_playback_capture_and_control_cannot_touch_new_identity
     );
 }
 #[test]
-fn local_capture_failure_stays_visible_and_guest_has_no_network_pending() {
+fn local_capture_failure_stays_visible_after_previous_profile_published() {
     let f = Fixture::new();
     let a = f.state("local-a");
     edit(&a, "guest", true);
     assert!(
         !refresh_now(&a).pending,
-        "guest annotations are local-only, never network pending"
+        "successful publication clears pending"
     );
     register(&a, "alice");
     edit(&a, "own", true);
@@ -654,6 +649,10 @@ fn explicit_default_view_only_does_not_silently_open_a_legacy_guest_writer() {
     let fixture = Fixture::new();
     let state = AppState::default();
     state.6.set_local(fixture.root.join("local-a")).unwrap();
+    let path = fixture.root.join("shared/collaboration.json");
+    let mut value: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    value["formatVersion"] = serde_json::json!(2);
+    fs::write(path, serde_json::to_vec(&value).unwrap()).unwrap();
     assert!(tauri::async_runtime::block_on(open_mode(
         &state,
         fixture.root.join("shared").to_string_lossy().into(),

@@ -9,7 +9,7 @@ use annotator_core::{
     media::identity::check_cancel,
     project::LocalProject,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{
     path::Path,
     sync::Arc,
@@ -71,21 +71,25 @@ pub async fn open_mode(state: &AppState, path: String, view_only: bool) -> Resul
             None
         };
         if view_only
-            && repo
-                .as_ref()
-                .is_none_or(|r| r.manifest().format_version != 2)
+            && repo.as_ref().is_none_or(|r| {
+                r.manifest().format_version
+                    != annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
+            })
         {
             return Err(AppError::invalid(
                 "Explicit view-only opening requires a default project",
             ));
         }
+        let identity = state.6.selected_profile()?;
         let project = match &repo {
-            Some(repo) if repo.manifest().format_version == 2 => {
+            Some(repo)
+                if repo.manifest().format_version
+                    == annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT =>
+            {
                 if view_only {
                     LocalProject::open_shared_view_only(repo.clone(), &state.6.local()?)?
                 } else {
-                    let identity = LocalIdentity::load_or_create(&state.6.local()?)?;
-                    let actor = Arc::new(repo.login_local(&identity)?);
+                    let actor = Arc::new(repo.adopt(&identity)?);
                     LocalProject::open_shared(repo.clone(), Some(actor), &state.6.local()?)?
                 }
             }
@@ -235,7 +239,7 @@ pub async fn refresh(state: &AppState, expected: Expected) -> Result<Status> {
                         }
                     } else {
                         runtime.error =
-                            Some(AppError::invalid("Current account missing from share"));
+                            Some(AppError::invalid("Current author missing from share"));
                     }
                 }
                 if let Some(layers) = &mut runtime.layers {
@@ -304,25 +308,6 @@ pub fn schedule(state: AppState) {
     });
 }
 
-#[derive(Deserialize)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase",
-    deny_unknown_fields
-)]
-pub enum IdentityAction {
-    Register {
-        login: String,
-        display_name: String,
-        password: String,
-    },
-    Login {
-        login: String,
-        password: String,
-    },
-    Logout,
-}
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transition {
@@ -330,107 +315,6 @@ pub struct Transition {
     pub status: Status,
 }
 
-pub async fn identity(
-    state: &AppState,
-    expected: Expected,
-    operation_id: String,
-    action: IdentityAction,
-) -> Result<Transition> {
-    let permit = state.6.begin(operation_id)?;
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let permit = permit;
-        let repo = {
-            let current = state.0.lock().map_err(|_| runtime::unavailable())?;
-            let project = current.as_ref().ok_or_else(runtime::stale)?;
-            let runtime = state.6.current.lock().map_err(|_| runtime::unavailable())?;
-            expected.check(project, &runtime, true)?;
-            runtime.repo.clone().ok_or_else(runtime::stale)?
-        };
-        #[cfg(test)]
-        state.6.run_hook();
-        check_cancel(&permit.cancel)?;
-        let actor = match action {
-            IdentityAction::Register {
-                login,
-                display_name,
-                password,
-            } => {
-                repo.register(&login, &display_name, &password)?;
-                check_cancel(&permit.cancel)?;
-                Some(Arc::new(repo.login(&login, &password)?))
-            }
-            IdentityAction::Login { login, password } => {
-                Some(Arc::new(repo.login(&login, &password)?))
-            }
-            IdentityAction::Logout if repo.manifest().format_version == 2 => {
-                let local = LocalIdentity::load_or_create(&state.6.local()?)?;
-                // Reuse the lease if already the automatic actor.
-                let existing = {
-                    let current = state.0.lock().map_err(|_| runtime::unavailable())?;
-                    let p = current.as_ref().ok_or_else(runtime::stale)?;
-                    expected.check(
-                        p,
-                        &*state.6.current.lock().map_err(|_| runtime::unavailable())?,
-                        true,
-                    )?;
-                    p.workspace()?
-                        .author_session()
-                        .filter(|a| a.identity().normalized_login == local.login_name())
-                };
-                if existing.is_some() {
-                    let current = state.0.lock().map_err(|_| runtime::unavailable())?;
-                    let p = current.as_ref().ok_or_else(runtime::stale)?;
-                    expected.check(
-                        p,
-                        &*state.6.current.lock().map_err(|_| runtime::unavailable())?,
-                        true,
-                    )?;
-                    check_cancel(&permit.cancel)?;
-                    // The workspace lease, history, pending publication and private state are
-                    // already the desired identity. Reopening would contend with our own lease.
-                    let opened = info_shared(p, &state.6)?;
-                    drop(permit);
-                    return Ok(Transition {
-                        opened,
-                        status: runtime::status(current.as_ref(), &state.6)?,
-                    });
-                }
-                Some(Arc::new(repo.login_local(&local)?))
-            }
-            IdentityAction::Logout => None,
-        };
-        check_cancel(&permit.cancel)?;
-        let next = LocalProject::open_shared(repo.clone(), actor, &state.6.local()?)?;
-        let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
-        expected.check(
-            current.as_ref().ok_or_else(runtime::stale)?,
-            &*state.6.current.lock().map_err(|_| runtime::unavailable())?,
-            true,
-        )?;
-        check_cancel(&permit.cancel)?;
-        reset_resources(&state)?;
-        state.6.install(Some(repo))?;
-        let opened = info_shared(&next, &state.6)?;
-        *current = Some(next);
-        drop(permit);
-        Ok(Transition {
-            opened,
-            status: runtime::status(current.as_ref(), &state.6)?,
-        })
-    })
-    .await
-    .map_err(|_| runtime::unavailable())?
-}
-#[tauri::command]
-pub async fn collaboration_identity(
-    state: State<'_, AppState>,
-    expected: Expected,
-    operation_id: String,
-    action: IdentityAction,
-) -> Result<Transition> {
-    identity(&state, expected, operation_id, action).await
-}
 #[tauri::command]
 pub fn collaboration_cancel(state: State<'_, AppState>, operation_id: String) -> Result<()> {
     state.6.cancel(&operation_id)
@@ -457,11 +341,10 @@ pub async fn collaboration_preferences(
         .await
 }
 
-pub async fn load_or_guest(
+pub async fn load_shared(
     state: &AppState,
     expected: Expected,
     operation_id: String,
-    guest: bool,
 ) -> Result<Transition> {
     let permit = state.6.begin(operation_id)?;
     let state = state.clone();
@@ -477,19 +360,11 @@ pub async fn load_or_guest(
                 p.workspace()?
                     .actor()
                     .cloned()
-                    .ok_or_else(|| AppError::invalid("Sign in first"))?,
+                    .ok_or_else(|| AppError::invalid("Select a writable profile first"))?,
             )
         };
         check_cancel(&permit.cancel)?;
-        let (payload, remote) = if guest {
-            let cache = LocalProject::open_shared(repo.clone(), None, &state.6.local()?)?;
-            (
-                Some(LayerPayload::from_document(&cache.snapshot()?.document)?),
-                None,
-            )
-        } else {
-            (None, repo.read_author(&actor.author_id)?)
-        };
+        let remote = repo.read_author(&actor.author_id)?;
         let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
         let p = current.as_mut().ok_or_else(runtime::stale)?;
         expected.check(
@@ -498,13 +373,9 @@ pub async fn load_or_guest(
             true,
         )?;
         check_cancel(&permit.cancel)?;
-        if let Some(payload) = payload {
-            p.publish_guest(&expected.project_id, expected.expected_revision, &payload)?;
-        } else {
-            p.load_shared_version(remote.as_ref())?;
-            reset_resources(&state)?;
-            state.6.install(Some(repo))?;
-        }
+        p.load_shared_version(remote.as_ref())?;
+        reset_resources(&state)?;
+        state.6.install(Some(repo))?;
         let opened = info_shared(p, &state.6)?;
         drop(permit);
         Ok(Transition {
@@ -516,18 +387,10 @@ pub async fn load_or_guest(
     .map_err(|_| runtime::unavailable())?
 }
 #[tauri::command]
-pub async fn collaboration_publish_guest(
-    state: State<'_, AppState>,
-    expected: Expected,
-    operation_id: String,
-) -> Result<Transition> {
-    load_or_guest(&state, expected, operation_id, true).await
-}
-#[tauri::command]
 pub async fn collaboration_load_shared(
     state: State<'_, AppState>,
     expected: Expected,
     operation_id: String,
 ) -> Result<Transition> {
-    load_or_guest(&state, expected, operation_id, false).await
+    load_shared(&state, expected, operation_id).await
 }

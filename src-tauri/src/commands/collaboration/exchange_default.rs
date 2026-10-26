@@ -45,6 +45,7 @@ pub(crate) fn prepare(
     source: &Path,
     parent: &Path,
     local: &Path,
+    identity: &annotator_core::collaboration::profiles::Profile,
     bindings: Option<SourceBindings>,
     cancel: &AtomicBool,
     mut progress: impl FnMut(&str, u64),
@@ -152,6 +153,7 @@ pub(crate) fn prepare(
         &imported.path,
         &target,
         local,
+        identity,
         cancel,
         &mut progress,
     )?;
@@ -204,6 +206,7 @@ mod tests {
             &json,
             &root.join("imports"),
             &root.join("local"),
+            &annotator_core::collaboration::profiles::Profile::new("Exchange").unwrap(),
             None,
             &cancel,
             |_, _| {},
@@ -231,6 +234,7 @@ mod tests {
             &json,
             &root.join("imports"),
             &root.join("local"),
+            &annotator_core::collaboration::profiles::Profile::new("Exchange").unwrap(),
             Some(wrong_digest),
             &cancel,
             |_, _| {}
@@ -247,6 +251,7 @@ mod tests {
             &json,
             &root.join("imports"),
             &root.join("local"),
+            &annotator_core::collaboration::profiles::Profile::new("Exchange").unwrap(),
             Some(wrong_audio),
             &cancel,
             |_, _| {}
@@ -258,6 +263,7 @@ mod tests {
             &json,
             &root.join("imports"),
             &root.join("local"),
+            &annotator_core::collaboration::profiles::Profile::new("Exchange").unwrap(),
             Some(bindings.clone()),
             &cancelled,
             |phase, _| {
@@ -272,6 +278,7 @@ mod tests {
             &json,
             &root.join("imports"),
             &root.join("local"),
+            &annotator_core::collaboration::profiles::Profile::new("Exchange").unwrap(),
             Some(bindings),
             &cancel,
             |_, _| {},
@@ -280,7 +287,10 @@ mod tests {
             panic!("must complete")
         };
         let (copy, repo) = prepared.commit();
-        assert_eq!(repo.manifest().format_version, 2);
+        assert_eq!(
+            repo.manifest().format_version,
+            annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
+        );
         assert_eq!(repo.manifest().media[0].id, d.media[0].id);
         assert!(copy.snapshot().unwrap().document.edits.is_empty());
         let bundle = root.join("share.zip");
@@ -297,6 +307,7 @@ mod tests {
             &bundle,
             &root.join("imports"),
             &root.join("local"),
+            &annotator_core::collaboration::profiles::Profile::new("Exchange").unwrap(),
             None,
             &cancel,
             |_, _| {},
@@ -304,7 +315,10 @@ mod tests {
         .unwrap() else {
             panic!("bundle must be complete")
         };
-        assert_eq!(bundle_prepared.repo.manifest().format_version, 2);
+        assert_eq!(
+            bundle_prepared.repo.manifest().format_version,
+            annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
+        );
         let unadopted = bundle_prepared.repo.root().to_path_buf();
         drop(bundle_prepared);
         assert!(!unadopted.exists());

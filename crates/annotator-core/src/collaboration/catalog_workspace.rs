@@ -19,7 +19,7 @@ pub(crate) fn validate_extension(
         "Previously loaded catalog media changed or disappeared",
     )?;
     require(
-        old.format_version == 2 || old == new,
+        old.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT || old == new,
         "Legacy catalog is immutable",
     )
 }
@@ -36,7 +36,8 @@ pub(crate) fn extend_document(
         "Private catalog identity mismatch",
     )?;
     require(
-        manifest.format_version == 2 || document.media.len() == manifest.media.len(),
+        manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT
+            || document.media.len() == manifest.media.len(),
         "Legacy catalog is immutable",
     )?;
     for local in &document.media {
@@ -74,7 +75,7 @@ pub(crate) fn equivalent(
     b: &LayerPayload,
     manifest: &CollaborationManifest,
 ) -> Result<bool> {
-    if manifest.format_version != 2 {
+    if manifest.format_version != crate::collaboration::CURRENT_COLLABORATION_FORMAT {
         return Ok(a == b);
     }
     Ok(a.project(manifest)? == b.project(manifest)?)

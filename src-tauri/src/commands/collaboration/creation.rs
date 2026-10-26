@@ -3,22 +3,15 @@ use super::{
     runtime::{self, Expected},
 };
 use crate::{commands::project::info_shared, state::AppState};
+#[cfg(test)]
+use annotator_core::media::{decode::decode, identity::fingerprint};
 use annotator_core::{
     collaboration::*,
     error::{AppError, Result},
     project::LocalProject,
 };
 use annotator_core::{error::ErrorCode, media::identity::check_cancel};
-#[cfg(test)]
-use annotator_core::{
-    media::{
-        decode::decode,
-        identity::{fingerprint, SourceStamp},
-        registry::same_identity,
-    },
-    model::ProjectDocument,
-};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{
     fs::{self, OpenOptions},
     io::{Read, Write},
@@ -114,187 +107,6 @@ impl PreparedCopy {
     }
 }
 
-#[cfg(test)]
-fn copy_project(
-    document: &ProjectDocument,
-    source: &Path,
-    target: &Path,
-    local: &Path,
-    credentials: &Credentials,
-    cancel: &AtomicBool,
-    mut progress: impl FnMut(&str, u64),
-) -> Result<PreparedCopy> {
-    check_cancel(cancel)?;
-    atomic::safe_existing(target)?;
-    let target = target.canonicalize().map_err(io)?;
-    if fs::read_dir(&target).map_err(io)?.next().is_some() {
-        return Err(AppError::invalid("Select an empty collaboration directory"));
-    }
-    let stage = target.join(format!(".create-{}", uuid::Uuid::new_v4()));
-    let mut staged = Owned::new();
-    staged.dir(&stage)?;
-    for name in ["media", "accounts", "annotations"] {
-        staged.dir(&stage.join(name))?;
-    }
-    let mut manifest = CollaborationManifest {
-        kind: MANIFEST_KIND.into(),
-        format_version: 1,
-        project_id: uuid::Uuid::new_v4().to_string(),
-        name: document.name.clone(),
-        created_at: document.created_at.clone(),
-        media: vec![],
-    };
-    for media in &document.media {
-        check_cancel(cancel)?;
-        let path = Path::new(&media.source_ref);
-        let path = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            source.join(path)
-        };
-        let stamp = SourceStamp::read(&path)?;
-        let decoded = decode(
-            &path,
-            &std::env::temp_dir().join("audio-annotator-pcm"),
-            cancel,
-            |phase, n| progress(phase, n),
-        )?;
-        if !same_identity(media, &decoded.descriptor) {
-            return Err(AppError::new(
-                ErrorCode::IdentityMismatch,
-                "Source media identity changed",
-            ));
-        }
-        let mut input = fs::File::open(&path).map_err(io)?;
-        let mut magic = [0u8; 12];
-        let read = input.read(&mut magic).map_err(io)?;
-        let ext = if read >= 12 && &magic[..4] == b"RIFF" && &magic[8..12] == b"WAVE" {
-            "wav"
-        } else if read >= 4 && &magic[..4] == b"fLaC" {
-            "flac"
-        } else {
-            "mp3"
-        };
-        let relative = format!("media/{}.{}", media.id, ext);
-        let copied = stage.join(&relative);
-        let mut output = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&copied)
-            .map_err(io)?;
-        staged.record_file(copied.clone())?;
-        let mut input = fs::File::open(&path).map_err(io)?;
-        let mut buffer = [0u8; 65536];
-        let mut count = 0;
-        loop {
-            check_cancel(cancel)?;
-            let n = input.read(&mut buffer).map_err(io)?;
-            if n == 0 {
-                break;
-            }
-            output.write_all(&buffer[..n]).map_err(io)?;
-            count += n as u64;
-            progress("copyMedia", count);
-        }
-        output.sync_all().map_err(io)?;
-        drop(output);
-        stamp.verify(&path)?;
-        if count != media.byte_length || fingerprint(&copied, cancel, |_| {})? != media.sha256 {
-            return Err(AppError::new(
-                ErrorCode::IdentityMismatch,
-                "Copied media fingerprint mismatch",
-            ));
-        }
-        manifest.media.push(PublicMedia {
-            id: media.id.clone(),
-            display_name: media.display_name.clone(),
-            source_ref: relative,
-            sha256: media.sha256.clone(),
-            byte_length: media.byte_length,
-            sample_rate: media.sample_rate,
-            frame_count: media.frame_count,
-            channel_count: media.channel_count,
-            channel_layout: media.channel_layout.clone(),
-        });
-    }
-    manifest.validate()?;
-    let bytes = serde_json::to_vec(&manifest).map_err(|_| runtime::unavailable())?;
-    atomic::publish_new(
-        &stage.join("collaboration.json"),
-        &bytes,
-        None,
-        Some(cancel),
-    )?;
-    staged.record_file(stage.join("collaboration.json"))?;
-    let preparation = (|| {
-        let repo = CollaborationRepository::open(&stage)?;
-        repo.register(
-            &credentials.login,
-            &credentials.display_name,
-            &credentials.password,
-        )?;
-        check_cancel(cancel)?;
-        let actor = repo.login(&credentials.login, &credentials.password)?;
-        repo.publish(&actor, None, &LayerPayload::from_document(document)?)?;
-        Ok(())
-    })();
-    // Capture every file created by registration/publication even on failure.
-    staged.inventory(&stage)?;
-    preparation?;
-    check_cancel(cancel)?;
-    if fs::read_dir(&target).map_err(io)?.count() != 1 {
-        return Err(AppError::invalid("Target changed during creation"));
-    }
-    let mut published = Owned::new();
-    for name in ["media", "accounts", "annotations"] {
-        atomic::safe_existing(&target)?;
-        let dest = target.join(name);
-        // create_dir is a no-clobber reservation. Transfer each owned file individually.
-        published.dir(&dest)?;
-        transfer(&stage.join(name), &dest, &mut published, cancel)?;
-    }
-    for media in &manifest.media {
-        let path = target.join(&media.source_ref);
-        if SourceStamp::read(&path)?.bytes != media.byte_length
-            || fingerprint(&path, cancel, |_| {})? != media.sha256
-        {
-            return Err(AppError::new(
-                ErrorCode::IdentityMismatch,
-                "Final media fingerprint mismatch",
-            ));
-        }
-    }
-    progress("publishManifest", manifest.media.len() as u64);
-    atomic::publish_new(
-        &target.join("collaboration.json"),
-        &bytes,
-        None,
-        Some(cancel),
-    )?;
-    published.record_file(target.join("collaboration.json"))?;
-    let repo = Arc::new(CollaborationRepository::open(&target)?);
-    // Capabilities are bound to the canonical root. Authenticate again after relocation.
-    let actor = Arc::new(repo.login(&credentials.login, &credentials.password)?);
-    let mut project = LocalProject::open_shared(repo.clone(), Some(actor), local)?;
-    let mut private = document.clone();
-    private.project_id = manifest.project_id.clone();
-    private.revision = private.revision.max(project.snapshot()?.document.revision);
-    for media in &mut private.media {
-        media.source_ref = manifest
-            .media
-            .iter()
-            .find(|m| m.id == media.id)
-            .ok_or_else(runtime::stale)?
-            .source_ref
-            .clone();
-    }
-    project.initialize_shared_private(private)?;
-    Ok(PreparedCopy {
-        project,
-        repo,
-        owned: published,
-    })
-}
 pub(crate) fn transfer(
     from: &Path,
     to: &Path,
@@ -331,13 +143,6 @@ pub(crate) fn transfer(
     }
     Ok(())
 }
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Credentials {
-    pub login: String,
-    pub display_name: String,
-    pub password: String,
-}
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyProgress {
@@ -351,18 +156,9 @@ pub async fn collaboration_create(
     expected: Expected,
     operation_id: String,
     target: String,
-    credentials: Option<Credentials>,
     on_progress: Channel<CopyProgress>,
 ) -> Result<Transition> {
     let permit = state.6.begin(operation_id.clone())?;
-    if let Some(Credentials {
-        login,
-        display_name,
-        password,
-    }) = credentials
-    {
-        drop((login, display_name, password));
-    }
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let permit = permit;
@@ -381,11 +177,12 @@ pub async fn collaboration_create(
         };
         let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
         let mut last_phase = String::new();
-        let prepared = super::defaults::copy(
+        let prepared = crate::commands::collaboration::defaults::copy(
             &document,
             &root,
             Path::new(&target),
             &state.6.local()?,
+            &state.6.selected_profile()?,
             &permit.cancel,
             |phase, completed| {
                 if last.elapsed() < std::time::Duration::from_millis(100) && phase == last_phase {
@@ -472,35 +269,32 @@ mod tests {
         }
         let document = source.snapshot().unwrap().document;
         let original = std::fs::read(root.join("source/project.json")).unwrap();
-        let credentials = Credentials {
-            login: "alice".into(),
-            display_name: "Alice".into(),
-            password: "password123".into(),
-        };
-        let (created, repo) = copy_project(
+        let profile = profiles::Profile::new("Alice").unwrap();
+        let (created, repo) = crate::commands::collaboration::defaults::copy(
             &document,
             source.root(),
             &root.join("target"),
             &root.join("local"),
-            &credentials,
+            &profile,
             &AtomicBool::new(false),
             |_, _| assert!(!root.join("target/collaboration.json").exists()),
         )
         .unwrap()
         .commit();
         assert!(created.is_shared());
-        assert_eq!(
-            repo.manifest()
-                .media
-                .iter()
-                .map(|m| Path::new(&m.source_ref)
+        let extensions = repo
+            .manifest()
+            .media
+            .iter()
+            .map(|m| {
+                Path::new(&m.source_ref)
                     .extension()
                     .unwrap()
                     .to_str()
-                    .unwrap())
-                .collect::<Vec<_>>(),
-            vec!["wav", "flac", "mp3"]
-        );
+                    .unwrap()
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(extensions, ["wav", "flac", "mp3"].into_iter().collect());
         for media in &repo.manifest().media {
             assert_eq!(
                 fingerprint(
@@ -576,18 +370,14 @@ mod tests {
         source.save(&d.project_id, next.document.revision).unwrap();
         let document = source.snapshot().unwrap().document;
         let original = fs::read(root.join("source/project.json")).unwrap();
-        let credentials = Credentials {
-            login: "alice".into(),
-            display_name: "Alice".into(),
-            password: "password123".into(),
-        };
+        let profile = profiles::Profile::new("Alice").unwrap();
         let cancel = AtomicBool::new(false);
-        let result = copy_project(
+        let result = crate::commands::collaboration::defaults::copy(
             &document,
             source.root(),
             &root.join("cancel"),
             &root.join("local"),
-            &credentials,
+            &profile,
             &cancel,
             |phase, _| {
                 if phase == "copyMedia" {
@@ -599,23 +389,23 @@ mod tests {
         assert_eq!(fs::read_dir(root.join("cancel")).unwrap().count(), 0);
         let mut incorrect = document.clone();
         incorrect.media[0].sha256 = "0".repeat(64);
-        assert!(copy_project(
+        assert!(crate::commands::collaboration::defaults::copy(
             &incorrect,
             source.root(),
             &root.join("failure"),
             &root.join("local"),
-            &credentials,
+            &profile,
             &AtomicBool::new(false),
             |_, _| {}
         )
         .is_err());
         assert_eq!(fs::read_dir(root.join("failure")).unwrap().count(), 0);
-        let (created, repo) = copy_project(
+        let (created, repo) = crate::commands::collaboration::defaults::copy(
             &document,
             source.root(),
             &root.join("target"),
             &root.join("local"),
-            &credentials,
+            &profile,
             &AtomicBool::new(false),
             |_, _| assert!(!root.join("target/collaboration.json").exists()),
         )
@@ -641,12 +431,12 @@ mod tests {
         for forbidden in ["workspace.json", ".project.lock", "recovery.json"] {
             assert!(!root.join("target").join(forbidden).exists());
         }
-        assert!(copy_project(
+        assert!(crate::commands::collaboration::defaults::copy(
             &document,
             source.root(),
             &root.join("target"),
             &root.join("local"),
-            &credentials,
+            &profile,
             &AtomicBool::new(false),
             |_, _| {}
         )
@@ -661,17 +451,13 @@ mod tests {
             fs::create_dir_all(root.join(name)).unwrap();
         }
         let source = LocalProject::create(&root.join("source"), "original".into()).unwrap();
-        let credentials = Credentials {
-            login: "alice".into(),
-            display_name: "Alice".into(),
-            password: "password123".into(),
-        };
-        let prepared = copy_project(
+        let profile = profiles::Profile::new("Alice").unwrap();
+        let prepared = crate::commands::collaboration::defaults::copy(
             &source.snapshot().unwrap().document,
             source.root(),
             &root.join("target"),
             &root.join("local"),
-            &credentials,
+            &profile,
             &AtomicBool::new(false),
             |_, _| {},
         )
@@ -679,7 +465,7 @@ mod tests {
         fs::write(root.join("target/media/foreign.txt"), b"not ours").unwrap();
         drop(prepared);
         assert!(!root.join("target/collaboration.json").exists());
-        assert!(!root.join("target/accounts").exists());
+        assert!(!root.join("target/authors").exists());
         assert!(!root.join("target/annotations").exists());
         assert_eq!(
             fs::read(root.join("target/media/foreign.txt")).unwrap(),

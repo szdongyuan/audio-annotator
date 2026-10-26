@@ -133,7 +133,7 @@ async fn start_inner(
                         if !project.is_shared()
                             || !super::collaboration::catalog::can_import(project)
                         {
-                            return Err(AppError::invalid("可配置导入需要可写的格式 2 项目"));
+                            return Err(AppError::invalid("可配置导入需要可写的协作项目"));
                         }
                         let scan = registry.result(&token)?;
                         let mut seen = std::collections::HashSet::new();

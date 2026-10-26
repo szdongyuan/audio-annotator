@@ -277,6 +277,7 @@ pub fn import_exchange(
                 Path::new(&source),
                 Path::new(&parent),
                 &state.6.local()?,
+                &state.6.selected_profile()?,
                 bindings,
                 &cancel,
                 |phase, completed| {

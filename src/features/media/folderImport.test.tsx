@@ -303,10 +303,10 @@ it('keeps the actual global Retry button draft-aware inside shared recovery admi
   expect(s.store.drafts.size).toBe(0); hook.unmount();
 });
 
-it('default writable owners can folder-import; view-only and legacy fixed catalogs cannot',()=>{
+it('default writable and ordinary owners can folder-import; view-only cannot',()=>{
  const a=setup(1);Object.assign(a.owner,{collaboration:{projectFlavor:'default',canImportMedia:true}});expect(a.controller.begin()).toBe(true);a.controller.cancel();
  const b=setup(1);Object.assign(b.owner,{collaboration:{projectFlavor:'default',canImportMedia:false}});expect(b.controller.begin()).toBe(false);
- const c=setup(1);Object.assign(c.owner,{collaboration:{projectFlavor:'legacyShared',canImportMedia:false}});expect(c.controller.begin()).toBe(false);
+ const c=setup(1);expect(c.controller.begin()).toBe(true);c.controller.cancel();
 });
 it('acknowledgement service errors do not turn an accepted folder import into a failed file',async()=>{
  const s=setup(1);vi.mocked(s.media.release).mockRejectedValueOnce({code:'SaveFailed',message:'release unavailable',retryable:true});await s.controller.choose(async()=>'D:/audio');s.result();await waitFor(()=>expect(s.media.start).toHaveBeenCalled());s.finish(1);await waitFor(()=>expect(s.controller.state).toBe('finished'));expect(s.controller.successCount).toBe(1);expect(s.controller.failedCount).toBe(0);expect(s.controller.pendingAcknowledgements).toHaveLength(1);await s.controller.retry();expect(s.controller.pendingAcknowledgements).toHaveLength(0);

@@ -33,19 +33,27 @@ pub(crate) fn info_shared(
     let mut opened = info(p);
     if p.is_shared() {
         let status = super::collaboration::runtime::status(Some(p), service)?;
-        opened.collaboration = Some(super::collaboration::runtime::Context {
-            project_flavor: status.project_flavor,
-            identity_mode: status.identity_mode,
-            can_write_annotations: status.can_write_annotations,
-            can_import_media: status.can_import_media,
-            hidden_media_ids: status.hidden_media_ids,
-            catalog_pending: status.catalog_pending,
-            runtime_nonce: status.runtime_nonce,
-            actor: status.actor,
-            preferences: status.preferences,
-        });
+        opened = info_with_status(p, &status);
     }
     Ok(opened)
+}
+pub(crate) fn info_with_status(
+    p: &LocalProject,
+    status: &super::collaboration::runtime::Status,
+) -> OpenProject {
+    let mut opened = info(p);
+    opened.collaboration = Some(super::collaboration::runtime::Context {
+        project_flavor: status.project_flavor.clone(),
+        identity_mode: status.identity_mode.clone(),
+        can_write_annotations: status.can_write_annotations,
+        can_import_media: status.can_import_media,
+        hidden_media_ids: status.hidden_media_ids.clone(),
+        catalog_pending: status.catalog_pending,
+        runtime_nonce: status.runtime_nonce.clone(),
+        actor: status.actor.clone(),
+        preferences: status.preferences.clone(),
+    });
+    opened
 }
 fn active(s: &mut Option<LocalProject>) -> Result<&mut LocalProject> {
     s.as_mut().ok_or_else(|| AppError::invalid("尚未打开项目"))
