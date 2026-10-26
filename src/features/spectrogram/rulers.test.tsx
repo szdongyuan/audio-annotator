@@ -4,7 +4,7 @@ import { AxisRulers } from './AxisRulers';
 import { wheelViewPatch } from './wheel';
 import { coordinates } from './coordinates';
 import { defaultSettings, defaultView } from './workspace';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { SpectrogramCanvas } from './SpectrogramCanvas';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 const media = fixture.media[0], view = { ...defaultView(media), startSeconds: 10, endSeconds: 30, lowHz: 100, highHz: 10000 };

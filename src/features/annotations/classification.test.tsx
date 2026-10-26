@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { parseProjectDocument, type Change } from '../../bridge/types';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue } from '../../app/commands';
@@ -14,8 +14,8 @@ function setup() {
  const store = new ProjectStore({ document: parseProjectDocument(structuredClone(fixture)), canUndo: true, canRedo: false });
  const applyChange = vi.fn(async (_id: string, revision: number, change: Change) => {
   const doc = structuredClone(store.snapshot.document), m = doc.media[0]; doc.revision = revision + 1;
-  if (change.type === 'setMediaCategory') m.categoryId = change.categoryId;
-  if (change.type === 'setChannelCategory') m.channelCategoryIds[change.channelIndex] = change.categoryId;
+  if (change.type === 'setMediaCategories') m.categoryIds = change.categoryIds;
+  if (change.type === 'setChannelCategories') m.channelCategoryIds[change.channelIndex] = change.categoryIds;
   if (change.type === 'updateMediaNote') m.note = change.note;
   if (change.type === 'updateChannelNote') m.channelNotes[change.channelIndex] = change.note;
   return { ...store.snapshot, document: doc };
@@ -35,7 +35,7 @@ it('drains file and channel notes before independent categories and immediate sa
   hook.result.current.classify({ mediaId: m.id, channelIndex: 0 }, null);
  });
  await s.lifecycle.save();
- expect(s.saved.at(-1)!.document.media[0]).toMatchObject({ categoryId: cat, channelCategoryIds: [null, m.channelCategoryIds[1]], note: 'file note', channelNotes: ['channel note', m.channelNotes[1]] });
+ expect(s.saved.at(-1)!.document.media[0]).toMatchObject({ categoryIds: [cat], channelCategoryIds: [[], m.channelCategoryIds[1]], note: 'file note', channelNotes: ['channel note', m.channelNotes[1]] });
  expect(s.saved.at(-1)!.document.annotations).toEqual(originalRegion);
  hook.unmount(); s.lifecycle.dispose();
 });
@@ -62,17 +62,17 @@ it('reconciles hidden comparison panes and hidden channels with first visible fa
  expect(reconcileContext(doc, { mediaId: id, channelIndex: 1 }, [{ mediaId: id, channels: [] }])).toEqual({ mediaId: id, channelIndex: null });
 });
 it('filters three explicit scopes and locates file/channel without inventing regions', () => {
- const doc = parseProjectDocument(structuredClone(fixture)), cat = doc.categories[0].id, m = doc.media[0]; m.categoryId = cat; m.channelCategoryIds[0] = cat;
+ const doc = parseProjectDocument(structuredClone(fixture)), cat = doc.categories[0].id, m = doc.media[0]; m.categoryIds = [cat]; m.channelCategoryIds[0] = [cat];
  const locate = vi.fn(); render(<AnnotationList doc={doc} selectedId={null} onLocate={locate} />);
  fireEvent.change(screen.getByLabelText('筛选类别'), { target: { value: cat } });
- const results = classificationResults(doc).filter(r => r.categoryId === cat);
+ const results = classificationResults(doc).filter(r => r.categoryIds.includes(cat));
  expect(results.map(r => r.scope)).toEqual(['file', 'channel', 'region']);
  fireEvent.click(screen.getByRole('button', { name: /整个文件/ })); expect(locate).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'file', mediaId: m.id }));
  fireEvent.click(screen.getByRole('button', { name: /整个通道 1/ })); expect(locate).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'channel', channelIndex: 0 }));
  expect(results.filter(r => r.scope !== 'region').every(r => !('region' in r))).toBe(true);
 });
 it('shows counts for file, channel and region references before atomic deletion', () => {
- const doc = parseProjectDocument(structuredClone(fixture)), cat = doc.categories[0], m = doc.media[0]; m.categoryId = cat.id; m.channelCategoryIds[0] = cat.id;
+ const doc = parseProjectDocument(structuredClone(fixture)), cat = doc.categories[0], m = doc.media[0]; m.categoryIds = [cat.id]; m.channelCategoryIds[0] = [cat.id];
  const command = vi.fn(); render(<CategoryManager ui={{ active: { store: { snapshot: { document: doc }, editingDisabled: false } }, command } as never} />);
  fireEvent.click(screen.getByLabelText(`删除类别 ${cat.name}`));
  expect(screen.getByRole('alertdialog')).toHaveTextContent('1 个文件、1 个通道、1 个区域');
@@ -82,8 +82,8 @@ it.each(['click', 'contextMenu'] as const)('compact category %s uses a captured 
  const s = setup(), hook = renderHook(() => useAnnotations(s.active)), m = s.store.snapshot.document.media[0];
  render(<ClassificationControl ui={hook.result.current} target={{ mediaId: m.id, channelIndex: 1 }} />);
  fireEvent[event](screen.getByRole('button', { name: `${m.displayName} 通道 2 类别` }));
- fireEvent.click(screen.getByRole('menuitem', { name: '通道类别' })); fireEvent.click(screen.getByRole('menuitem', { name: '未分类' }));
- await waitFor(() => expect(s.applyChange).toHaveBeenCalledWith(expect.anything(), expect.anything(), { type: 'setChannelCategory', mediaId: m.id, channelIndex: 1, categoryId: null }));
+ fireEvent.click(screen.getByRole('menuitem', { name: '通道类别' })); fireEvent.click(screen.getByRole('menuitemcheckbox', { name: '清空标签' }));
+ await waitFor(() => expect(s.applyChange).toHaveBeenCalledWith(expect.anything(), expect.anything(), { type: 'setChannelCategories', mediaId: m.id, channelIndex: 1, categoryIds: [] }));
  hook.unmount(); s.lifecycle.dispose();
 });
 import { useSelection } from '../selection/useSelection';
@@ -147,8 +147,8 @@ it('right clicking the title beside a category opens the same captured submenu',
  const s = setup(), hook = renderHook(() => useAnnotations(s.active)), m = s.store.snapshot.document.media[0];
  render(<ClassificationControl ui={hook.result.current} target={{ mediaId: m.id, channelIndex: null }}><h2>文件标题</h2></ClassificationControl>);
  fireEvent.contextMenu(screen.getByText('文件标题'));
- fireEvent.click(screen.getByRole('menuitem', { name: '文件类别' })); fireEvent.click(screen.getByRole('menuitem', { name: '鸟声' }));
- await waitFor(() => expect(s.applyChange).toHaveBeenCalledWith(expect.anything(), expect.anything(), { type: 'setMediaCategory', mediaId: m.id, categoryId: s.store.snapshot.document.categories[0].id }));
+ fireEvent.click(screen.getByRole('menuitem', { name: '文件类别' })); fireEvent.click(screen.getByRole('menuitemcheckbox', { name: '鸟声' }));
+ await waitFor(() => expect(s.applyChange).toHaveBeenCalledWith(expect.anything(), expect.anything(), { type: 'setMediaCategories', mediaId: m.id, categoryIds: [s.store.snapshot.document.categories[0].id] }));
  hook.unmount(); s.lifecycle.dispose();
 });
 import { FilePane } from '../spectrogram/FilePane';
@@ -161,4 +161,25 @@ it('interacting with comparison file header controls sets its visible context ev
  fireEvent(screen.getByLabelText('other.wav 频谱类型'), new MouseEvent('pointerdown', {bubbles:true,button:0}));
  expect(hook.result.current.context).toEqual({ mediaId: other.id, channelIndex: 1 });
  hook.unmount(); s.lifecycle.dispose();
+});
+
+it('preserves accepted file/channel labels when the temporary single-choice controls add another label', async () => {
+ const s = setup(), first = s.store.snapshot.document.categories[0].id;
+ const second = '00000000-0000-4000-8000-000000000077';
+ s.store.snapshot.document.categories.push({id:second,name:'第二标签',color:'#123456'});
+ s.store.snapshot.document.media[0].categoryIds = [first];
+ s.store.snapshot.document.media[0].channelCategoryIds[0] = [first];
+ const hook = renderHook(() => useAnnotations(s.active)), mediaId = s.store.snapshot.document.media[0].id;
+ await act(async () => { await hook.result.current.classify({mediaId,channelIndex:null},second); await hook.result.current.classify({mediaId,channelIndex:0},second); });
+ expect(s.store.snapshot.document.media[0].categoryIds).toEqual([first,second]);
+ expect(s.store.snapshot.document.media[0].channelCategoryIds[0]).toEqual([first,second]);
+ hook.unmount(); s.lifecycle.dispose();
+});
+
+
+it('category deletion explains that other labels and notes survive', () => {
+ const doc=parseProjectDocument(structuredClone(fixture)), category=doc.categories[0];
+ render(<CategoryManager ui={{active:{store:{snapshot:{document:doc},editingDisabled:false}},command:vi.fn()} as never}/>);
+ fireEvent.click(screen.getByLabelText(`删除类别 ${category.name}`));
+ expect(screen.getByRole('alertdialog')).toHaveTextContent('其他标签及备注保留');
 });

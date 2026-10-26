@@ -1,3 +1,4 @@
+import { toggleLabel } from './labels';
 import { annotationDisabled } from '../collaboration/capabilities';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { classifyTarget, type ClassificationTarget } from './classification';
@@ -21,9 +22,13 @@ export function useAnnotations(active: ActiveProject | null, selection?: Selecti
     void owner.lifecycle.enqueueEdit(async () => { owner.store.assertEditable(); await owner.lifecycle.submitDrafts(); return action(); }).catch(cause => { owner.store.setError(normalizeError(cause)); });
   };
   const command = (change: Change) => run(() => active!.queue.enqueue(change, { owner: 'annotations' }));
-  const mutate = (id: string, patch: Partial<Pick<Annotation, 'region' | 'categoryId'>>) => run(async () => {
+  const mutate = (id: string, patch: Partial<Pick<Annotation, 'region' | 'categoryIds'>>) => run(async () => {
     const annotation = active!.store.snapshot.document.annotations.find(a => a.id === id);
     if (annotation) await active!.queue.enqueue({ type: 'updateAnnotation', annotation: { ...annotation, ...patch, updatedAt: new Date().toISOString() } }, { owner: 'annotations' });
+  });
+  const classifyAnnotation = (id: string, categoryId: string | null) => run(async () => {
+    const doc = active!.store.snapshot.document, annotation = doc.annotations.find(a => a.id === id);
+    if (annotation && (categoryId === null || doc.categories.some(c => c.id === categoryId))) await active!.queue.enqueue({ type: 'updateAnnotation', annotation: { ...annotation, categoryIds: toggleLabel(annotation.categoryIds, categoryId), updatedAt: new Date().toISOString() } }, { owner: 'annotations' });
   });
   const history = (kind: 'undo' | 'redo') => run(async () => { if (active!.store.snapshot[kind === 'undo' ? 'canUndo' : 'canRedo']) await active!.queue[kind]({ owner: 'annotations' }); },false);
   const remove = () => { if (selectedId) run(async () => { if (active!.store.snapshot.document.annotations.some(a => a.id === selectedId)) await active!.queue.enqueue({ type: 'removeAnnotation', id: selectedId }, { owner: 'annotations' }); }); };
@@ -36,7 +41,7 @@ export function useAnnotations(active: ActiveProject | null, selection?: Selecti
     window.addEventListener('keydown', listener); return () => window.removeEventListener('keydown', listener);
   }, [active]);
   const classify = (target: ClassificationTarget, categoryId: string | null) => active ? classifyTarget(active, target, categoryId, () => binding.current === active) : Promise.resolve();
-  return { active, drafts, selectedId, select, command, mutate, history, remove, classify };
+  return { active, drafts, selectedId, select, command, mutate, classifyAnnotation, history, remove, classify };
 }
 export type AnnotationUI = ReturnType<typeof useAnnotations>;
 export const AnnotationContext = createContext<AnnotationUI | null>(null);

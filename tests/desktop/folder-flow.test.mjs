@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { start, wait } from './harness.mjs';
+import { start, wait, By } from './harness.mjs';
 
 const base = path.resolve(process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/default-collaboration-v040/task5/desktop-evidence/folder-flow'); await fs.mkdir(base, { recursive: true });
 const output = await fs.realpath(await fs.mkdtemp(path.join(base, 'native-')));
@@ -26,9 +26,9 @@ const resultText = () => h.evaluate(`return document.querySelector('.source-impo
 const snap = async () => (await h.snapshot(id)).document;
 async function folder(recursive = false) {
   await h.menu('导入文件夹');
-  await h.select('规则预设', '全部音频');
-  assert.equal(await (await h.element('[role="dialog"] input[type="checkbox"]')).isSelected(), true);
-  if (!recursive) await h.click('[role="dialog"] input[type="checkbox"]');
+  await h.select('导入方案', '通用·平铺');
+  await h.click('.source-rules summary'); const recursion=await h.driver.findElement(By.xpath("//label[contains(.,'包含子文件夹')]/input"));assert.equal(await recursion.isSelected(), true);
+  if (!recursive) await recursion.click();
   await h.clickText('选择文件夹…');
   const heldScan=await h.evaluate('return window.__folderTest.holdScan');
   await h.until("Array.from(document.querySelectorAll('.dialog-actions button')).some(b=>b.textContent==='扫描预览'&&!b.disabled)",'source selection ready for scanning');await h.clickText('扫描预览');
@@ -69,7 +69,7 @@ try {
 
   await h.clickText('双文件对比'); await h.until(`document.querySelectorAll('.spectrogram-surface').length===4`);
   const frame = await h.evaluate(`const r=e=>e.getBoundingClientRect().toJSON();return {inner:[innerWidth,innerHeight],top:r(document.querySelector('.project-header')).height+r(document.querySelector('.workspace-toolbar')).height,bottom:r(document.querySelector('.playback-bar')).height,plots:[...document.querySelectorAll('.spectrogram-surface')].map(r),headers:[...document.querySelectorAll('.file-pane')].map(p=>r(p.querySelector('.file-heading')).height+r(p.querySelector('.file-controls')).height),feedback:r(document.querySelector('.workspace-feedback')).height};`);
-  assert.equal(frame.top, 72); assert.equal(frame.bottom, 48); assert.ok(frame.headers.every(n => n === 54)); assert.ok(frame.plots.every(p => p.height === 236.5 && p.bottom <= frame.inner[1])); assert.equal(frame.feedback, 0); report.frames.push({ outer: h.nativeRect(), ...frame }); await h.screenshot('folder-results-dismissed-layout'); check('Dismissed folder results reserve no feedback height; exact 1280x800 outer window retains four 236.5px plots and 72/48/54 budgets');
+  assert.equal(frame.top, 72); assert.equal(frame.bottom, 42); assert.ok(frame.headers.every(n => n === 54)); assert.ok(frame.plots.every(p => p.height === 239.5 && p.bottom <= frame.inner[1])); assert.equal(frame.feedback, 0); report.frames.push({ outer: h.nativeRect(), ...frame }); await h.screenshot('folder-results-dismissed-layout'); check('Dismissed folder results reserve no feedback height; exact 1280x800 outer window retains four 239.5px plots and 72/42/54 budgets');
 
   await create(); await h.evaluate('window.__folderTest.holdNext=true'); await folder(); await h.until(`window.__folderTest.held.length>=2&&document.querySelector('.source-import-progress')?.textContent.includes('成功 1')`, 'first accepted and late native results held');
   const before = Date.now(); await h.clickText('取消导入'); assert.match(await resultText(), /音频导入已取消/); report.cancelVisibleMs = Date.now() - before; assert.ok(report.cancelVisibleMs < 500);
@@ -82,7 +82,7 @@ try {
   await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`); assert.equal((await snap()).media.length, 1); check('Direct multi-select audio import still works after folder cancellation');
   const originalMedia = (await snap()).media[0]; await h.clickText('关闭导入结果'); await fs.rename(path.join(endAudio, 'end.wav'), movedAudio);
   const copiedPath=path.join(next,originalMedia.sourceRef),missingCopy=copiedPath+'.owned-offline';await fs.rename(copiedPath,missingCopy);try{
-  await h.until(`document.querySelector('.media-availability')?.textContent.includes('源文件缺失')`); await h.clickText('重新关联'); await h.clickText('选择文件…'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);
+  await h.until(`document.querySelector('[aria-label="源文件缺失"]')`);await h.context('.media-select[aria-label="end.wav"]');await h.label('重新关联…');await h.clickText('选择文件…');await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);
   const relinked = (await snap()).media[0]; assert.ok(relinked.sourceRef.endsWith('moved.wav')); assert.deepEqual({...relinked,sourceRef:originalMedia.sourceRef},originalMedia); check('Real relink picker verifies moved fixture and preserves descriptor identity/classification/notes');
   }finally{await fs.rename(missingCopy,copiedPath);}
   report.passed = true;

@@ -2,11 +2,15 @@ mod export;
 mod import;
 mod limits;
 mod manifest;
+mod path_plan;
 use crate::error::{AppError, ErrorCode};
-pub use export::{export_annotations, export_bundle};
+pub use export::{
+    export_annotations, export_annotations_with_plan, export_bundle, export_bundle_with_plan,
+};
 pub use import::{import_exchange, ImportedProject};
 pub use limits::Limits;
 pub use manifest::Manifest;
+pub use path_plan::{capture_organization, root_organization, ExportPathPlan, PathChange};
 fn io(error: std::io::Error) -> AppError {
     let mut e = AppError::new(ErrorCode::SaveFailed, format!("交换文件读写失败：{error}"));
     e.retryable = true;

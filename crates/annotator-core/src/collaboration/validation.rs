@@ -10,7 +10,7 @@ pub const MAX_AUTHORS: usize = 128;
 pub const MAX_LAYER_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_TOTAL_LAYER_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_AUTHOR_BYTES: usize = 8192;
-pub const MAX_MEDIA: usize = 4096;
+pub const MAX_MEDIA: usize = 10_000;
 pub const MAX_CATEGORIES: usize = 4096;
 pub const MAX_ANNOTATIONS: usize = 100_000;
 pub(crate) fn require(valid: bool, message: &str) -> Result<()> {
@@ -58,7 +58,13 @@ pub(crate) fn decode<T: DeserializeOwned>(bytes: &[u8], max: usize, kind: &str) 
     }
     let header: Header = serde_json::from_slice(bytes)
         .map_err(|_| AppError::invalid("Invalid collaboration header"))?;
-    if header.format_version != 1 {
+    if header.format_version
+        != if matches!(kind, LAYER_KIND | "audio-annotator-private-workspace") {
+            2
+        } else {
+            1
+        }
+    {
         return Err(AppError::new(
             ErrorCode::UnsupportedVersion,
             "Unsupported collaboration format version",
@@ -129,7 +135,7 @@ impl LayerPayload {
                     media_id: m.id.clone(),
                     note: m.note.clone(),
                     channel_notes: m.channel_notes.clone(),
-                    category_id: m.category_id.clone(),
+                    category_ids: m.category_ids.clone(),
                     channel_category_ids: m.channel_category_ids.clone(),
                 })
                 .collect(),
@@ -155,7 +161,7 @@ impl LayerPayload {
                 .ok_or_else(|| AppError::invalid("Labels reference unknown media"))?;
             media.note = labels.note.clone();
             media.channel_notes = labels.channel_notes.clone();
-            media.category_id = labels.category_id.clone();
+            media.category_ids = labels.category_ids.clone();
             media.channel_category_ids = labels.channel_category_ids.clone();
         }
         doc.validate()?;

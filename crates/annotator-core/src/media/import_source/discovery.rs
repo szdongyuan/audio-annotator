@@ -24,6 +24,7 @@ pub fn scan(
         entries: vec![],
         sources: vec![],
         limits,
+        folder_summary: vec![],
     };
     for (source_index, raw) in config.paths.iter().enumerate() {
         check_cancel(cancel)?;
@@ -205,7 +206,8 @@ pub fn scan(
         entries.sort_by(|a, b| a.path.cmp(&b.path));
         for entry in entries {
             check_cancel(cancel)?;
-            let route = routes.get(&entry.path.to_lowercase()).copied();
+            let metadata = routes.get(&entry.path.to_lowercase());
+            let route = metadata.map(|r| r.position);
             if !config.rules.matches(&entry.path)
                 || (config.rules.mode == Mode::Jingcheng
                     && !route.is_some_and(|p| p == 1 || (p == 2 && config.rules.include_second)))
@@ -215,6 +217,33 @@ pub fn scan(
             }
             if entry.size > limits.audio_bytes || result.candidates.len() >= limits.candidates {
                 return Err(limit());
+            }
+            let source_label = if config.kind == SourceKind::Zip {
+                Path::new(&source_name)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(&source_name)
+            } else {
+                &source_name
+            };
+            let original_filename = entry.path.rsplit('/').next().unwrap_or("").to_owned();
+            let plan = config
+                .organization
+                .plan(source_label, &entry.path, metadata)
+                .and_then(|p| {
+                    super::organization::name(&original_filename, false)?;
+                    Ok(p)
+                });
+            let (resulting_folder_path, missing) = match plan {
+                Ok(p) => p,
+                Err(e) => {
+                    result.issue(source_index, &entry.path, e.message);
+                    result.counts.skipped += 1;
+                    continue;
+                }
+            };
+            for message in missing {
+                result.issue(source_index, &entry.path, message);
             }
             result.counts.selected_bytes = result
                 .counts
@@ -230,6 +259,8 @@ pub fn scan(
                 display_name: display_name(&source_name, &entry.path),
                 byte_length: entry.size,
                 logical_position: route,
+                resulting_folder_path,
+                original_filename,
             });
             result.entries.push(entry);
         }
@@ -238,6 +269,7 @@ pub fn scan(
         progress(&result.counts);
     }
     check_cancel(cancel)?;
+    result.rebuild_summary()?;
     Ok(result)
 }
 fn checked(result: &mut ScanResult, limits: Limits) -> Result<()> {

@@ -43,6 +43,7 @@ impl Fixture {
     }
     fn config(&self) -> Config {
         Config {
+            organization: Default::default(),
             kind: annotator_core::media::import_source::SourceKind::Folder,
             paths: vec![self.root.join("audio").to_string_lossy().into()],
             rules: Default::default(),
@@ -94,8 +95,8 @@ fn channel<T: serde::Serialize + Clone + Send + Sync + 'static>(
 fn preview_is_owned_bounded_and_never_publishes() {
     let f = Fixture::new();
     let token = f.scan();
-    assert_eq!(page(&f.state, &token, 0, 256).unwrap().candidates.len(), 1);
-    assert!(page(&f.state, &token, 0, 257).is_err());
+    assert_eq!(page(&f.state, &token, 0, 50).unwrap().candidates.len(), 1);
+    assert!(page(&f.state, &token, 0, 51).is_err());
     let mut wrong = token.clone();
     wrong.runtime_nonce = "foreign".into();
     assert!(page(&f.state, &wrong, 0, 1).is_err());
@@ -151,6 +152,7 @@ fn zip_config(f: &Fixture, count: usize) -> Config {
     }
     zip.finish().unwrap();
     Config {
+        organization: Default::default(),
         kind: import_source::SourceKind::Zip,
         paths: vec![f.root.join("recordings.zip").to_string_lossy().into()],
         rules: Default::default(),
@@ -364,12 +366,9 @@ fn scan_channel_failure_cancels_and_releases_preview() {
 fn batches_over_256_keep_preview_indices_and_release_each_pending_capability() {
     let f = Fixture::new();
     let token = scan_config(&f, zip_config(&f, 257));
+    assert_eq!(page(&f.state, &token, 0, 50).unwrap().candidates.len(), 50);
     assert_eq!(
-        page(&f.state, &token, 0, 256).unwrap().candidates.len(),
-        256
-    );
-    assert_eq!(
-        page(&f.state, &token, 256, 256).unwrap().candidates[0].index,
+        page(&f.state, &token, 256, 50).unwrap().candidates[0].index,
         256
     );
     let mut prepared = 0;
@@ -601,11 +600,12 @@ fn folder_preview_skips_only_existing_project_media_paths() {
     crate::commands::media::release(&f.state, &task, &ready.id).unwrap();
     cancel(&f.state, &token, true).unwrap();
     let config = Config {
+        organization: Default::default(),
         paths: vec![f.root.join("project/media").to_string_lossy().into()],
         ..f.config()
     };
     let token = scan_config(&f, config);
-    let page = page(&f.state, &token, 0, 256).unwrap();
+    let page = page(&f.state, &token, 0, 50).unwrap();
     assert!(page.candidates.is_empty());
     assert_eq!(page.counts.skipped, 1);
     cancel(&f.state, &token, true).unwrap();
@@ -620,10 +620,7 @@ fn folder_preview_skips_only_existing_project_media_paths() {
     cancel(&f.state, &original, true).unwrap();
     let zip = scan_config(&f, zip_config(&f, 2));
     assert_eq!(
-        super::page(&f.state, &zip, 0, 256)
-            .unwrap()
-            .candidates
-            .len(),
+        super::page(&f.state, &zip, 0, 50).unwrap().candidates.len(),
         2
     );
 }
@@ -680,4 +677,234 @@ fn finished_callback_can_immediately_start_next_source_batch() {
     assert!(next.iter().any(|event| event["type"] == "failed"));
     assert!(next.iter().all(|event| event["type"] != "ready"));
     assert_eq!(f.state.6.prepared_count.load(Ordering::Acquire), 0);
+}
+
+#[test]
+fn native_preview_seals_target_paths_original_names_and_manual_layout_revision() {
+    use crate::commands::{collaboration::catalog, organization};
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    let f = Fixture::new();
+    let e = f.expected();
+    let binding = organization::Binding {
+        runtime_nonce: e.runtime_nonce,
+        project_id: e.project_id,
+    };
+    let target = uuid::Uuid::new_v4().to_string();
+    tauri::async_runtime::block_on(organization::apply(
+        &f.state,
+        binding.clone(),
+        0,
+        OrganizationOperation::CreateFolder {
+            id: target.clone(),
+            parent_id: None,
+            name: "选中".into(),
+        },
+    ))
+    .unwrap();
+    let mut config = zip_config(&f, 2);
+    config.organization.target_folder_id = Some(target.clone());
+    config.organization.mode = import_source::OrganizationMode::Template;
+    config.organization.template = "共同".into();
+    let token = scan_config(&f, config);
+    let preview = page(&f.state, &token, 0, 1).unwrap();
+    assert_eq!(
+        preview.candidates[0].resulting_folder_path,
+        ["选中", "共同"]
+    );
+    assert_eq!(preview.folder_summary.len(), 2);
+    println!(
+        "import_source_page IPC {}",
+        serde_json::to_string(&preview).unwrap()
+    );
+    let (ch, rx) = channel();
+    let task =
+        tauri::async_runtime::block_on(batch(&f.state, token.clone(), vec![0, 1], ch)).unwrap();
+    let events = wait_media(&rx);
+    assert!(events.iter().all(|e| e["type"] != "failed"), "{events:?}");
+    let ready = events
+        .iter()
+        .filter(|e| e["type"] == "ready")
+        .map(|e| {
+            serde_json::from_value::<annotator_core::model::MediaDescriptor>(e["media"].clone())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let mut forged = ready[0].clone();
+    forged.display_name = "forged/path.wav".into();
+    assert!(
+        tauri::async_runtime::block_on(catalog::import(&f.state, f.expected(), forged)).is_err()
+    );
+    for descriptor in &ready {
+        tauri::async_runtime::block_on(catalog::import(&f.state, f.expected(), descriptor.clone()))
+            .unwrap();
+    }
+    let head = tauri::async_runtime::block_on(organization::get(&f.state, binding.clone()))
+        .unwrap()
+        .organization;
+    assert_eq!(head.folders.len(), 2);
+    assert_eq!(head.layout_revision, 1);
+    assert!(head.media.iter().all(|m| m.original_filename == "CH1.wav"));
+    tauri::async_runtime::block_on(organization::apply(
+        &f.state,
+        binding,
+        head.revision,
+        OrganizationOperation::RenameFolder {
+            id: target,
+            name: "新名字".into(),
+        },
+    ))
+    .unwrap();
+    assert!(page(&f.state, &token, 0, 1).is_err());
+    assert!(
+        tauri::async_runtime::block_on(batch(&f.state, token.clone(), vec![0], channel().0))
+            .is_err()
+    );
+    // Committed retries acknowledge the current moved layout, with the original capability.
+    tauri::async_runtime::block_on(catalog::import(&f.state, f.expected(), ready[0].clone()))
+        .unwrap();
+    for descriptor in &ready {
+        crate::commands::media::release(&f.state, &task, &descriptor.id).unwrap();
+    }
+}
+#[test]
+fn native_prepared_placement_rejects_manual_changes_before_publication() {
+    use crate::commands::{collaboration::catalog, organization};
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    let f = Fixture::new();
+    let mut config = zip_config(&f, 1);
+    config.organization.mode = import_source::OrganizationMode::SourcePath;
+    let token = scan_config(&f, config);
+    let (ch, rx) = channel();
+    let task = tauri::async_runtime::block_on(batch(&f.state, token, vec![0], ch)).unwrap();
+    let events = wait_media(&rx);
+    let ready: annotator_core::model::MediaDescriptor = serde_json::from_value(
+        events.iter().find(|e| e["type"] == "ready").unwrap()["media"].clone(),
+    )
+    .unwrap();
+    let e = f.expected();
+    let binding = organization::Binding {
+        runtime_nonce: e.runtime_nonce,
+        project_id: e.project_id,
+    };
+    tauri::async_runtime::block_on(organization::apply(
+        &f.state,
+        binding.clone(),
+        0,
+        OrganizationOperation::CreateFolder {
+            id: uuid::Uuid::new_v4().to_string(),
+            parent_id: None,
+            name: "manual".into(),
+        },
+    ))
+    .unwrap();
+    assert!(
+        tauri::async_runtime::block_on(catalog::import(&f.state, f.expected(), ready.clone()))
+            .is_err()
+    );
+    let head = tauri::async_runtime::block_on(organization::get(&f.state, binding))
+        .unwrap()
+        .organization;
+    assert!(head.media.is_empty());
+    assert_eq!(head.folders.len(), 1);
+    crate::commands::media::release(&f.state, &task, &ready.id).unwrap();
+}
+
+#[test]
+fn direct_import_target_is_bound_and_relink_keeps_membership_and_filename() {
+    use crate::commands::{collaboration::catalog, media, organization};
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    let f = Fixture::new();
+    let e = f.expected();
+    let binding = organization::Binding {
+        runtime_nonce: e.runtime_nonce,
+        project_id: e.project_id,
+    };
+    let target = uuid::Uuid::new_v4().to_string();
+    tauri::async_runtime::block_on(organization::apply(
+        &f.state,
+        binding.clone(),
+        0,
+        OrganizationOperation::CreateFolder {
+            id: target.clone(),
+            parent_id: None,
+            name: "direct".into(),
+        },
+    ))
+    .unwrap();
+    let e = f.expected();
+    let (ch, rx) = channel();
+    let task = tauri::async_runtime::block_on(media::start_targeted(
+        &f.state,
+        Some(e.runtime_nonce),
+        e.project_id,
+        vec![f.root.join("audio/CH1.wav").to_string_lossy().into()],
+        Some(media::DirectTarget {
+            folder_id: Some(target.clone()),
+            layout_revision: 1,
+        }),
+        ch,
+    ))
+    .unwrap();
+    let events = wait_media(&rx);
+    let ready: annotator_core::model::MediaDescriptor = serde_json::from_value(
+        events.iter().find(|e| e["type"] == "ready").unwrap()["media"].clone(),
+    )
+    .unwrap();
+    tauri::async_runtime::block_on(catalog::import(&f.state, f.expected(), ready.clone())).unwrap();
+    let head = tauri::async_runtime::block_on(organization::get(&f.state, binding.clone()))
+        .unwrap()
+        .organization;
+    assert_eq!(head.media[0].folder_id, Some(target));
+    assert_eq!(head.media[0].original_filename, "CH1.wav");
+    media::release(&f.state, &task, &ready.id).unwrap();
+    let e = f.expected();
+    let (ch, rx) = channel();
+    let relink_task = tauri::async_runtime::block_on(media::start(
+        &f.state,
+        Some(e.runtime_nonce),
+        e.project_id,
+        vec![f.root.join("audio/CH1.wav").to_string_lossy().into()],
+        Some(ready.id.clone()),
+        ch,
+    ))
+    .unwrap();
+    assert!(wait_media(&rx).iter().all(|e| e["type"] != "failed"));
+    assert_eq!(
+        tauri::async_runtime::block_on(organization::get(&f.state, binding))
+            .unwrap()
+            .organization,
+        head
+    );
+    media::release(&f.state, &relink_task, &ready.id).unwrap();
+}
+
+#[test]
+fn scan_preflight_excludes_paths_that_exceed_existing_project_folder_capacity() {
+    let f = Fixture::new();
+    let repo = f.state.6.current.lock().unwrap().repo.clone().unwrap();
+    let mut head = repo.read_organization().unwrap();
+    head.revision = 1;
+    head.layout_revision = 1;
+    head.folders = (0..10_000)
+        .map(|i| annotator_core::collaboration::organization::Folder {
+            id: uuid::Uuid::new_v4().to_string(),
+            parent_id: None,
+            name: format!("existing-{i}"),
+        })
+        .collect();
+    head.validate().unwrap();
+    fs::write(
+        f.root.join("project/organization.json"),
+        serde_json::to_vec(&head).unwrap(),
+    )
+    .unwrap();
+    let mut config = zip_config(&f, 1);
+    config.organization.mode = import_source::OrganizationMode::Template;
+    config.organization.template = "new".into();
+    let token = scan_config(&f, config);
+    let preview = page(&f.state, &token, 0, 50).unwrap();
+    assert_eq!(preview.counts.candidates, 0);
+    assert_eq!(preview.counts.skipped, 1);
+    assert_eq!(preview.counts.issues, 1);
+    assert!(preview.folder_summary.is_empty());
 }

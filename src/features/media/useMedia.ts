@@ -8,9 +8,11 @@ import { FolderImportController } from './folderImport';
 import { folderClient } from '../../bridge/folders';
 import { sourceClient } from '../../bridge/sourceImport';
 import { SourceImportController } from './sourceImport';
+import { useOrganization } from './useOrganization';
 const none = () => () => {};
 const zero = () => 0;
 export function useMedia(active: ActiveProject | null) {
+  const organization=useOrganization(active);
   const current = useRef(active); current.current = active;
   const [binding, setBinding] = useState<{ owner: ActiveProject; controller: MediaImportController; folder: FolderImportController; source: SourceImportController } | null>(null);
   const controller = binding?.owner === active ? binding?.controller ?? null : null;
@@ -53,17 +55,19 @@ export function useMedia(active: ActiveProject | null) {
       const paths = await mediaDialogs.choose(!target);
       if (!paths || current.current !== active || active.store.editingDisabled) return;
       setRelink(null); setError(null);
-      await controller.start(Array.isArray(paths) ? paths : [paths], target?.id, reservation);
+      const chosen=Array.isArray(paths)?paths:[paths];
+      const placement=!target&&organization?.snapshot?{folderId:organization.selectedFolderId,layoutRevision:organization.snapshot.layoutRevision}:undefined;
+      await controller.start(chosen,target?.id,reservation,placement?receive=>(active.commands?.media??mediaClient).start(active.store.snapshot.document.projectId,chosen,receive,undefined,placement):undefined);
     } catch (e) { if (current.current === active) setError(normalizeError(e)); }
     finally { controller.unreserve(reservation); }
   };
   const media = active?.store.snapshot.document.media ?? [];
   const selected = media.find(m => m.id === selectedId) ?? media.find(m => m.id === active?.store.snapshot.document.viewState.activeMediaId) ?? media[0] ?? null;
-  return { controller, folder, source, statuses, selected, selectedId: selected?.id ?? null, setSelectedId, relink, setRelink, error,
+  return { controller, folder, source, organization, statuses, selected, selectedId: selected?.id ?? null, setSelectedId, relink, setRelink, error,
     disabled: !active || !controller || active.store.editingDisabled || controller.occupied,
     chooseFolder: () => { if (active?.collaboration?.canImportMedia!==false) folder?.begin(); },
     sourceDisabled: !active?.collaboration || active.collaboration.projectFlavor !== 'default' || !active.collaboration.canImportMedia,
-    chooseSourceFolder: () => { source?.begin('folder'); }, chooseSourceZip: () => { source?.begin('zip'); },
+    chooseSourceFolder: (returnFocus?:HTMLElement|null) => { source?.begin('folder',organization?.selectedFolderId??null,returnFocus); }, chooseSourceZip: (returnFocus?:HTMLElement|null) => { source?.begin('zip',organization?.selectedFolderId??null,returnFocus); },
     choose: () => void choose(), chooseRelink: () => void choose(relink ?? undefined),
     verify: () => { if (relink && controller && !controller.occupied && !active?.store.editingDisabled) { const target = relink; setRelink(null); void controller.start([target.sourceRef], target.id).catch(e => { if (current.current === active) setError(normalizeError(e)); }); } },
   };

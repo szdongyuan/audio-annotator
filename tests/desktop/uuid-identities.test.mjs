@@ -1,3 +1,4 @@
+import { waitMasked, waitNoMasks } from './workspace-helpers.mjs';
 // Actual UI acceptance; native IPC is read-only. Native profile fixture is seeded
 // before launching the separate long-list process, never into a frontend store.
 import assert from 'node:assert/strict';
@@ -25,15 +26,15 @@ try{
  await a.menu('新建项目');await a.until(`document.querySelector('.collaboration-status')?.textContent.includes('Alice')`);assert.equal((await status(a)).actor.authorId,alice.authorId);
  await a.menu('导入音频');await a.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`);await a.clickText('关闭导入结果');await a.selectMedia('mono16.wav');
  await a.menu('类别管理','标注');await a.input('类别名称','Alice category');await a.clickText('添加类别');
- await a.drag('.channel-pane:first-child .annotation-overlay',[.2,.3],[.6,.7]);await a.label('标注');await a.clickText('Alice category');await a.until(`document.querySelector('.annotation-inspector')`);await a.input('区域备注','Alice own note');await sync(a);
+ await a.drag('.channel-pane:first-child .annotation-overlay',[.2,.3],[.6,.7]);await a.label('标注');await a.label('Alice category');await a.driver.actions().sendKeys(Key.ESCAPE).perform();await a.until(`document.querySelector('.annotation-inspector')`);await a.input('区域备注','Alice own note');await sync(a);
  const aa=(await snap(a)).document.annotations[0];assert.ok(aa);
- await a.context(`[data-annotation-id="${aa.id}"]`);await a.label('屏蔽选区');await a.until(`document.querySelector('.mask-rect')`);await (await a.element('[aria-label="播放音量"]')).sendKeys(Key.HOME,...Array(8).fill(Key.ARROW_RIGHT));
- await a.driver.findElement(By.xpath("//div[contains(@class,'media-card') and .//button[@aria-label='six.flac']]/button[normalize-space(.)='从我的列表隐藏']")).click();await sync(a);
+ await a.context(`[data-annotation-id="${aa.id}"]`);await a.label('屏蔽选区');await waitMasked(a);await (await a.element('[aria-label="播放音量"]')).sendKeys(Key.HOME,...Array(8).fill(Key.ARROW_RIGHT));
+ await a.selectMedia('six.flac');await a.context('.media-select[aria-label="six.flac"]');await a.label('从我的列表隐藏');await sync(a);
  const before=await snap(a),nonce=(await status(a)).runtimeNonce,selected=await a.evaluate(`return document.querySelector('[data-annotation-id].is-selected')?.dataset.annotationId`);
  await selectIdentity(a,alice.authorId);const after=await snap(a);assert.deepEqual(after,before);assert.equal((await status(a)).runtimeNonce,nonce);assert.equal(await a.evaluate(`return document.querySelector('[data-annotation-id].is-selected')?.dataset.annotationId`),selected);check('same UUID disabled selection is a true no-op for document/history/selection/runtime');
  const bob=await createIdentity(a,'Bob');assert.equal((await snap(a)).document.annotations.length,0);assert.equal((await snap(a)).document.categories.length,0);assert.equal((await status(a)).preferences.volume,.75);assert.equal((await status(a)).hiddenMediaIds.length,0);
  await a.selectMedia('mono16.wav');await a.menu('类别管理','标注');await a.input('类别名称','Bob category');await a.clickText('添加类别');await ready(a);
- await a.drag('.channel-pane:first-child .annotation-overlay',[.2,.3],[.6,.7]);await a.label('标注');await a.clickText('Bob category');await a.until(`document.querySelector('.annotation-inspector')`);
+ await a.drag('.channel-pane:first-child .annotation-overlay',[.2,.3],[.6,.7]);await a.label('标注');await a.label('Bob category');await a.driver.actions().sendKeys(Key.ESCAPE).perform();await a.until(`document.querySelector('.annotation-inspector')`);
  for(const [label,value]of [['开始（秒）',aa.region.startSeconds],['结束（秒）',aa.region.endSeconds],['下界（Hz）',aa.region.lowHz],['上界（Hz）',aa.region.highHz]])await a.input(label,String(value));
  await a.input('区域备注','Bob own note');await sync(a);const bb=(await snap(a)).document.annotations[0];assert.deepEqual(bb.region,aa.region);assert.notEqual(bb.id,aa.id);
  await selectIdentity(a,alice.authorId);assert.equal((await snap(a)).document.annotations[0].note,'Alice own note');assert.equal((await snap(a)).document.categories[0].name,'Alice category');assert.equal((await snap(a)).document.edits.length,1);assert.equal((await status(a)).preferences.volume,.08);assert.equal((await status(a)).hiddenMediaIds.length,1);assert.ok((await status(a)).snapshot.authors.some(x=>x.identity.authorId===bob.authorId&&x.layer?.payload.annotations[0]?.note==='Bob own note'));check('Alice/Bob overlapping regions and own categories/notes remain independent; Alice masks/volume/hidden list restore');

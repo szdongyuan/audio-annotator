@@ -2,7 +2,7 @@
 import { afterEach, it, expect, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { webcrypto } from 'node:crypto';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { ProjectStore } from '../../app/store';
 import { mediaClient } from '../../bridge/media';
 import { parseProjectDocument } from '../../bridge/types';
@@ -25,7 +25,7 @@ it('separates processed geometry, cancels late edits/undo/source changes and ign
   act(() => pending[0].done(packet(pending[0].r))); await waitFor(() => expect(hook.result.current.completed).toBe(1));
   hook.rerender({ source: 'processed' }); await waitFor(() => expect(pending.length).toBe(2));
   expect(pending[1].r.analysisSource).toBe('processed'); expect(hook.result.current.completed).toBe(0);
-  const edit = { id: 'mask', enabled: true, processingVersion: 1 as const, region: { mediaId: media.id, channelIndex: 0, startSeconds: 0, endSeconds: 1, lowHz: 1000, highHz: 2000 } };
+  const edit = { id: 'mask', enabled: true, processingVersion: 2 as const, operation: {type: 'mask' as const}, region: { mediaId: media.id, channelIndex: 0, startSeconds: 0, endSeconds: 1, lowHz: 1000, highHz: 2000 } };
   const accept = (edits: typeof edit[]) => active.store.accept({ ...active.store.snapshot, document: { ...active.store.snapshot.document, revision: active.store.dirtyRevision + 1, edits } });
   act(() => { accept([edit]); pending[1].done(packet(pending[1].r)); });
   await waitFor(() => expect(pending.length).toBe(3)); expect(hook.result.current.completed).toBe(0);
@@ -210,5 +210,18 @@ it.each(['original','processed'] as const)('opposite audition override leaves %s
  act(()=>hook.result.current.playback.playSelection(doc.annotations[0].region,override));await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
  expect(api.configure.mock.calls[0][0].mode).toMatchObject({selectionSource:override});expect(hook.result.current.playback.workspaceSource).toBe(source);
  expect([hook.result.current.left.keys,hook.result.current.right.keys]).toEqual(keys);expect(request).toHaveBeenCalledTimes(count);
+ hook.unmount();
+});
+
+it('monitor-only state changes preserve processed tile jobs and cached identity',async()=>{
+ vi.stubGlobal('crypto',webcrypto);vi.spyOn(mediaClient,'status').mockResolvedValue([{mediaId:media.id,status:'ready'}]);
+ const request=vi.spyOn(nativeTileTransport,'request').mockImplementation(async r=>packet(r));
+ vi.spyOn(nativeTileTransport,'cancel').mockResolvedValue();vi.spyOn(nativeTileTransport,'register').mockResolvedValue('monitor');vi.spyOn(nativeTileTransport,'retire').mockResolvedValue();
+ const active={store:new ProjectStore({document:parseProjectDocument(structuredClone(fixture)),canUndo:false,canRedo:false})} as ActiveProject;
+ const api={available:()=>false,devices:async()=>[],listen:async()=>()=>{},control:async()=>emptyPlayback,configure:async()=>emptyPlayback};
+ const hook=renderHook(()=>({tiles:useTiles(active,media,defaultSettings,defaultView(media),0,800,'ready','processed'),playback:usePlayback(active,media.id,undefined,api)}));
+ await waitFor(()=>expect(hook.result.current.tiles.completed).toBe(1));const keys=hook.result.current.tiles.keys,document=active.store.snapshot.document;
+ act(()=>{hook.result.current.playback.setGlobalMonitorGain(6);hook.result.current.playback.setMediaMonitorGain(media.id,3);});
+ await new Promise(r=>setTimeout(r,150));expect(request).toHaveBeenCalledOnce();expect(hook.result.current.tiles.keys).toEqual(keys);expect(active.store.snapshot.document).toBe(document);
  hook.unmount();
 });

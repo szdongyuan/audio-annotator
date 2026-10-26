@@ -1,7 +1,7 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { flushSync } from 'react-dom';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { parseProjectDocument, type Change } from '../../bridge/types';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue } from '../../app/commands';
@@ -14,6 +14,7 @@ import { useMasks } from '../playback/useMasks';
 import { coordinates } from '../spectrogram/coordinates';
 import { CollaborationContext, type CollaborationUI } from '../collaboration/useCollaboration';
 import { RemoteContext } from '../collaboration/remote';
+import { PlaybackContext } from '../playback/usePlayback';
 function setup() {
   const doc = parseProjectDocument(structuredClone(fixture)), store = new ProjectStore({ document: doc, canUndo: true, canRedo: false });
   const applyChange = vi.fn(async (_id: string, revision: number, c: Change) => {
@@ -33,21 +34,21 @@ beforeEach(() => {
 });
 function mounted(shared = false) {
   const s = setup(), media = s.doc.media[0]; let ui!: SelectionUI;
-  const inspect=vi.fn(),remote=structuredClone(s.doc.annotations[0]);
+  const inspect=vi.fn(),setCue=vi.fn(),remote=structuredClone(s.doc.annotations[0]);
   const collaboration=shared?{active:s.active,controller:{owner:s.active,visible:()=>true,status:{snapshot:{authors:[{identity:{authorId:'bob',displayName:'Bob'},layer:{payload:{annotations:[remote],categories:s.doc.categories}},error:null}]}}}} as unknown as CollaborationUI:null;
   if(shared)Object.assign(s.active,{collaboration:{actor:null,runtimeNonce:'nonce'}});
-  function Workspace() { ui = useSelection(s.active, media.id); useAnnotations(s.active, ui); useMasks(s.active, ui); return <CollaborationContext.Provider value={collaboration}><RemoteContext.Provider value={{inspect} as never}><SelectionContext.Provider value={ui}><AnnotationOverlay media={media} channel={1} view={defaultView(media)} /></SelectionContext.Provider></RemoteContext.Provider></CollaborationContext.Provider>; }
+  function Workspace() { ui = useSelection(s.active, media.id); useAnnotations(s.active, ui); useMasks(s.active, ui); return <PlaybackContext.Provider value={{setCue} as never}><CollaborationContext.Provider value={collaboration}><RemoteContext.Provider value={{inspect} as never}><SelectionContext.Provider value={ui}><AnnotationOverlay media={media} channel={1} view={defaultView(media)} /></SelectionContext.Provider></RemoteContext.Provider></CollaborationContext.Provider></PlaybackContext.Provider>; }
   const component = render(<Workspace />), surface = screen.getByLabelText('通道 2 标注图层');
   surface.setPointerCapture = vi.fn();
   vi.spyOn(surface, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100, width: 800, height: 400 } as DOMRect);
   const pointer = (kind: 'pointerDown' | 'pointerMove' | 'pointerUp', x: number, y: number, target = surface) => fireEvent[kind](target, { button: 0, pointerId: 1, clientX: x, clientY: y });
-  return { ...s, component, surface, pointer, inspect,remote,collaboration, refresh:()=>component.rerender(<Workspace/>), ui: () => ui, finish: () => { component.unmount(); s.active.lifecycle.dispose(); } };
+  return { ...s, component, surface, pointer, inspect,setCue,remote,collaboration, refresh:()=>component.rerender(<Workspace/>), ui: () => ui, finish: () => { component.unmount(); s.active.lifecycle.dispose(); } };
 }
 it.each([false, true])('first blank gesture in another channel deactivates global selection (shared=%s)', shared => {
  const s=mounted(shared), selected={region:{...s.doc.annotations[0].region,channelIndex:0},object:null};
  act(()=>s.ui().state.select(selected));
  s.pointer('pointerDown',740,140);s.pointer('pointerUp',800,170);
- expect(s.ui().selection).toBeNull();expect(s.ui().candidate).toBe(selected);
+ expect(s.ui().selection).toBeNull();expect(s.ui().candidate).toBeNull();expect(s.setCue).not.toHaveBeenCalled();
  expect(s.applyChange).not.toHaveBeenCalled();
  s.pointer('pointerDown',740,140);s.pointer('pointerUp',800,170);
  expect(s.ui().selection?.region.channelIndex).toBe(1);s.finish();
@@ -182,13 +183,13 @@ it('right click prioritizes the selected overlapping object and exposes all capt
   const { coordinates } = await import('../spectrogram/coordinates');
   const c = coordinates(defaultView(s.doc.media[0]), s.doc.media[0].sampleRate / 2, 800, 400);
   fireEvent.contextMenu(s.surface, { clientX: 100 + c.secondsToX((a.region.startSeconds + a.region.endSeconds) / 2), clientY: 100 + c.hzToY((a.region.lowHz + a.region.highHz) / 2) });
-  expect(s.ui().menu?.target?.object?.id).toBe(a.id); expect(s.ui().menu?.overlaps.map(s => s.object?.kind)).toEqual(['annotation', 'mask']); s.finish();
+  expect(s.ui().menu?.target?.object?.id).toBe(a.id); expect(s.ui().menu?.overlaps.map(s => s.object?.kind)).toEqual(['annotation']); s.finish();
 });
 it('Delete masks the selection; text Escape/Delete do not act and later Escape clears only UI selection', async () => {
   const s = mounted(); s.pointer('pointerDown', 300, 200); s.pointer('pointerUp', 500, 300);
   const input = document.createElement('textarea'); document.body.append(input); fireEvent.keyDown(input, { key: 'Escape' }); fireEvent.keyDown(input, { key: 'Delete' });
   expect(s.ui().selection).not.toBeNull(); expect(s.applyChange).not.toHaveBeenCalled(); input.remove();
-  fireEvent.keyDown(window, { key: 'Delete' }); await waitFor(() => expect(s.ui().selection?.object?.kind).toBe('mask'));
+  fireEvent.keyDown(window, { key: 'Delete' }); await waitFor(() => expect(s.applyChange).toHaveBeenCalledOnce()); expect(s.ui().selection).toBeNull(); expect(s.ui().candidate).toBeNull();
   expect(s.doc.annotations).toHaveLength(1); fireEvent.keyDown(window, { key: 'Escape' }); fireEvent.keyDown(window, { key: 'Delete' });
   await s.active.lifecycle.save(); expect(s.applyChange).toHaveBeenCalledOnce(); expect(s.ui().selection).toBeNull(); s.finish();
 });
@@ -218,14 +219,14 @@ it('never renders a menu captured by an earlier runtime after same-project Save 
   hook.rerender({ active: { ...s.active } }); expect(renders.every(open => !open)).toBe(true); hook.unmount(); s.active.lifecycle.dispose();
 });
 
-it('first outside blank gesture only deactivates; inactive temporary outline ignores Delete, click reactivates and next drag replaces', async () => {
+it('first outside blank gesture clears temporary candidate; Delete is inert and next drag replaces', async () => {
   const s = mounted(); s.pointer('pointerDown', 300, 200); s.pointer('pointerUp', 500, 300);
   const first = s.ui().selection;
   s.pointer('pointerDown', 700, 150); s.pointer('pointerMove', 800, 250); s.pointer('pointerUp', 800, 250);
-  expect(s.ui().selection).toBeNull(); expect(s.ui().state.getCandidate()).toBe(first);
-  expect(document.querySelector('.is-temporary')).not.toBeNull(); expect(document.querySelector('.region-handle')).toBeNull();
+  expect(s.ui().selection).toBeNull(); expect(s.ui().state.getCandidate()).toBeNull();
+  expect(document.querySelector('.is-temporary')).toBeNull(); expect(document.querySelector('.region-handle')).toBeNull();
   fireEvent.keyDown(window, { key: 'Delete' }); await s.active.lifecycle.save(); expect(s.applyChange).not.toHaveBeenCalled();
-  s.pointer('pointerDown', 400, 250); s.pointer('pointerUp', 400, 250); expect(s.ui().selection).toBe(first);
+  s.pointer('pointerDown', 850, 120); s.pointer('pointerUp', 850, 120); expect(s.ui().selection).toBeNull();
   fireEvent.keyDown(window, { key: 'Escape' }); expect(s.ui().selection).toBeNull();
   s.pointer('pointerDown', 400, 250); s.pointer('pointerUp', 550, 320);
   expect(s.ui().selection?.object).toBeNull(); expect(s.ui().selection).not.toBe(first);
@@ -266,4 +267,42 @@ it('a stale rendered active frame cannot begin a gesture after its target disapp
   expect(s.ui().selection).toBeNull();
   s.pointer('pointerMove', p.x + 20, p.y); s.pointer('pointerUp', p.x + 20, p.y);
   expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it('one blank click clears temporary active and candidate and sets a precise cue; saved annotation survives',()=>{
+ const s=mounted(),target={region:{...s.doc.annotations[0].region},object:null};
+ act(()=>s.ui().state.select(target));s.pointer('pointerDown',850,120);s.pointer('pointerUp',850,120);
+ expect(s.ui().selection).toBeNull();expect(s.ui().candidate).toBeNull();expect(document.querySelector('[data-temporary-selection]')).toBeNull();
+ expect(s.setCue).toHaveBeenLastCalledWith(s.active,s.doc.media[0].id,1.875);
+ act(()=>s.ui().selectObject('annotation',s.doc.annotations[0].id));s.pointer('pointerDown',850,120);s.pointer('pointerUp',850,120);
+ expect(s.ui().selection).toBeNull();expect(s.active.store.snapshot.document.annotations).toHaveLength(1);expect(document.querySelector('[data-annotation-id]')).toBeTruthy();s.finish();
+});
+it('DSP edits have no persistent frames or overlap targets',()=>{
+ const s=mounted();s.doc.edits[0].region=s.doc.annotations[0].region;s.refresh();expect(document.querySelector('[data-edit-id]')).toBeNull();
+ const p=objectPoint(s);fireEvent.contextMenu(s.surface,{clientX:p.x,clientY:p.y});
+ expect(s.ui().menu?.overlaps.every(o=>o.object?.kind==='annotation')).toBe(true);s.finish();
+});
+import { usePlayback, type PlaybackUI } from '../playback/usePlayback';
+import { emptyPlayback, type PlaybackRequest } from '../../bridge/playback';
+import { CueLine } from '../playback/CueLine';
+it('real overlay plus playback replaces paused intent from a shared-channel cue and never interrupts a playing blank click',async()=>{
+ const s=setup(),m=s.doc.media[0];s.doc.annotations=[];s.doc.edits=[];let ui!:SelectionUI,playback!:PlaybackUI,generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async(action:string)=>({...emptyPlayback,generation:++generation,state:action==='pause'?'paused' as const:'stopped' as const})),configure:vi.fn(async(q:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:q.projectId,mediaId:q.mediaId,state:'playing' as const}))};
+ function App(){ui=useSelection(s.active,m.id);playback=usePlayback(s.active,m.id,ui.selection?.region,api);return <PlaybackContext.Provider value={playback}><SelectionContext.Provider value={ui}>{[0,1].map(channel=><div key={channel}><AnnotationOverlay media={m} channel={channel} view={defaultView(m)}/><CueLine mediaId={m.id} view={defaultView(m)}/></div>)}<button onClick={playback.toggle}>播放测试</button></SelectionContext.Provider></PlaybackContext.Provider>;}
+ const view=render(<App/>),surface=screen.getByLabelText('通道 2 标注图层');surface.setPointerCapture=vi.fn();vi.spyOn(surface,'getBoundingClientRect').mockReturnValue({left:100,top:100,width:800,height:400} as DOMRect);
+ const pointer=(kind:'pointerDown'|'pointerUp',x:number,y:number)=>fireEvent[kind](surface,{button:0,pointerId:1,clientX:x,clientY:y});
+ pointer('pointerDown',300,200);pointer('pointerUp',500,300);fireEvent.click(screen.getByRole('button',{name:'播放测试'}));await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ const controls=api.control.mock.calls.length;pointer('pointerDown',850,120);pointer('pointerUp',850,120);await act(async()=>{});expect(playback.playing).toBe(true);expect(api.control).toHaveBeenCalledTimes(controls);expect(ui.selection).toBeNull();expect(ui.candidate).toBeNull();expect(document.querySelectorAll('.audio-cue')).toHaveLength(2);
+ act(()=>playback.stop());await act(async()=>{});fireEvent.click(screen.getByRole('button',{name:'播放测试'}));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0]).toMatchObject({mediaId:m.id,seekSeconds:1.875,mode:{mode:'processed'}});
+ fireEvent.click(screen.getByRole('button',{name:'播放测试'}));await act(async()=>{});pointer('pointerDown',700,120);pointer('pointerUp',700,120);fireEvent.click(screen.getByRole('button',{name:'播放测试'}));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(3));expect(api.configure.mock.calls[2][0].seekSeconds).toBe(1.5);view.unmount();s.active.lifecycle.dispose();
+});
+it('explicit selection audition continues through a blank cue click, then pause/play starts the file at that new cue',async()=>{
+ const s=setup(),m=s.doc.media[0];s.doc.annotations=[];s.doc.edits=[];let ui!:SelectionUI,playback!:PlaybackUI,generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async(action:string)=>({...emptyPlayback,generation:++generation,state:action==='pause'?'paused' as const:'stopped' as const})),configure:vi.fn(async(q:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:q.projectId,mediaId:q.mediaId,state:'playing' as const}))};
+ function App(){ui=useSelection(s.active,m.id);playback=usePlayback(s.active,m.id,ui.selection?.region,api);return <PlaybackContext.Provider value={playback}><SelectionContext.Provider value={ui}><AnnotationOverlay media={m} channel={1} view={defaultView(m)}/><button onClick={()=>playback.playSelection(ui.selection!.region,'original')}>试听原始选区</button><button onClick={playback.toggle}>播放暂停</button></SelectionContext.Provider></PlaybackContext.Provider>;}
+ const view=render(<App/>),surface=screen.getByLabelText('通道 2 标注图层');surface.setPointerCapture=vi.fn();vi.spyOn(surface,'getBoundingClientRect').mockReturnValue({left:100,top:100,width:800,height:400} as DOMRect);
+ const pointer=(kind:'pointerDown'|'pointerUp',x:number,y:number)=>fireEvent[kind](surface,{button:0,pointerId:1,clientX:x,clientY:y});
+ pointer('pointerDown',300,200);pointer('pointerUp',500,300);const region=ui.selection!.region;fireEvent.click(screen.getByRole('button',{name:'试听原始选区'}));await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());expect(api.configure.mock.calls[0][0]).toMatchObject({mediaId:m.id,mode:{mode:'selection',region,selectionSource:'original'}});
+ const controls=api.control.mock.calls.length,stream=playback.status;pointer('pointerDown',850,120);pointer('pointerUp',850,120);await act(async()=>{});expect(ui.selection).toBeNull();expect(playback.playing).toBe(true);expect(playback.status).toBe(stream);expect(api.control).toHaveBeenCalledTimes(controls);expect(api.configure).toHaveBeenCalledOnce();expect(playback.sourceId).toBe(m.id);
+ fireEvent.click(screen.getByRole('button',{name:'播放暂停'}));await waitFor(()=>expect(playback.status.state).toBe('paused'));expect(api.control).toHaveBeenLastCalledWith('pause');expect(api.configure).toHaveBeenCalledOnce();
+ fireEvent.click(screen.getByRole('button',{name:'播放暂停'}));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0]).toMatchObject({mediaId:m.id,mode:{mode:'processed'},seekSeconds:1.875,play:true});expect(api.control).toHaveBeenLastCalledWith('stop');expect(api.control.mock.invocationCallOrder.at(-1)).toBeLessThan(api.configure.mock.invocationCallOrder.at(-1)!);view.unmount();s.active.lifecycle.dispose();
 });

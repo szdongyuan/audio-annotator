@@ -37,7 +37,7 @@ try{
   changes.push({type:'updateMediaNote',mediaId:m.id,note:`音频备注 ${i}`,mergeKey:null});
   for(let c=0;c<m.channelCount;c++)changes.push({type:'updateChannelNote',mediaId:m.id,channelIndex:c,note:`声道备注 ${i}/${c}`,mergeKey:null});
   const region={mediaId:m.id,channelIndex:m.channelCount-1,startSeconds:.02,endSeconds:.08,lowHz:200,highHz:2000};
-  changes.push({type:'addAnnotation',annotation:{id:randomUUID(),region,categoryId:category.id,note:`区域备注 ${i}`,createdAt:now,updatedAt:now}},{type:'addEdit',edit:{id:randomUUID(),region,enabled:i===0,processingVersion:1}},{type:'updateAnalysis',mediaId:m.id,settings:{window:'hamming',windowSize:1024,hopSize:256,fftSize:2048,melBands:64}},{type:'updatePlaybackMix',mediaId:m.id,mix:{soloChannels:[m.channelCount-1],mutedChannels:[0]}});
+  changes.push({type:'addAnnotation',annotation:{id:randomUUID(),region,categoryIds:[category.id],note:`区域备注 ${i}`,createdAt:now,updatedAt:now}},{type:'addEdit',edit:{id:randomUUID(),region,enabled:i===0, operation: { type: 'mask' }, processingVersion: 2}},{type:'updateAnalysis',mediaId:m.id,settings:{window:'hamming',windowSize:1024,hopSize:256,fftSize:2048,melBands:64}},{type:'updatePlaybackMix',mediaId:m.id,mix:{soloChannels:[m.channelCount-1],mutedChannels:[0]}});
  }
  const view=(m,i)=>({visibleChannels:[m.channelCount-1],startSeconds:.01,endSeconds:.09,lowHz:100,highHz:10000,frequencyMix:.65,spectrumKind:i?'mel':'stft',gainDb:3,dynamicRangeDb:70,palette:'magma'});
  changes.push({type:'updateViewState',viewState:{media:{[a.id]:view(a,0),[b.id]:view(b,1)},activeMediaId:a.id,compareMediaId:b.id,linkedTime:true}});

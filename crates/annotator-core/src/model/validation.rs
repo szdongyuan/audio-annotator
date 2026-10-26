@@ -70,9 +70,9 @@ pub fn validate_region(region: &Region, media: &[MediaDescriptor]) -> Result<()>
     )
 }
 pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
-    if doc.format_version != 2
+    if doc.format_version != 3
         || doc.algorithm_versions.analysis != 1
-        || doc.algorithm_versions.dsp != 1
+        || doc.algorithm_versions.dsp != 2
     {
         return Err(AppError::new(
             ErrorCode::UnsupportedVersion,
@@ -136,14 +136,8 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
         )?;
     }
     for media in &doc.media {
-        for category in std::iter::once(&media.category_id)
-            .chain(&media.channel_category_ids)
-            .flatten()
-        {
-            require(
-                doc.categories.iter().any(|c| &c.id == category),
-                "Unknown category reference",
-            )?;
+        for labels in std::iter::once(&media.category_ids).chain(&media.channel_category_ids) {
+            validate_categories(labels, &doc.categories)?;
         }
     }
     require(
@@ -167,17 +161,12 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
     for annotation in &doc.annotations {
         validate_region(&annotation.region, &doc.media)?;
         dates(&annotation.created_at, &annotation.updated_at)?;
-        require(
-            annotation
-                .category_id
-                .as_ref()
-                .is_none_or(|id| doc.categories.iter().any(|c| &c.id == id)),
-            "Unknown category reference",
-        )?;
+        validate_categories(&annotation.category_ids, &doc.categories)?;
     }
     for edit in &doc.edits {
         validate_region(&edit.region, &doc.media)?;
-        if edit.processing_version != 1 {
+        edit.operation.validate()?;
+        if edit.processing_version != 2 {
             return Err(AppError::new(
                 ErrorCode::UnsupportedVersion,
                 "Unsupported edit processing version",
@@ -274,6 +263,20 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
                 && view.dynamic_range_db > 0.0
                 && !view.palette.trim().is_empty(),
             "Invalid view bounds or display settings",
+        )?;
+    }
+    Ok(())
+}
+
+/// Ordered sets: accepting a label set never sorts or deduplicates user input.
+pub fn validate_categories(labels: &[String], categories: &[Category]) -> Result<()> {
+    require(labels.len() <= 64, "At most 64 labels per target")?;
+    let mut seen = HashSet::new();
+    for label in labels {
+        require(seen.insert(label), "Duplicate category reference")?;
+        require(
+            categories.iter().any(|c| &c.id == label),
+            "Unknown category reference",
         )?;
     }
     Ok(())

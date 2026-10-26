@@ -2,7 +2,7 @@ import { Plus, Save } from 'lucide-react';
 import type { ProjectLifecycleUI } from './useProjectLifecycle';
 import type { ExchangeUI } from '../exchange/useExchange';
 import type { MenuItem } from '../../components/menu/menuModel';
-type Props = { onCreateCollaboration?: () => void; project: ProjectLifecycleUI; onImport?: () => void; onImportFolder?: () => void; onImportZip?: () => void; sourceDisabled?: boolean; importDisabled?: boolean; exchange?: ExchangeUI };
+type Props = { onCreateCollaboration?: () => void; project: ProjectLifecycleUI; onImport?: () => void; onImportFolder?: (returnFocus?:HTMLElement|null) => void; onImportZip?: (returnFocus?:HTMLElement|null) => void; sourceDisabled?: boolean; importDisabled?: boolean; exchange?: ExchangeUI };
 export function projectMenuItems({project,onImport,onImportFolder,onImportZip,sourceDisabled=false,importDisabled=true,exchange,onCreateCollaboration}:Props):MenuItem[]{
  const busy=project.busy||!!project.recovery||!!project.active?.store.editingDisabled;
  return [
@@ -14,8 +14,8 @@ export function projectMenuItems({project,onImport,onImportFolder,onImportZip,so
   {id:'import',label:'导入音频',disabled:busy||project.active?.collaboration?.canImportMedia===false||importDisabled,action:onImport},
   {id:'import-folder',label:'导入文件夹…',disabled:busy||sourceDisabled||project.active?.collaboration?.canImportMedia===false||importDisabled||!onImportFolder,action:onImportFolder},
   {id:'import-zip-audio',label:'导入 ZIP 音频…',disabled:busy||sourceDisabled||importDisabled||!onImportZip,action:onImportZip},
-  {id:'import-share',label:'导入分享文件…',disabled:busy||!exchange,action:()=>exchange?.show('import')},
-  {id:'export',label:project.active?.collaboration?'导出我的标注 / 项目包…':'分享项目…',disabled:busy||!project.active||!exchange,action:()=>exchange?.show('export')},
+  {id:'import-share',label:'导入分享文件…',disabled:busy||!exchange,action:returnFocus=>exchange?.show('import',returnFocus)},
+  {id:'export',label:project.active?.collaboration?'导出我的标注 / 项目包…':'分享项目…',disabled:busy||!project.active||!exchange,action:returnFocus=>exchange?.show('export',returnFocus)},
   ...(onCreateCollaboration&&project.active&&!project.active.collaboration?[{id:'collaboration-create',label:'创建协作副本…',disabled:busy||!project.active||!!project.active.collaboration,action:onCreateCollaboration}]:[]),
   {id:'close',label:'关闭项目',disabled:busy||!project.active,action:()=>{void project.close();}},
  ];

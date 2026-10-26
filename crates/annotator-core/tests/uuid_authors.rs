@@ -14,7 +14,7 @@ fn profile_uuid_is_shared_across_projects_and_nickname_does_not_revoke_lease() {
         CollaborationRepository::create_default(&root.join("a"), "A", &profile).unwrap();
     let (b, second) =
         CollaborationRepository::create_default(&root.join("b"), "B", &profile).unwrap();
-    assert_eq!(a.manifest().format_version, 3);
+    assert_eq!(a.manifest().format_version, 5);
     assert_eq!(session.identity().author_id, profile.author_id);
     assert_eq!(second.identity().author_id, profile.author_id);
     assert_eq!(
@@ -39,7 +39,7 @@ fn profile_uuid_is_shared_across_projects_and_nickname_does_not_revoke_lease() {
 
 #[test]
 fn old_collaboration_versions_are_rejected_without_writes() {
-    for version in [1, 2] {
+    for version in [1, 2, 3, 4] {
         let root = std::env::temp_dir().join(format!("old-collab-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&root).unwrap();
         let bytes = format!("{{\"formatVersion\":{version}}}").into_bytes();

@@ -1,6 +1,6 @@
 import { act,fireEvent,render,renderHook,screen,waitFor } from '@testing-library/react';
 import { expect,it,vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { IdentityDialog } from './IdentityDialog';
 import { useCollaboration, type CollaborationUI } from './useCollaboration';
 import type { CollaborationCommands } from '../../bridge/collaboration';

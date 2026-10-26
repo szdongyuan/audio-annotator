@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue, type ProjectCommands } from '../../app/commands';
 import { parseProjectDocument } from '../../bridge/types';

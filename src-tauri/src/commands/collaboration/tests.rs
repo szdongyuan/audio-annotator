@@ -419,6 +419,8 @@ fn profile_selection_preserves_private_cache_preferences_and_nonces() {
         .workspace_mut()
         .unwrap()
         .save_preferences(PlaybackPreferences {
+            monitor_gain_db: 0.0,
+            media_monitor_gain_db: Default::default(),
             volume: 0.2,
             ..Default::default()
         })

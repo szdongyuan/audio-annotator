@@ -2,7 +2,7 @@ import { ImportAcknowledgements, ImportProgress } from './ImportProgress';
 import { expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue, type ProjectCommands } from '../../app/commands';
 import { parseProjectDocument, type ProjectSnapshot } from '../../bridge/types';
@@ -11,7 +11,7 @@ import { MediaImportController } from './imports';
 import { MediaList } from './MediaList';
 import { MediaTextDetails } from './MediaTextDetails';
 import { useMedia } from './useMedia';
-import { mediaClient } from '../../bridge/media';
+import { mediaClient,mediaDialogs } from '../../bridge/media';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 
 function setup() {
@@ -78,7 +78,7 @@ it('keeps admission busy until both native completion and the start response arr
 
 it('searches real document metadata and preserves missing media notes', () => {
   render(<MediaList media={fixture.media} annotations={fixture.annotations} statuses={[{ mediaId: fixture.media[0].id, status: 'missing' }]} selectedId={null} disabled={false} onSelect={() => {}} onImport={() => {}} onRelink={() => {}} />);
-  expect(screen.getByText('源文件缺失')).toBeInTheDocument();
+  expect(screen.getByLabelText('源文件缺失')).toBeInTheDocument();
   expect(screen.getByText(fixture.media[0].displayName)).toBeInTheDocument();
   fireEvent.change(screen.getByRole('textbox', { name: '搜索音频' }), { target: { value: 'nothing matches' } });
   expect(screen.getByText('没有匹配的音频')).toBeInTheDocument();
@@ -154,4 +154,13 @@ it('ending the current failed import leaves older acknowledgement recovery reach
  const s=setup();vi.mocked(s.api.release).mockRejectedValueOnce({code:'SaveFailed',message:'release unavailable',retryable:true});await s.controller.start(['one.wav']);s.emit({type:'ready',taskId:'task',index:0,media:candidate});s.emit({type:'finished',taskId:'task',cancelled:false});await s.controller.settled();
  await s.controller.start(['bad.wav']);s.emit({type:'failed',taskId:'task',index:0,path:'bad.wav',error:{code:'DecodeFailed',message:'invalid audio',retryable:false}});s.emit({type:'finished',taskId:'task',cancelled:false});await s.controller.discard();
  render(<ImportAcknowledgements controller={s.controller}/>);fireEvent.click(screen.getByRole('button',{name:'重试导入确认'}));await waitFor(()=>expect(s.controller.pendingAcknowledgements).toHaveLength(0));expect(s.api.release).toHaveBeenLastCalledWith('task',candidate.id);expect(s.commands.applyChange).toHaveBeenCalledTimes(1);s.controller.dispose();
+});
+it('binds direct and source imports to selected folder without replacing the import controller',async()=>{
+ const organizationBridge=await import('../../bridge/organization');const source={kind:'audio-annotator-organization' as const,formatVersion:1 as const,projectId:fixture.projectId,revision:4,layoutRevision:3,folders:[{id:'33333333-3333-4333-8333-333333333333',parentId:null,name:'目标'}],media:[]};
+ const native=vi.spyOn(organizationBridge,'createOrganizationClient').mockReturnValue({get:vi.fn(async()=>({runtimeNonce:'11111111-1111-4111-8111-111111111111',projectId:fixture.projectId,organization:source})),apply:vi.fn()});
+ const choose=vi.spyOn(mediaDialogs,'choose').mockResolvedValue('D:/a.wav');const s=setup();const active={store:s.store,queue:s.queue,path:'D:/shared',collaboration:{runtimeNonce:'11111111-1111-4111-8111-111111111111',projectFlavor:'default',canImportMedia:true},commands:{media:s.api}} as unknown as ActiveProject;
+ const hook=renderHook(()=>useMedia(active));await waitFor(()=>expect(hook.result.current.organization?.snapshot?.revision).toBe(4));const controller=hook.result.current.controller;
+ act(()=>hook.result.current.organization!.select(source.folders[0].id));expect(hook.result.current.controller).toBe(controller);act(()=>hook.result.current.chooseSourceFolder());expect(hook.result.current.source?.config.organization.targetFolderId).toBe(source.folders[0].id);
+ await act(()=>hook.result.current.source!.cancel());act(()=>hook.result.current.choose());await waitFor(()=>expect(s.api.start).toHaveBeenCalled());expect(vi.mocked(s.api.start).mock.calls[0][4]).toEqual({folderId:source.folders[0].id,layoutRevision:3});expect(hook.result.current.controller).toBe(controller);
+ hook.unmount();s.controller.dispose();native.mockRestore();choose.mockRestore();
 });

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue, type ProjectCommands } from '../../app/commands';
 import { parseProjectDocument, type ProjectSnapshot } from '../../bridge/types';

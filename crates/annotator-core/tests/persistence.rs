@@ -20,7 +20,7 @@ impl Drop for Temp {
 }
 fn document(revision: u64) -> ProjectDocument {
     let mut d =
-        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json"))
+        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v3.json"))
             .unwrap();
     d.revision = revision;
     d.playback_mix
@@ -382,7 +382,7 @@ fn explicit_discard_does_not_require_a_valid_primary() {
 
 #[test]
 fn unsupported_primary_is_rejected_without_changing_project_or_recovery_bytes() {
-    for version in [1, 3] {
+    for version in [1, 2, 4] {
         let dir = Temp::new();
         drop(FileStore::create(&dir.0, &document(0)).unwrap());
         let recovery = fs::read(dir.0.join("recovery.json")).unwrap();
@@ -410,15 +410,15 @@ fn classifications_and_compare_preferences_survive_save_and_reopen() {
     drop(FileStore::create(&dir.0, &document(0)).unwrap());
     let mut p = LocalProject::open(&dir.0).unwrap();
     let d = p.snapshot().unwrap().document;
-    let category = Some(d.categories[0].id.clone());
+    let category = vec![d.categories[0].id.clone()];
     p.session_mut()
         .unwrap()
         .apply_change(
             &d.project_id,
             0,
-            Change::SetMediaCategory {
+            Change::SetMediaCategories {
                 media_id: d.media[0].id.clone(),
-                category_id: category.clone(),
+                category_ids: category.clone(),
             },
         )
         .unwrap();
@@ -427,10 +427,10 @@ fn classifications_and_compare_preferences_survive_save_and_reopen() {
         .apply_change(
             &d.project_id,
             1,
-            Change::SetChannelCategory {
+            Change::SetChannelCategories {
                 media_id: d.media[0].id.clone(),
                 channel_index: 0,
-                category_id: category,
+                category_ids: category,
             },
         )
         .unwrap();

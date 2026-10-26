@@ -17,6 +17,7 @@ use std::{
 
 pub struct CollaborationRepository {
     pub(super) root: PathBuf,
+    pub(super) organization: organization::Organization,
     pub(super) manifest: CollaborationManifest,
     pub(super) manifest_hash: String,
     pub(super) catalog_revision: Option<CatalogRevision>,
@@ -88,6 +89,7 @@ impl CollaborationRepository {
             manifest_hash: hash(&bytes),
             catalog_revision: loaded.revision,
             catalog_record_hashes: loaded.record_hashes,
+            organization: loaded.organization,
         };
         repo.authors()?;
         Ok(repo)
@@ -355,7 +357,7 @@ impl CollaborationRepository {
         let author = &session.identity.author_id;
         let mut layer = AuthorLayer {
             kind: LAYER_KIND.into(),
-            format_version: 1,
+            format_version: 2,
             project_id: self.manifest.project_id.clone(),
             author_id: author.clone(),
             revision: base.map_or(1, |b| b.revision + 1),

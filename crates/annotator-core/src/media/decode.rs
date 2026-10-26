@@ -289,8 +289,8 @@ pub fn decode(
             .map(|mask| mask.iter().map(|c| format!("{c:?}")).collect()),
         note: String::new(),
         channel_notes: vec![String::new(); channels],
-        category_id: None,
-        channel_category_ids: vec![None; channels],
+        category_ids: vec![],
+        channel_category_ids: vec![vec![]; channels],
     };
     let pcm_path = pending.path.clone();
     pending.published = true;

@@ -13,7 +13,7 @@ import { useCollaborationContext } from '../collaboration/useCollaboration';
 
 type Box = { left: number; top: number; right: number; bottom: number };
 const intersect = (a: Box, b: Box): Box => ({ left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom) });
-const sameTarget = (a: Selection | null, b: Selection) => a === b || !!a?.object && a.object.kind === b.object?.kind && a.object.id === b.object.id;
+
 
 export function SelectionToolbar({ media, channel, view, status }: { media: MediaDescriptor; channel: number; view: MediaView; status: MediaStatus['status'] }) {
   const ui = useSelectionContext(), playback = usePlaybackContext();
@@ -55,24 +55,25 @@ export function SelectionToolbar({ media, channel, view, status }: { media: Medi
     window.addEventListener('scroll', measure, true); window.addEventListener('resize', measure);
     return () => { observer.disconnect(); window.removeEventListener('scroll', measure, true); window.removeEventListener('resize', measure); };
   }, [eligible, target, view, media.sampleRate]);
-  const validMenu = menu && eligible && position && menu.owner === ui?.active && sameTarget(target, menu.target) ? menu : null;
+  const validMenu = menu && eligible && position && menu.owner === ui?.active && ui!.state.matches(menu.target) ? menu : null;
   useLayoutEffect(() => { if (menu && !validMenu) setMenu(null); }, [menu, validMenu]);
   const shown = eligible && !!position;
   const disabled = !ui?.active || ui.active.store.editingDisabled;
   const reason = status === 'ready' ? '' : status === 'missing' ? '音频文件缺失' : status === 'changed' ? '音频源文件已改变' : '音频尚未就绪';
-  const commands = (captured: Selection) => targetCommands(ui!, captured, playback, () => [{ mediaId: media.id, status: latest.current.status }], () => latest.current.ui?.active === ui?.active && sameTarget(latest.current.ui?.state.getActiveSelection() ?? null, captured));
+  const commands = (captured: Selection) => targetCommands(ui!, captured, playback, () => [{ mediaId: media.id, status: latest.current.status }], () => latest.current.ui?.active === ui?.active && !!latest.current.ui?.state.matches(captured));
   const open = (kind: 'category' | 'audition', trigger: HTMLElement) => {
     if (!target || disabled || kind==='category'&&annotationDisabled(ui?.active) || menuIsOpen()) return;
     const rect = trigger.getBoundingClientRect(); setMenu({ owner: ui!.active, target, kind, x: rect.left, y: rect.bottom, trigger });
   };
   const items: MenuItem[] = validMenu?.kind === 'category' ? [
-    { id: 'none', label: '未分类', disabled, action: () => commands(validMenu.target).edit(selected => { void ui!.actions!.classify(selected, null); }) },
-    ...ui!.active!.store.snapshot.document.categories.map(c => ({ id: c.id, label: c.name, disabled, action: () => commands(validMenu.target).edit(selected => { void ui!.actions!.classify(selected, c.id); }) })),
+    { id: 'none', label: '清空标签', keepOpen: true, checked: false, disabled, action: () => commands(validMenu.target).edit(selected => { void ui!.actions!.classify(selected, null); }) },
+    ...ui!.active!.store.snapshot.document.categories.map(c => ({ id: c.id, label: c.name, keepOpen: true, checked: ui!.active!.store.snapshot.document.annotations.find(a => a.id === ui!.state.follow(validMenu.target).object?.id)?.categoryIds.includes(c.id) ?? false, disabled, action: () => commands(validMenu.target).edit(selected => { void ui!.actions!.classify(selected, c.id); }) })),
   ] : (['original', 'processed'] as const).map(source => ({ id: source, label: source === 'original' ? '试听选区原音' : '试听选区（应用屏蔽）', disabled: disabled || !!reason, title: reason || undefined, action: () => { if (validMenu) commands(validMenu.target).audition(source); } }));
   return <div ref={host} className="selection-toolbar-layer" data-pane-control onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()} onClick={e => e.stopPropagation()} onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }}>
     {eligible && <div ref={bar} role="toolbar" aria-label="选区操作" className="selection-toolbar" style={{ ...position, visibility: shown ? 'visible' : 'hidden' }}>
       <button disabled={disabled || !!reason} title={reason || '播放当前选区'} onClick={() => { if (target) commands(target).audition(); }}>播放</button>
       <button aria-label="试听选区版本" aria-haspopup="menu" aria-expanded={validMenu?.kind === 'audition'} disabled={disabled || !!reason} title={reason || '选择本次试听版本'} onClick={e => open('audition', e.currentTarget)}>▾</button>
+      <button aria-label="应用区域增益" disabled={disabled} onClick={e => { if (target) ui!.openGain(target, e.currentTarget); }}>增益</button>
       <button aria-label="标注" aria-haspopup="menu" aria-expanded={validMenu?.kind === 'category'} disabled={disabled||annotationDisabled(ui?.active)} onClick={e => open('category', e.currentTarget)}>标注 ▾</button>
     </div>}
     {validMenu && <Menu items={items} anchor={validMenu} returnFocus={validMenu.trigger} onClose={() => setMenu(null)} />}

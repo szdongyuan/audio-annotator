@@ -24,6 +24,10 @@ export class SelectionState {
   private priorActive = false;
   private dragging = false;
   private listeners = new Set<() => void>();
+  private bindings = new WeakMap<Selection, Selection>();
+  intentVersion = 0;
+  follow(target: Selection): Selection { let next = this.bindings.get(target); while (next) { target = next; next = this.bindings.get(target); } return target; }
+  matches(target: Selection) { return this.getActiveSelection() === this.follow(target); }
   context: ClassificationTarget | null = null;
   getContext = () => this.context;
   interact(context: ClassificationTarget | null) {
@@ -36,8 +40,10 @@ export class SelectionState {
   getSnapshot = this.getActiveSelection;
   getGesture = () => this.dragging;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
-  select(value: Selection | null) { this.value = value; this.active = !!value; if (value) this.interact({ mediaId: value.region.mediaId, channelIndex: value.region.channelIndex }); this.listeners.forEach(l => l()); }
-  deactivate() { this.active = false; this.listeners.forEach(l => l()); }
+  select(value: Selection | null, binding = false) { if (!binding) this.intentVersion++; this.value = value; this.active = !!value; if (value) this.interact({ mediaId: value.region.mediaId, channelIndex: value.region.channelIndex }); this.listeners.forEach(l => l()); }
+  deactivate() { if (this.active) this.intentVersion++; this.active = false; this.listeners.forEach(l => l()); }
+  clear(target?: Selection) { if (target && !this.matches(target)) return; this.select(null); }
+  clearCandidate(target: Selection) { if (this.value !== this.follow(target)) return false; this.select(null); return true; }
   beginGesture() { this.prior = this.value; this.priorActive = this.active; this.dragging = true; this.listeners.forEach(l => l()); }
   endGesture() { this.dragging = false; this.prior = null; this.listeners.forEach(l => l()); }
   cancel() {
@@ -47,7 +53,7 @@ export class SelectionState {
     if (this.value) this.interact({ mediaId: this.value.region.mediaId, channelIndex: this.value.region.channelIndex });
     this.listeners.forEach(l => l());
   }
-  bind(target: Selection, object: ObjectRef) { if (this.getActiveSelection() !== target) return false; this.select({ region: target.region, object }); return true; }
+  bind(target: Selection, object: ObjectRef) { const latest = this.follow(target); if (this.getActiveSelection() !== latest) return false; const next = { region: latest.region, object }; this.bindings.set(latest, next); this.select(next, true); return true; }
   reconcile(doc: ProjectDocument) {
     // Native work and history may settle mid-gesture. Cancellation must not
     // restore an obsolete saved region or resurrect a removed prior object.
@@ -56,6 +62,7 @@ export class SelectionState {
     const next = resolveSelection(doc, this.value);
     if (next === this.value) return;
     if (!next) this.endGesture();
+    if (this.value && next) this.bindings.set(this.value, next);
     this.value = next; this.active = this.active && !!next;
     if (this.active && next) this.interact({ mediaId: next.region.mediaId, channelIndex: next.region.channelIndex });
     this.listeners.forEach(l => l());

@@ -74,11 +74,14 @@ pub fn run() {
             commands::project::save_project_as,
             commands::project::save_project_as_controlled,
             commands::project::close_project,
+            commands::exchange::export_path_preview,
             commands::exchange::export_annotations,
             commands::exchange::export_bundle,
             commands::exchange::import_exchange,
             commands::exchange::cancel_exchange,
             commands::media::import_media,
+            commands::organization::organization_get,
+            commands::organization::organization_apply,
             commands::source_import::scan_import_sources,
             commands::source_import::import_source_page,
             commands::source_import::cancel_import_source_scan,
@@ -100,6 +103,7 @@ pub fn run() {
             commands::playback::playback_configure,
             commands::playback::playback_control,
             commands::playback::playback_status,
+            commands::playback::playback_monitor_gain,
         ])
         .run(context)
         .expect("启动音频标注桌面应用失败");

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import type { AnalysisSettings as Settings, MediaDescriptor } from '../../bridge/types';
 import { AnalysisSettings } from '../../features/spectrogram/AnalysisSettings';
 import { defaultView, defaultSettings } from '../../features/spectrogram/workspace';

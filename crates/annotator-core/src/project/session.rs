@@ -110,6 +110,14 @@ impl ProjectSession {
         self.check_revision(project_id, expected_revision)?;
         let mut next = self.document.clone();
         apply(&mut next, &change)?;
+        if next == self.document
+            && matches!(
+                change,
+                Change::AddEdit { .. } | Change::ResetMediaMasks { .. }
+            )
+        {
+            return Ok(self.snapshot());
+        }
         self.advance(&mut next)?;
         if change.records_history() {
             self.history
@@ -232,21 +240,21 @@ fn apply(doc: &mut ProjectDocument, change: &Change) -> Result<()> {
             doc.playback_mix.remove(media_id);
             clean_view(doc);
         }
-        Change::SetMediaCategory {
+        Change::SetMediaCategories {
             media_id,
-            category_id,
+            category_ids,
         } => {
-            find_mut(&mut doc.media, media_id, |m| &m.id)?.category_id = category_id.clone();
+            find_mut(&mut doc.media, media_id, |m| &m.id)?.category_ids = category_ids.clone();
         }
-        Change::SetChannelCategory {
+        Change::SetChannelCategories {
             media_id,
             channel_index,
-            category_id,
+            category_ids,
         } => {
             *find_mut(&mut doc.media, media_id, |m| &m.id)?
                 .channel_category_ids
                 .get_mut(*channel_index as usize)
-                .ok_or_else(|| AppError::invalid("Invalid channel"))? = category_id.clone();
+                .ok_or_else(|| AppError::invalid("Invalid channel"))? = category_ids.clone();
         }
         Change::UpdateMediaNote { media_id, note, .. } => {
             find_mut(&mut doc.media, media_id, |m| &m.id)?.note = note.clone()
@@ -282,17 +290,13 @@ fn apply(doc: &mut ProjectDocument, change: &Change) -> Result<()> {
             remove(&mut doc.categories, id, |c| &c.id)?;
             for media in &mut doc.media {
                 for category in
-                    std::iter::once(&mut media.category_id).chain(&mut media.channel_category_ids)
+                    std::iter::once(&mut media.category_ids).chain(&mut media.channel_category_ids)
                 {
-                    if category.as_ref() == Some(id) {
-                        *category = None;
-                    }
+                    category.retain(|category| category != id);
                 }
             }
             for annotation in &mut doc.annotations {
-                if annotation.category_id.as_ref() == Some(id) {
-                    annotation.category_id = None;
-                }
+                annotation.category_ids.retain(|category| category != id);
             }
         }
         Change::AddAnnotation { annotation } => doc.annotations.push(annotation.clone()),
@@ -300,7 +304,23 @@ fn apply(doc: &mut ProjectDocument, change: &Change) -> Result<()> {
             *find_mut(&mut doc.annotations, &annotation.id, |a| &a.id)? = annotation.clone()
         }
         Change::RemoveAnnotation { id } => remove(&mut doc.annotations, id, |a| &a.id)?,
-        Change::AddEdit { edit } => doc.edits.push(edit.clone()),
+        Change::AddEdit { edit } => {
+            doc.edits.push(edit.clone());
+            if matches!(edit.operation, EditOperation::Gain {gain_db} if gain_db == 0.0) {
+                // A zero-gain command is still subject to the full strict edit
+                // contract, but must not create content or history.
+                doc.validate()?;
+                doc.edits.pop();
+            }
+        }
+        Change::ResetMediaMasks { media_id } => {
+            if !doc.media.iter().any(|m| &m.id == media_id) {
+                return Err(AppError::invalid("Unknown media"));
+            }
+            doc.edits.retain(|e| {
+                &e.region.media_id != media_id || !matches!(e.operation, EditOperation::Mask)
+            });
+        }
         Change::UpdateEdit { edit } => {
             *find_mut(&mut doc.edits, &edit.id, |e| &e.id)? = edit.clone()
         }

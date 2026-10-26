@@ -1,4 +1,4 @@
-use super::{io, limit, zip_error, Limits, Manifest};
+use super::{io, limit, zip_error, ExportPathPlan, Limits, Manifest};
 use crate::{
     error::{AppError, ErrorCode, Result},
     media::identity::{check_cancel, fingerprint, SourceStamp},
@@ -13,8 +13,12 @@ use std::{
 };
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
-pub(crate) fn encode(doc: &ProjectDocument, bundle: bool, limits: Limits) -> Result<Vec<u8>> {
-    let manifest = Manifest::capture(doc, bundle)?;
+pub(crate) fn encode(
+    doc: &ProjectDocument,
+    plan: &ExportPathPlan,
+    limits: Limits,
+) -> Result<Vec<u8>> {
+    let manifest = Manifest::capture_with_plan(doc, plan)?;
     // Serialize through a bounded writer, not an unbounded allocation for huge notes.
     struct Bounded {
         bytes: Vec<u8>,
@@ -101,9 +105,23 @@ pub fn export_annotations(
     target: &Path,
     cancel: &AtomicBool,
     limits: Limits,
+    progress: impl FnMut(&str, u64),
+) -> Result<()> {
+    let plan = ExportPathPlan::build(doc, &super::root_organization(doc)?, false, true)?;
+    export_annotations_with_plan(doc, &plan, target, cancel, limits, progress)
+}
+pub fn export_annotations_with_plan(
+    doc: &ProjectDocument,
+    plan: &ExportPathPlan,
+    target: &Path,
+    cancel: &AtomicBool,
+    limits: Limits,
     mut progress: impl FnMut(&str, u64),
 ) -> Result<()> {
-    let bytes = encode(doc, false, limits)?;
+    if plan.bundle {
+        return Err(super::invalid("Expected annotation plan"));
+    }
+    let bytes = encode(doc, plan, limits)?;
     publish(target, cancel, |mut file| {
         file.write_all(&bytes).map_err(io)?;
         file.sync_all().map_err(io)?;
@@ -117,10 +135,26 @@ pub fn export_bundle(
     target: &Path,
     cancel: &AtomicBool,
     limits: Limits,
+    progress: impl FnMut(&str, u64),
+) -> Result<()> {
+    let plan = ExportPathPlan::build(doc, &super::root_organization(doc)?, true, true)?;
+    export_bundle_with_plan(doc, &plan, root, target, cancel, limits, progress)
+}
+#[allow(clippy::too_many_arguments)]
+pub fn export_bundle_with_plan(
+    doc: &ProjectDocument,
+    plan: &ExportPathPlan,
+    root: &Path,
+    target: &Path,
+    cancel: &AtomicBool,
+    limits: Limits,
     mut progress: impl FnMut(&str, u64),
 ) -> Result<()> {
-    let manifest = encode(doc, true, limits)?;
-    if doc.media.len() as u64 + 1 > limits.entries {
+    if !plan.bundle {
+        return Err(super::invalid("Expected bundle plan"));
+    }
+    let manifest = encode(doc, plan, limits)?;
+    if doc.media.len() as u64 + plan.directories.len() as u64 + 1 > limits.entries {
         return Err(limit());
     }
     let mut total = manifest.len() as u64;
@@ -135,6 +169,13 @@ pub fn export_bundle(
         zip.start_file("manifest.json", options)
             .map_err(zip_error)?;
         zip.write_all(&manifest).map_err(io)?;
+        for directory in &plan.directories {
+            zip.add_directory(
+                directory,
+                SimpleFileOptions::default().unix_permissions(0o755),
+            )
+            .map_err(zip_error)?;
+        }
         for media in &doc.media {
             check_cancel(cancel)?;
             let source = Path::new(&media.source_ref);
@@ -157,7 +198,7 @@ pub fn export_bundle(
             }
             stamp.verify(&source)?;
             zip.start_file(
-                super::manifest::media_path(&media.id),
+                &plan.media_paths[&media.id],
                 options.large_file(media.byte_length >= u32::MAX as u64),
             )
             .map_err(zip_error)?;

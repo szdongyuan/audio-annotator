@@ -5,7 +5,7 @@ import path from 'node:path';
 import { cueUI } from './task5-ui.mjs';
 import { start, Key, wait } from './harness.mjs';
 
-const output = path.resolve(process.env.ANNOTATOR_INTERACTION_OUTPUT ?? '.test-output/fidelity-task6/interaction');
+const output = path.resolve(process.env.ANNOTATOR_INTERACTION_OUTPUT ?? process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/fidelity-task6/interaction');
 await fs.mkdir(output, { recursive: true });
 const project = await fs.mkdtemp(path.join(output, 'project-'));
 const names = ['stereo24.wav', 'stereo.mp3', 'float32.wav'];

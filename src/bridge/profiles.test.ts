@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { normalizeNickname, parseProfile, parseProfileExpected, parseProfileResponse, parseProfileSnapshot, profileClient } from './profiles';
 import { parseSharedContext } from './collaboration';
-import fixture from '../../tests/fixtures/document-v2.json';
+import fixture from '../../tests/fixtures/document-v3.json';
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke, Channel: class {} }));
 export const a = '11111111-1111-4111-8111-111111111111';

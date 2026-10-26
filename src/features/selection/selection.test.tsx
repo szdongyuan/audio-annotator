@@ -3,7 +3,7 @@ import { drawRegion } from '../annotations/selection';
 import { gestureKind, exceedsThreshold } from './gestures';
 import { SelectionState } from './state';
 import { parseProjectDocument } from '../../bridge/types';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 it('requires more than four CSS pixels and gives pan priority over handles', () => {
   expect(exceedsThreshold({ x: 10, y: 10 }, { x: 14, y: 10 })).toBe(false);
   expect(exceedsThreshold({ x: 10, y: 10 }, { x: 14.1, y: 10 })).toBe(true);

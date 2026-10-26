@@ -45,18 +45,18 @@ export async function toolbarUI(h, projectId, report) {
   const beforeTemporary = await playbackStatus(h); await h.click('.selection-toolbar button:first-child'); const temporaryPlayed = await outputAfter(h, beforeTemporary.generation); await h.label('停止');
   check('temporary toolbar one-click playback consumes native frames', { temporaryPlayed });
   await h.label('stereo24.wav 设为播放源'); assert.equal(await source(), 'primary');
-  await h.click('.selection-toolbar [aria-label="标注"]'); await h.label('工具条测试');
+  await h.click('.selection-toolbar [aria-label="标注"]'); await h.label('工具条测试');await h.driver.actions().sendKeys(Key.ESCAPE).perform();
   await h.until(`document.querySelector('${compare} .annotation-rect.is-selected[data-annotation-id]')`);
   const created = (await documentState()).annotations.at(-1), id = created.id;
-  assert.equal(await source(), 'primary'); assert.equal(created.categoryId, (await documentState()).categories.find(c => c.name === '工具条测试').id);
+  assert.equal(await source(), 'primary'); assert.deepEqual(created.categoryIds,[ (await documentState()).categories.find(c => c.name === '工具条测试').id]);
   const categoryButton = await h.element('.selection-toolbar [aria-label="标注"]'); await categoryButton.sendKeys(Key.ENTER);
   await h.until(`document.querySelector('[role=menu]')`); await h.driver.actions().sendKeys(Key.HOME, Key.ENTER).perform();
-  await h.driver.wait(async () => (await documentState()).annotations.find(a => a.id === id)?.categoryId === null, 30000);
+  await h.driver.wait(async () => (await documentState()).annotations.find(a => a.id === id)?.categoryIds.length === 0, 30000);await h.driver.actions().sendKeys(Key.ESCAPE).perform();
   assert.equal((await documentState()).annotations.length, 1); assert.equal(await source(), 'primary');
   await h.click('.selection-toolbar [aria-label="标注"]'); await h.driver.actions().sendKeys(Key.ESCAPE).perform();
   assert.equal(await h.evaluate(`return document.activeElement?.getAttribute('aria-label')`), '标注');
   await h.driver.actions().keyDown(Key.SHIFT).sendKeys(Key.TAB).keyUp(Key.SHIFT).perform();
-  assert.equal(await h.evaluate(`return document.activeElement?.getAttribute('aria-label')`), '试听选区版本');
+  assert.equal(await h.evaluate(`return document.activeElement?.getAttribute('aria-label')`), '应用区域增益');await h.driver.actions().keyDown(Key.SHIFT).sendKeys(Key.TAB).keyUp(Key.SHIFT).perform();assert.equal(await h.evaluate(`return document.activeElement?.getAttribute('aria-label')`), '试听选区版本');
   await h.driver.actions().sendKeys(Key.TAB).perform();
   assert.ok(await h.evaluate(`return !!document.querySelector('.annotation-rect.is-selected')`));
   await heldDrag('.annotation-rect.is-selected', [.5, .6], [.64, .6]);
@@ -65,8 +65,8 @@ export async function toolbarUI(h, projectId, report) {
   await h.label('循环播放'); const beforePlay = await playbackStatus(h); await h.click('.selection-toolbar button:first-child');
   const played = await outputAfter(h, beforePlay.generation); assert.equal(played.mediaId, moved.region.mediaId); assert.ok(Math.abs(played.firstSeconds - moved.region.startSeconds) < 1/48000); assert.ok(Math.abs(played.endSeconds - moved.region.endSeconds) < 1/48000);
   await h.label('停止'); check('right comparison toolbar category creates once then updates stable ID, preserves playback source, supports keyboard and moved selection actual audio', { temporary, created, moved, played });
-  await h.driver.actions().sendKeys(Key.DELETE).perform(); await h.until(`document.querySelector('.mask-rect.is-selected')`); await bitmap();
-  const masked = (await documentState()).edits.at(-1); await bounded('active mask has the one current toolbar');
+  await h.driver.actions().sendKeys(Key.DELETE).perform(); await h.driver.wait(async()=>(await documentState()).edits.length===1,30000); await bitmap();
+  const masked = (await documentState()).edits.at(-1);assert.equal(await h.evaluate(`return ${visible}.length`),0,'successful DSP clears toolbar without persistent frame');await h.click(`[data-annotation-id="${id}"]`);await bounded('saved annotation toolbar remains independently reachable after DSP');
   const auditions = [];
   for (const [workspace, label] of [['暂存编辑', '试听选区原音'], ['原音', '试听选区（应用屏蔽）']]) {
     await h.select('声音版本', workspace); const pixels = await bitmap(), previous = await playbackStatus(h);
@@ -75,9 +75,9 @@ export async function toolbarUI(h, projectId, report) {
     assert.equal(await h.evaluate(`return document.querySelector('[aria-label="声音版本"]').selectedOptions[0].textContent`), workspace);
     assert.deepEqual(await bitmap(), pixels); auditions.push({ workspace, label, status }); await h.label('停止');
   }
-  await h.click('.selection-toolbar [aria-label="标注"]'); await h.label('工具条测试');
-  await h.driver.wait(async () => (await documentState()).annotations.length === 2, 30000);
-  assert.equal((await documentState()).edits.length, 1); check('mask toolbar creates independent annotation and both opposite auditions consume frames without changing either graph', { masked, auditions });
+  await h.click('.selection-toolbar [aria-label="标注"]'); await h.label('工具条测试');await h.driver.actions().sendKeys(Key.ESCAPE).perform();
+  await h.driver.wait(async () => (await documentState()).annotations.length === 1, 30000);
+  assert.equal((await documentState()).edits.length, 1); check('saved annotation label toggles one stable object independently of DSP and both opposite auditions preserve graphs', { masked, auditions });
   await h.label('循环播放'); await h.select('声音版本', '暂存编辑');
   await draw(plot, [.94, .015], [.98, .045]); const edge = await bounded('tiny top-right selection stays small with toolbar clamped inside'); assert.ok(edge.toolbar.width > edge.frame.width);
   await h.screenshot('toolbar-tiny-top-right');

@@ -111,6 +111,8 @@ fn local_logout_is_a_workspace_preserving_noop() {
                 .workspace_mut()
                 .unwrap()
                 .save_preferences(PlaybackPreferences {
+                    monitor_gain_db: 0.0,
+                    media_monitor_gain_db: Default::default(),
                     volume: 0.24,
                     ..Default::default()
                 })
@@ -502,7 +504,8 @@ fn save_as_unsaved_case(block_source_save: bool) {
                         high_hz: 100.0,
                     },
                     enabled: true,
-                    processing_version: 1,
+                    processing_version: 2,
+                    operation: annotator_core::model::EditOperation::Mask,
                 },
             },
         ] {

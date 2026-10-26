@@ -1,9 +1,10 @@
 import { normalizeError } from '../../bridge/client';
-import { parseSourceRules, sameSourceToken, type SourceCommands, type SourceConfig, type SourceCounts, type SourceEvent, type SourcePage, type SourceRules, type SourceToken } from '../../bridge/sourceImport';
+import { parseSourceOrganization, parseSourceRules, sameSourceToken, type SourceCommands, type SourceConfig, type SourceCounts, type SourceEvent, type SourcePage, type SourceRules, type SourceToken } from '../../bridge/sourceImport';
 import type { AppError } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import { MediaImportController, type ImportItem } from './imports';
-import { ImportRuleStore } from './importRules';
+import { ImportPlanStore } from './importPlans';
+import { splitPatterns } from './importRules';
 export type SourceState = 'idle' | 'choosing' | 'scanning' | 'preview' | 'importing' | 'paused' | 'finished' | 'cancelled' | 'failed';
 const emptyCounts = (): SourceCounts => ({ checked: 0, candidates: 0, skipped: 0, issues: 0, selectedBytes: 0 });
 /** One preview owns the media reservation until its native capability is released. */
@@ -20,7 +21,12 @@ export class SourceImportController {
   error: AppError | null = null;
   picking = false;
   loadingPage = false;
-  readonly rules = new ImportRuleStore();
+  readonly plans = new ImportPlanStore();
+  presetId = '';
+  returnFocus:HTMLElement|null=null;
+  form={include:'',exclude:'',strip:''};
+  private syncForm(){this.form={include:this.config.rules.include.join('\n'),exclude:this.config.rules.exclude.join('\n'),strip:this.config.organization.stripComponents.join('; ')};}
+  configureText(field:'include'|'exclude'|'strip',text:string){const pending=this.configurePlan(field==='strip'?{organization:{...this.config.organization,stripComponents:splitPatterns(text)}}:{rules:{...this.config.rules,[field]:splitPatterns(text)}});this.form={...this.form,[field]:text};this.notify();return pending;}
   private token: SourceToken | null = null;
   private acknowledged = false;
   private generation = 0;
@@ -38,7 +44,8 @@ export class SourceImportController {
   private listeners = new Set<() => void>();
   private unsubscribers: (() => void)[];
   constructor(private owner: ActiveProject, private imports: MediaImportController, private api: SourceCommands) {
-    this.config = { kind: 'folder', paths: [], rules: structuredClone(this.rules.last) };
+    this.config = { kind: 'folder', paths: [], rules: structuredClone(this.plans.last.rules), organization: {...structuredClone(this.plans.last.organization),targetFolderId:null} };
+    this.syncForm();
     this.unsubscribers = [imports.subscribe(() => {
         this.unreserve();
         this.notify();
@@ -103,11 +110,14 @@ export class SourceImportController {
       this.imports.unreserve(this);
     }
   }
-  begin(kind: SourceConfig['kind']) {
+  begin(kind: SourceConfig['kind'], targetFolderId:string|null=null,returnFocus?:HTMLElement|null) {
     if (this.disposed || this.busy || this.failures.length || this.pendingAcknowledgements.length || this.owner.collaboration?.canImportMedia === false || !this.reserve())
       return false;
+    this.returnFocus=returnFocus??(document.activeElement instanceof HTMLElement?document.activeElement:null);
     this.generation++;
-    this.config = { kind, paths: [], rules: structuredClone(this.rules.last) };
+    this.config = { kind, paths: [], rules: structuredClone(this.plans.last.rules), organization: {...structuredClone(this.plans.last.organization),targetFolderId} };
+    this.presetId='';
+    this.syncForm();
     this.state = 'choosing';
     this.open = true;
     this.counts = emptyCounts();
@@ -139,11 +149,14 @@ export class SourceImportController {
       this.notify();
     }
   }
-  async configure(rules: SourceRules) {
-    if (['importing', 'paused'].includes(this.state))
-      return;
-    this.config = { ...this.config, rules: structuredClone(rules) };
-    await this.invalidate();
+  configure(rules:SourceRules){return this.configurePlan({rules});}
+  async applyPreset(id:string){const preset=this.plans.presets.find(p=>p.id===id);if(!preset)return;await this.configurePlan({rules:preset.rules,organization:{...preset.organization,targetFolderId:this.config.organization.targetFolderId}});this.presetId=id;this.notify();}
+  async configurePlan(patch:Partial<Pick<SourceConfig,'rules'|'organization'>>){
+    if(this.disposed||['importing','paused'].includes(this.state))return;
+    const next={...this.config,...structuredClone(patch)};
+    // Generic discovery cannot carry dormant manifest tokens. Change both fields together.
+    if(patch.rules?.mode==='generic'&&this.config.rules.mode!=='generic'&&!patch.organization)next.organization={...next.organization,template:'{source}/{relativeDir}'};
+    this.config=next;this.presetId='';this.syncForm();await this.invalidate();
   }
   private async invalidate() {
     this.generation++;
@@ -196,6 +209,7 @@ export class SourceImportController {
     let g = this.generation;
     try {
       parseSourceRules(this.config.rules);
+      parseSourceOrganization(this.config.organization,this.config.rules.mode);
       if (!this.config.paths.length)
         throw new Error('请选择音频来源');
       if (!this.reserve())
@@ -212,7 +226,7 @@ export class SourceImportController {
       this.items = [];
       this.counts = emptyCounts();
       this.state = 'scanning';
-      this.rules.remember(this.config.rules);
+      this.plans.remember(this.config);
       this.notify();
       const token = await this.api.start(this.owner.store.snapshot.document.projectId, structuredClone(this.config), e => this.receive(g, e));
       if (!this.valid(g) || !['scanning', 'preview'].includes(this.state)) {
@@ -328,7 +342,16 @@ export class SourceImportController {
           this.state = 'paused';
           break;
         }
-        const page = await this.api.page(token, this.offset, 256);
+        // Keep native/visible pages bounded while retaining the existing 256-item batch lifecycle.
+        const candidates: SourcePage['candidates'] = [];
+        const size = Math.min(256, this.counts.candidates - this.offset);
+        while (candidates.length < size) {
+          const page = await this.api.page(token, this.offset + candidates.length, Math.min(50, size - candidates.length));
+          if (!this.valid(g) || this.state !== 'importing') return;
+          if (!page.candidates.length) throw new Error('扫描预览已失效，请重新扫描');
+          candidates.push(...page.candidates);
+        }
+        const page = { candidates };
         if (!this.valid(g) || this.state !== 'importing')
           return;
         // Other edits and release acknowledgements may settle while paging.
@@ -431,6 +454,7 @@ export class SourceImportController {
     }
   }
   show() {
+    this.returnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
     this.open = true;
     this.notify();
   }

@@ -142,6 +142,7 @@ impl LocalProject {
                     | Change::UpdateEdit { .. }
                     | Change::RemoveEdit { .. }
                     | Change::SetEditEnabled { .. }
+                    | Change::ResetMediaMasks { .. }
                     | Change::UpdateAnalysis { .. }
                     | Change::UpdatePlaybackMix { .. }
                     | Change::UpdateViewState { .. }

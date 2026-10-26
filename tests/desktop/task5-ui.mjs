@@ -18,7 +18,7 @@ export async function processedUI(h,projectId,report) {
  const view=doc.viewState.media[m.id]??{startSeconds:0,endSeconds:2,lowHz:0,highHz:24000,frequencyMix:.65,spectrumKind:'stft'};
  const c=coordinates(view,m.sampleRate/2,1,1),plot='.file-pane[data-pane="primary"] .annotation-overlay';
  await h.drag(plot,[.2,c.hzToY(2100)],[.8,c.hzToY(900)]);
- await h.driver.actions().sendKeys(Key.DELETE).perform();await h.until(`document.querySelector('.mask-rect.is-selected')`);
+ await h.driver.actions().sendKeys(Key.DELETE).perform();await h.driver.wait(async()=>(await h.snapshot(projectId)).document.edits.length===1,30000);assert.equal(await h.evaluate("return document.querySelector('.mask-rect')"),null);
  let accepted=(await h.snapshot(projectId)).document,edit=accepted.edits[0];assert.ok(edit.region.lowHz<1500&&edit.region.highHz>1500);
  const processed=await bitmap(h);assert.notEqual(processed[0].hash,original[0].hash);assert.deepEqual(processed.slice(1),original.slice(1));
  const tiles=await h.evaluate('return window.__task5tiles');const t=tiles.find(t=>t.request.mediaId===m.id&&t.request.channelIndex===0&&t.request.analysisSource==='processed');assert.ok(t);
@@ -29,20 +29,19 @@ export async function processedUI(h,projectId,report) {
  await h.label('重做 · Ctrl Y');assert.deepEqual(await bitmap(h),processed);
  await h.select('声音版本','原音');assert.deepEqual(await bitmap(h),original);
  await h.select('声音版本','暂存编辑');assert.deepEqual(await bitmap(h),processed);
- await h.clickText('屏蔽');await h.label('启用屏蔽 1');assert.deepEqual(await bitmap(h),original);
- await h.clickText('屏蔽');await h.label('启用屏蔽 1');assert.deepEqual(await bitmap(h),processed);
- await h.click('.mask-rect');await h.drag('.mask-rect.is-selected',[.5,.5],[.65,.5]);const moved=await bitmap(h);assert.notEqual(moved[0].hash,processed[0].hash);
- await h.label('撤销 · Ctrl Z');assert.deepEqual(await bitmap(h),processed);
- await h.label('重做 · Ctrl Y');assert.deepEqual(await bitmap(h),moved);
+ await h.clickText('处理');await h.label('启用屏蔽 1');assert.deepEqual(await bitmap(h),original);
+ await h.clickText('处理');await h.label('启用屏蔽 1');assert.deepEqual(await bitmap(h),processed);
+ await h.drag(plot,[.5,.5],[.65,.5]);const moved=await bitmap(h);assert.deepEqual(moved,processed,'DSP has no draggable geometry or pixel mutation from blank gesture');
+ assert.deepEqual((await h.snapshot(projectId)).document.edits[0],edit);await h.driver.actions().sendKeys(Key.ESCAPE).perform();
  await h.label('删除屏蔽 1');assert.deepEqual(await bitmap(h),original);
  await h.label('撤销 · Ctrl Z');assert.deepEqual(await bitmap(h),moved);
- report.checks.push({name:'real UI undo/redo, raw switch, disable/enable, move and delete recompute matching pixels',moved});
+ report.checks.push({name:'real UI undo/redo, raw switch, disable/enable, no DSP hit/move and list delete recompute matching pixels',moved});
  // Explicit opposite auditions preserve both file graphs, while consuming native device frames.
- await h.context('.mask-rect');await h.label('播放选区');await outputAfter(h,0);await h.label('停止');
+ await h.drag(plot,[.2,c.hzToY(2100)],[.8,c.hzToY(900)]);await h.context(plot,[.5,c.hzToY(1500)]);await h.label('播放选区');await outputAfter(h,0);await h.label('停止');
  await h.label('循环播放');const auditions=[];
  for(const [workspace,label] of [['暂存编辑','试听选区原音'],['原音','试听选区（应用屏蔽）']]) {
   await h.select('声音版本',workspace);const before=await bitmap(h),count=await h.evaluate('return window.__task5tiles.length'),prior=await playbackStatus(h);
-  await h.context('.mask-rect');await h.label(label);const status=await outputAfter(h,prior.generation);
+  await h.context(plot,[.5,c.hzToY(1500)]);await h.label(label);const status=await outputAfter(h,prior.generation);
   assert.equal(await h.evaluate(`return document.querySelector('[aria-label="声音版本"]').selectedOptions[0].textContent`),workspace);assert.deepEqual(await bitmap(h),before);assert.equal(await h.evaluate('return window.__task5tiles.length'),count);
   await h.label('暂停 · 空格');const paused=await playbackStatus(h);await h.label('播放 · 空格');const resumed=await outputAfter(h,paused.generation);assert.equal(resumed.firstSeconds,status.firstSeconds);assert.equal(resumed.endSeconds,status.endSeconds);
   auditions.push({workspace,label,status,paused,resumed});await h.label('停止');
@@ -58,7 +57,7 @@ export async function processedUI(h,projectId,report) {
  await h.driver.wait(async()=>{reopenedPixels=await bitmap(h);report.reopenPixels.samples.push({elapsedMs:performance.now()-reopenStarted,bitmaps:reopenedPixels});return JSON.stringify(reopenedPixels)===JSON.stringify(moved);},10000,'reopened canvases must commit all four exact saved bitmaps',50);
  assert.deepEqual(reopenedPixels,moved);
  report.checks.push({name:'opposite explicit auditions preserve both graphs/source; pause/resume actual frames; saved mask reconstructs after UI reopen',auditions});
- await h.context('.mask-rect');await h.label('删除屏蔽');await h.until(`!document.querySelector('.mask-rect')`);await bitmap(h);
+ await h.clickText('处理');await h.label('删除屏蔽 1');await h.driver.wait(async()=>(await h.snapshot(projectId)).document.edits.length===0,30000);assert.equal(await h.evaluate("return document.querySelector('.mask-rect')"),null);await bitmap(h);
 }
 
 export async function cueUI(h,projectId,report) {

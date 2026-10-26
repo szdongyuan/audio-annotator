@@ -62,7 +62,7 @@ try {
   assert.equal(opened.collaboration.identityMode, 'profile');
   assert.deepEqual(await fs.readFile(path.join(source, 'project.json')), sourceBytes);
   const defaultManifest = JSON.parse(await fs.readFile(path.join(shared, 'collaboration.json')));
-  assert.equal(defaultManifest.formatVersion,3);
+  assert.equal(defaultManifest.formatVersion,5);
   const publicManifest={...defaultManifest,media:snapshot.document.media};
   const profileExpected=async()=>{const s=await invoke('profile_list');return {storeRevision:s.storeRevision,runtimeNonce:s.runtimeNonce,project:s.project};};
   const createProfile=async displayName=>(await invoke('profile_create',{expected:await profileExpected(),operationId:crypto.randomUUID(),displayName})).profile;
@@ -71,13 +71,13 @@ try {
   await save();await settle();
   assert.equal(crypto.createHash('sha256').update(await fs.readFile(path.join(shared,publicManifest.media[0].sourceRef))).digest('hex'),media.sha256);
   assert.ok((await h.evaluate('return window.copyEvents')).some(e => e.phase === 'copyMedia'));
-  report.checks.push('explicit ordinary source → default copied media/progress and source immutability; format3 author/catalog contract preserves UUID ownership');
+  report.checks.push('explicit ordinary source → default copied media/progress and source immutability; format5 author/catalog contract preserves UUID ownership');
   await assert.rejects(invoke('apply_change', { ...expected(), change: { type: 'removeMedia', mediaId: media.id } }));
   const failedImport=await invoke('import_media',{...expected(),paths:[path.join(output,'owned-missing.wav')],onEvent:await channel('failedImportEvents')});
   await h.until('window.failedImportEvents.some(e=>e.type==="finished")');
   const failedEvents=await h.evaluate('return window.failedImportEvents');assert.ok(failedEvents.every(e=>e.taskId===failedImport));assert.equal(failedEvents.filter(e=>e.type==='failed').length,1);assert.ok(failedEvents.find(e=>e.type==='failed').error);assert.equal(failedEvents.some(e=>e.type==='ready'),false);assert.equal(failedEvents.find(e=>e.type==='finished').cancelled,false);
   assert.deepEqual((await invoke('get_project_snapshot',expected())).document.media,snapshot.document.media);
-  report.checks.push('format3 admits media import; missing owned source emits failed/finished with no prepared media or document mutation; subsequent profile commands verify preparation slot release');
+  report.checks.push('format5 admits media import; missing owned source emits failed/finished with no prepared media or document mutation; subsequent profile commands verify preparation slot release');
   const owner = expected();
   const temporary=await createProfile('Temporary');await selectProfile(temporary.authorId);
   assert.equal(opened.collaboration.actor.authorId,temporary.authorId);assert.equal(snapshot.document.categories.length,0);
@@ -103,7 +103,7 @@ try {
   await invoke('retire_analysis_view', { projectId: snapshot.document.projectId, runtimeNonce: nonce, viewId });
   report.checks.push('profile switching, invalid UUID preservation, create Bob with isolated categories, independent author layers, stale-owner rejection, catalog guard, credential-free status');
   report.checks.push('delayed previous identity playback configure/control and analysis lease registration reject; current playback status unchanged');
-  await invoke('collaboration_preferences', { expected: expected(), preferences: { volume: 0.3, deviceId: null, loopEnabled: true, source: 'original' } });
+  await invoke('collaboration_preferences', { expected: expected(), preferences: { monitorGainDb:0,mediaMonitorGainDb:{},volume: 0.3, deviceId: null, loopEnabled: true, source: 'original' } });
   const manifest = path.join(shared, 'collaboration.json'), hidden = path.join(shared, 'owned-offline.json');
   await fs.rename(manifest, hidden);
   try {
@@ -145,9 +145,10 @@ try {
   snapshot = await invoke('apply_change', { ...expected(), change: { type: 'relinkMedia', media: relinked } });
   await invoke('release_media_import',{taskId:relinkTask,mediaId:relinked.id});
   const privateEdit = crypto.randomUUID();
-  snapshot = await invoke('apply_change', { ...expected(), change: { type: 'addEdit', edit: { id: privateEdit, region: { mediaId: media.id, channelIndex: 0, startSeconds: 0, endSeconds: media.frameCount / media.sampleRate / 2, lowHz: 10, highHz: 100 }, enabled: true, processingVersion: 1 } } });
+  snapshot = await invoke('apply_change', { ...expected(), change: { type: 'addEdit', edit: { id: privateEdit, region: { mediaId: media.id, channelIndex: 0, startSeconds: 0, endSeconds: media.frameCount / media.sampleRate / 2, lowHz: 10, highHz: 100 }, enabled: true, operation: { type: 'mask' }, processingVersion: 2 } } });
   await save(); await settle();
   const exchange = async (command, args) => {
+    if(command==='export_annotations'||command==='export_bundle'){const preview=await invoke('export_path_preview',{expected:args.expected,bundle:command==='export_bundle',preserveFolders:true});args={...args,previewToken:preview.token};}
     await invoke(command, { ...args, onEvent: await channel('exchangeEvents') });
     await h.until('window.exchangeEvents.some(e=>e.type!=="progress")');
     const event = await h.evaluate('return window.exchangeEvents.find(e=>e.type!=="progress")');
@@ -187,7 +188,7 @@ try {
   await invoke('close_project', { ...expected(), discard: false });
   report.checks.push('owned private-primary corruption returns recovery without active snapshot; refresh is gated, full-envelope recovery returns an atomically bound new nonce and preserved UUID-owned content');
   const currentBytes=await fs.readFile(manifest);
-  for(const formatVersion of [1,2]){await fs.writeFile(manifest,JSON.stringify({...defaultManifest,formatVersion}));const before=await fs.readFile(manifest);await assert.rejects(invoke('open_project',{path:manifest}),/Unsupported|unsupported/);assert.deepEqual(await fs.readFile(manifest),before);}
+  for(const formatVersion of [1,2,3,4]){await fs.writeFile(manifest,JSON.stringify({...defaultManifest,formatVersion}));const before=await fs.readFile(manifest);await assert.rejects(invoke('open_project',{path:manifest}),/Unsupported|unsupported/);assert.deepEqual(await fs.readFile(manifest),before);}
   await fs.writeFile(manifest,currentBytes);
   report.checks.push('old collaboration formats 1/2 reject without rewriting; ordinary source/exchange remain format2');
   const authorRecords = await fs.readdir(path.join(shared, 'authors'));

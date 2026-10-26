@@ -16,6 +16,7 @@ use std::{
 pub struct ImportedProject {
     pub document: ProjectDocument,
     pub path: PathBuf,
+    pub organization: crate::collaboration::organization::Organization,
 }
 /// Cleanup is scoped to a freshly created canonical directory bearing our random ownership token.
 struct Staging {
@@ -99,20 +100,35 @@ pub fn import_exchange(
         let bytes = read_manifest(zip.by_name("manifest.json").map_err(zip_error)?, limits)?;
         let manifest = Manifest::parse(&bytes, true)?;
         let document = manifest.document(false)?;
-        let allowed: HashSet<_> = manifest
-            .media
-            .iter()
-            .map(|m| super::manifest::media_path(&m.id))
+        let plan = super::ExportPathPlan::build(
+            &document,
+            &manifest.organization,
+            true,
+            manifest.preserve_folders,
+        )?;
+        let allowed: HashSet<_> = plan
+            .media_paths
+            .values()
+            .cloned()
+            .chain(plan.directories.iter().cloned())
             .chain(std::iter::once("manifest.json".to_owned()))
             .collect();
         if entries != allowed.len() || zip.file_names().any(|n| !allowed.contains(n)) {
             return Err(invalid("包内文件缺失或包含未声明条目"));
         }
+        for name in &plan.directories {
+            let entry = zip.by_name(name).map_err(zip_error)?;
+            if !entry.is_dir() || entry.is_symlink() || entry.size() != 0 {
+                return Err(invalid("目录条目类型或长度不符"));
+            }
+        }
         let mut total = bytes.len() as u64;
         if total > limits.total_bytes {
             return Err(limit());
         }
-        fs::create_dir(stage.path.join("media")).map_err(io)?;
+        for directory in &plan.directories {
+            fs::create_dir_all(stage.path.join(directory)).map_err(io)?;
+        }
         for media in &document.media {
             check_cancel(cancel)?;
             if media.byte_length > limits.media_bytes {
@@ -179,6 +195,9 @@ pub fn import_exchange(
         Manifest::parse(&read_manifest(file, limits)?, false)?
     };
     let document = manifest.document(true)?;
+    let mut organization = manifest.organization;
+    organization.project_id = document.project_id.clone();
+    organization.validate()?;
     let bytes = serde_json::to_vec_pretty(&document).map_err(|_| invalid("项目编码失败"))?;
     if bytes.len() > 32 * 1024 * 1024 {
         return Err(limit());
@@ -203,7 +222,11 @@ pub fn import_exchange(
     fs::rename(&stage.path, &path).map_err(|e| context(e, "发布项目目录"))?;
     // Only an ownership marker is removed after publication; media and project are now durable.
     let _ = fs::remove_file(path.join(stage.marker()));
-    Ok(ImportedProject { document, path })
+    Ok(ImportedProject {
+        document,
+        path,
+        organization,
+    })
 }
 fn context(error: std::io::Error, phase: &str) -> AppError {
     let mut error = io(error);

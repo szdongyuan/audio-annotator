@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { parseCollaborationStatus, parseSharedContext, parseTransition } from './collaboration';
 import { parseProjectDocument, type ProjectDocument } from './types';
-import fixture from '../../tests/fixtures/document-v2.json';
+import fixture from '../../tests/fixtures/document-v3.json';
 const id='11111111-1111-4111-8111-111111111111';
 const actor={authorId:id,displayName:'Alice',createdAt:'2026-10-23T00:00:00Z'};
-const preferences={volume:.75,deviceId:null,loopEnabled:false,source:'processed'};
+const preferences={monitorGainDb:0,mediaMonitorGainDb:{},volume:.75,deviceId:null,loopEnabled:false,source:'processed'};
 export const statusFixture=()=>({formatVersion:1,runtimeNonce:id,projectId:id,shared:true,projectFlavor:'default' as const,identityMode:'profile' as const,canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false,actor,preferences,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:null,error:null,snapshot:{projectId:id,authors:[]}});
 function documentStatus(document:ProjectDocument){
- const payload={categories:document.categories,annotations:document.annotations,mediaLabels:document.media.map(m=>({mediaId:m.id,note:m.note,channelNotes:m.channelNotes,categoryId:m.categoryId,channelCategoryIds:m.channelCategoryIds}))};
- const layer={kind:'audio-annotator-author-layer',formatVersion:1,projectId:document.projectId,authorId:id,revision:1,parent:null,hash:'a'.repeat(64),payload};
+ const payload={categories:document.categories,annotations:document.annotations,mediaLabels:document.media.map(m=>({mediaId:m.id,note:m.note,channelNotes:m.channelNotes,categoryIds:m.categoryIds,channelCategoryIds:m.channelCategoryIds}))};
+ const layer={kind:'audio-annotator-author-layer',formatVersion:2,projectId:document.projectId,authorId:id,revision:1,parent:null,hash:'a'.repeat(64),payload};
  return {...statusFixture(),projectId:document.projectId,snapshot:{projectId:document.projectId,authors:[{identity:actor,layer,error:null}]}};
 }
 describe('collaboration boundary',()=>{
@@ -49,7 +49,7 @@ describe('collaboration boundary',()=>{
   for(const patch of [{formatVersion:2},{password:'secret'},{actor:{...actor,passwordHash:'hash'}},{preferences:{...preferences,volume:2}},{snapshot:{projectId:id,authors:Array(129).fill({identity:actor,layer:null,error:null})}}])expect(()=>parseCollaborationStatus({...statusFixture(),...patch})).toThrow();
  });
  it('rejects invalid geometry and private fields nested in foreign layers',()=>{
-  const layer={kind:'audio-annotator-author-layer',formatVersion:1,projectId:id,authorId:id,revision:1,parent:null,hash:'a'.repeat(64),payload:{categories:[],annotations:[{id:'22222222-2222-4222-8222-222222222222',region:{mediaId:id,channelIndex:0,startSeconds:2,endSeconds:1,lowHz:0,highHz:100},categoryId:null,note:'',createdAt:actor.createdAt,updatedAt:actor.createdAt}],mediaLabels:[]}};
+  const layer={kind:'audio-annotator-author-layer',formatVersion:2,projectId:id,authorId:id,revision:1,parent:null,hash:'a'.repeat(64),payload:{categories:[],annotations:[{id:'22222222-2222-4222-8222-222222222222',region:{mediaId:id,channelIndex:0,startSeconds:2,endSeconds:1,lowHz:0,highHz:100},categoryIds:[],note:'',createdAt:actor.createdAt,updatedAt:actor.createdAt}],mediaLabels:[]}};
   expect(()=>parseCollaborationStatus({...statusFixture(),snapshot:{projectId:id,authors:[{identity:actor,layer,error:null}]}})).toThrow();
   layer.payload.annotations=[];
   expect(()=>parseCollaborationStatus({...statusFixture(),snapshot:{projectId:id,authors:[{identity:actor,layer:{...layer,payload:{...layer.payload,edits:[]}},error:null}]}})).toThrow();
@@ -59,4 +59,46 @@ describe('collaboration boundary',()=>{
   const cyclic:Record<string,unknown>={};cyclic.self=cyclic;
   expect(()=>parseCollaborationStatus({...statusFixture(),error:{code:'InvalidInput',message:'failure',retryable:false,details:cyclic}})).toThrow();
  });
+});
+
+it('keeps multilabel references inside each author and rejects retired author envelopes',()=>{
+ const document=parseProjectDocument(structuredClone(fixture));
+ const second={...document.categories[0],id:'00000000-0000-4000-8000-000000000077',name:'第二标签'};
+ document.categories.push(second);
+ const ids=[second.id,document.categories[0].id];
+ document.media[0].categoryIds=ids;document.media[0].channelCategoryIds[0]=ids;document.annotations[0].categoryIds=ids;
+ const status=documentStatus(document);
+ expect(parseCollaborationStatus(status,document).snapshot?.authors[0].layer?.payload.annotations[0].categoryIds).toEqual(ids);
+ for(const mutate of [
+  (s:typeof status)=>{s.snapshot.authors[0].layer.formatVersion=1;},
+  (s:typeof status)=>{s.snapshot.authors[0].layer.payload.annotations[0].categoryIds=[document.projectId];},
+  (s:typeof status)=>{s.snapshot.authors[0].layer.payload.mediaLabels[0].categoryIds=[document.projectId];},
+  (s:typeof status)=>{s.snapshot.authors[0].layer.payload.mediaLabels[0].channelCategoryIds[0]=[document.projectId];},
+ ]) {const bad=structuredClone(status);mutate(bad);expect(()=>parseCollaborationStatus(bad,document)).toThrow();}
+ const author=structuredClone(status.snapshot.authors[0]),foreign='00000000-0000-4000-8000-000000000078';
+ author.identity.authorId=foreign;author.layer.authorId=foreign;author.layer.payload.categories=[];
+ status.snapshot.authors.push(author);
+ expect(()=>parseCollaborationStatus(status,document)).toThrow();
+});
+
+it('validates private monitor defaults and explicit nullable absolute overrides',async()=>{
+ const {parsePreferences}=await import('./collaboration');
+ const valid={...preferences,monitorGainDb:6,mediaMonitorGainDb:{[id]:6}};
+ expect(parsePreferences(valid)).toEqual(valid);
+ expect(parsePreferences({...valid,mediaMonitorGainDb:{[id]:null}})).toMatchObject({mediaMonitorGainDb:{[id]:null}});
+ for(const patch of [{monitorGainDb:NaN},{monitorGainDb:24.1},{monitorGainDb:-60.1},{mediaMonitorGainDb:{[id]:Infinity}},{mediaMonitorGainDb:{bad:0}},{mediaMonitorGainDb:{[id]:{gain:0}}}])expect(()=>parsePreferences({...valid,...patch})).toThrow();
+});
+
+it('rejects private monitor overrides for media outside the current document',()=>{
+ const document=parseProjectDocument(structuredClone(fixture));
+ const status={...statusFixture(),projectId:document.projectId,snapshot:{projectId:document.projectId,authors:[]},preferences:{...preferences,monitorGainDb:0,mediaMonitorGainDb:{[document.media[0].id]:3}}};
+ expect(()=>parseCollaborationStatus(status,document)).not.toThrow();
+ status.preferences.mediaMonitorGainDb={[id]:3};
+ expect(()=>parseCollaborationStatus(status,document)).toThrow();
+});
+
+it('accepts bounded private monitor maps beyond the former small context budget',()=>{
+ const mediaMonitorGainDb=Object.fromEntries(Array.from({length:6000},(_,i)=>[`${i.toString(16).padStart(8,'0')}-0000-4000-8000-000000000001`,-59.99999999999999]));
+ expect(()=>parseSharedContext({runtimeNonce:id,projectFlavor:'default',identityMode:'profile',canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false,actor,preferences:{...preferences,monitorGainDb:0,mediaMonitorGainDb}})).not.toThrow();
+ expect(()=>parseCollaborationStatus({...statusFixture(),preferences:{...preferences,monitorGainDb:0,mediaMonitorGainDb}})).not.toThrow();
 });

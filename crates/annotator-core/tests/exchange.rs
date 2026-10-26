@@ -20,7 +20,7 @@ fn root() -> PathBuf {
     p
 }
 fn document() -> ProjectDocument {
-    ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json")).unwrap()
+    ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v3.json")).unwrap()
 }
 #[test]
 fn json_preserves_all_semantics_without_source_paths_and_imports_missing_media() {
@@ -69,7 +69,7 @@ fn rejects_unknown_versions_fields_dangling_references_and_bounds() {
     for (pointer, value, expected) in [
         (
             "/formatVersion",
-            serde_json::json!(3),
+            serde_json::json!(5),
             ErrorCode::UnsupportedVersion,
         ),
         (
@@ -78,8 +78,8 @@ fn rejects_unknown_versions_fields_dangling_references_and_bounds() {
             ErrorCode::InvalidInput,
         ),
         (
-            "/annotations/0/categoryId",
-            serde_json::json!("00000000-0000-4000-8000-000000000099"),
+            "/annotations/0/categoryIds",
+            serde_json::json!(["00000000-0000-4000-8000-000000000099"]),
             ErrorCode::InvalidInput,
         ),
     ] {
@@ -153,6 +153,11 @@ fn zip_roundtrip_matches_every_semantic_field_and_original_bytes() {
 fn archive(p: &Path, entries: &[(&str, &[u8])]) {
     let mut z = zip::ZipWriter::new(fs::File::create(p).unwrap());
     for (name, data) in entries {
+        if name.ends_with('/') {
+            z.add_directory(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            continue;
+        }
         z.start_file(
             *name,
             zip::write::SimpleFileOptions::default()
@@ -333,7 +338,8 @@ fn zip_rejects_fingerprint_metadata_unknown_fields_and_unlisted_files() {
     let d = real_document(&r);
     let source = fs::read(&d.media[0].source_ref).unwrap();
     let p = r.join("invalid.zip");
-    let media_path = format!("media/{}", d.media[0].id);
+    let captured = annotator_core::exchange::Manifest::capture(&d, true).unwrap();
+    let media_path = captured.media[0].media_path.clone().unwrap();
     let cancel = AtomicBool::new(false);
     let value =
         serde_json::to_value(annotator_core::exchange::Manifest::capture(&d, true).unwrap())
@@ -348,6 +354,7 @@ fn zip_rejects_fingerprint_metadata_unknown_fields_and_unlisted_files() {
         }
         let manifest = serde_json::to_vec(&bad).unwrap();
         let mut entries = vec![
+            ("audio/", b"".as_slice()),
             ("manifest.json", manifest.as_slice()),
             (media_path.as_str(), source.as_slice()),
         ];
@@ -482,13 +489,13 @@ fn zip64_index_is_validated_without_large_test_files() {
 }
 
 fn classify(d: &mut ProjectDocument) {
-    d.media[0].category_id = Some(d.categories[0].id.clone());
-    d.media[0].channel_category_ids[1] = Some(d.categories[0].id.clone());
+    d.media[0].category_ids = vec![d.categories[0].id.clone()];
+    d.media[0].channel_category_ids[1] = vec![d.categories[0].id.clone()];
     d.view_state.compare_layout = annotator_core::model::CompareLayout::Vertical;
     d.view_state.compare_split = 0.7;
 }
 #[test]
-fn portable_v2_rejects_missing_nullable_fields_unknown_fields_and_local_paths() {
+fn portable_v4_rejects_missing_nullable_fields_unknown_fields_and_local_paths() {
     use annotator_core::exchange::Manifest;
     let current = serde_json::to_value(Manifest::capture(&document(), false).unwrap()).unwrap();
     {
@@ -496,7 +503,7 @@ fn portable_v2_rejects_missing_nullable_fields_unknown_fields_and_local_paths() 
         for (pointer, key) in [
             ("/media/0", "channelLayout"),
             ("/media/0", "mediaPath"),
-            ("/annotations/0", "categoryId"),
+            ("/annotations/0", "categoryIds"),
             ("/viewState", "activeMediaId"),
         ] {
             let mut bad = original.clone();
@@ -515,7 +522,7 @@ fn portable_v2_rejects_missing_nullable_fields_unknown_fields_and_local_paths() 
     }
     let original = serde_json::to_value(Manifest::capture(&document(), false).unwrap()).unwrap();
     for (pointer, key) in [
-        ("/media/0", "categoryId"),
+        ("/media/0", "categoryIds"),
         ("/media/0", "channelCategoryIds"),
         ("/viewState", "compareLayout"),
         ("/viewState", "compareSplit"),
@@ -541,7 +548,7 @@ fn portable_v1_and_future_versions_are_explicitly_unsupported() {
     }
     let r = root();
     let cancel = AtomicBool::new(false);
-    for version in [1, 3] {
+    for version in [1, 2, 3, 5] {
         value["formatVersion"] = serde_json::json!(version);
         let bytes = serde_json::to_vec(&value).unwrap();
         assert_eq!(
@@ -571,5 +578,392 @@ fn portable_v1_and_future_versions_are_explicitly_unsupported() {
             assert_eq!(fs::read_dir(&r).unwrap().count(), 0);
         }
     }
+    fs::remove_dir_all(r).unwrap();
+}
+#[test]
+fn directory_path_plan_is_windows_safe_deterministic_and_preserves_extensions() {
+    use annotator_core::{
+        collaboration::organization::{Folder, MediaMembership, Organization},
+        exchange::ExportPathPlan,
+    };
+    let d = document();
+    let mut org = Organization::empty(d.project_id.clone());
+    let folder_id = "00000000-0000-4000-8000-000000000001".to_owned();
+    org.folders.push(Folder {
+        id: folder_id.clone(),
+        parent_id: None,
+        name: "CON.wav".into(),
+    });
+    org.folders.push(Folder {
+        id: "00000000-0000-4000-8000-000000000002".into(),
+        parent_id: None,
+        name: "空目录".into(),
+    });
+    org.media.push(MediaMembership {
+        media_id: d.media[0].id.clone(),
+        folder_id: None,
+        original_filename: "con.wav".into(),
+    });
+    let plan = ExportPathPlan::build(&d, &org, true, true).unwrap();
+    assert!(plan.directories.contains(&"audio/空目录/".to_owned()));
+    let path = &plan.media_paths[&d.media[0].id];
+    assert!(path.starts_with("audio/_con-"), "{path}");
+    assert!(path.ends_with(".wav"));
+    assert!(path.contains(&d.media[0].id));
+    let mut reversed = org.clone();
+    reversed.folders.reverse();
+    let reordered = ExportPathPlan::build(&d, &reversed, true, true).unwrap();
+    assert_eq!(plan.media_paths, reordered.media_paths);
+    assert_eq!(plan.directories, reordered.directories);
+    org.media[0].original_filename = format!("{}.flac", "音".repeat(150));
+    let long = ExportPathPlan::build(&d, &org, true, true).unwrap();
+    let basename = long.media_paths[&d.media[0].id].rsplit('/').next().unwrap();
+    assert!(basename.encode_utf16().count() <= 120);
+    assert!(basename.ends_with(&format!("-{}.flac", d.media[0].id)));
+    for device in ["COM¹.wav", "LPT².mp3", "LPT³", "AUX", "NUL.txt", "COM9"] {
+        org.media[0].original_filename = device.into();
+        assert!(ExportPathPlan::build(&d, &org, true, false)
+            .unwrap()
+            .media_paths[&d.media[0].id]
+            .starts_with("audio/_"));
+    }
+}
+
+#[test]
+fn physical_limits_apply_only_to_emitted_paths_and_logical_metadata_roundtrips() {
+    use annotator_core::{
+        collaboration::organization::{Folder, MediaMembership, Organization},
+        exchange::{export_annotations_with_plan, export_bundle_with_plan, ExportPathPlan},
+    };
+    let r = root();
+    let d = real_document(&r);
+    let cancel = AtomicBool::new(false);
+    let mut org = Organization::empty(d.project_id.clone());
+    let mut parent = None;
+    for i in 0..4 {
+        let id = format!("00000000-0000-4000-8000-{:012}", i + 1);
+        org.folders.push(Folder {
+            id: id.clone(),
+            parent_id: parent,
+            name: "长目录".repeat(30),
+        });
+        parent = Some(id);
+    }
+    org.media.push(MediaMembership {
+        media_id: d.media[0].id.clone(),
+        folder_id: parent,
+        original_filename: "原始音频.wav".into(),
+    });
+    assert!(ExportPathPlan::build(&d, &org, true, true)
+        .unwrap_err()
+        .message
+        .contains("平铺"));
+    let json = ExportPathPlan::build(&d, &org, false, true).unwrap();
+    let json_path = r.join("logical.json");
+    export_annotations_with_plan(&d, &json, &json_path, &cancel, Limits::default(), |_, _| {})
+        .unwrap();
+    let flat = ExportPathPlan::build(&d, &org, true, false).unwrap();
+    let zip_path = r.join("flat.zip");
+    export_bundle_with_plan(
+        &d,
+        &flat,
+        &r,
+        &zip_path,
+        &cancel,
+        Limits::default(),
+        |_, _| {},
+    )
+    .unwrap();
+    let imported = import_exchange(&zip_path, &r, &cancel, Limits::default(), |_, _| {}).unwrap();
+    let mut expected = org.clone();
+    expected.project_id = imported.document.project_id.clone();
+    assert_eq!(imported.organization, expected);
+    assert_eq!(imported.document.media[0].source_ref, "audio/原始音频.wav");
+    let mut archive = zip::ZipArchive::new(fs::File::open(zip_path).unwrap()).unwrap();
+    assert_eq!(archive.len(), 3);
+    assert!(archive.by_name("audio/").unwrap().is_dir());
+    org.folders.truncate(1);
+    org.media[0].folder_id = Some(org.folders[0].id.clone());
+    org.folders[0].name = "中文目录".into();
+    org.folders.push(Folder {
+        id: "00000000-0000-4000-8000-000000000099".into(),
+        parent_id: None,
+        name: "空目录".into(),
+    });
+    let preserved = ExportPathPlan::build(&d, &org, true, true).unwrap();
+    let p = r.join("preserved.zip");
+    export_bundle_with_plan(
+        &d,
+        &preserved,
+        &r,
+        &p,
+        &cancel,
+        Limits::default(),
+        |_, _| {},
+    )
+    .unwrap();
+    let restored = import_exchange(&p, &r, &cancel, Limits::default(), |_, _| {}).unwrap();
+    assert_eq!(restored.organization.folders, org.folders);
+    assert_eq!(restored.organization.media, org.media);
+    assert_eq!(
+        fs::read(restored.path.join(&restored.document.media[0].source_ref)).unwrap(),
+        fs::read(&d.media[0].source_ref).unwrap()
+    );
+    fs::remove_dir_all(r).unwrap();
+}
+#[test]
+fn preview_reports_changed_empty_folder_paths_and_secondary_collision_namespace() {
+    use annotator_core::{
+        collaboration::organization::{Folder, MediaMembership, Organization},
+        exchange::ExportPathPlan,
+    };
+    let d = document();
+    let mut org = Organization::empty(d.project_id.clone());
+    let id = d.media[0].id.clone();
+    org.folders.push(Folder {
+        id: id.clone(),
+        parent_id: None,
+        name: "CON.wav".into(),
+    });
+    org.folders.push(Folder {
+        id: "00000000-0000-4000-8000-000000000008".into(),
+        parent_id: None,
+        name: format!("_CON.wav-{id}"),
+    });
+    org.folders.push(Folder {
+        id: "00000000-0000-4000-8000-000000000009".into(),
+        parent_id: None,
+        name: "bad<>name. ".trim_end().into(),
+    });
+    org.media.push(MediaMembership {
+        media_id: id,
+        folder_id: None,
+        original_filename: "con.wav".into(),
+    });
+    let plan = ExportPathPlan::build(&d, &org, true, true).unwrap();
+    assert!(plan.changes.iter().any(|c| c.kind == "folder"
+        && c.original_path == "audio/CON.wav/"
+        && c.planned_path.starts_with("audio/_CON.wav-")));
+    assert!(plan
+        .changes
+        .iter()
+        .any(|c| c.kind == "folder" && c.original_path == "audio/bad<>name./"));
+    let names: std::collections::HashSet<_> = plan
+        .directories
+        .iter()
+        .map(|s| s.trim_end_matches('/').to_lowercase())
+        .chain(plan.media_paths.values().map(|s| s.to_lowercase()))
+        .collect();
+    assert_eq!(names.len(), plan.directories.len() + plan.media_paths.len());
+}
+#[test]
+fn exchange4_raw_preflight_rejects_duplicate_and_wrong_directory_records_before_extraction() {
+    let r = root();
+    let cancel = AtomicBool::new(false);
+    let p = r.join("raw.zip");
+    archive(&p, &[("a", b""), ("b", b"")]);
+    let mut bytes = fs::read(&p).unwrap();
+    let central: Vec<_> = bytes
+        .windows(4)
+        .enumerate()
+        .filter(|(_, w)| *w == b"PK\x01\x02")
+        .map(|(i, _)| i)
+        .collect();
+    bytes[central[1] + 46] = b'a';
+    fs::write(&p, &bytes).unwrap();
+    assert_eq!(
+        import_exchange(&p, &r, &cancel, Limits::default(), |_, _| {})
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidArchive
+    );
+    for name in ["audio/", "audio/file.wav"] {
+        archive(&p, &[(name, b"")]);
+        let original = fs::read(&p).unwrap();
+        let at = original
+            .windows(4)
+            .position(|w| w == b"PK\x01\x02")
+            .unwrap();
+        let mut bad = original;
+        let mode: u32 = if name.ends_with('/') {
+            0o100644 << 16
+        } else {
+            (0o040755 << 16) | 0x10
+        };
+        bad[at + 38..at + 42].copy_from_slice(&mode.to_le_bytes());
+        fs::write(&p, bad).unwrap();
+        assert_eq!(
+            import_exchange(&p, &r, &cancel, Limits::default(), |_, _| {})
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidArchive
+        );
+    }
+    let limits = Limits::default();
+    assert_eq!(limits.entries, 20002);
+    assert_eq!(limits.manifest_bytes, 32 * 1024 * 1024);
+    let mut z = zip::ZipWriter::new(fs::File::create(&p).unwrap());
+    for i in 0..20003 {
+        z.add_directory(
+            format!("audio/d{i}/"),
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+    }
+    z.finish().unwrap();
+    assert_eq!(
+        import_exchange(&p, &r, &cancel, limits, |_, _| {})
+            .unwrap_err()
+            .code,
+        ErrorCode::ResourceLimit
+    );
+    assert_eq!(fs::read_dir(&r).unwrap().count(), 1);
+    fs::remove_dir_all(r).unwrap();
+}
+
+#[test]
+fn manifest_rejects_unbounded_logical_head_even_when_flat_paths_are_short() {
+    use annotator_core::{
+        collaboration::organization::{Folder, MediaMembership, Organization},
+        exchange::ExportPathPlan,
+    };
+    let mut d = document();
+    let template = d.media[0].clone();
+    d.media.clear();
+    let mut org = Organization::empty(d.project_id.clone());
+    for i in 1..=10000 {
+        let id = if i == 1 {
+            template.id.clone()
+        } else {
+            format!("10000000-0000-4000-8000-{i:012}")
+        };
+        let mut media = template.clone();
+        media.id = id.clone();
+        d.analysis.insert(id.clone(), Default::default());
+        d.playback_mix.insert(id.clone(), Default::default());
+        d.media.push(media);
+        org.folders.push(Folder {
+            id: id.clone(),
+            parent_id: if i == 1 {
+                None
+            } else {
+                Some(template.id.clone())
+            },
+            name: format!("{i}{}", "𠀀".repeat(123)),
+        });
+        org.media.push(MediaMembership {
+            media_id: id,
+            folder_id: Some(template.id.clone()),
+            original_filename: "𠀀".repeat(255),
+        });
+    }
+    org.validate().unwrap();
+    d.validate().unwrap();
+    assert!(serde_json::to_vec(&org).unwrap().len() > 16 * 1024 * 1024);
+    assert!(
+        matches!(ExportPathPlan::build(&d,&org,false,true),Err(e) if e.code==ErrorCode::ResourceLimit)
+    );
+}
+#[test]
+fn manifest4_rejects_duplicate_json_fields_and_exact_membership_mismatches() {
+    use annotator_core::exchange::Manifest;
+    let manifest = Manifest::capture(&document(), false).unwrap();
+    let bytes = serde_json::to_string(&manifest).unwrap();
+    let duplicate = bytes.replacen(
+        "\"formatVersion\":4",
+        "\"formatVersion\":4,\"formatVersion\":4",
+        1,
+    );
+    assert!(Manifest::parse(duplicate.as_bytes(), false).is_err());
+    for field in ["organization", "preserveFolders"] {
+        let mut value = serde_json::to_value(&manifest).unwrap();
+        value.as_object_mut().unwrap().remove(field);
+        assert!(Manifest::parse(&serde_json::to_vec(&value).unwrap(), false).is_err());
+    }
+    let mut value = serde_json::to_value(&manifest).unwrap();
+    value["organization"]["media"] = serde_json::json!([]);
+    assert!(Manifest::parse(&serde_json::to_vec(&value).unwrap(), false).is_err());
+    value = serde_json::to_value(&manifest).unwrap();
+    value["organization"]["projectId"] = serde_json::json!("00000000-0000-4000-8000-000000000099");
+    assert!(Manifest::parse(&serde_json::to_vec(&value).unwrap(), false).is_err());
+}
+
+#[test]
+fn multilabel_exchange4_boundary_and_unicode_tree_roundtrip() {
+    use annotator_core::{
+        collaboration::organization::{Folder, MediaMembership, Organization},
+        exchange::{
+            export_annotations_with_plan, export_bundle_with_plan, ExportPathPlan, Manifest,
+        },
+    };
+    let r = root();
+    let mut d = real_document(&r);
+    let second = annotator_core::model::Category {
+        id: "00000000-0000-4000-8000-000000000077".into(),
+        name: "第二标签".into(),
+        color: "#123456".into(),
+    };
+    let ids = vec![second.id.clone(), d.categories[0].id.clone()];
+    d.categories.push(second);
+    d.media[0].category_ids = ids.clone();
+    d.media[0].channel_category_ids[0] = ids.clone();
+    d.annotations[0].category_ids = ids;
+    let source_before = fs::read(&d.media[0].source_ref).unwrap();
+    let mut org = Organization::empty(d.project_id.clone());
+    let folder = "00000000-0000-4000-8000-000000000078".to_owned();
+    org.folders.push(Folder {
+        id: folder.clone(),
+        parent_id: None,
+        name: "中文目录 🎵".into(),
+    });
+    org.media.push(MediaMembership {
+        media_id: d.media[0].id.clone(),
+        folder_id: Some(folder),
+        original_filename: "原始音频.wav".into(),
+    });
+    let cancel = AtomicBool::new(false);
+    for bundle in [false, true] {
+        let plan = ExportPathPlan::build(&d, &org, bundle, true).unwrap();
+        let mut manifest = Manifest::capture_with_plan(&d, &plan).unwrap();
+        assert_eq!(manifest.format_version, 4);
+        manifest.format_version = 3;
+        assert_eq!(
+            manifest.document(false).unwrap_err().code,
+            ErrorCode::UnsupportedVersion
+        );
+        let path = r.join(if bundle {
+            "多标签.zip"
+        } else {
+            "多标签.json"
+        });
+        if bundle {
+            export_bundle_with_plan(&d, &plan, &r, &path, &cancel, Limits::default(), |_, _| {})
+                .unwrap();
+        } else {
+            export_annotations_with_plan(&d, &plan, &path, &cancel, Limits::default(), |_, _| {})
+                .unwrap();
+        }
+        let export_before = fs::read(&path).unwrap();
+        let imported = import_exchange(&path, &r, &cancel, Limits::default(), |_, _| {}).unwrap();
+        assert_eq!(imported.organization.folders, org.folders);
+        assert_eq!(imported.organization.media, org.media);
+        let copy = &imported.document;
+        assert_eq!(copy.media[0].category_ids, d.media[0].category_ids);
+        assert_eq!(
+            copy.media[0].channel_category_ids,
+            d.media[0].channel_category_ids
+        );
+        assert_eq!(copy.annotations, d.annotations);
+        assert_eq!(copy.edits, d.edits);
+        assert_ne!(copy.project_id, d.project_id);
+        assert_eq!(fs::read(&path).unwrap(), export_before);
+        if bundle {
+            assert_eq!(
+                fs::read(imported.path.join(&copy.media[0].source_ref)).unwrap(),
+                source_before
+            );
+        }
+    }
+    assert_eq!(fs::read(&d.media[0].source_ref).unwrap(), source_before);
     fs::remove_dir_all(r).unwrap();
 }

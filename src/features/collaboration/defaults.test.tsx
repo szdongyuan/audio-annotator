@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseSharedContext, parseCollaborationStatus } from '../../bridge/collaboration';
 import { projectMenuItems } from '../project/ProjectActions';
 import { collaborationMenu } from './CollaborationMenu';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue } from '../../app/commands';
 import { ProjectLifecycle } from '../project/lifecycle';

@@ -30,7 +30,8 @@ fn edit(r: Region) -> SpectralEdit {
         id: "edit".into(),
         region: r,
         enabled: true,
-        processing_version: 1,
+        processing_version: 2,
+        operation: annotator_core::model::EditOperation::Mask,
     }
 }
 fn tone(frames: usize, hz: f64) -> Vec<f32> {
@@ -183,7 +184,13 @@ fn arbitrary_blocks_and_seeks_have_global_stft_phase_and_bounded_reads() {
     let a = render(&x, 1, PlaybackMode::Processed, &edits, 4096);
     let b = render(&x, 1, PlaybackMode::Processed, &edits, 73);
     assert_eq!(a, b);
-    let mut dsp = DspProcessor::new(info(x.len(), 1), 1, PlaybackMode::Processed, &edits).unwrap();
+    let mut dsp = DspProcessor::new(
+        info(x.len(), 1),
+        DSP_VERSION,
+        PlaybackMode::Processed,
+        &edits,
+    )
+    .unwrap();
     let mut reads = 0;
     let got = dsp
         .read_frames(9517, 121, |start, n| {
@@ -202,13 +209,13 @@ fn arbitrary_blocks_and_seeks_have_global_stft_phase_and_bounded_reads() {
 #[test]
 fn invalid_versions_ranges_nonfinite_and_empty_are_explicit() {
     assert!(
-        matches!(DspProcessor::new(info(100,1),2,PlaybackMode::Original,&[]),Err(e) if e.code==ErrorCode::UnsupportedVersion)
+        matches!(DspProcessor::new(info(100,1),1,PlaybackMode::Original,&[]),Err(e) if e.code==ErrorCode::UnsupportedVersion)
     );
-    assert!(DspProcessor::new(info(0, 1), 1, PlaybackMode::Original, &[]).is_err());
+    assert!(DspProcessor::new(info(0, 1), DSP_VERSION, PlaybackMode::Original, &[]).is_err());
     let mut bad = edit(region(0, 0., 0.001, 0., 2000.));
     bad.processing_version = 99;
     assert!(
-        matches!(DspProcessor::new(info(100,1),1,PlaybackMode::Processed,&[bad]),Err(e) if e.code==ErrorCode::UnsupportedVersion)
+        matches!(DspProcessor::new(info(100,1),DSP_VERSION,PlaybackMode::Processed,&[bad]),Err(e) if e.code==ErrorCode::UnsupportedVersion)
     );
     for r in [
         region(0, 0., 1., 0., 24001.),
@@ -217,7 +224,7 @@ fn invalid_versions_ranges_nonfinite_and_empty_are_explicit() {
     ] {
         assert!(DspProcessor::new(
             info(48000, 1),
-            1,
+            DSP_VERSION,
             PlaybackMode::Selection {
                 region: r,
                 source: SelectionSource::Original
@@ -226,7 +233,8 @@ fn invalid_versions_ranges_nonfinite_and_empty_are_explicit() {
         )
         .is_err());
     }
-    let mut dsp = DspProcessor::new(info(100, 1), 1, PlaybackMode::Processed, &[]).unwrap();
+    let mut dsp =
+        DspProcessor::new(info(100, 1), DSP_VERSION, PlaybackMode::Processed, &[]).unwrap();
     assert!(dsp
         .read_frames(0, 100, |_, n| Ok(vec![f32::NAN; n]))
         .is_err());
@@ -280,7 +288,7 @@ fn mixing_solo_then_mute_layouts_and_output_safety() {
         mix_stereo(&[0.25, -0.5], 2, &mute_left, 1.).unwrap(),
         vec![0., -0.5]
     );
-    assert_eq!(mix_stereo(&[2., -2.], 2, &all, 1.).unwrap(), vec![1., -1.]);
+    assert_eq!(mix_stereo(&[2., -2.], 2, &all, 1.).unwrap(), vec![2., -2.]);
     assert!(mix_stereo(&[f32::NAN], 1, &all, 1.).is_err());
     assert!(mix_stereo(&[1.], 2, &all, 1.).is_err());
     assert!(mix_stereo(&[1.], 1, &all, f32::INFINITY).is_err());
@@ -436,7 +444,8 @@ fn visual_stft_settings_do_not_change_processing() {
 #[test]
 fn ten_minute_six_channel_source_renders_a_seek_without_full_file_reads() {
     let mut source = info(48000 * 600, 6);
-    let mut dsp = DspProcessor::new(source.clone(), 1, PlaybackMode::Processed, &[]).unwrap();
+    let mut dsp =
+        DspProcessor::new(source.clone(), DSP_VERSION, PlaybackMode::Processed, &[]).unwrap();
     let start = source.frame_count - 777;
     let mut total_read = 0;
     let out = dsp
@@ -459,7 +468,7 @@ fn ten_minute_six_channel_source_renders_a_seek_without_full_file_reads() {
         }
     }
     source.frame_count = 100;
-    let mut original = DspProcessor::new(source, 1, PlaybackMode::Original, &[]).unwrap();
+    let mut original = DspProcessor::new(source, DSP_VERSION, PlaybackMode::Original, &[]).unwrap();
     assert!(original.read_frames(0, 1, |_, _| Ok(vec![0.; 5])).is_err());
 }
 
@@ -495,5 +504,100 @@ fn resampler_drains_nonzero_final_filter_tail_and_keeps_output_finite() {
     let mut clipped = BlockResampler::new(48000, 44100, 1, 3000).unwrap();
     let mut output = clipped.push(&vec![f32::MAX; 3000]).unwrap();
     output.extend(clipped.finish().unwrap());
-    assert!(output.iter().all(|v| v.is_finite() && v.abs() <= 1.));
+    assert!(output.iter().all(|v| v.is_finite()));
+}
+
+#[test]
+fn regional_gain_measured_sum_repetition_mask_and_channel_isolation() {
+    use annotator_core::model::EditOperation;
+    let x = tone(48000, 1500.);
+    let gain = |db| {
+        let mut e = edit(region(0, 0.0, 1.0, 0.0, 24000.));
+        e.operation = EditOperation::Gain { gain_db: db };
+        e
+    };
+    for db in [6.0, -6.0, 0.0] {
+        let out = render(&x, 1, PlaybackMode::Processed, &[gain(db)], 777);
+        let measured = 20.0 * (rms(&out[9600..38400]) / rms(&x[9600..38400])).log10();
+        assert!((measured - db).abs() < 0.001, "{db} -> {measured}");
+    }
+    let repeated = vec![gain(6.0), gain(6.0)];
+    let a = render(&x, 1, PlaybackMode::Processed, &repeated, 4096);
+    let b = render(&x, 1, PlaybackMode::Processed, &repeated, 73);
+    assert_eq!(a, b);
+    assert!((20.0 * (rms(&a[9600..38400]) / rms(&x[9600..38400])).log10() - 12.0).abs() < 0.001);
+    let mut dsp = DspProcessor::new(
+        info(x.len(), 1),
+        DSP_VERSION,
+        PlaybackMode::Processed,
+        &repeated,
+    )
+    .unwrap();
+    assert_eq!(
+        dsp.read_frames(
+            19003,
+            199,
+            |s, n| Ok(x[s as usize..s as usize + n].to_vec())
+        )
+        .unwrap(),
+        a[19003..19202]
+    );
+    for (edits, expected) in [(vec![gain(24.0); 3], 48.0), (vec![gain(-60.0); 3], -120.0)] {
+        let out = render(&x, 1, PlaybackMode::Processed, &edits, 1003);
+        let db = 20.0 * (rms(&out[9600..38400]) / rms(&x[9600..38400])).log10();
+        assert!((db - expected).abs() < 0.001, "clamp {expected}->{db}");
+    }
+    let cancel = render(
+        &x,
+        1,
+        PlaybackMode::Processed,
+        &[gain(6.0), gain(-6.0)],
+        701,
+    );
+    assert!(
+        rms(&cancel
+            .iter()
+            .zip(&x)
+            .map(|(a, b)| a - b)
+            .collect::<Vec<_>>())
+            < 1e-6
+    );
+    let mut masked = repeated;
+    masked.push(edit(region(0, 0.0, 1.0, 0.0, 24000.)));
+    assert!(rms(&render(&x, 1, PlaybackMode::Processed, &masked, 1001)[9600..38400]) < 1e-7);
+    let stereo: Vec<_> = x.iter().flat_map(|v| [*v, *v]).collect();
+    let out = render(&stereo, 2, PlaybackMode::Processed, &[gain(6.0)], 511);
+    assert!(out
+        .chunks_exact(2)
+        .zip(&x)
+        .all(|(f, v)| (f[1] - v).abs() < 1e-6));
+}
+
+#[test]
+fn regional_plus24_then_monitor_minus24_recovers_clean_interior_before_conversion() {
+    use annotator_core::{
+        audio::{
+            device::output_f32, engine::OutputBuffer, mixer::mix_stereo, resample::BlockResampler,
+        },
+        model::{EditOperation, PlaybackMix},
+    };
+    use std::sync::{atomic::AtomicU64, Arc};
+    let x = tone(48000, 1500.);
+    let mut gain = edit(region(0, 0.0, 1.0, 0.0, 24000.));
+    gain.operation = EditOperation::Gain { gain_db: 24.0 };
+    let amplified = render(&x, 1, PlaybackMode::Processed, &[gain], 4096);
+    let mixed = mix_stereo(&amplified[20000..23000], 1, &PlaybackMix::default(), 1.0).unwrap();
+    let mut resampler = BlockResampler::new(48000, 48000, 2, 3000).unwrap();
+    let frames = resampler.push(&mixed).unwrap();
+    let buffer = OutputBuffer::new(3000, Arc::new(AtomicU64::new(1)), 1, 0);
+    buffer.set_monitor_gain_db(-24.0).unwrap();
+    for (i, frame) in frames.chunks_exact(2).enumerate() {
+        buffer.push([frame[0], frame[1]], i as u64);
+    }
+    buffer.set_playing(true);
+    for expected in &x[20000..23000] {
+        let frame = buffer.consume();
+        let restored = output_f32(frame[0] * buffer.monitor_scalar());
+        assert!((restored - expected).abs() < 1e-6, "{restored}!={expected}");
+    }
 }

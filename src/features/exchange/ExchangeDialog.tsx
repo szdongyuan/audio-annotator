@@ -1,10 +1,10 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { AppError } from '../../bridge/types';
-export interface ExchangeState { busy: boolean; phase: string; completed: number; result: string | null; error: AppError | null; cancelled: boolean; onCancel: () => void; onClose: () => void }
+export interface ExchangeState { returnFocus?: HTMLElement|null; busy: boolean; phase: string; completed: number; result: string | null; error: AppError | null; cancelled: boolean; onCancel: () => void; onClose: () => void }
 export function ExchangeDialog({ title, children, ...state }: ExchangeState & { title: string; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
-  useEffect(() => { const previous = document.activeElement as HTMLElement | null; ref.current?.focus(); return () => previous?.focus(); }, []);
-  return <div className="dialog-backdrop"><section ref={ref} className="project-dialog exchange-dialog" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} onKeyDown={e => {
+  useEffect(() => { const previous = state.returnFocus ?? (document.activeElement as HTMLElement | null); ref.current?.focus(); return () => previous?.focus(); }, []);
+  return <div className="dialog-backdrop" onPointerDown={e=>{if(e.target===e.currentTarget&&!state.busy)state.onClose();}}><section ref={ref} className="project-dialog exchange-dialog" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} onKeyDown={e => {
     if (e.key === 'Escape' && !state.busy) { e.stopPropagation(); state.onClose(); }
     if (e.key === 'Tab') { const items = [...(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)') ?? [])]; const first = items[0], last = items.at(-1); if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { e.preventDefault(); last?.focus(); } else if (!e.shiftKey && (document.activeElement === last || document.activeElement === ref.current)) { e.preventDefault(); first?.focus(); } }
   }}><span className="exchange-eyebrow">LOCAL FILE EXCHANGE</span><h2>{title}</h2>{children}

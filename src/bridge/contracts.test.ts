@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import fixture from '../../tests/fixtures/document-v2.json';
+import fixture from '../../tests/fixtures/document-v3.json';
 import { parseProjectDocument, parseProjectSnapshot, parseChange, parseAppError } from './types';
 import { folderClient, parseFolderEvent, parseFolderPage, parseScanToken } from './folders';
 
@@ -68,10 +68,10 @@ describe('shared Rust/TypeScript document contract', () => {
   });
   it('rejects versions, unknown fields, malformed references and non-finite bounds', () => {
     for (const mutate of [
-      (d: typeof fixture) => { d.formatVersion = 3; },
+      (d: typeof fixture) => { d.formatVersion = 2; },
       (d: typeof fixture) => { d.annotations[0].region.highHz = Infinity; },
       (d: typeof fixture) => { d.annotations[0].region.channelIndex = 2; },
-      (d: typeof fixture) => { d.annotations[0].categoryId = fixture.projectId; },
+      (d: typeof fixture) => { d.annotations[0].categoryIds = [fixture.projectId]; },
       (d: typeof fixture) => { d.analysis[fixture.media[0].id as keyof typeof d.analysis].hopSize = 0; },
       (d: typeof fixture) => { d.playbackMix[fixture.media[0].id as keyof typeof d.playbackMix].soloChannels = [1, 1]; },
     ]) {
@@ -90,29 +90,76 @@ describe('shared Rust/TypeScript document contract', () => {
   });
 });
 
-it('requires complete v2 classifications and comparison preferences', () => {
-  for (const [pointer, key] of [['media', 'categoryId'], ['media', 'channelCategoryIds'], ['viewState', 'compareLayout'], ['viewState', 'compareSplit']]) {
+it('requires complete v3 classifications and comparison preferences', () => {
+  for (const [pointer, key] of [['media', 'categoryIds'], ['media', 'channelCategoryIds'], ['viewState', 'compareLayout'], ['viewState', 'compareSplit']]) {
     const d = structuredClone(fixture);
     const target = (pointer === 'media' ? d.media[0] : d.viewState) as unknown as Record<string, unknown>;
     delete target[key];
     expect(() => parseProjectDocument(d)).toThrow();
   }
   for (const value of [-.1, .24, .76, Infinity]) expect(() => parseProjectDocument({ ...fixture, viewState: { ...fixture.viewState, compareSplit: value } })).toThrow();
-  expect(parseChange({ type: 'setMediaCategory', mediaId: fixture.media[0].id, categoryId: null }).type).toBe('setMediaCategory');
-  expect(parseChange({ type: 'setChannelCategory', mediaId: fixture.media[0].id, channelIndex: 0, categoryId: fixture.categories[0].id }).type).toBe('setChannelCategory');
+  expect(parseChange({ type: 'setMediaCategories', mediaId: fixture.media[0].id, categoryIds: [] }).type).toBe('setMediaCategories');
+  expect(parseChange({ type: 'setChannelCategories', mediaId: fixture.media[0].id, channelIndex: 0, categoryIds: [fixture.categories[0].id] }).type).toBe('setChannelCategories');
 });
 
-it('checks v2 classification references and channel-array lengths without accepting legacy native responses', () => {
+it('checks v3 classification references and channel-array lengths without accepting legacy native responses', () => {
   const base = parseProjectDocument(structuredClone(fixture));
   const id = base.categories[0].id;
-  base.media[0].categoryId = id; base.media[0].channelCategoryIds[1] = id;
+  base.media[0].categoryIds = [id]; base.media[0].channelCategoryIds[1] = [id];
   expect(parseProjectDocument(base)).toBe(base);
   for (const mutate of [
-    (d: typeof base) => { d.media[0].categoryId = d.projectId; },
-    (d: typeof base) => { d.media[0].channelCategoryIds[0] = d.projectId; },
+    (d: typeof base) => { d.media[0].categoryIds = [d.projectId]; },
+    (d: typeof base) => { d.media[0].channelCategoryIds[0] = [d.projectId]; },
     (d: typeof base) => { d.media[0].channelCategoryIds.pop(); },
   ]) { const invalid = structuredClone(base); mutate(invalid); expect(() => parseProjectDocument(invalid)).toThrow(); }
   expect(() => parseProjectDocument({ ...fixture, formatVersion: 1 })).toThrow();
-  expect(() => parseChange({ type: 'setMediaCategory', mediaId: base.media[0].id })).toThrow();
-  expect(() => parseChange({ type: 'setChannelCategory', mediaId: base.media[0].id, channelIndex: 6, categoryId: null })).toThrow();
+  expect(() => parseChange({ type: 'setMediaCategories', mediaId: base.media[0].id })).toThrow();
+  expect(() => parseChange({ type: 'setChannelCategories', mediaId: base.media[0].id, channelIndex: 6, categoryIds: [] })).toThrow();
+});
+
+it('accepts ordered multilabel DTOs and rejects nullable, duplicate, oversized and legacy contracts', async () => {
+  const { default: current } = await import('../../tests/fixtures/document-v3.json');
+  const d = parseProjectDocument(structuredClone(current));
+  const second = { ...d.categories[0], id: '00000000-0000-4000-8000-000000000077', name: '第二标签' };
+  d.categories.push(second);
+  d.media[0].categoryIds = [second.id, d.categories[0].id];
+  d.media[0].channelCategoryIds[0] = [...d.media[0].categoryIds];
+  d.annotations[0].categoryIds = [...d.media[0].categoryIds];
+  expect(parseProjectDocument(d)).toEqual(d);
+  expect(parseChange({ type: 'setMediaCategories', mediaId: d.media[0].id, categoryIds: [] })).toEqual({ type: 'setMediaCategories', mediaId: d.media[0].id, categoryIds: [] });
+  for (const labels of [null, [second.id, second.id], Array(65).fill(second.id), [d.projectId]]) {
+    for (const target of ['file', 'channel', 'region']) {
+      const bad = structuredClone(d) as unknown as { media: {categoryIds:unknown;channelCategoryIds:unknown[]}[]; annotations: {categoryIds:unknown}[] };
+      if (target === 'file') bad.media[0].categoryIds = labels;
+      else if (target === 'channel') bad.media[0].channelCategoryIds[0] = labels;
+      else bad.annotations[0].categoryIds = labels;
+      expect(() => parseProjectDocument(bad)).toThrow();
+    }
+  }
+  expect(() => parseChange({ type: 'setMediaCategory', mediaId: d.media[0].id, categoryId: null })).toThrow();
+});
+
+it('accepts exactly 64 distinct labels and rejects a distinct 65th at document and command boundaries', () => {
+ const d=parseProjectDocument(structuredClone(fixture));
+ d.categories=Array.from({length:65},(_,i)=>({id:`00000000-0000-4000-8001-${String(i+1).padStart(12,'0')}`,name:`标签${i}`,color:'#123456'}));
+ const ids=d.categories.slice(0,64).map(c=>c.id);
+ d.media[0].categoryIds=[...ids];d.media[0].channelCategoryIds[0]=[...ids];d.annotations[0].categoryIds=[...ids];
+ expect(parseProjectDocument(d)).toBe(d);
+ for(const type of ['setMediaCategories','setChannelCategories']) {
+  const command={type,mediaId:d.media[0].id,categoryIds:ids,...(type==='setChannelCategories'?{channelIndex:0}:{})};
+  expect(parseChange(command)).toEqual(command);
+  expect(()=>parseChange({...command,categoryIds:d.categories.map(c=>c.id)})).toThrow();
+ }
+ d.media[0].categoryIds=d.categories.map(c=>c.id);expect(()=>parseProjectDocument(d)).toThrow();
+});
+
+it('accepts strict DSP2 mask and gain operations and rejects retired or malformed edits',()=>{
+ const document=structuredClone(fixture);
+ expect(()=>parseProjectDocument(document)).not.toThrow();
+ for(const operation of [{type:'gain',gainDb:-60},{type:'gain',gainDb:24},{type:'mask'}]) {
+  const d=structuredClone(document);Object.assign(d.edits[0],{operation});expect(()=>parseProjectDocument(d)).not.toThrow();
+ }
+ for(const operation of [undefined,{type:'gain',gainDb:Infinity},{type:'gain',gainDb:24.1},{type:'gain',gainDb:-60.1},{type:'mask',gainDb:0},{type:'gain'}]) {
+  const d=structuredClone(document);Object.assign(d.edits[0],{operation});expect(()=>parseProjectDocument(d)).toThrow();
+ }
 });

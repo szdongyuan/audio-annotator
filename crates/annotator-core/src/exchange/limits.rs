@@ -15,33 +15,32 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            manifest_bytes: 16 * 1024 * 1024,
-            entries: 4096,
+            manifest_bytes: 32 * 1024 * 1024,
+            entries: 20002,
             total_bytes: 20 * 1024 * 1024 * 1024,
             media_bytes: 8 * 1024 * 1024 * 1024,
         }
     }
 }
 pub fn safe_path(name: &str) -> Result<()> {
-    if name.is_empty()
-        || name.len() > 256
-        || !name.is_ascii()
-        || name.contains(['\\', ':'])
-        || name.starts_with('/')
+    let path = name.strip_suffix('/').unwrap_or(name);
+    if path.is_empty()
+        || name.encode_utf16().count() > 240
+        || path.len() > 960
+        || path.contains(['\\', ':'])
+        || path.starts_with('/')
     {
-        return Err(invalid("禁止绝对路径、反斜线或特殊 ZIP 路径"));
+        return Err(invalid("禁止绝对路径、反斜线或过长 ZIP 路径"));
     }
-    for part in name.split('/') {
-        let stem = part.split('.').next().unwrap_or("").to_ascii_uppercase();
+    for part in path.split('/') {
         if part.is_empty()
             || part == "."
             || part == ".."
             || part.ends_with(['.', ' '])
-            || part.bytes().any(|b| b < 32 || b"<>\"|?*".contains(&b))
-            || ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str())
-            || ((stem.starts_with("COM") || stem.starts_with("LPT"))
-                && stem.len() == 4
-                && matches!(stem.as_bytes()[3], b'1'..=b'9'))
+            || part
+                .chars()
+                .any(|c| c.is_control() || "<>\"|?*".contains(c))
+            || super::path_plan::reserved(part)
         {
             return Err(invalid("禁止不安全的 Windows 文件名"));
         }
@@ -135,20 +134,24 @@ pub fn preflight(file: &mut File, limits: Limits) -> Result<usize> {
         let name_len = u16le(&header[28..]);
         let extra = u16le(&header[30..]);
         let comment = u16le(&header[32..]);
-        if name_len > 256 || u16le(&header[34..]) != 0 || u16le(&header[8..]) & 1 != 0 {
+        if name_len > 961 || u16le(&header[34..]) != 0 || u16le(&header[8..]) & 1 != 0 {
             return Err(invalid("加密、分卷或过长的 ZIP 路径"));
         }
         let mut name = vec![0; name_len as usize];
         file.read_exact(&mut name).map_err(io)?;
         let name = std::str::from_utf8(&name).map_err(|_| invalid("ZIP 路径不是 UTF-8"))?;
         safe_path(name)?;
-        if !names.insert(name.to_ascii_lowercase()) {
+        if !names.insert(name.trim_end_matches('/').to_lowercase()) {
             return Err(invalid("ZIP 条目大小写重名"));
         }
         let mode = (u32le(&header[38..]) >> 16) as u32;
         let kind = mode & 0o170000;
-        if (kind != 0 && kind != 0o100000) || u32le(&header[38..]) & 0x10 != 0 {
-            return Err(invalid("禁止链接、目录或特殊条目"));
+        let directory = name.ends_with('/');
+        let dos_directory = u32le(&header[38..]) & 0x10 != 0;
+        if (directory && ((kind != 0 && kind != 0o040000) || u32le(&header[24..]) != 0))
+            || (!directory && ((kind != 0 && kind != 0o100000) || dos_directory))
+        {
+            return Err(invalid("禁止链接、错误目录或特殊条目"));
         }
         file.seek(SeekFrom::Current((extra + comment) as i64))
             .map_err(io)?;

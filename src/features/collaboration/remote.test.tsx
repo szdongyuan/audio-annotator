@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { ProjectStore } from '../../app/store';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import type { AuthorSnapshot } from '../../bridge/collaboration';
@@ -20,7 +20,7 @@ export function remoteFixture() {
  const identity=(id:string,name:string)=>({authorId:id,displayName:name,createdAt:'2026-10-23T00:00:00Z'});
  const alice=identity('alice','Alice'),bob=identity('bob','Bob');
  const active={store,collaboration:{runtimeNonce:'session',actor:alice,preferences:null}} as ActiveProject;
- const author=(who:typeof alice):AuthorSnapshot=>({identity:who,error:null,layer:{kind:'audio-annotator-author-layer',formatVersion:1,projectId:fixture.projectId,authorId:who.authorId,revision:1,parent:null,hash:'hash',payload:{categories:[{...store.snapshot.document.categories[0],name:who.displayName+' category'}],annotations:structuredClone(store.snapshot.document.annotations),mediaLabels:store.snapshot.document.media.map(m=>({mediaId:m.id,note:who.displayName+' file',channelNotes:Array(m.channelCount).fill(who.displayName+' channel'),categoryId:store.snapshot.document.categories[0].id,channelCategoryIds:Array(m.channelCount).fill(null)}))}}});
+ const author=(who:typeof alice):AuthorSnapshot=>({identity:who,error:null,layer:{kind:'audio-annotator-author-layer',formatVersion:2,projectId:fixture.projectId,authorId:who.authorId,revision:1,parent:null,hash:'hash',payload:{categories:[{...store.snapshot.document.categories[0],name:who.displayName+' category'}],annotations:structuredClone(store.snapshot.document.annotations),mediaLabels:store.snapshot.document.media.map(m=>({mediaId:m.id,note:who.displayName+' file',channelNotes:Array(m.channelCount).fill(who.displayName+' channel'),categoryIds:[store.snapshot.document.categories[0].id],channelCategoryIds:Array.from({length:m.channelCount},()=>[])}))}}});
  const authors=[author(alice),author(bob)],controller=new CollaborationController(active);
  controller.status={snapshot:{projectId:fixture.projectId,authors}} as never;
  const ui={active,controller} as CollaborationUI;
@@ -76,4 +76,19 @@ it('keeps focus inside read-only details when a remote deletion removes the focu
  const s=remoteFixture(),props={target:s.target,close:()=>{},play:()=>{},locate:()=>{}};
  const component=render(<RemoteInspector {...props} value={resolveRemote(s.ui,s.target)}/>);screen.getByRole('button',{name:'播放此区域'}).focus();component.rerender(<RemoteInspector {...props} value={null}/>);
  expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);component.unmount();
+});
+
+it('renders and inspects every foreign label using the foreign category order for its color', () => {
+ const s=remoteFixture(), layer=s.authors[1].layer!, first=layer.payload.categories[0];
+ const second={id:'00000000-0000-4000-8000-000000000077',name:'第二标签',color:'#123456'};
+ layer.payload.categories.push(second);
+ layer.payload.annotations[0].categoryIds=[second.id,first.id];
+ layer.payload.mediaLabels[0].categoryIds=[second.id,first.id];
+ layer.payload.mediaLabels[0].channelCategoryIds[0]=[second.id,first.id];
+ const {container}=render(<RemoteAnnotations authors={[s.authors[1]]} media={s.active.store.snapshot.document.media[0]} channel={1} view={defaultView(s.active.store.snapshot.document.media[0])}/>);
+ expect(container.querySelector('.remote-annotation')).toHaveAttribute('title','Bob · 第二标签 · Bob category');
+ expect((container.querySelector('.remote-annotation') as HTMLElement).style.getPropertyValue('--region-color')).toBe(first.color);
+ const value=resolveRemote(s.ui,s.target)!;
+ render(<RemoteInspector target={s.target} value={value} close={()=>{}} play={()=>{}} locate={()=>{}}/>);
+ expect(screen.getByRole('dialog')).toHaveTextContent('第二标签 · Bob category');
 });

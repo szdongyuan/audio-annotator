@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest';
 import { AppMenu } from './AppMenu';
 import { CompareSplitter } from '../features/spectrogram/CompareSplitter';
 import { useWorkspace } from '../features/spectrogram/useWorkspace';
-import fixture from '../../tests/fixtures/document-v2.json';
+import fixture from '../../tests/fixtures/document-v3.json';
 import { parseProjectDocument } from '../bridge/types';
 import { ProjectStore } from './store';
 import { CommandQueue, type ProjectCommands } from './commands';
@@ -77,5 +77,5 @@ it('zooms out the short linked comparison tail using the displayed pair duration
  const menus=workspaceMenus({project:{active:{store:{snapshot:{document:doc},editingDisabled:false}}},mediaUI:{selectedId:long.id,statuses:[]},selection:{selection:null,context:{mediaId:short.id}},workspace:{state:{activeMediaId:long.id,compareMediaId:short.id,linkedTime:true},view:()=>view,patch},annotations:{},playback:{options:{}},toggleMedia:vi.fn(),toggleProperties:vi.fn(),settings:vi.fn(),inspector:vi.fn(),help:vi.fn(),focusNote:vi.fn()} as unknown as Parameters<typeof workspaceMenus>[0]);
  menus.find(m=>m.id==='view')!.items.find(i=>i.id==='out')!.action!();
  expect(patch).toHaveBeenLastCalledWith(short.id,expect.objectContaining({startSeconds:2.5,endSeconds:12.5}));
- menus.find(m=>m.id==='view')!.items.find(i=>i.id==='reset')!.action!();expect(patch).toHaveBeenLastCalledWith(short.id,expect.objectContaining({startSeconds:0,endSeconds:10}));
+ menus.find(m=>m.id==='view')!.items.find(i=>i.id==='reset')!.action!();expect(patch).toHaveBeenLastCalledWith(short.id,expect.objectContaining({startSeconds:0,endSeconds:short.frameCount/short.sampleRate}));
 });

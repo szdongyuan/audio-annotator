@@ -9,6 +9,7 @@ import { MaskContext, useMasks } from '../features/playback/useMasks';
 import { AppMenu } from './AppMenu';
 import { workspaceMenus } from './WorkspaceActions';
 import { HelpDialog, type HelpTopic } from './HelpDialog';
+import { RegionGainDialog } from '../features/playback/RegionGainDialog';
 import { TransportBar, TransportDevices } from '../features/playback/TransportBar';
 import { ChannelMixer } from '../features/playback/ChannelMixer';
 import { EditList } from '../features/playback/EditList';
@@ -87,7 +88,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
 
   return <RemoteContext.Provider value={remote}><SelectionContext.Provider value={selection}><AnnotationContext.Provider value={annotations}><MaskContext.Provider value={masks}><PlaybackContext.Provider value={playback}><div className="app-shell">
     <header className="project-header">
-      <AppMenu menus={menus} owner={project?.active ?? null} contextKey={`${selection.context?.mediaId}:${selection.context?.channelIndex}`} />
+      <AppMenu menus={menus} owner={project?.active ?? null} contextKey={`${selection.context?.mediaId}:${selection.context?.channelIndex}:${selection.state.intentVersion}`} />
       <div className="project-identity" title={project?.active?.path}><span>{doc?.name ?? '音频标注'}</span>{project?.active && <SaveIndicator lifecycle={project.active.lifecycle} shared={!!project.active.collaboration} />}</div>{collaboration && <CollaborationStatus ui={collaboration} />}
     </header>
 
@@ -113,7 +114,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
 
     <div className="workspace">
       {mediaOpen && <aside id="media-panel" className="media-panel panel" aria-label="音频列表">
-        <MediaList hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => workspace.selectPane('primary', id)} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
+        <MediaList organization={mediaUI?.organization} hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => workspace.selectPane('primary', id)} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
       </aside>}
 
       <main className="analysis-workspace" aria-label="音频分析工作区">
@@ -136,11 +137,15 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
           </div>
         </div>}
 
+        <TransportBar key={project?.active?.collaboration?.runtimeNonce ?? project?.active?.path ?? ''} ui={playback} hasSelection={!!selection.selection && selection.selection.region.mediaId === playback.sourceId} hasMasks={!!doc?.edits.some(e => e.region.mediaId === playback.sourceId && e.operation.type === 'mask')}
+          onGain={trigger => { const target = selection.state.getActiveSelection(); if (target && target.region.mediaId === playback.sourceId) selection.openGain(target, trigger); }}
+          onResetView={() => { const m = playback.media; if (m) workspace.patch(m.id, { startSeconds: 0, endSeconds: m.frameCount / m.sampleRate, lowHz: 0, highHz: m.sampleRate / 2 }); }}
+          onResetMasks={() => { if (playback.sourceId) masks.command({ type: 'resetMediaMasks', mediaId: playback.sourceId }); }} />
       </main>
 
       {propertiesOpen && <aside id="properties-panel" className="properties-panel panel" aria-label="属性">
         <div className="panel-heading"><h2><Settings2 size={16} />标注与属性</h2><span className="subtle-label">{doc?.annotations.length ?? 0} 个区域</span></div>
-        <div className={`inspector-tabs${collaboration?.controller ? ' is-shared' : ''}`} role="tablist" aria-label="属性分区">{[['region', '区域'], ['list', '列表'], ['notes', '文件/通道'], ...(collaboration?.controller ? [['authors', '作者']] : []), ['categories', '类别'], ['masks', '屏蔽'], ['mix', '混合'], ['devices', '设备']].map(([id, label]) => <button role="tab" aria-selected={inspectorTab === id} key={id} onClick={() => setInspectorTab(id)}>{label}</button>)}</div>
+        <div className={`inspector-tabs${collaboration?.controller ? ' is-shared' : ''}`} role="tablist" aria-label="属性分区">{[['region', '区域'], ['list', '列表'], ['notes', '文件/通道'], ...(collaboration?.controller ? [['authors', '作者']] : []), ['categories', '类别'], ['masks', '处理'], ['mix', '混合'], ['devices', '设备']].map(([id, label]) => <button role="tab" aria-selected={inspectorTab === id} key={id} onClick={() => setInspectorTab(id)}>{label}</button>)}</div>
         <div className="property-section inspector-content">
           {inspectorTab === 'authors' && collaboration && <RemoteList ui={collaboration} inspect={remote.inspect} />}
           {inspectorTab === 'region' && <AnnotationInspector ui={annotations} annotation={selectedAnnotation} />}
@@ -151,7 +156,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
             else { selection.state.select(null); const channelIndex = result.scope === 'channel' ? result.channelIndex : null; if (channelIndex !== null) workspace.patch(result.mediaId, { visibleChannels: [...new Set([...workspace.view(result.mediaId).visibleChannels, channelIndex])].sort((a, b) => a - b) }); selection.state.interact({ mediaId: result.mediaId, channelIndex }); setInspectorTab('notes'); }
           }} />}
           {inspectorTab === 'notes' && <NotesEditor ui={annotations} media={doc?.media.find(m => m.id === selection.context?.mediaId) ?? selected ?? null} channelIndex={selection.context?.channelIndex ?? null} />}
-          {inspectorTab === 'masks' && <EditList ui={masks} onLocate={async edit => { if(!await workspace.revealMedia(edit.region.mediaId))return;masks.select(edit.id); if (edit.region.mediaId !== selected?.id && edit.region.mediaId !== workspace.state.compareMediaId) workspace.selectPane('primary', edit.region.mediaId); workspace.locate(edit.region); }} />}
+          {inspectorTab === 'masks' && <EditList ui={masks} onLocate={async edit => { if(!await workspace.revealMedia(edit.region.mediaId))return; if (edit.region.mediaId !== selected?.id && edit.region.mediaId !== workspace.state.compareMediaId) workspace.selectPane('primary', edit.region.mediaId); workspace.locate(edit.region); }} />}
           {inspectorTab === 'mix' && playback.media && <ChannelMixer media={playback.media} mix={playback.mix} disabled={project?.active?.store.editingDisabled ?? true} onChange={playback.updateMix} />}
           {inspectorTab === 'devices' && <TransportDevices ui={playback} />}
           {inspectorTab === 'categories' && <CategoryManager key={project?.active?.collaboration?.runtimeNonce ?? project?.active?.path} ui={annotations} />}
@@ -160,9 +165,9 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
       </aside>}
     </div>
 
-    <TransportBar ui={playback} />
+    <RegionGainDialog ui={selection} />
     {mediaUI?.folder?.state === 'choosing' && <FolderImportDialog controller={mediaUI.folder} />}
-    {mediaUI?.source?.open && <SourceImportDialog controller={mediaUI.source} />}
+    {mediaUI?.source?.open && <SourceImportDialog controller={mediaUI.source} organization={mediaUI.organization} />}
     {helpTopic && <HelpDialog topic={helpTopic} onClose={() => setHelpTopic(null)} />}
     <RegionMenu ui={selection} playback={playback} workspace={workspace} statuses={mediaUI?.statuses ?? []} focusNote={focusNote} />
     {remote.selected && <RemoteInspector target={remote.selected} value={remote.value} close={remote.close} play={remote.play} locate={remote.locate} />}

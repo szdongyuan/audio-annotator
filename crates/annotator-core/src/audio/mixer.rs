@@ -67,8 +67,8 @@ pub fn mix_stereo(
             (value, value)
         };
         output.extend([
-            (left * volume as f64).clamp(-1.0, 1.0) as f32,
-            (right * volume as f64).clamp(-1.0, 1.0) as f32,
+            (left * volume as f64) as f32,
+            (right * volume as f64) as f32,
         ]);
     }
     Ok(output)

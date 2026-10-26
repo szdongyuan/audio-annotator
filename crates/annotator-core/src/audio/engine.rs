@@ -76,6 +76,7 @@ struct Slot {
 }
 pub struct OutputBuffer {
     slots: Box<[Slot]>,
+    monitor_scalar: AtomicU32,
     read: AtomicUsize,
     write: AtomicUsize,
     epoch: Arc<AtomicU64>,
@@ -98,6 +99,7 @@ impl OutputBuffer {
     pub fn new(capacity: usize, epoch: Arc<AtomicU64>, generation: u64, start: u64) -> Self {
         assert!(capacity > 0);
         Self {
+            monitor_scalar: AtomicU32::new(1.0_f32.to_bits()),
             slots: (0..capacity)
                 .map(|_| Slot {
                     left: AtomicU32::new(0),
@@ -123,6 +125,19 @@ impl OutputBuffer {
             ring_exhausted_nanos: AtomicU64::new(u64::MAX),
             device_failed: AtomicBool::new(false),
         }
+    }
+    pub fn set_monitor_gain_db(&self, db: f64) -> crate::error::Result<()> {
+        if !db.is_finite() || !(-60.0..=24.0).contains(&db) {
+            return Err(crate::error::AppError::invalid("Invalid monitor gain"));
+        }
+        self.monitor_scalar.store(
+            (10.0_f64.powf(db / 20.0) as f32).to_bits(),
+            Ordering::Release,
+        );
+        Ok(())
+    }
+    pub fn monitor_scalar(&self) -> f32 {
+        f32::from_bits(self.monitor_scalar.load(Ordering::Acquire))
     }
     pub fn free(&self) -> usize {
         self.slots.len()
@@ -324,7 +339,7 @@ impl PresentationTracker {
 }
 fn clean(v: f32) -> f32 {
     if v.is_finite() {
-        v.clamp(-1.0, 1.0)
+        v
     } else {
         0.0
     }

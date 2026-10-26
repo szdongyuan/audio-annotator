@@ -114,7 +114,7 @@ impl BlockResampler {
         self.received += frames as u64;
         if self.inner.is_none() {
             self.produced += frames as u64;
-            return Ok(input.iter().map(|v| v.clamp(-1.0, 1.0)).collect());
+            return Ok(input.to_vec());
         }
         self.pending.extend_from_slice(input);
         let chunk = self.inner.as_ref().unwrap().input_frames_next() * self.channels;
@@ -163,8 +163,8 @@ impl BlockResampler {
                     if !channel[i].is_finite() {
                         return Err(AppError::invalid("Non-finite resampler output"));
                     }
-                    // Sinc/FFT ringing can overshoot even when mixed input was bounded.
-                    interleaved.push(channel[i].clamp(-1.0, 1.0) as f32);
+                    // Preserve finite headroom until monitor gain and device conversion.
+                    interleaved.push(channel[i].clamp(-(f32::MAX as f64), f32::MAX as f64) as f32);
                 }
                 self.produced += 1;
             }

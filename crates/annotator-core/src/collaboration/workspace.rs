@@ -28,15 +28,48 @@ pub enum WorkspaceSource {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlaybackPreferences {
     pub volume: f64,
+    pub monitor_gain_db: f64,
+    #[serde(deserialize_with = "monitor_overrides")]
+    pub media_monitor_gain_db: std::collections::BTreeMap<String, Option<f64>>,
     #[serde(deserialize_with = "crate::model::required_nullable")]
     pub device_id: Option<String>,
     pub loop_enabled: bool,
     pub source: WorkspaceSource,
 }
+fn monitor_overrides<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<std::collections::BTreeMap<String, Option<f64>>, D::Error> {
+    struct Overrides;
+    impl<'de> serde::de::Visitor<'de> for Overrides {
+        type Value = std::collections::BTreeMap<String, Option<f64>>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("unique bounded media monitor overrides")
+        }
+        fn visit_map<M: serde::de::MapAccess<'de>>(
+            self,
+            mut map: M,
+        ) -> std::result::Result<Self::Value, M::Error> {
+            let mut values = std::collections::BTreeMap::new();
+            while let Some((key, value)) = map.next_entry::<String, Option<f64>>()? {
+                if values.len() >= super::validation::MAX_MEDIA
+                    || values.insert(key, value).is_some()
+                {
+                    return Err(serde::de::Error::custom(
+                        "Duplicate or excessive monitor overrides",
+                    ));
+                }
+            }
+            Ok(values)
+        }
+    }
+    deserializer.deserialize_map(Overrides)
+}
 impl Default for PlaybackPreferences {
     fn default() -> Self {
         Self {
             volume: 0.75,
+            monitor_gain_db: 0.0,
+            media_monitor_gain_db: Default::default(),
             device_id: None,
             loop_enabled: false,
             source: WorkspaceSource::Processed,
@@ -234,7 +267,7 @@ impl PrivateWorkspace {
         let empty = LayerPayload::from_document(&initial)?;
         let mut envelope = PrivateEnvelope {
             kind: CACHE_KIND.into(),
-            format_version: 1,
+            format_version: 2,
             root_key,
             manifest_hash,
             catalog: (repo.manifest().format_version
@@ -634,7 +667,7 @@ impl PrivateWorkspace {
         if let (Some(pending), Some(remote)) = (self.envelope.in_flight.clone(), remote) {
             let expected = AuthorLayer {
                 kind: LAYER_KIND.into(),
-                format_version: 1,
+                format_version: 2,
                 project_id: self.repo.manifest().project_id.clone(),
                 author_id: self.envelope.actor.clone(),
                 revision: self.envelope.base.as_ref().map_or(1, |b| b.revision + 1),
@@ -688,7 +721,7 @@ impl PrivateWorkspace {
         if let (Some(pending), Some(remote)) = (self.envelope.in_flight.clone(), remote) {
             let expected = AuthorLayer {
                 kind: LAYER_KIND.into(),
-                format_version: 1,
+                format_version: 2,
                 project_id: self.repo.manifest().project_id.clone(),
                 author_id: self.envelope.actor.clone(),
                 revision: self.envelope.base.as_ref().map_or(1, |b| b.revision + 1),
@@ -763,7 +796,7 @@ fn validate_envelope(
 ) -> Result<()> {
     require(
         e.kind == CACHE_KIND
-            && e.format_version == 1
+            && e.format_version == 2
             && e.root_key == identity.root_key
             && e.manifest_hash == identity.manifest_hash
             && e.actor == identity.actor,
@@ -815,6 +848,22 @@ fn validate_envelope(
                 .is_none_or(|d| d.len() <= 4096 && !d.contains('\0')),
         "Invalid private playback preferences",
     )?;
+    require(
+        e.preferences.monitor_gain_db.is_finite()
+            && (-60.0..=24.0).contains(&e.preferences.monitor_gain_db),
+        "Invalid monitor gain",
+    )?;
+    require(
+        e.preferences.media_monitor_gain_db.len() <= manifest.media.len(),
+        "Too many monitor overrides",
+    )?;
+    for (id, db) in &e.preferences.media_monitor_gain_db {
+        require(
+            manifest.media.iter().any(|m| &m.id == id)
+                && db.is_none_or(|v| v.is_finite() && (-60.0..=24.0).contains(&v)),
+            "Invalid monitor override",
+        )?;
+    }
     e.confirmed.project(manifest)?;
     e.confirmed.hash()?;
     if let Some(base) = &e.base {
@@ -884,7 +933,7 @@ pub(crate) fn install_payload(
             .find(|m| m.id == media.id)
             .ok_or_else(|| AppError::invalid("Missing media labels"))?;
         media.note = labels.note.clone();
-        media.category_id = labels.category_id.clone();
+        media.category_ids = labels.category_ids.clone();
         media.channel_notes = labels.channel_notes.clone();
         media.channel_category_ids = labels.channel_category_ids.clone();
     }

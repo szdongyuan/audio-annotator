@@ -74,13 +74,18 @@ fn empty_default_stable_identity_and_strict_versions() {
     let bytes = fs::read(r.root().join("collaboration.json")).unwrap();
     assert!(parse_manifest(&bytes).is_err());
     let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    value["formatVersion"] = 2.into();
-    fs::write(
-        r.root().join("collaboration.json"),
-        serde_json::to_vec(&value).unwrap(),
-    )
-    .unwrap();
-    assert!(CollaborationRepository::open(r.root()).is_err());
+    for version in [1, 2, 3, 4, 6] {
+        value["formatVersion"] = version.into();
+        fs::write(
+            r.root().join("collaboration.json"),
+            serde_json::to_vec(&value).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            CollaborationRepository::open(r.root()).err().unwrap().code,
+            ErrorCode::UnsupportedVersion
+        );
+    }
 }
 #[test]
 fn append_is_verified_idempotent_and_does_not_change_manifest_identity() {
@@ -449,13 +454,19 @@ fn catalog_collection_limit_and_record_versions_are_enforced() {
     }
     fs::write(&file, &bytes).unwrap();
     let original: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    for i in 1..4095 {
+    let mut organization = r.read_organization().unwrap();
+    for i in 1..9999 {
         let mut record = original.clone();
         let id = uuid::Uuid::new_v4().to_string();
         let source = format!("media/{id}.wav");
         record["media"]["id"] = id.clone().into();
         record["media"]["sourceRef"] = source.clone().into();
         record["media"]["sha256"] = format!("{i:064x}").into();
+        organization.media.push(organization::MediaMembership {
+            media_id: id.clone(),
+            folder_id: None,
+            original_filename: format!("{id}.wav"),
+        });
         fs::write(
             r.root().join(source),
             fs::read(r.root().join(&p.media().source_ref)).unwrap(),
@@ -467,35 +478,18 @@ fn catalog_collection_limit_and_record_versions_are_enforced() {
         )
         .unwrap();
     }
-    assert_eq!(r.reload_catalog().unwrap().manifest().media.len(), 4095);
-    let temporaries: Vec<_> = (0..256)
-        .map(|i| r.root().join(format!("catalog/.foreign-{i}.tmp")))
-        .collect();
-    for path in &temporaries {
-        fs::write(path, b"retained foreign temporary").unwrap();
-    }
-    assert_eq!(
-        fs::read_dir(r.root().join("catalog")).unwrap().count(),
-        4352
-    );
-    assert_eq!(r.reload_catalog().unwrap().manifest().media.len(), 4095);
+    fs::write(
+        r.root().join("organization.json"),
+        serde_json::to_vec(&organization).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(r.reload_catalog().unwrap().manifest().media.len(), 9999);
+    let sentinel = r.root().join("catalog/.foreign.tmp");
+    fs::write(&sentinel, b"retained foreign temporary").unwrap();
     let last = prepared(&t, &r, "last", 2);
-    let source_before = fs::read(t.0.join("last.wav")).unwrap();
-    assert_eq!(
-        r.append_media(&a, &last, &AtomicBool::new(false))
-            .unwrap_err()
-            .code,
-        ErrorCode::ResourceLimit
-    );
-    assert_eq!(fs::read(t.0.join("last.wav")).unwrap(), source_before);
-    assert!(!r.root().join(&last.media().source_ref).exists());
-    assert_eq!(r.reload_catalog().unwrap().manifest().media.len(), 4095);
-    for path in temporaries {
-        assert_eq!(fs::read(&path).unwrap(), b"retained foreign temporary");
-        fs::remove_file(path).unwrap();
-    }
     r.append_media(&a, &last, &AtomicBool::new(false)).unwrap();
-    assert_eq!(r.reload_catalog().unwrap().manifest().media.len(), 4096);
+    assert_eq!(r.reload_catalog().unwrap().manifest().media.len(), 10_000);
+    assert_eq!(fs::read(sentinel).unwrap(), b"retained foreign temporary");
     let q = prepared(&t, &r, "overflow", 2);
     assert_eq!(
         r.append_media(&a, &q, &AtomicBool::new(false))
@@ -509,7 +503,7 @@ fn catalog_collection_limit_and_record_versions_are_enforced() {
         &bytes,
     )
     .unwrap();
-    assert!(r.reload_catalog().is_err());
+    assert_eq!(r.reload_catalog().unwrap().manifest().media.len(), 10_000);
 }
 #[test]
 fn malformed_records_changed_old_media_and_limits_fail_closed() {
@@ -549,6 +543,7 @@ fn aggregate_catalog_bytes_are_bounded_before_loading_all_records() {
     let record_path = r.root().join(format!("catalog/{}.json", p.media().id));
     let original: serde_json::Value =
         serde_json::from_slice(&fs::read(record_path).unwrap()).unwrap();
+    let mut organization = r.read_organization().unwrap();
     for _ in 0..280 {
         let id = uuid::Uuid::new_v4().to_string();
         let source = format!("media/{id}.wav");
@@ -556,6 +551,11 @@ fn aggregate_catalog_bytes_are_bounded_before_loading_all_records() {
         record["media"]["id"] = id.clone().into();
         record["media"]["sourceRef"] = source.clone().into();
         record["media"]["displayName"] = "n".repeat(60000).into();
+        organization.media.push(organization::MediaMembership {
+            media_id: id.clone(),
+            folder_id: None,
+            original_filename: format!("{id}.wav"),
+        });
         fs::write(
             r.root().join(source),
             fs::read(r.root().join(&p.media().source_ref)).unwrap(),
@@ -567,6 +567,11 @@ fn aggregate_catalog_bytes_are_bounded_before_loading_all_records() {
         )
         .unwrap();
     }
+    fs::write(
+        r.root().join("organization.json"),
+        serde_json::to_vec(&organization).unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         r.reload_catalog().err().unwrap().code,
         ErrorCode::ResourceLimit

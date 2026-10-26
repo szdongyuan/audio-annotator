@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { parseProjectDocument } from '../../bridge/types';
 import { AnnotationInspector } from './AnnotationInspector';
 import { CategoryManager } from './CategoryManager';
@@ -22,15 +22,15 @@ it('rejects duplicate trimmed category names and requires affected-count confirm
   fireEvent.change(screen.getByLabelText('类别名称'), { target: { value: ' 鸟声 ' } });
   expect(screen.getByRole('button', { name: '添加类别' })).toBeDisabled();
   fireEvent.click(screen.getByLabelText('删除类别 鸟声'));
-  expect(screen.getByRole('alertdialog')).toHaveTextContent('1 个区域将设为未分类'); expect(command).not.toHaveBeenCalled();
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('1 个区域将移除此标签'); expect(command).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: '确认删除类别' }));
   expect(command).toHaveBeenCalledWith({ type: 'removeCategory', id: doc.categories[0].id });
 });
 it('combines category/channel/note filters and locates the exact media and channel', () => {
   const doc = parseProjectDocument(fixture), onLocate = vi.fn(), a = doc.annotations[0];
-  doc.annotations.push({ ...a, id: 'second', categoryId: null, region: { ...a.region, channelIndex: 0 }, note: 'another' });
+  doc.annotations.push({ ...a, id: 'second', categoryIds: [], region: { ...a.region, channelIndex: 0 }, note: 'another' });
   render(<AnnotationList doc={doc} selectedId={null} onLocate={onLocate} />);
-  fireEvent.change(screen.getByLabelText('筛选类别'), { target: { value: a.categoryId } });
+  fireEvent.change(screen.getByLabelText('筛选类别'), { target: { value: a.categoryIds[0] } });
   fireEvent.change(screen.getByLabelText('筛选通道'), { target: { value: '1' } });
   fireEvent.change(screen.getByLabelText('筛选备注'), { target: { value: '区域' } });
   expect(screen.getAllByRole('button')).toHaveLength(1); fireEvent.click(screen.getByRole('button'));

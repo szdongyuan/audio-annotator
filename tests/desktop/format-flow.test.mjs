@@ -9,7 +9,7 @@ const output = await fs.mkdtemp(path.join(parent,'run-'));
 const project = path.join(output, 'project'); await fs.mkdir(project);
 const json = path.join(output, 'v2.annotations.json');
 const sources = [];
-for (const version of [1, 999]) {
+for (const version of [1, 2, 999]) {
   const local = path.join(output, `local-${version}`); await fs.mkdir(local);
   sources.push({ version, local: path.join(local, 'project.json'), portable: path.join(output, `share-${version}.json`) });
 }
@@ -19,7 +19,7 @@ const paths = {
   '': [[path.resolve('tests/fixtures/audio/stereo24.wav')]],
   '分享 · 保存到本机': [json],
   '导入标注文件或完整项目包': sources.map(s => s.portable),
-  '选择新项目的存放位置 · 将创建独立子文件夹': [output, output],
+  '选择新项目的存放位置 · 将创建独立子文件夹': [output, output, output],
 };
 const report = { output, method: 'Actual native v2 save and UI open/import rejection. Only picker results injected. Ordinary open saves/closes the old session before attempting the target; no rollback promise.', checks: [], sources: [] };
 const hash = async file => createHash('sha256').update(await fs.readFile(file)).digest('hex');
@@ -31,11 +31,11 @@ try {
   await h.menu('保存'); await h.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);
   const manifest = JSON.parse(await fs.readFile(path.join(project, 'collaboration.json'), 'utf8'));
   const saved=(await h.snapshot(manifest.projectId)).document;
-  assert.equal(saved.formatVersion, 2); assert.equal(saved.media[0].categoryId, null); assert.deepEqual(saved.media[0].channelCategoryIds, [null, null]);
+  assert.equal(saved.formatVersion, 3); assert.deepEqual(saved.media[0].categoryIds, []); assert.deepEqual(saved.media[0].channelCategoryIds, [[], []]);
   assert.equal(saved.viewState.compareLayout, 'horizontal'); assert.equal(saved.viewState.compareSplit, .5);
   report.checks.push('native save writes complete format 2');
-  await h.menu('导出我的标注 / 项目包'); await h.label('我的标注（不含音频）'); await h.clickText('选择保存位置…'); await h.until(`document.querySelector('.exchange-result')`); await h.clickText('关闭');
-  const portable = JSON.parse(await fs.readFile(json, 'utf8')); assert.equal(portable.formatVersion, 2);
+  await h.menu('导出我的标注 / 项目包'); await h.label('我的标注（不含音频）'); await h.clickText('预览导出路径'); await h.until("document.querySelector('[aria-label=导出路径预览]')"); await h.clickText('选择保存位置…'); await h.until(`document.querySelector('.exchange-result')`); await h.clickText('关闭');
+  const portable = JSON.parse(await fs.readFile(json, 'utf8')); assert.equal(portable.formatVersion, 4);
   for (const source of sources) {
     await fs.writeFile(source.local, JSON.stringify({ ...saved, formatVersion: source.version }));
     await fs.writeFile(source.portable, JSON.stringify({ ...portable, formatVersion: source.version }));

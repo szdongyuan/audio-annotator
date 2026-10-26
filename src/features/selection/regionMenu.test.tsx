@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { parseProjectDocument, type Change, type Region } from '../../bridge/types';
 import { RegionMenu } from './RegionMenu';
 import { ProjectStore } from '../../app/store';
@@ -73,7 +73,7 @@ it('preserves temporary targets but rejects a callback owned by an earlier runti
 it('missing audio disables playback but classification remains possible for its stable target', () => {
   const p = props(true, false); render(<RegionMenu {...p as unknown as ComponentProps<typeof RegionMenu>} />);
   expect(screen.getByRole('menuitem', { name: '播放选区' })).toHaveAttribute('aria-disabled', 'true');
-  fireEvent.click(screen.getByRole('menuitem', { name: '标注类型' })); fireEvent.click(screen.getByRole('menuitem', { name: '未分类' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: '标注类型' })); fireEvent.click(screen.getByRole('menuitemcheckbox', { name: '清空标签' }));
   expect(p.ui.actions.classify).toHaveBeenCalledWith(p.ui.menu.target, null); expect(p.playback.playSelection).not.toHaveBeenCalled();
 });
 it('zoom uses exact physical bounds without changing objects', () => {
@@ -102,7 +102,7 @@ it('opening an inactive object menu preserves selection but choosing note activa
 });
 it.each(['标注类型','屏蔽选区'])('choosing %s activates a captured inactive target only when executed',async label=>{
  const s=runtimeMenu();s.open();expect(s.ui().state.getActiveSelection()).toBeNull();
- fireEvent.click(screen.getByRole('menuitem',{name:label}));if(label==='标注类型')fireEvent.click(screen.getByRole('menuitem',{name:'未分类'}));
+ fireEvent.click(screen.getByRole('menuitem',{name:label}));if(label==='标注类型')fireEvent.click(screen.getByRole('menuitemcheckbox',{name:'清空标签'}));
  expect(s.ui().state.getActiveSelection()).not.toBeNull();await act(async()=>{await s.owner.lifecycle.submitDrafts();});s.dispose();
 });
 

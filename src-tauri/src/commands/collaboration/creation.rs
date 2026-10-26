@@ -362,7 +362,8 @@ mod tests {
                             high_hz: 100.0,
                         },
                         enabled: true,
-                        processing_version: 1,
+                        processing_version: 2,
+                        operation: annotator_core::model::EditOperation::Mask,
                     },
                 },
             )

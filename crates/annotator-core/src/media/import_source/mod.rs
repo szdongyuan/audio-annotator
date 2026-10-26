@@ -6,16 +6,18 @@ mod staging;
 pub use staging::StagedAudio;
 mod discovery;
 mod jingcheng;
+mod organization;
 use crate::{
     error::{AppError, ErrorCode, Result},
     media::identity::SourceStamp,
 };
 pub use discovery::scan;
+pub use organization::{FolderSummary, OrganizationConfig, OrganizationMode};
 pub use rules::{Mode, Rules};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-pub const MAX_PAGE: usize = 256;
+pub const MAX_PAGE: usize = 50;
 pub const MAX_ISSUES: usize = 256;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,10 +31,12 @@ pub struct Config {
     pub kind: SourceKind,
     pub paths: Vec<String>,
     pub rules: Rules,
+    pub organization: OrganizationConfig,
 }
 impl Config {
     pub fn validate(&self) -> Result<()> {
         self.rules.validate()?;
+        self.organization.validate(self.rules.mode)?;
         if self.paths.is_empty()
             || self.paths.len() > 32
             || (self.kind == SourceKind::Folder && self.paths.len() != 1)
@@ -98,6 +102,8 @@ pub struct Candidate {
     pub display_name: String,
     pub byte_length: u64,
     pub logical_position: Option<u32>,
+    pub resulting_folder_path: Vec<String>,
+    pub original_filename: String,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -128,6 +134,7 @@ pub struct ScanResult {
     entries: Vec<Entry>,
     sources: Vec<Source>,
     limits: Limits,
+    folder_summary: Vec<FolderSummary>,
 }
 impl ScanResult {
     /// Before publishing the immutable preview, omit exact already-imported folder paths.
@@ -151,6 +158,96 @@ impl ScanResult {
         self.candidates = candidates;
         self.entries = entries;
         self.counts.candidates = self.candidates.len();
+        // Exclusion cannot introduce new folders or exceed the original bound.
+        self.rebuild_summary().expect("bounded subset");
+    }
+    /// Native preflight can exclude invalid project placements without exposing entry paths.
+    pub fn validate_placements(
+        &mut self,
+        mut validate: impl FnMut(&Candidate) -> Result<()>,
+    ) -> Result<()> {
+        let mut candidates = vec![];
+        let mut entries = vec![];
+        for (mut candidate, entry) in std::mem::take(&mut self.candidates)
+            .into_iter()
+            .zip(std::mem::take(&mut self.entries))
+        {
+            if let Err(error) = validate(&candidate) {
+                self.counts.skipped += 1;
+                self.counts.selected_bytes -= candidate.byte_length;
+                self.issue(
+                    candidate.source_index,
+                    &candidate.relative_path,
+                    error.message,
+                );
+            } else {
+                candidate.index = candidates.len();
+                candidates.push(candidate);
+                entries.push(entry);
+            }
+        }
+        self.candidates = candidates;
+        self.entries = entries;
+        self.counts.candidates = self.candidates.len();
+        self.rebuild_summary()
+    }
+    pub fn folder_summary(&self) -> &[FolderSummary] {
+        &self.folder_summary
+    }
+    pub fn bind_target_path(&mut self, prefix: &[String]) -> Result<()> {
+        let mut candidates = vec![];
+        let mut entries = vec![];
+        for (mut c, e) in std::mem::take(&mut self.candidates)
+            .into_iter()
+            .zip(std::mem::take(&mut self.entries))
+        {
+            if prefix.len() + c.resulting_folder_path.len() > 16 {
+                self.counts.skipped += 1;
+                self.counts.selected_bytes -= c.byte_length;
+                self.issue(c.source_index, &c.relative_path, "目标和生成目录超过 16 层");
+                continue;
+            }
+            let mut path = prefix.to_vec();
+            path.extend(c.resulting_folder_path);
+            c.resulting_folder_path = path;
+            c.index = candidates.len();
+            candidates.push(c);
+            entries.push(e);
+        }
+        self.candidates = candidates;
+        self.entries = entries;
+        self.counts.candidates = self.candidates.len();
+        self.rebuild_summary()
+    }
+    pub(super) fn rebuild_summary(&mut self) -> Result<()> {
+        let mut nodes = vec![];
+        let mut index = std::collections::HashMap::new();
+        for c in &self.candidates {
+            let mut parent = None;
+            for name in &c.resulting_folder_path {
+                let key = (parent, name.to_lowercase());
+                let current = if let Some(i) = index.get(&key) {
+                    *i
+                } else {
+                    if nodes.len() >= 10_000 {
+                        return Err(limit());
+                    }
+                    let i = nodes.len();
+                    nodes.push(FolderSummary {
+                        index: i,
+                        parent_index: parent,
+                        name: name.clone(),
+                        media_count: 0,
+                    });
+                    index.insert(key, i);
+                    i
+                };
+                nodes[current].media_count += 1;
+                parent = Some(current);
+            }
+        }
+        self.folder_summary = nodes;
+        Ok(())
     }
     pub fn candidates(&self) -> &[Candidate] {
         &self.candidates

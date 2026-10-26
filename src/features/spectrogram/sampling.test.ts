@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import type { TileResult } from './tileClient';
 import { createSampler, timeCenters, frequencyCenters } from './sampling';
 export function tile(overrides: Partial<TileResult['request']> = {}, values = [-20, -40, -40, -20], extra: Partial<TileResult['metadata']> = {}): TileResult {
-  const request = { requestId: 'r', viewId: 'v', projectId: 'p', mediaId: 'm', generation: 1, analysisSource:'original' as const,processingVersion:1,editSignature:'',configHash: 'h', channelIndex: 0, kind: 'stft' as const, settings: { window: 'hann' as const, windowSize: 64, hopSize: 100, fftSize: 200, melBands: 32 }, startFrame: 0, frameCount: 2, timeLod: 0, frequencyStart: 0, frequencyCount: 2, frequencyLod: 0, visible: true, ...overrides };
+  const request = { requestId: 'r', viewId: 'v', projectId: 'p', mediaId: 'm', generation: 1, analysisSource:'original' as const,processingVersion:2,editSignature:'',configHash: 'h', channelIndex: 0, kind: 'stft' as const, settings: { window: 'hann' as const, windowSize: 64, hopSize: 100, fftSize: 200, melBands: 32 }, startFrame: 0, frameCount: 2, timeLod: 0, frequencyStart: 0, frequencyCount: 2, frequencyLod: 0, visible: true, ...overrides };
   const rows = request.frameCount, columns = Math.ceil(request.frequencyCount / 2 ** request.frequencyLod);
   return { request, metadata: { rows, columns, sourceFrames: rows * 2 ** request.timeLod, sampleRate: 1000, totalSamples: 200, startSeconds: request.startFrame / 10, endSeconds: (request.startFrame + rows * 2 ** request.timeLod) / 10, frameStepSamples: 100 * 2 ** request.timeLod, melPointsHz: [], ...extra }, values: Float32Array.from(values) };
 }

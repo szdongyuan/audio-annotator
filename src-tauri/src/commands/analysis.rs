@@ -466,7 +466,7 @@ mod tests {
         *state.0.lock().unwrap() = Some(project);
         let request = TileRequest {
             analysis_source: AnalysisSource::Processed,
-            processing_version: 1,
+            processing_version: 2,
             edit_signature: AnalysisSource::Processed.signature(&media.id, &[]),
             request_id: "p".into(),
             view_id: state.2.scheduler.register_view().unwrap(),
@@ -508,7 +508,8 @@ mod tests {
                 high_hz: media.sample_rate as f64 / 2.,
             },
             enabled: true,
-            processing_version: 1,
+            processing_version: 2,
+            operation: annotator_core::model::EditOperation::Mask,
         };
         let changed = state.clone();
         let project_id = id.clone();
@@ -611,7 +612,7 @@ mod tests {
         let settings = snapshot.document.analysis[&descriptor.id].clone();
         let request = TileRequest {
             analysis_source: annotator_core::analysis::source::AnalysisSource::Original,
-            processing_version: 1,
+            processing_version: 2,
             edit_signature: String::new(),
             request_id: "test".into(),
             view_id: state.2.scheduler.register_view().unwrap(),

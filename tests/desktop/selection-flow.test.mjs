@@ -15,11 +15,13 @@ export async function selectionFlow(h, context) {
   const temporaryStyle = () => h.evaluate(`const e=document.querySelector('.is-temporary');return e?{left:e.style.left,top:e.style.top,width:e.style.width,height:e.style.height,active:e.classList.contains('is-selected'),handles:e.querySelectorAll('.region-handle').length}:null`);
   const firstTemporary = await temporaryStyle(); assert.equal(firstTemporary.active, true); assert.equal(firstTemporary.handles, 8);
   await h.drag('.annotation-overlay', [.8,.1], [.9,.2]);
-  const inactive = await temporaryStyle(); assert.deepEqual(inactive, { ...firstTemporary, active: false, handles: 0 });
+  const inactive = await temporaryStyle(); assert.equal(inactive, null, 'first external gesture clears temporary frame and candidate');
   await h.driver.actions().sendKeys(Key.DELETE).perform();
   assert.equal((await h.snapshot(context.id)).document.edits.length, before.edits.length, 'inactive Delete cannot mask');
   await h.screenshot('inactive-outline');
-  await h.drag('.annotation-overlay', [.4,.45], [.4,.45]); assert.equal((await temporaryStyle()).active, true, 'click reactivates retained outline');
+  await h.drag('.annotation-overlay', [.4,.45], [.4,.45]); assert.equal(await temporaryStyle(), null, 'plain click keeps no retained outline');
+  assert.ok(await h.evaluate("return !!document.querySelector('.audio-cue')"));
+  await h.drag('.annotation-overlay', [.2,.25], [.6,.7]);
   await h.drag('.annotation-overlay', [.4,.45], [.45,.45]);
   const movedTemporary = await temporaryStyle(); assert.ok(parseFloat(movedTemporary.left)>parseFloat(firstTemporary.left)); assert.equal(movedTemporary.width,firstTemporary.width,'interior drag moves without changing width');
   await h.drag('.annotation-overlay', [.8,.1], [.9,.2]);
@@ -28,29 +30,30 @@ export async function selectionFlow(h, context) {
   assert.equal(await h.evaluate(`return document.querySelectorAll('.is-temporary').length`), 1);
   await h.screenshot('active-replacement');
   await h.context('.annotation-overlay', [.4,.45]);
-  await h.label('标注类型'); await h.clickText('选区测试');
+  await h.label('标注类型'); await h.label('选区测试'); await h.driver.actions().sendKeys(Key.ESCAPE,Key.ESCAPE).perform();
   await h.until(`document.querySelector('.annotation-inspector')`);
   let doc = (await h.snapshot(context.id)).document;
   assert.equal(doc.annotations.length, before.annotations.length + 1);
   const annotation = doc.annotations.at(-1);
-  assert.equal(annotation.categoryId, doc.categories.find(c => c.name === '选区测试').id);
+  assert.deepEqual(annotation.categoryIds,[ doc.categories.find(c => c.name === '选区测试').id]);
   await h.input('区域备注', '右键选区备注');
   await h.context('.annotation-overlay', [.4,.45]);
-  await h.label('标注类型'); await h.clickText('未分类');
-  await h.until(`document.querySelector('select[aria-label="区域类别"]')?.value===''`);
+  await h.label('标注类型'); await h.label('清空标签');await h.driver.actions().sendKeys(Key.ESCAPE,Key.ESCAPE).perform();
+  await h.driver.wait(async()=>(await h.snapshot(context.id)).document.annotations[0].categoryIds.length===0,30000);
   doc = (await h.snapshot(context.id)).document;
   assert.equal(doc.annotations.length, 1); assert.equal(doc.annotations[0].note, '右键选区备注');
   // The restored focus is the plot, so Delete is a physical keyboard event.
   await h.driver.actions().move({origin:await h.element('.annotation-overlay')}).click().perform();
   await h.context(`[data-annotation-id="${annotation.id}"]`); await h.driver.actions().sendKeys(Key.ESCAPE).perform();
   await h.driver.actions().sendKeys(Key.DELETE).perform();
-  await h.until(`document.querySelector('.mask-rect.is-selected')`);
+  await h.driver.wait(async()=>(await h.snapshot(context.id)).document.edits.length===1,30000);
+  assert.equal(await h.evaluate("return document.querySelector('.mask-rect')"),null);
   doc = (await h.snapshot(context.id)).document;
   assert.equal(doc.edits.length, 1); assert.deepEqual(doc.edits[0].region, annotation.region); assert.equal(doc.annotations.length, 1);
-  await h.driver.actions().sendKeys(Key.DELETE).perform();
+  await h.click(`[data-annotation-id="${annotation.id}"]`);await h.driver.actions().sendKeys(Key.DELETE).perform();
   assert.equal((await h.snapshot(context.id)).document.edits.length, 1, 'identical mask deduplicates');
   await h.label('撤销 · Ctrl Z');
-  await h.until(`!document.querySelector('.mask-rect')`);
+  await h.driver.wait(async()=>(await h.snapshot(context.id)).document.edits.length===0,30000);
   assert.equal((await h.snapshot(context.id)).document.annotations.length, 1);
 
   // First blank gesture deactivates; the second creates the next temporary range.
@@ -83,6 +86,7 @@ export async function selectionFlow(h, context) {
   const menu = await h.evaluate(`return [...document.querySelectorAll('[role="menu"]')].map(e=>{const r=e.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight}})`);
   assert.ok(menu.every(r => r.left >= 0 && r.top >= 0 && r.right <= r.width && r.bottom <= r.height));
   await h.driver.actions().sendKeys(Key.ARROW_DOWN, Key.ARROW_RIGHT).perform();
+  await h.until("document.querySelectorAll('[role=menu]').length===2&&[...document.querySelectorAll('[role=menu]')].every(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight;})",'nested menu placement committed');
   const nestedMenu = await h.evaluate(`return [...document.querySelectorAll('[role="menu"]')].map(e=>{const r=e.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight}})`);
   assert.equal(nestedMenu.length,2,'keyboard opens a real nested context menu');
   assert.ok(nestedMenu.every(r=>r.left>=0&&r.top>=0&&r.right<=r.width&&r.bottom<=r.height));
@@ -94,7 +98,7 @@ export async function selectionFlow(h, context) {
   const priorCompareDraw = await temporaryStyle();
   await h.drag(second, [.2,.25], [.6,.7]);
   assert.equal(await h.evaluate(`return document.querySelectorAll('.annotation-rect.is-selected').length`), 0, 'first comparison blank gesture only deactivates the global active selection');
-  assert.deepEqual(await temporaryStyle(), { ...priorCompareDraw, active: false, handles: 0 });
+  assert.equal(await temporaryStyle(), null, 'comparison deactivation clears the temporary candidate');
   await h.drag(second, [.2,.25], [.6,.7]); await h.context(second, [.4,.45]); await h.label('备注');
   await h.until(`document.activeElement?.getAttribute('aria-label')==='区域备注'`);
   await h.input('区域备注', '来自对比面板');
@@ -104,31 +108,29 @@ export async function selectionFlow(h, context) {
   const priorCompareGeneration = (await playbackStatus()).generation;
   await h.context(second, [.4,.45]); await h.label('试听选区（应用屏蔽）');
   const comparePlayback = await awaitNativeOutput(before.media.find(m=>m.id!==primaryId).id, priorCompareGeneration); assert.equal(comparePlayback.underrunFrames, 0); await h.label('停止');
-  await h.context(second, [.4,.45]); await h.label('屏蔽选区'); await h.until(`document.querySelector('.mask-rect.is-selected')`);
-  await h.context(second, [.4,.45]); await h.label('重叠对象'); await h.label('未分类标注 2');
+  await h.context(second, [.4,.45]); await h.label('屏蔽选区'); await h.driver.wait(async()=>(await h.snapshot(context.id)).document.edits.length===1,30000);
+  assert.equal(await h.evaluate("return document.querySelector('.mask-rect')"),null,'DSP is absent from overlay hits');
+  await h.click(`[data-annotation-id="${compared.id}"]`);
   await h.context(second, [.4,.45]); await h.label('删除标注');
   doc = (await h.snapshot(context.id)).document; assert.equal(doc.annotations.length, 1); assert.equal(doc.edits.length, 1, 'explicit annotation delete retains overlapping mask');
-  await h.context('.mask-rect'); await h.driver.actions().sendKeys(Key.ESCAPE).perform();
-  // Context opening is neutral; explicitly select the retained mask before moving it.
-  await h.click('.mask-rect');
-  await h.until(`document.querySelector('.mask-rect.is-selected')`);
+  await h.context(second); await h.driver.actions().sendKeys(Key.ESCAPE).perform();
+  // Removed edit-frame interactions now prove DSP geometry cannot be hit/moved.
   const maskBefore = doc.edits[0];
-  await h.drag('.mask-rect', [.005,.3], [.1,.3]);
-  doc = (await h.snapshot(context.id)).document; assert.notEqual(doc.edits[0].region.startSeconds, maskBefore.region.startSeconds, 'border moves mask');
+  await h.drag(second, [.005,.3], [.1,.3]);
+  doc = (await h.snapshot(context.id)).document; assert.deepEqual(doc.edits[0].region, maskBefore.region, 'blank drag cannot move a DSP border');
   const borderMovedMask = doc.edits[0];
-  await h.drag('.mask-rect', [.5,.5], [.6,.5]);
-  doc = (await h.snapshot(context.id)).document; assert.notEqual(doc.edits[0].region.startSeconds, borderMovedMask.region.startSeconds, 'active mask interior moves its persistent geometry');
-  assert.equal(doc.edits.length, 1); assert.equal(await h.evaluate(`return document.querySelectorAll('.is-temporary').length`), 0);
-  const movedMask = doc.edits[0]; await h.drag('.mask-rect .handle-e', [.5,.5], [2,.5]);
-  doc = (await h.snapshot(context.id)).document; assert.notEqual(doc.edits[0].region.endSeconds, movedMask.region.endSeconds, 'handle resizes mask');
-  await h.context('.mask-rect'); await h.label('放大到选区'); await wait(400);
+  await h.drag(second, [.5,.5], [.6,.5]);
+  doc = (await h.snapshot(context.id)).document; assert.deepEqual(doc.edits[0].region, borderMovedMask.region, 'blank interior gesture cannot change DSP geometry');
+  assert.equal(doc.edits.length, 1);await h.driver.actions().sendKeys(Key.ESCAPE).perform();
+  assert.equal(await h.evaluate(`return document.querySelectorAll('.mask-rect,.region-handle').length`),0,'no DSP resize handles');
+  await h.clickText('处理');await h.label('定位屏蔽 1');await wait(400);
   const beforePan = (await h.snapshot(context.id)).document, panMedia = beforePan.edits[0].region.mediaId;
   await h.driver.actions().keyDown(Key.ALT).perform();
   try { await h.drag(second, [.5,.5], [.65,.5]); } finally { await h.driver.actions().keyUp(Key.ALT).perform(); }
   await h.driver.wait(async () => (await h.snapshot(context.id)).document.viewState.media[panMedia].startSeconds !== beforePan.viewState.media[panMedia].startSeconds, 10000, 'Alt-left drag must pan the zoomed view');
   const afterPan = (await h.snapshot(context.id)).document;
   assert.deepEqual(afterPan.edits[0].region, beforePan.edits[0].region, 'pan priority leaves mask geometry unchanged');
-  assert.equal(await h.evaluate(`return document.querySelectorAll('.mask-rect.is-selected').length`),1);
+  assert.equal(await h.evaluate(`return document.querySelectorAll('.mask-rect.is-selected').length`),0);
   await h.context(second); await h.label('重置当前视图');
   await h.screenshot('selection-compare-context');
   await h.clickText('保存');
@@ -136,7 +138,7 @@ export async function selectionFlow(h, context) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  const output = path.resolve(process.env.ANNOTATOR_SELECTION_OUTPUT ?? '.test-output/fidelity-release/selection', process.env.ANNOTATOR_SELECTION_OUTPUT ? '' : `run-${Date.now()}-${process.pid}`); await fs.mkdir(output, { recursive: true });
+  const output = path.resolve(process.env.ANNOTATOR_SELECTION_OUTPUT ?? process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/fidelity-release/selection', (process.env.ANNOTATOR_SELECTION_OUTPUT || process.env.ANNOTATOR_SUITE_OUTPUT) ? '' : `run-${Date.now()}-${process.pid}`); await fs.mkdir(output, { recursive: true });
   const project = await fs.mkdtemp(path.join(output, 'project-'));
   const paths = { '新建项目 · 选择空文件夹': [project], '': [[path.resolve('tests/fixtures/audio/stereo.mp3'), path.resolve('tests/fixtures/audio/mono16.wav')]] };
   const report = { method: 'Owned native Tauri process, official tauri-driver and EdgeDriver; native picker paths only use the e2e feature. Edits use WebDriver pointer/keyboard.', output };

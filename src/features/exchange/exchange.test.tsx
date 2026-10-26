@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { ExportDialog } from './ExportDialog';
 import { ImportDialog } from './ImportDialog';
 import { useProjectLifecycle } from '../project/useProjectLifecycle';
@@ -39,18 +39,21 @@ it('explains JSON versus complete packages and exposes progress, cancellation an
  rerender(<ExportDialog busy={false} phase="" completed={0} result="D:/shared/test.zip" error={null} cancelled={false} onStart={start} onCancel={cancel} onClose={()=>{}} />);expect(screen.getByText('D:/shared/test.zip')).toBeInTheDocument();
 });
 it('a terminal event before start acknowledgement cannot attach an old task ID to the next attempt',async()=>{
+ const previewSpy=vi.spyOn(exchangeClient,'preview').mockResolvedValue({token:'preview',runtimeNonce:'nonce',projectId:fixture.projectId,documentRevision:0,organizationRevision:null,bundle:false,preserveFolders:true,directories:[],mediaPaths:{},changes:[]});
  const save=vi.spyOn(exchangeDialogs,'save').mockResolvedValue('D:/new.json');const cancel=vi.spyOn(exchangeClient,'cancel').mockResolvedValue();
  const receivers:((e:ExchangeEvent)=>void)[]=[];const acknowledgements:((id:string)=>void)[]=[];
  const start=vi.spyOn(exchangeClient,'start').mockImplementation(async(_request,receive)=>{receivers.push(receive);return new Promise<string>(r=>acknowledgements.push(r));});
- const project={performExchange:async(action:Parameters<ProjectLifecycleUI['performExchange']>[0])=>{await action({projectId:fixture.projectId,expectedRevision:0});}} as ProjectLifecycleUI;
+ const project={active:{store:{snapshot:{document:{projectId:fixture.projectId,revision:0}}},queue:{flush:async()=>{}},lifecycle:{submitDrafts:async()=>{}}},performExchange:async(action:Parameters<ProjectLifecycleUI['performExchange']>[0])=>{await action({projectId:fixture.projectId,expectedRevision:0});}} as unknown as ProjectLifecycleUI;
  const {result,unmount}=renderHook(()=>useExchange(project));
+ await act(async()=>result.current.prepareExport('annotations'));
  await act(async()=>result.current.startExport('annotations'));
+ expect(start.mock.calls[0][0]).toMatchObject({previewToken:'preview',expected:{expectedRevision:0}});
  await act(async()=>receivers[0]({type:'completed',taskId:'first',path:'D:/new.json',opened:null}));expect(result.current.busy).toBe(false);
  await act(async()=>result.current.startExport('annotations'));await act(async()=>acknowledgements[0]('first'));
  await act(async()=>result.current.onCancel());await act(async()=>acknowledgements[1]('second'));
  expect(cancel.mock.calls.map(c=>c[0])).not.toContain('first');expect(cancel).toHaveBeenCalledWith('second');
  await act(async()=>receivers[1]({type:'cancelled',taskId:'second'}));expect(result.current.cancelled).toBe(true);expect(result.current.error).toBeNull();
- unmount();save.mockRestore();cancel.mockRestore();start.mockRestore();
+ unmount();save.mockRestore();cancel.mockRestore();start.mockRestore();previewSpy.mockRestore();
 });
 it('import describes an independent copy and keeps failure, cancelled and success states distinct',()=>{
  const props={busy:false,phase:'',completed:0,result:null,error:null,cancelled:false,onStart:vi.fn(),onCancel:vi.fn(),onClose:vi.fn()};const {rerender}=render(<ImportDialog {...props}/>);
@@ -96,3 +99,23 @@ it('changed JSON source can restart preflight and only verified completion adopt
  const hook=renderHook(()=>useExchange(project));await act(async()=>hook.result.current.startImport());await act(async()=>hook.result.current.chooseSource(media[0].id));await act(async()=>hook.result.current.continueImport());expect(adopt).not.toHaveBeenCalled();expect(hook.result.current.sources?.sourceSha256).toBe(digest);
  digest='b'.repeat(64);fail=false;await act(async()=>hook.result.current.startImport());expect(hook.result.current.bindings).toEqual({});await act(async()=>hook.result.current.chooseSource(media[0].id));await act(async()=>hook.result.current.continueImport());expect(adopt).toHaveBeenCalledTimes(1);expect(adopt.mock.calls[0][0].collaboration).toMatchObject({projectFlavor:'default',identityMode:'profile'});expect(start.mock.calls.at(-1)![0].bindings?.sourceSha256).toBe(digest);expect(hook.result.current.sources).toBeNull();hook.unmount();source.mockRestore();parent.mockRestore();choose.mockRestore();start.mockRestore();
 });
+it('offers folder preservation only for bundles, requires preview acceptance and bounds adjustment rows',()=>{const changes=Array.from({length:61},(_,i)=>({kind:'media' as const,id:String(i),originalPath:`audio/raw${i}`,plannedPath:`audio/safe${i}`}));const preview={token:'token',runtimeNonce:'nonce',projectId:fixture.projectId,documentRevision:1,organizationRevision:1,bundle:true,preserveFolders:true,directories:['audio/'],mediaPaths:{},changes};const prepare=vi.fn(),start=vi.fn(),invalidate=vi.fn();const props={busy:false,phase:'',completed:0,result:null,error:null,cancelled:false,onStart:start,onPreview:prepare,onInvalidatePreview:invalidate,onCancel:vi.fn(),onClose:vi.fn()};const {rerender}=render(<ExportDialog {...props} preview={null}/>);expect(screen.getByLabelText('保留项目文件夹层级')).toBeChecked();expect(screen.getByRole('button',{name:'选择保存位置…'})).toBeDisabled();fireEvent.click(screen.getByText('预览导出路径'));expect(prepare).toHaveBeenCalledWith('bundle',true);rerender(<ExportDialog {...props} preview={preview}/>);expect(screen.getByText('路径调整（61）').closest('details')).not.toHaveAttribute('open');expect(screen.getByRole('button',{name:'选择保存位置…'})).toBeEnabled();fireEvent.click(screen.getByLabelText('仅标注（不含音频）'));expect(screen.queryByLabelText('保留项目文件夹层级')).toBeNull();expect(invalidate).toHaveBeenCalled();});
+it('dismisses delayed export previews, serializes close/reopen requests and rejects stale post-save revisions',async()=>{
+ const owner={store:{snapshot:{document:{projectId:fixture.projectId,revision:0}}},queue:{flush:vi.fn(async()=>{})},lifecycle:{submitDrafts:vi.fn(async()=>{})}} as unknown as NonNullable<ProjectLifecycleUI['active']>;
+ let revision=0;const perform=vi.fn(async(action:Parameters<ProjectLifecycleUI['performExchange']>[0])=>{await action({projectId:fixture.projectId,expectedRevision:revision});});
+ const project={active:owner,performExchange:perform} as unknown as ProjectLifecycleUI;
+ const waits:((value:Awaited<ReturnType<typeof exchangeClient.preview>>)=>void)[]=[];
+ const native=vi.spyOn(exchangeClient,'preview').mockImplementation(()=>new Promise(r=>waits.push(r)));
+ const save=vi.spyOn(exchangeDialogs,'save').mockResolvedValue('D:/out.zip'),start=vi.spyOn(exchangeClient,'start').mockResolvedValue('task');
+ const make=(token:string,preserveFolders:boolean)=>({token,runtimeNonce:'nonce',projectId:fixture.projectId,documentRevision:0,organizationRevision:0,bundle:true,preserveFolders,directories:['audio/'],mediaPaths:{},changes:[]});
+ const hook=renderHook(()=>useExchange(project));act(()=>hook.result.current.show('export'));
+ let first!:Promise<void>,second!:Promise<void>;await act(async()=>{first=hook.result.current.prepareExport('bundle',true);await Promise.resolve();});expect(native).toHaveBeenCalledTimes(1);expect(perform).not.toHaveBeenCalled();
+ act(()=>hook.result.current.onClose());expect(hook.result.current.dialog).toBeNull();act(()=>hook.result.current.show('export'));
+ await act(async()=>{second=hook.result.current.prepareExport('bundle',false);await Promise.resolve();});expect(native).toHaveBeenCalledTimes(1);
+ await act(async()=>{waits[0](make('old',true));await first;});expect(native).toHaveBeenCalledTimes(2);expect(hook.result.current.preview).toBeNull();
+ await act(async()=>{waits[1](make('new',false));await second;});expect(hook.result.current.preview?.token).toBe('new');
+ revision=1;await act(async()=>hook.result.current.startExport('bundle'));expect(start).not.toHaveBeenCalled();expect(hook.result.current.preview).toBeNull();expect(hook.result.current.error?.code).toBe('RevisionConflict');
+ hook.unmount();native.mockRestore();save.mockRestore();start.mockRestore();
+});
+it('never returns a late native completion to a replaced project owner',async()=>{const makeOwner=()=>({store:{snapshot:{document:{projectId:fixture.projectId,revision:0}}},queue:{flush:async()=>{}},lifecycle:{submitDrafts:async()=>{}}}) as unknown as NonNullable<ProjectLifecycleUI['active']>;const owner=makeOwner(),adopt=vi.fn();const perform=async(action:Parameters<ProjectLifecycleUI['performExchange']>[0])=>{const value=await action({projectId:fixture.projectId,expectedRevision:0});if(value)adopt(value);};const preview=vi.spyOn(exchangeClient,'preview').mockResolvedValue({token:'p',runtimeNonce:'nonce',projectId:fixture.projectId,documentRevision:0,organizationRevision:null,bundle:true,preserveFolders:true,directories:['audio/'],mediaPaths:{},changes:[]});const save=vi.spyOn(exchangeDialogs,'save').mockResolvedValue('D:/out.zip');let receive!:(e:ExchangeEvent)=>void;const start=vi.spyOn(exchangeClient,'start').mockImplementation(async(_r,callback)=>{receive=callback;return 'late';});const hook=renderHook(({active})=>useExchange({active,performExchange:perform} as unknown as ProjectLifecycleUI),{initialProps:{active:owner}});await act(()=>hook.result.current.prepareExport('bundle'));await act(async()=>hook.result.current.startExport('bundle'));hook.rerender({active:makeOwner()});await act(async()=>receive({type:'completed',taskId:'late',path:'D:/out.zip',opened:{snapshot:{document:parseProjectDocument(structuredClone(fixture)),canUndo:false,canRedo:false},path:'wrong',persistedRevision:0,recovery:null}}));expect(adopt).not.toHaveBeenCalled();hook.unmount();preview.mockRestore();save.mockRestore();start.mockRestore();});
+it('keeps pending path previews dismissible with Escape and outside pointer while writes remain protected',()=>{const close=vi.fn(),props={busy:false,previewBusy:true,phase:'',completed:0,result:null,error:null,cancelled:false,onStart:vi.fn(),onCancel:vi.fn(),onClose:close};const view=render(<ExportDialog {...props}/>);fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});fireEvent.pointerDown(document.querySelector('.dialog-backdrop')!);expect(close).toHaveBeenCalledTimes(2);view.rerender(<ExportDialog {...props} busy/>);fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});fireEvent.pointerDown(document.querySelector('.dialog-backdrop')!);expect(close).toHaveBeenCalledTimes(2);});

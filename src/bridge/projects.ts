@@ -8,7 +8,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { normalizeError } from './client';
 import { parseProjectDocument, parseProjectSnapshot, type ProjectDocument, type ProjectSnapshot } from './types';
 import type { PersistenceCommands } from '../features/project/lifecycle';
-import { parseCopyProgress, parseSharedContext, type SharedContext } from './collaboration';
+import { parseCopyProgress, parseSharedContext, validatePreferenceMedia, type SharedContext } from './collaboration';
 
 export type RecoverySource = 'recovery' | 'backup';
 export interface RecoveryReport { primary: ProjectDocument | null; candidates: { source: RecoverySource; document: ProjectDocument }[] }
@@ -40,6 +40,7 @@ export function parseOpened(value: unknown): OpenedProject {
   }
   if (Object.keys(v).some(k => !['path','persistedRevision','snapshot','recovery','collaboration'].includes(k))) throw new Error('Unknown opened project field');
   const snapshot=v.snapshot===null?null:parseProjectSnapshot(v.snapshot),collaboration=v.collaboration===undefined?undefined:parseSharedContext(v.collaboration);
+  if(snapshot&&collaboration)validatePreferenceMedia(collaboration.preferences,snapshot.document);
   if(snapshot&&collaboration&&collaboration.hiddenMediaIds.some(id=>!snapshot.document.media.some(m=>m.id===id)))throw new Error('Unknown hidden media');
   return { path:v.path,persistedRevision:v.persistedRevision,snapshot,recovery,...(collaboration?{collaboration}:{}) };
 }

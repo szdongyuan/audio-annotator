@@ -66,11 +66,11 @@ fn ring_is_bounded_and_reuses_consumed_slots() {
     assert!(out.push([0.5; 2], 9));
 }
 #[test]
-fn nonfinite_and_clipping_are_sanitized() {
+fn nonfinite_is_sanitized_and_finite_headroom_preserved() {
     let (_, out) = buffer();
     out.push([f32::NAN, 2.0], 21);
     out.set_playing(true);
-    assert_eq!(out.consume(), [0.0, 1.0]);
+    assert_eq!(out.consume(), [0.0, 2.0]);
 }
 #[test]
 fn play_pause_resume_stop_preserves_session_start() {
@@ -352,7 +352,8 @@ fn real_selection_renderer_loops_both_sources_on_original_channel_and_exact_boun
             ..region.clone()
         },
         enabled: true,
-        processing_version: 1,
+        processing_version: 2,
+        operation: annotator_core::model::EditOperation::Mask,
     };
     let mut energies = Vec::new();
     for source in [SelectionSource::Original, SelectionSource::Processed] {
@@ -426,4 +427,32 @@ fn sub_device_frame_loop_is_rejected_without_infinite_production() {
         }
     )
     .is_err());
+}
+
+#[test]
+fn finite_headroom_survives_mixer_resampler_and_ring() {
+    use annotator_core::{
+        audio::{mixer::mix_stereo, resample::BlockResampler},
+        model::PlaybackMix,
+    };
+    let scalar = 10.0_f32.powf(24.0 / 20.0);
+    let mixed = mix_stereo(
+        &[0.4 * scalar, -0.2 * scalar],
+        2,
+        &PlaybackMix::default(),
+        1.0,
+    )
+    .unwrap();
+    for rate in [48000, 44100] {
+        let mut resampler = BlockResampler::new(48000, rate, 2, 4000).unwrap();
+        let mut output = resampler.push(&mixed.repeat(4000)).unwrap();
+        output.extend(resampler.finish().unwrap());
+        let (_, out) = buffer();
+        let middle = &output[2000..2002];
+        out.push([middle[0], middle[1]], 21);
+        out.set_playing(true);
+        let frame = out.consume();
+        assert!((frame[0] / scalar - 0.4).abs() < 0.001, "{rate}: {frame:?}");
+        assert!((frame[1] / scalar + 0.2).abs() < 0.001);
+    }
 }

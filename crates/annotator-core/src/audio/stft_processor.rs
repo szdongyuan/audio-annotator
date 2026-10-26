@@ -1,13 +1,13 @@
 use super::mask;
 use crate::{
     error::{AppError, ErrorCode, Result},
-    model::{Region, SpectralEdit},
+    model::{EditOperation, Region, SpectralEdit},
 };
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-pub const DSP_VERSION: u32 = 1;
+pub const DSP_VERSION: u32 = 2;
 pub const FFT_SIZE: usize = 2048;
 pub const HOP_SIZE: usize = 512;
 pub const MAX_BLOCK_FRAMES: usize = 4096;
@@ -80,6 +80,7 @@ impl DspProcessor {
                 return Err(version_error());
             }
             validate_region(&edit.region, &info)?;
+            edit.operation.validate()?;
             if edit.enabled {
                 matching.push(edit.clone());
             }
@@ -207,17 +208,32 @@ impl DspProcessor {
                             ..
                         }
                 );
-                let regions: Vec<_> = self
+                let edits: Vec<_> = self
                     .edits
                     .iter()
                     .filter(|e| e.region.channel_index as usize == source_channel)
-                    .map(|e| &e.region)
                     .collect();
                 let time = (frame + FFT_SIZE as i64 / 2) as f64 / self.info.sample_rate as f64;
                 for bin in 0..=FFT_SIZE / 2 {
                     let hz = bin as f64 * self.info.sample_rate as f64 / FFT_SIZE as f64;
                     let mut gain = if applies {
-                        1.0 - mask::suppression(&regions, time, hz, self.info.sample_rate)
+                        {
+                            let mut suppression = 0.0_f64;
+                            let mut db = 0.0_f64;
+                            for edit in &edits {
+                                let weight = mask::time_weight(&edit.region, time)
+                                    * mask::frequency_weight(
+                                        &edit.region,
+                                        hz,
+                                        self.info.sample_rate,
+                                    );
+                                match edit.operation {
+                                    EditOperation::Mask => suppression = suppression.max(weight),
+                                    EditOperation::Gain { gain_db } => db += weight * gain_db,
+                                }
+                            }
+                            (1.0 - suppression) * 10.0_f64.powf(db.clamp(-120.0, 48.0) / 20.0)
+                        }
                     } else {
                         1.0
                     };

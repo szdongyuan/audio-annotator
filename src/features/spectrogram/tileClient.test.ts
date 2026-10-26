@@ -3,15 +3,15 @@ import { describe,it,expect,vi } from 'vitest';
 import { TileClient, decodeTile, splitFrequencyRequests, analysisConfigHash, type TileRequest, type TileTransport } from './tileClient';
 import { webcrypto } from 'node:crypto';
 const settings={window:'hann' as const,windowSize:64,hopSize:64,fftSize:64,melBands:128};
-const request:TileRequest={requestId:'r1',viewId:'v1',projectId:'p1',mediaId:'m1',generation:1,analysisSource:'original' as const,processingVersion:1,editSignature:'',configHash:'hash',settings,channelIndex:0,kind:'stft',startFrame:0,frameCount:2,timeLod:0,frequencyStart:0,frequencyCount:33,frequencyLod:0,visible:true};
+const request:TileRequest={requestId:'r1',viewId:'v1',projectId:'p1',mediaId:'m1',generation:1,analysisSource:'original' as const,processingVersion:2,editSignature:'',configHash:'hash',settings,channelIndex:0,kind:'stft',startFrame:0,frameCount:2,timeLod:0,frequencyStart:0,frequencyCount:33,frequencyLod:0,visible:true};
 function packet(req= request, overrides:Record<string,unknown>={},value=-20):ArrayBuffer {
  const meta=new TextEncoder().encode(JSON.stringify({protocol:1,request:req,tile:{rows:2,columns:33,sourceFrames:2,sampleRate:48000,totalSamples:4800,startSeconds:0,endSeconds:128/48000,frameStepSamples:64,melPointsHz:[]},valueCount:66,encoding:'f32le-db-row-major',...overrides}));
  const offset=Math.ceil((8+meta.length)/4)*4;const bytes=new ArrayBuffer(offset+66*4);const data=new DataView(bytes);new Uint8Array(bytes).set([65,84,48,49]);data.setUint32(4,meta.length,true);new Uint8Array(bytes,8,meta.length).set(meta);for(let i=0;i<66;i++)data.setFloat32(offset+i*4,value,true);return bytes;
 }
 describe('binary tile contract',()=>{
  it('rejects missing, forged, mismatched and unknown source identity fields',()=>{
-   const original={...request,analysisSource:'original' as const,processingVersion:1,editSignature:''};
-   for(const changed of [{analysisSource:'processed'},{processingVersion:2},{editSignature:'0'.repeat(64)},{analysisSource:undefined},{extraAuthority:'untrusted'}])expect(()=>decodeTile(packet({...original,...changed} as TileRequest),original)).toThrow();
+   const original={...request,analysisSource:'original' as const,processingVersion:2,editSignature:''};
+   for(const changed of [{analysisSource:'processed'},{processingVersion:1},{editSignature:'0'.repeat(64)},{analysisSource:undefined},{extraAuthority:'untrusted'}])expect(()=>decodeTile(packet({...original,...changed} as TileRequest),original)).toThrow();
    expect(()=>decodeTile(packet({...original,analysisSource:'future'} as unknown as TileRequest),{...original,analysisSource:'future'} as unknown as TileRequest)).toThrow();
  });
  it('reads little-endian raw floats and physical metadata',()=>{const result=decodeTile(packet(),request);expect(result.values).toBeInstanceOf(Float32Array);expect(result.values[0]).toBe(-20);expect(result.metadata.endSeconds).toBe(128/48000);});

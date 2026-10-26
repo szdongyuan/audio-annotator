@@ -53,3 +53,13 @@ for (const suite of ['rulers-flow', 'compact-layout', 'classification-flow', 'fe
     assert.notEqual(standalone(), standalone(), 'standalone runs must preserve prior reports too');
   });
 }
+
+for(const file of ['selection-flow.test.mjs','fidelity-flow.test.mjs','processed-flow.test.mjs','interaction-flow.test.mjs','task7-sharing.mjs']){
+ test(`${file} honors generic owned suite output when legacy output is absent`,async()=>{
+  const source=await fs.readFile(new URL(`./${file}`,import.meta.url),'utf8'),match=source.match(/const (output|parent)\s*=\s*path\.resolve\([^;]+\);/);assert.ok(match);
+  const expected=path.join(os.tmpdir(),'annotator-generic-suite-output',file),env={...process.env,ANNOTATOR_SUITE_OUTPUT:expected};
+  for(const name of ['ANNOTATOR_SELECTION_OUTPUT','ANNOTATOR_FIDELITY_OUTPUT','ANNOTATOR_PROCESSED_OUTPUT','ANNOTATOR_INTERACTION_OUTPUT','ANNOTATOR_SHARING_OUTPUT'])delete env[name];
+  const actual=execFileSync(process.execPath,['--input-type=module','-e',`import path from 'node:path';const baseline=false;${match[0]}console.log(${match[1]});`],{encoding:'utf8',windowsHide:true,env}).trim();
+  assert.equal(actual,file==='fidelity-flow.test.mjs'?path.join(expected,'native'):expected);
+ });
+}

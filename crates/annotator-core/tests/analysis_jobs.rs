@@ -23,7 +23,7 @@ fn request() -> TileRequest {
     };
     TileRequest {
         analysis_source: annotator_core::analysis::source::AnalysisSource::Original,
-        processing_version: 1,
+        processing_version: 2,
         edit_signature: String::new(),
         request_id: "request-1".into(),
         view_id: "view-1".into(),

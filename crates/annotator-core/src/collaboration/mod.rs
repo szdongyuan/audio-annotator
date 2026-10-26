@@ -2,8 +2,10 @@
 pub mod atomic;
 mod authors;
 mod catalog;
+mod catalog_storage;
 pub(crate) mod catalog_workspace;
 mod model;
+pub mod organization;
 pub mod profiles;
 mod repository;
 mod sync;

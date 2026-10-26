@@ -1,3 +1,4 @@
+import { organizationName, organizationUuid } from './organization';
 import { Channel } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { runtimeInvoke } from './runtimeInvoke';
@@ -11,10 +12,13 @@ export interface SourceRules {
   exclude: string[];
   includeSecond: boolean;
 }
+export interface SourceOrganization {targetFolderId:string|null;mode:'sourcePath'|'flat'|'template';wrapSource:boolean;stripComponents:string[];template:string}
+export const defaultSourceOrganization = ():SourceOrganization => ({targetFolderId:null,mode:'flat',wrapSource:false,stripComponents:[],template:'{source}/{relativeDir}'});
 export interface SourceConfig {
   kind: 'folder' | 'zip';
   paths: string[];
   rules: SourceRules;
+  organization: SourceOrganization;
 }
 export interface SourceToken {
   runtimeNonce: string;
@@ -36,6 +40,8 @@ export interface SourceCandidate {
   displayName: string;
   byteLength: number;
   logicalPosition: number | null;
+  resultingFolderPath:string[];
+  originalFilename:string;
 }
 export interface SourceIssue {
   sourceIndex: number;
@@ -46,6 +52,7 @@ export interface SourcePage {
   candidates: SourceCandidate[];
   issues: SourceIssue[];
   counts: SourceCounts;
+  folderSummary:{index:number;parentIndex:number|null;name:string;mediaCount:number}[];
 }
 export type SourceEvent = {
   type: 'progress' | 'result';
@@ -118,12 +125,15 @@ export function parseSourceEvent(v: unknown): SourceEvent {
     shape(v, { type: oneOf('progress', 'result'), token: parseSourceToken, counts });
   return v as SourceEvent;
 }
+export function parseSourceOrganization(v:unknown, discovery:SourceRules['mode']):SourceOrganization {
+ shape(v,{targetFolderId:v=>{if(v!==null)organizationUuid(v);},mode:oneOf('sourcePath','flat','template'),wrapSource:bool,stripComponents:array(organizationName(true),32),template:text});
+ const o=v as SourceOrganization;check(new TextEncoder().encode(o.template).length<=4096);check(!/^[a-z]:\//i.test(o.template));const parts=o.template.split('/');check(parts.length<=16);
+ for(const part of parts){if(part.startsWith('{')&&part.endsWith('}'))check(['{source}','{relativeDir}','{record}','{date}','{result}','{faultType}','{model}','{route}'].includes(part)&&(discovery!=='generic'||['{source}','{relativeDir}'].includes(part)));else{check(!/[{}]/.test(part));organizationName(true)(part);}}
+ return o;
+}
 export function parseSourcePage(v: unknown): SourcePage {
-  shape(v, { candidates: array(c => shape(c, { index: integer(9999), sourceIndex: integer(31), sourceName: text, relativePath: relative, displayName: text, byteLength: integer(1024 ** 3), logicalPosition: x => {
-        if (x !== null)
-          integer()(x);
-      } })), issues: array(i => shape(i, { sourceIndex: integer(31), relativePath: text, message: text })), counts });
-  return v as SourcePage;
+ shape(v,{candidates:array(c=>shape(c,{index:integer(9999),sourceIndex:integer(31),sourceName:text,relativePath:relative,displayName:text,byteLength:integer(1024**3),logicalPosition:x=>{if(x!==null)check(x===1||x===2);},resultingFolderPath:array(organizationName(true),16),originalFilename:organizationName(false)}),50),issues:array(i=>shape(i,{sourceIndex:integer(31),relativePath:text,message:text})),counts,folderSummary:array(f=>shape(f,{index:integer(9999),parentIndex:x=>{if(x!==null)integer(9999)(x);},name:organizationName(true),mediaCount:integer(10000)}),10000)});
+ const page=v as SourcePage;const siblings=new Set<string>();page.folderSummary.forEach((f,i)=>{check(f.index===i&&(f.parentIndex===null||f.parentIndex<i)&&f.mediaCount>0&&f.mediaCount<=page.counts.candidates);let depth=1,parent=f.parentIndex;while(parent!==null){check(++depth<=16);parent=page.folderSummary[parent].parentIndex;}const key=JSON.stringify([f.parentIndex,f.name.toLowerCase()]);check(!siblings.has(key));siblings.add(key);});check(page.candidates.length<=page.counts.candidates);return page;
 }
 export function parseSourceMediaEvent(v: unknown): MediaEvent {
   const type = (v as {
@@ -156,7 +166,7 @@ export function createSourceClient(runtimeNonce?: string): SourceCommands {
   return {
     start: async (projectId, config, receive) => {
       uuid(projectId);
-      shape(config, { kind: oneOf('folder', 'zip'), paths: array(text, 32), rules: parseSourceRules });
+      shape(config, { kind: oneOf('folder', 'zip'), paths: array(text, 32), rules: parseSourceRules, organization: x=>parseSourceOrganization(x,config.rules.mode) });
       check(config.paths.length > 0 && (config.kind !== 'folder' || config.paths.length === 1));
       const onEvent = new Channel<unknown>();
       onEvent.onmessage = v => {
@@ -170,10 +180,10 @@ export function createSourceClient(runtimeNonce?: string): SourceCommands {
       check(token.projectId === projectId);
       return token;
     },
-    page: async (token, offset, limit = 256) => {
+    page: async (token, offset, limit = 50) => {
       owned(token);
       integer(10000)(offset);
-      integer(256)(limit);
+      integer(50)(limit);
       check(limit > 0);
       const page = parseSourcePage(await invoke('import_source_page', { token, offset, limit }));
       check(offset <= page.counts.candidates && page.candidates.length === Math.min(limit, page.counts.candidates - offset));

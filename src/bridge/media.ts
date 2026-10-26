@@ -1,3 +1,4 @@
+import { organizationUuid } from './organization';
 import { runtimeInvoke } from './runtimeInvoke';
 import { Channel } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -13,15 +14,16 @@ export const mediaDialogs = {
   choose: (multiple: boolean) => open({ multiple, directory: false, filters: [{ name: '音频', extensions: ['wav', 'flac', 'mp3'] }] }),
 };
 export interface MediaCommands {
-  start(projectId: string, paths: string[], event: (event: MediaEvent) => void, relinkId?: string): Promise<string>;
+  start(projectId: string, paths: string[], event: (event: MediaEvent) => void, relinkId?: string, target?: {folderId:string|null;layoutRevision:number}): Promise<string>;
   cancel(taskId: string): Promise<void>;
   release(taskId: string, mediaId: string): Promise<void>;
   status(projectId: string): Promise<MediaStatus[]>;
 }
-export function createMediaClient(runtimeNonce?: string) {
+export function createMediaClient(runtimeNonce?: string): MediaCommands {
  const invoke = runtimeInvoke(runtimeNonce);
 return {
-  start: async (projectId, paths, receive, relinkId) => {
+  start: async (projectId, paths, receive, relinkId, target) => {
+    if(target){if(target.folderId!==null)organizationUuid(target.folderId);if(!Number.isSafeInteger(target.layoutRevision)||target.layoutRevision<0)throw new Error('无效目录版本');if(relinkId)throw new Error('关联音频不能改变目录');}
     const onEvent = new Channel<MediaEvent>();
     onEvent.onmessage = event => {
       // Validate document/error payloads before they reach the persistent command queue.
@@ -31,7 +33,7 @@ return {
     };
     return relinkId
       ? invoke('relink_media', { projectId, mediaId: relinkId, path: paths[0], onEvent })
-      : invoke('import_media', { projectId, paths, onEvent });
+      : invoke('import_media', { projectId, paths, onEvent, ...(target?{target}:{}) });
   },
   cancel: taskId => invoke('cancel_media_import', { taskId }),
   release: (taskId, mediaId) => invoke('release_media_import', { taskId, mediaId }),

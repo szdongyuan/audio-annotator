@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import fixture from '../../tests/fixtures/document-v2.json';
+import fixture from '../../tests/fixtures/document-v3.json';
 import { ProjectStore } from './store';
 import { CommandQueue, type ProjectCommands } from './commands';
 import { parseProjectDocument, type Change, type ProjectSnapshot } from '../bridge/types';
@@ -201,4 +201,7 @@ it('keeps a retry unresolved while in flight and rejects duplicate retry or disc
   gate.resolve(snapshot(1));
   await retry;
   await expect(queue.flush()).resolves.toBeUndefined();
+});
+it('an acknowledgement callback failure cannot turn an accepted native mutation into a replayable command failure',async()=>{
+ const s=setup(),onAccepted=vi.fn(()=>{throw new Error('UI observer failed');});await expect(s.queue.enqueue(note('accepted'),{onAccepted})).rejects.toThrow('UI observer failed');expect(s.store.snapshot.document.revision).toBe(1);expect(s.queue.unresolvedFailures).toHaveLength(0);expect(s.api.applyChange).toHaveBeenCalledOnce();
 });

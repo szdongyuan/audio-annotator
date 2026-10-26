@@ -1,6 +1,6 @@
 import { retryAdmission } from './admission';
 import { exchangeClient } from './exchange';
-import fixture from '../../tests/fixtures/document-v2.json';
+import fixture from '../../tests/fixtures/document-v3.json';
 import { describe,expect,it,vi } from 'vitest';
 const invoked=vi.hoisted(()=>vi.fn());
 vi.mock('@tauri-apps/api/core',()=>({invoke:invoked,isTauri:()=>true,Channel:class{onmessage=()=>{};}}));

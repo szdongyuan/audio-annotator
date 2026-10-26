@@ -1,3 +1,4 @@
+import { waitMasked, waitNoMasks, sameBitmap } from './workspace-helpers.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -29,7 +30,7 @@ async function exportFile(h, annotations = false) {
   const labels = await h.evaluate(`return [...document.querySelectorAll('input[name="exchange-format"]')].map(e=>e.getAttribute('aria-label'))`);
   assert.deepEqual(labels, ['我的项目包（含音频）', '我的标注（不含音频）']);
   if (annotations) await h.label('我的标注（不含音频）');
-  await h.clickText('选择保存位置…');
+  await h.clickText('预览导出路径'); await h.until("document.querySelector('[aria-label=导出路径预览]')"); await h.clickText('选择保存位置…');
   await h.until(`document.querySelector('.exchange-result')&&!document.querySelector('.exchange-progress')`);
   await h.screenshot(annotations ? 'export-annotations' : 'export-default-bundle');
   await h.clickText('关闭');
@@ -51,7 +52,7 @@ async function actualTileEnergy(h, document, masked=true) {
   const values = {};
   try {
     for (const analysisSource of ['original', 'processed']) {
-      const request = { requestId: randomUUID(), viewId, projectId, mediaId: media.id, generation: 1, analysisSource, processingVersion: 1, editSignature: analysisSource === 'original' ? '' : editSignature, configHash, settings, channelIndex: 0, kind: 'stft', startFrame: Math.round(3 * media.sampleRate / settings.hopSize), frameCount: 8, timeLod: 0, frequencyStart: 0, frequencyCount: settings.fftSize / 2 + 1, frequencyLod: 0, visible: true };
+      const request = { requestId: randomUUID(), viewId, projectId, mediaId: media.id, generation: 1, analysisSource, processingVersion: 2, editSignature: analysisSource === 'original' ? '' : editSignature, configHash, settings, channelIndex: 0, kind: 'stft', startFrame: Math.round(3 * media.sampleRate / settings.hopSize), frameCount: 8, timeLod: 0, frequencyStart: 0, frequencyCount: settings.fftSize / 2 + 1, frequencyLod: 0, visible: true };
       const result = await h.driver.executeAsyncScript(`const [request,done]=arguments,api=window.__TAURI_INTERNALS__,callback=api.transformCallback(()=>{});api.invoke('collaboration_status').then(s=>api.invoke('request_tile',{runtimeNonce:s.runtimeNonce,request,onEvent:'__CHANNEL__:'+callback})).then(buffer=>{const v=new DataView(buffer),length=v.getUint32(4,true),offset=Math.ceil((8+length)/4)*4,header=JSON.parse(new TextDecoder().decode(new Uint8Array(buffer,8,length)));done({header,values:Array.from(new Float32Array(buffer,offset))});},error=>done({error})).finally(()=>api.unregisterCallback(callback));`, request);
       assert.equal(result.error, undefined, JSON.stringify(result.error));
       assert.deepEqual(result.header.request, request);
@@ -68,7 +69,7 @@ async function actualTileEnergy(h, document, masked=true) {
 }
 
 export async function standaloneSharing() {
-  const parent = path.resolve(process.env.ANNOTATOR_SHARING_OUTPUT ?? '.test-output/fidelity-task7');
+  const parent = path.resolve(process.env.ANNOTATOR_SHARING_OUTPUT ?? process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/fidelity-task7');
   await fs.mkdir(parent, { recursive: true });
   const output = await fs.mkdtemp(path.join(parent, 'native-'));
   const project = path.join(output, 'project'), copy = path.join(output, 'local-copy'), originals = path.join(output, 'owned-originals'), unavailable = path.join(output, 'owned-originals-unavailable'), recipient = path.join(output, 'recipient');
@@ -95,19 +96,19 @@ export async function standaloneSharing() {
     await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`); await h.clickText('关闭导入结果');await h.selectMedia('dual-tone.wav'); await bitmap(h);
     await h.menu('类别管理', '标注'); await h.input('类别名称', '分享分类'); await h.clickText('添加类别'); await h.until(`document.querySelector('.category-row')`);
     await h.click('.file-heading h2'); await h.input('音频备注', '文件备注：完整分享');
-    await h.click('.file-heading .classification-control'); await h.label('文件类别'); await h.label('分享分类');
+    await h.click('.file-heading .classification-control'); await h.label('文件类别'); await h.label('分享分类');await h.driver.actions().sendKeys(Key.ESCAPE,Key.ESCAPE).perform();
     await h.click('.channel-pane:nth-child(2) .channel-caption strong'); await h.input('通道 2 备注', '通道备注：独立保留');
-    await h.click('.channel-pane:nth-child(2) .classification-control'); await h.label('通道类别'); await h.label('分享分类');
+    await h.click('.channel-pane:nth-child(2) .classification-control'); await h.label('通道类别'); await h.label('分享分类');await h.driver.actions().sendKeys(Key.ESCAPE,Key.ESCAPE).perform();
     const initial = (await h.snapshot(id)).document, media = initial.media.find(m=>m.displayName==='dual-tone.wav');
     const view = initial.viewState.media[media.id] ?? { startSeconds: 0, endSeconds: 8, lowHz: 0, highHz: 24000, frequencyMix: .65, spectrumKind: 'stft' };
     const c = coordinates(view, 24000, 1, 1);
     await h.drag('.channel-pane:first-child .annotation-overlay', [.2, c.hzToY(2100)], [.8, c.hzToY(900)]);
-    await h.click('.selection-toolbar button[aria-label="标注"]'); await h.label('分享分类'); await h.until(`document.querySelector('.annotation-inspector')`);
+    await h.until("[...document.querySelectorAll('.selection-toolbar')].some(e=>getComputedStyle(e).visibility==='visible')",'actual selection toolbar placement visible');await h.click('.selection-toolbar button[aria-label="标注"]'); await h.label('分享分类');await h.driver.actions().sendKeys(Key.ESCAPE).perform(); await h.until(`document.querySelector('.annotation-inspector')`);
     await h.input('区域备注', '区域备注：屏蔽可恢复');
-    await h.click('.annotation-rect.is-selected'); await h.driver.actions().sendKeys(Key.DELETE).perform(); await h.until(`document.querySelector('.mask-rect')`);
+    await h.click('.annotation-rect.is-selected'); await h.driver.actions().sendKeys(Key.DELETE).perform(); await waitMasked(h);
     await save(h);
     const saved = (await h.snapshot(id)).document, categoryId = saved.categories[0].id;
-    assert.equal(saved.media.find(m=>m.displayName==='dual-tone.wav').categoryId, categoryId); assert.equal(saved.media.find(m=>m.displayName==='dual-tone.wav').channelCategoryIds[1], categoryId); assert.equal(saved.annotations[0].categoryId, categoryId);
+    assert.deepEqual(saved.media.find(m=>m.displayName==='dual-tone.wav').categoryIds,[ categoryId]); assert.deepEqual(saved.media.find(m=>m.displayName==='dual-tone.wav').channelCategoryIds[1],[ categoryId]); assert.deepEqual(saved.annotations[0].categoryIds,[ categoryId]);
     assert.equal(saved.media.find(m=>m.displayName==='dual-tone.wav').note, '文件备注：完整分享'); assert.equal(saved.media.find(m=>m.displayName==='dual-tone.wav').channelNotes[1], '通道备注：独立保留'); assert.equal(saved.annotations[0].note, '区域备注：屏蔽可恢复'); assert.equal(saved.edits.length, 1);
     const beforePixels = await bitmap(h), beforeEnergy = await actualTileEnergy(h, saved);
     check('actual UI creates and saves three independent classifications/notes plus processed mask', { beforeEnergy, beforePixels });
@@ -139,8 +140,10 @@ export async function standaloneSharing() {
     assert.equal(await h.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`), 'processed');
     const recipientPixels = await bitmap(h), recipientEnergy = await actualTileEnergy(h, imported.document,false);
     assert.notDeepEqual(recipientPixels,beforePixels);assert.ok(Math.abs(recipientEnergy.rejectionDb)<.01);
-    await h.select('声音版本', '原音'); const originalPixels = await bitmap(h); assert.equal(originalPixels[0].hash, recipientPixels[0].hash); assert.deepEqual(originalPixels.slice(1), recipientPixels.slice(1));
-    await h.select('声音版本', '暂存编辑'); assert.deepEqual(await bitmap(h), recipientPixels);
+    await h.select('声音版本', '原音'); const originalPixels = await bitmap(h);
+    await h.select('声音版本', '暂存编辑');await sameBitmap(h,recipientPixels,'empty processed source restores exact canvas');
+    await h.select('声音版本', '原音');await sameBitmap(h,originalPixels,'original source restores exact canvas');
+    await h.select('声音版本', '暂存编辑');await sameBitmap(h,recipientPixels,'processed source remains exact after second switch');
     await h.menu('播放整段', '音频'); const playing = await outputAfter(h, 0); assert.ok(playing.consumedFrames > 2400); await h.label('停止');
     await h.screenshot('portable-import-originals-unavailable');
     check('independent bundle import with unavailable original paths preserves own labels and original audio while excluding private masks from processed tiles/canvas, consuming real native output frames', { importedRoot: imported.root, importedSources, recipientEnergy, recipientPixels, originalPixels, playing, stopped: await playbackStatus(h) });

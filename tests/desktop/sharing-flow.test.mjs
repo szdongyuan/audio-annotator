@@ -8,7 +8,7 @@ export async function sharingFlow(h, context) {
     await h.menu('导出我的标注 / 项目包');
     assert.equal(await (await h.element('[aria-label="我的项目包（含音频）"]')).isSelected(), true);
     if (kind) await h.label(kind);
-    await h.clickText('选择保存位置…');
+    await h.clickText('预览导出路径'); await h.until("document.querySelector('[aria-label=导出路径预览]')"); await h.clickText('选择保存位置…');
     await h.until(`document.querySelector('.exchange-result') && !document.querySelector('.exchange-progress')`); await h.clickText('关闭');
   }
   for (const extension of ['json', 'zip']) {

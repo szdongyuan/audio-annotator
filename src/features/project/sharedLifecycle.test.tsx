@@ -4,12 +4,12 @@ import { act,renderHook,waitFor } from '@testing-library/react';
 import { beforeEach,expect,it,vi } from 'vitest';
 const invoke=vi.hoisted(()=>vi.fn());
 vi.mock('@tauri-apps/api/core',()=>({invoke,isTauri:()=>false,Channel:class{onmessage=()=>{};}}));
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { useProjectLifecycle } from './useProjectLifecycle';
 import type { LocalProjectCommands, OpenedProject } from '../../bridge/projects';
 import type { CollaborationStatus, Transition } from '../../bridge/collaboration';
 const nonceA='11111111-1111-4111-8111-111111111111',nonceB='22222222-2222-4222-8222-222222222222';
-function opened(nonce=nonceA):OpenedProject{return{snapshot:{document:structuredClone(fixture) as never,canUndo:false,canRedo:false},persistedRevision:fixture.revision,recovery:null,path:'shared',collaboration:{projectFlavor:'default' as const,identityMode:'profile' as const,canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false,runtimeNonce:nonce,actor:{authorId:'11111111-1111-4111-8111-111111111111',displayName:'本机身份',createdAt:'2026-10-26T00:00:00Z'},preferences:{volume:.75,deviceId:null,loopEnabled:false,source:'processed'}}};}
+function opened(nonce=nonceA):OpenedProject{return{snapshot:{document:structuredClone(fixture) as never,canUndo:false,canRedo:false},persistedRevision:fixture.revision,recovery:null,path:'shared',collaboration:{projectFlavor:'default' as const,identityMode:'profile' as const,canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false,runtimeNonce:nonce,actor:{authorId:'11111111-1111-4111-8111-111111111111',displayName:'本机身份',createdAt:'2026-10-26T00:00:00Z'},preferences:{monitorGainDb:0,mediaMonitorGainDb:{},volume:.75,deviceId:null,loopEnabled:false,source:'processed'}}};}
 function transition(o:OpenedProject):Transition{return{opened:o,status:{formatVersion:1,...o.collaboration,shared:true,projectId:fixture.projectId,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:null,error:null,snapshot:null} as CollaborationStatus};}
 function setup(o=opened()){const api:LocalProjectCommands={choose:async()=>'/project',open:async()=>o,create:vi.fn(),save:vi.fn(),close:vi.fn(),recover:vi.fn(),saveAs:vi.fn(),cancelRecovery:vi.fn(),onCloseRequested:async()=>()=>{},destroyWindow:vi.fn()};const hook=renderHook(()=>useProjectLifecycle(api));return{hook,api};}
 beforeEach(()=>{invoke.mockReset();invoke.mockImplementation(async(name,args)=>name==='collaboration_status'?transition(opened()).status:name==='save_project'?args.expectedRevision:undefined);});

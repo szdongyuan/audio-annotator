@@ -3,13 +3,13 @@ import { Key } from './harness.mjs';
 export async function spectralFlow(h, context) {
   await h.drag('.annotation-overlay', [.2,.25], [.6,.7]);
   await h.context('.annotation-overlay', [.4,.45]);
-  await h.label('标注类型'); await h.clickText('未分类');
+  await h.label('标注类型'); await h.clickText('清空标签');await h.driver.actions().sendKeys('\uE00C','\uE00C').perform();
   await h.until(`document.querySelector('.annotation-inspector')`);
   assert.equal((await h.snapshot(context.id)).document.annotations.length, 1);
   await h.input('区域备注', '区域独立备注');
   await h.clickText('类别'); await h.input('类别名称', '测试类别'); await h.clickText('添加类别');
   await h.until(`document.querySelector('.category-row')`);
-  await h.clickText('区域'); await h.select('区域类别', '测试类别');
+  await h.clickText('区域'); await h.click('[aria-label=区域类别] input');
   await h.label('撤销 · Ctrl Z'); await h.label('重做 · Ctrl Y');
   await h.click('.file-heading h2'); await h.clickText('文件/通道'); await h.input('音频备注', '文件独立备注'); await h.click('.channel-pane:nth-child(2) .channel-caption strong'); await h.input('通道 2 备注', '通道独立备注');
   await h.clickText('分析设置');

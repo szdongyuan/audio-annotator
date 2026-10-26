@@ -182,7 +182,6 @@
 .inspector-tabs { flex-wrap: wrap; }.inspector-tabs button { flex: 1 0 28%; }
 .mix-channel { display: flex; align-items: center; gap: 5px; margin: 12px 0; font-size: 11px; }.mix-channel span { flex: 1; }.mix-channel button { font-size: 10px; padding: 5px; border: 1px solid #4b424b; color: #aca0b0; border-radius: 4px; background: #24212a; }
 .edit-item { border: 1px solid #51453c; border-radius: 5px; margin: 10px 0; padding: 8px; font-size: 11px; }.edit-item.is-selected { border-color: #dc9a61; }.edit-item>div { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }.edit-item input { accent-color: #c88c56; }.edit-locate { border: 0; background: none; padding: 0; color: #d3b69b; text-align: left; cursor: pointer; width: 100%; }.edit-locate span,.edit-locate small { display: block; margin-top: 5px; color: #9b8b94; line-height: 1.5; overflow-wrap: anywhere; }
-.annotation-rect.mask-rect { --region-color: #e6a25c; background: transparent; border-style: double; }.mask-rect.is-disabled { opacity: .45; border-style: dashed; background: transparent; }.mask-rect .annotation-label { background: #5a3b23; }
 .audio-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: #fcead3; box-shadow: 0 0 5px #ffe5b9; z-index: 4; pointer-events: none; }.audio-playhead::before { content: ''; position: absolute; top: 0; left: -3px; border-left: 3px solid transparent; border-right: 3px solid transparent; border-top: 7px solid #fcead3; }
 .file-pane.is-playback-source { border-color: #826045; }.file-heading .text-button { margin-left: auto; white-space: nowrap; }
 @media (max-width: 1100px) { .transport-detail .playback-counters { display: none; }.transport-live .playback-clock { min-width: 85px; }.transport-main { gap: 7px; }.transport-live .volume-slider { width: 45px; } }
@@ -230,3 +229,51 @@
 .direct-import-progress > div { flex-shrink: 0; }
 .direct-import-progress > .import-progress-details { display: block; min-height: 0; overflow: auto; flex: 1 1 auto; }
 .direct-import-progress > .import-recovery-actions { gap: 8px; }
+.media-folder-row { display:flex; align-items:center; min-height:28px; gap:2px; }
+.media-folder-select { flex:1; min-width:0; border:0; background:transparent; color:inherit; text-align:left; padding:5px 6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.media-folder-select .count { margin-left:6px; }
+.media-folder-row.is-selected,.media-folder-select[aria-pressed=true] { background:var(--surface-raised); border-radius:4px; }
+.media-folder-content { margin-left:7px; border-left:1px solid var(--border); padding-left:3px; }
+.media-card { position:relative; }
+.media-context { position:absolute; right:3px; top:3px; }
+.source-import-dialog input:not([type=checkbox]),.source-import-dialog select { max-width:100%; min-width:0; }
+.source-folder-preview { max-height:180px; overflow:auto; }
+.source-folder-preview button { max-width:100%; white-space:normal; overflow-wrap:anywhere; text-align:left; }
+.source-import-body details { margin-block:6px; }
+.source-import-body details small { overflow-wrap:anywhere; }
+/* Compact media rows match the directory tree rhythm. */
+.media-card { height: 28px; margin: 0; border: 0; border-radius: 3px; }
+.media-select { height: 28px; padding: 3px 6px; gap: 6px; align-items: center; }
+.media-select > svg { flex-shrink: 0; }
+.media-select strong { flex: 1; min-width: 0; font-size: 11px; font-weight: 400; }
+.media-select .media-record-name, .media-select .media-file-name { display: inline; font-size: inherit; }
+.media-select .media-record-name::after { content: ' / '; }
+.media-row-status { flex: 0 0 12px; font-size: 10px; color: #9b938d; }
+.media-row-status.ready { color: #97b69c; }
+.media-row-status.missing, .media-row-status.changed { color: #e4a482; }
+.analysis-workspace { container-type: inline-size; container-name: analysis; }
+.playback-bar.transport-live { height: 42px; min-height: 42px; padding: 3px 6px; }
+.transport-main { gap: 6px; }
+.transport-controls { gap: 2px; flex-shrink: 0; }
+.transport-live .icon-button { width: 28px; height: 30px; }
+.transport-live .playback-clock { min-width: 74px; flex-shrink: 0; }
+.transport-live .playback-clock span { font-size: 13px; }
+.transport-live .playback-clock small { display: none; }
+.transport-source { max-width: 100px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.transport-live .button { white-space: nowrap; padding: 5px 6px; font-size: 10px; }
+.monitor-control { position: relative; flex-shrink: 0; }
+.monitor-popover { position: absolute; z-index: 20; right: 0; bottom: 38px; width: 250px; max-width: calc(100cqw - 12px); max-height: min(360px, 75vh); overflow: auto; border: 1px solid #685045; background: #242128; border-radius: 6px; padding: 12px; box-shadow: 0 8px 28px #0009; }
+.monitor-popover label { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; font-size: 11px; }
+.monitor-popover input, .monitor-popover select { width: 100%; max-width: 100%; min-width: 0; color: inherit; background: #19171d; border: 1px solid #51434f; padding: 5px; }
+.monitor-popover p { font-size: 11px; color: #f1b39a; overflow-wrap: anywhere; }
+@container analysis (max-width: 900px) { .transport-gain, .transport-source { display: none; } }
+@container analysis (max-width: 680px) { .transport-main .playback-position { display: none; } .transport-live .volume-slider { width: 45px; } }
+@container analysis (max-width: 460px) { .transport-live .volume-slider, .transport-volume-icon, .transport-live .audition-controls { display: none; } .transport-main { gap: 3px; } }
+.label-checkboxes { border: 0; margin: 0 0 14px; padding: 0; font-size: 11px; }
+.label-checkboxes legend { margin-bottom: 7px; }
+.label-checkboxes label { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+.inspector-content .label-checkboxes input[type=checkbox] { width: auto; }
+
+.playback-error { left: 6px; right: 6px; max-width: calc(100% - 12px); overflow-wrap: anywhere; align-items: flex-start; }
+.label-checkboxes { min-width: 0; }
+.label-checkboxes label { overflow-wrap: anywhere; }

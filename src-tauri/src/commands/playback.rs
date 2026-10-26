@@ -30,6 +30,7 @@ pub struct PlaybackRequest {
     pub bypass: bool,
     pub looping: bool,
     pub volume: f32,
+    pub monitor_gain_db: f64,
     pub device_id: Option<String>,
     pub seek_seconds: Option<f64>,
     pub play: bool,
@@ -81,6 +82,7 @@ struct Control {
     buffer: Option<Arc<OutputBuffer>>,
     cancel: Arc<AtomicBool>,
     source_rate: u32,
+    monitor_gain_db: f64,
 }
 impl Default for Control {
     fn default() -> Self {
@@ -90,10 +92,16 @@ impl Default for Control {
             buffer: None,
             cancel: Arc::new(AtomicBool::new(false)),
             source_rate: 1,
+            monitor_gain_db: 0.0,
         }
     }
 }
 impl Control {
+    fn attach_buffer(&mut self, buffer: Arc<OutputBuffer>) -> Result<()> {
+        buffer.set_monitor_gain_db(self.monitor_gain_db)?;
+        self.buffer = Some(buffer);
+        Ok(())
+    }
     fn ready(&mut self) {
         if self.status.state == TransportState::Buffering {
             self.status.state = self
@@ -413,7 +421,7 @@ fn run(work: &Work, control: &Mutex<Control>, epoch: &Arc<AtomicU64>) -> Result<
         if c.status.generation != work.generation {
             return Ok(());
         }
-        c.buffer = Some(buffer.clone());
+        c.attach_buffer(buffer.clone())?;
         c.status.device_name = Some(device.name.clone());
         c.status.device_rate = device.sample_rate();
         c.status.device_channels = device.channels();
@@ -544,7 +552,9 @@ pub async fn playback_configure(
     app: tauri::AppHandle,
     request: PlaybackRequest,
 ) -> Result<PlaybackStatus> {
-    if !request.volume.is_finite()
+    if !request.monitor_gain_db.is_finite()
+        || !(-60.0..=24.0).contains(&request.monitor_gain_db)
+        || !request.volume.is_finite()
         || !(0.0..=1.0).contains(&request.volume)
         || request
             .seek_seconds
@@ -572,7 +582,7 @@ pub async fn playback_configure(
                 frame_count: descriptor.frame_count,
                 channel_count: descriptor.channel_count as usize,
             },
-            1,
+            annotator_core::audio::DSP_VERSION,
             mode,
             &doc.edits,
         )?;
@@ -660,6 +670,7 @@ pub async fn playback_configure(
         c.buffer = None;
         c.cancel = cancel.clone();
         c.source_rate = descriptor.sample_rate;
+        c.monitor_gain_db = request.monitor_gain_db;
         c.status = PlaybackStatus {
             generation,
             project_id: Some(request.project_id.clone()),
@@ -708,7 +719,7 @@ pub async fn playback_configure(
 mod tests {
     use super::*;
     fn document() -> ProjectDocument {
-        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json"))
+        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v3.json"))
             .unwrap()
     }
     #[test]
@@ -835,4 +846,212 @@ mod tests {
         runtime.changed(&before, &after);
         assert!(runtime.status().unwrap().media_id.is_none());
     }
+}
+
+#[cfg(test)]
+mod monitor_tests {
+    use super::*;
+    #[test]
+    fn realtime_monitor_changes_only_scalar_and_rejects_stale_streams() {
+        let runtime = PlaybackRuntime::default();
+        let buffer = Arc::new(OutputBuffer::new(16, runtime.epoch.clone(), 7, 100));
+        runtime.epoch.store(7, Ordering::Release);
+        buffer.push([4.0, -2.0], 101);
+        buffer.set_playing(true);
+        {
+            let mut c = runtime.control.lock().unwrap();
+            c.status = PlaybackStatus {
+                generation: 7,
+                project_id: Some("project".into()),
+                media_id: Some("media".into()),
+                state: TransportState::Playing,
+                ..Default::default()
+            };
+            c.buffer = Some(buffer.clone());
+            c.source_rate = 100;
+        }
+        let request = MonitorGainRequest {
+            project_id: "project".into(),
+            media_id: "media".into(),
+            generation: 7,
+            monitor_gain_db: -24.0,
+        };
+        runtime.monitor(&request).unwrap();
+        assert!((buffer.monitor_scalar() - 10.0_f32.powf(-24.0 / 20.0)).abs() < 1e-7);
+        assert_eq!(buffer.consumed(), 0);
+        assert_eq!(buffer.position(), 100);
+        assert_eq!(buffer.free(), 15);
+        let after = runtime.status().unwrap();
+        assert_eq!(after.generation, 7);
+        assert_eq!(after.position_seconds, 1.0);
+        for bad in [
+            MonitorGainRequest {
+                generation: 6,
+                ..request.clone()
+            },
+            MonitorGainRequest {
+                media_id: "other".into(),
+                ..request.clone()
+            },
+            MonitorGainRequest {
+                project_id: "other".into(),
+                ..request.clone()
+            },
+            MonitorGainRequest {
+                monitor_gain_db: f64::NAN,
+                ..request.clone()
+            },
+            MonitorGainRequest {
+                monitor_gain_db: 24.1,
+                ..request.clone()
+            },
+        ] {
+            assert!(runtime.monitor(&bad).is_err());
+        }
+        assert_eq!(buffer.consume(), [4.0, -2.0]);
+        runtime.reset();
+        assert!(runtime.monitor(&request).is_err());
+    }
+    #[test]
+    fn buffering_monitor_updates_latest_scalar_before_device_starts() {
+        let runtime = PlaybackRuntime::default();
+        {
+            let mut c = runtime.control.lock().unwrap();
+            c.monitor_gain_db = 6.0;
+            c.status = PlaybackStatus {
+                generation: 4,
+                project_id: Some("p".into()),
+                media_id: Some("m".into()),
+                state: TransportState::Buffering,
+                ..Default::default()
+            };
+        }
+        let mut request = MonitorGainRequest {
+            project_id: "p".into(),
+            media_id: "m".into(),
+            generation: 4,
+            monitor_gain_db: -6.0,
+        };
+        runtime.monitor(&request).unwrap();
+        request.monitor_gain_db = -24.0;
+        runtime.monitor(&request).unwrap();
+        let buffer = Arc::new(OutputBuffer::new(8, runtime.epoch.clone(), 4, 100));
+        runtime
+            .control
+            .lock()
+            .unwrap()
+            .attach_buffer(buffer.clone())
+            .unwrap();
+        assert!((buffer.monitor_scalar() - 10.0_f32.powf(-24.0 / 20.0)).abs() < 1e-7);
+        assert_eq!(runtime.control.lock().unwrap().status.generation, 4);
+        assert!(runtime.pending.lock().unwrap().is_none());
+    }
+    #[test]
+    fn realtime_native_command_rejects_retired_owner_and_changed_source() {
+        let state = AppState::default();
+        let doc =
+            ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v3.json"))
+                .unwrap();
+        let root = std::env::temp_dir().join(format!("monitor-owned-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("project.json"), serde_json::to_vec(&doc).unwrap()).unwrap();
+        *state.0.lock().unwrap() =
+            Some(annotator_core::project::LocalProject::open(&root).unwrap());
+        state.3.epoch.store(3, Ordering::Release);
+        let nonce = state.6.current.lock().unwrap().nonce.clone();
+        let request = MonitorGainRequest {
+            project_id: doc.project_id.clone(),
+            media_id: doc.media[0].id.clone(),
+            generation: 3,
+            monitor_gain_db: 6.0,
+        };
+        {
+            let mut c = state.3.control.lock().unwrap();
+            c.status = PlaybackStatus {
+                generation: 3,
+                project_id: Some(doc.project_id.clone()),
+                media_id: Some(doc.media[0].id.clone()),
+                state: TransportState::Buffering,
+                ..Default::default()
+            };
+        }
+        assert!(monitor_owned(&state, Some(&nonce), &request).is_ok());
+        assert!(monitor_owned(&state, Some("retired"), &request).is_err());
+        let mut changed = doc.clone();
+        changed.media[0].source_ref = "replacement.wav".into();
+        state.3.changed(&doc, &changed);
+        assert!(monitor_owned(&state, Some(&nonce), &request).is_err());
+        state.6.retire();
+        assert!(monitor_owned(&state, Some(&nonce), &request).is_err());
+        *state.0.lock().unwrap() = None;
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MonitorGainRequest {
+    pub project_id: String,
+    pub media_id: String,
+    pub generation: u64,
+    pub monitor_gain_db: f64,
+}
+impl PlaybackRuntime {
+    fn monitor(&self, request: &MonitorGainRequest) -> Result<PlaybackStatus> {
+        if !request.monitor_gain_db.is_finite()
+            || !(-60.0..=24.0).contains(&request.monitor_gain_db)
+            || request.generation > annotator_core::model::validation::MAX_SAFE_INTEGER
+        {
+            return Err(AppError::invalid("Invalid monitor gain request"));
+        }
+        let mut c = self
+            .control
+            .lock()
+            .map_err(|_| device_error("Playback unavailable"))?;
+        if c.status.project_id.as_deref() != Some(&request.project_id)
+            || c.status.media_id.as_deref() != Some(&request.media_id)
+            || c.status.generation != request.generation
+            || c.cancel.load(Ordering::Acquire)
+        {
+            return Err(AppError::new(
+                ErrorCode::RevisionConflict,
+                "Playback source changed",
+            ));
+        }
+        c.monitor_gain_db = request.monitor_gain_db;
+        if let Some(buffer) = &c.buffer {
+            buffer.set_monitor_gain_db(request.monitor_gain_db)?;
+        }
+        sample_clock(&mut c);
+        Ok(c.status.clone())
+    }
+}
+
+#[tauri::command]
+pub fn playback_monitor_gain(
+    state: State<'_, AppState>,
+    runtime_nonce: Option<String>,
+    request: MonitorGainRequest,
+) -> Result<PlaybackStatus> {
+    monitor_owned(&state, runtime_nonce.as_deref(), &request)
+}
+pub(crate) fn monitor_owned(
+    state: &AppState,
+    nonce: Option<&str>,
+    request: &MonitorGainRequest,
+) -> Result<PlaybackStatus> {
+    let guard = state
+        .0
+        .lock()
+        .map_err(|_| device_error("Project unavailable"))?;
+    let project = guard
+        .as_ref()
+        .ok_or_else(|| AppError::invalid("No active project"))?;
+    check_owner(state, Some(project), nonce)?;
+    let document = project.snapshot()?.document;
+    if document.project_id != request.project_id
+        || !document.media.iter().any(|m| m.id == request.media_id)
+    {
+        return Err(super::collaboration::runtime::stale());
+    }
+    state.3.monitor(request)
 }

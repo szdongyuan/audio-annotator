@@ -1,3 +1,4 @@
+import { waitMasked, waitNoMasks } from './workspace-helpers.mjs';
 import { createIdentity, exportIdentity, importIdentity, profiles } from './identity-helpers.mjs';
 // Two independent native UI clients. IPC below is read-only assertion; all user
 // mutations use real WebDriver controls and native picker queues.
@@ -31,15 +32,15 @@ const sync=async h=>{await h.menu('保存并同步','协作');await h.until(`doc
 const tab=(h,name)=>h.driver.findElement(By.xpath(`//button[@role='tab' and normalize-space(.)='${name}']`)).click();
 const region=async(h,name)=>{
  await h.menu('类别管理','标注');await h.input('类别名称',name+' category');await h.clickText('添加类别');
- await h.drag('.channel-pane:first-child .annotation-overlay',[.2,.25],[.6,.7]);await h.label('标注');await h.clickText(name+' category');await h.until(`document.querySelector('.annotation-inspector')`);
+ await h.drag('.channel-pane:first-child .annotation-overlay',[.2,.25],[.6,.7]);await h.label('标注');await h.label(name+' category');await h.driver.actions().sendKeys(Key.ESCAPE).perform();await h.until(`document.querySelector('.annotation-inspector')`);
  for(const [label,value]of [['开始（秒）','0.4'],['结束（秒）','1.5'],['下界（Hz）','1000'],['上界（Hz）','6000']])await h.input(label,value);
  await h.input('区域备注',name+' region');await sync(h);return(await snapshot(h)).document.annotations[0];
 };
 const notes=async(h,name)=>{
  await h.click('.file-heading h2');await h.until(`document.querySelector('[aria-label="音频备注"]')`);await h.input('音频备注',name+' file');
- await h.click('.file-heading .classification-control');await h.label('文件类别');await h.label(name+' category');
+ await h.click('.file-heading .classification-control');await h.label('文件类别');await h.label(name+' category');await h.driver.actions().sendKeys(Key.ESCAPE,Key.ESCAPE).perform();
  await h.click('.channel-pane:nth-child(2) .channel-caption strong');await h.until(`document.querySelector('[aria-label="通道 2 备注"]')`);await h.input('通道 2 备注',name+' channel');
- await h.click('.channel-pane:nth-child(2) .channel-caption .classification-control');await h.label('通道类别');await h.label(name+' category');await sync(h);
+ await h.click('.channel-pane:nth-child(2) .channel-caption .classification-control');await h.label('通道类别');await h.label(name+' category');await h.driver.actions().sendKeys(Key.ESCAPE,Key.ESCAPE).perform();await sync(h);
 };
 const filter=async(h,name,exclude)=>{await h.menu('作者显示与同步状态…','协作');await h.driver.findElement(By.xpath(`//label[normalize-space(.)='${name}']/input`)).click();if(exclude)await h.driver.findElement(By.xpath(`//label[normalize-space(.)='${exclude}']/input`)).click();await h.clickText('关闭');};
 const selectOwn=async(h,id)=>{await h.drag(`[data-annotation-id="${id}"]`,[.5,.5],[.5,.5]);await h.until(`document.querySelector('.annotation-inspector')`);};
@@ -71,13 +72,13 @@ try{
  // Own overlapping active frame stays draggable despite the foreign frame.
  await selectOwn(a,aa.id);const oldStart=(await snapshot(a)).document.annotations[0].region.startSeconds;await a.drag(`[data-annotation-id="${aa.id}"]`,[.5,.5],[.55,.5]);assert.ok((await snapshot(a)).document.annotations[0].region.startSeconds>oldStart);assert.equal((await snapshot(b)).document.annotations[0].region.startSeconds,.4);await a.menu('撤销','编辑');await sync(a);
  await a.input('区域备注','Alice updated');await sync(a);await b.driver.wait(async()=>{const s=await status(b);return s.snapshot.authors.some(x=>x.identity.displayName==='Alice'&&x.layer?.payload.annotations[0]?.note==='Alice updated');},30000);
- await selectOwn(a,aa.id);await a.click('.selection-toolbar button');await a.driver.wait(async()=>{const p=await playback(a);return p.state==='playing'&&p.consumedFrames>4800;},30000);
+ await selectOwn(a,aa.id);await a.until("[...document.querySelectorAll('.selection-toolbar')].some(e=>getComputedStyle(e).visibility==='visible')",'selection play toolbar visible');await a.click('.selection-toolbar button');await a.driver.wait(async()=>{const p=await playback(a);return p.state==='playing'&&p.consumedFrames>4800;},30000);
  const generationBefore=(await playback(a)).generation,undoBefore=(await snapshot(a)).canUndo;
  const draft=await a.element('[aria-label="区域备注"]');await draft.click();await draft.sendKeys(Key.CONTROL,'a',Key.NULL,'Alice typing while Bob changes');
  await selectOwn(b,bb.id);await b.input('区域备注','Bob remote update');await sync(b);await a.driver.wait(async()=>{const s=await status(a);return s.snapshot.authors.some(x=>x.identity.displayName==='Bob'&&x.layer?.payload.annotations[0]?.note==='Bob remote update');},30000);
  assert.equal(await draft.getAttribute('value'),'Alice typing while Bob changes');assert.equal((await snapshot(a)).canUndo,undoBefore);assert.equal(await a.evaluate(`return document.querySelector('[data-annotation-id].is-selected')?.dataset.annotationId`),aa.id);assert.equal((await playback(a)).generation,generationBefore);assert.equal(await a.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`),'original');await a.label('停止');check('remote update preserves own note input, selected frame, undo availability and active playback generation/source');
  // Private masks, preferences and view changes persist locally and do not alter B.
- const bPrivate=(await snapshot(b)).document;await selectOwn(a,aa.id);await a.context(`[data-annotation-id="${aa.id}"]`);await a.label('屏蔽选区');await a.until(`document.querySelector('.mask-rect')`);await a.label('显示通道 2');await sync(a);
+ const bPrivate=(await snapshot(b)).document;await selectOwn(a,aa.id);await a.context(`[data-annotation-id="${aa.id}"]`);await a.label('屏蔽选区');await waitMasked(a);await a.label('显示通道 2');await sync(a);
  const aPrivate=(await snapshot(a)).document;assert.equal(aPrivate.edits.length,1);assert.deepEqual((await snapshot(b)).document.edits,bPrivate.edits);assert.deepEqual((await snapshot(b)).document.viewState,bPrivate.viewState);assert.equal((await status(b)).preferences?.volume??.75,.75);assert.equal(await b.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`),'processed');assert.equal((await status(a)).preferences.volume,.11);check('private mask, channel visibility, volume and source changes on A leave B unchanged');
  // A deletion removes only A's foreign row from B, including an already-open detail.
  await b.clickText('作者');await b.click('.remote-list-entry');await b.until(`document.querySelector('.remote-inspector')?.textContent.includes('Alice typing')`);
@@ -88,7 +89,7 @@ try{
  await filter(b,'勾选作者','Bob');await b.drag('.channel-pane:first-child .annotation-overlay',[.3,.9],[.3,.9]); // use exact rendered foreign bounds below if outside
  if(!await b.evaluate(`return !!document.querySelector('.remote-inspector')`))await b.drag('.remote-annotation',[.5,.5],[.5,.5]);
  await b.until(`document.querySelector('.remote-inspector')`);await b.clickText('关闭只读详情');await b.context('.remote-annotation');await b.until(`document.querySelector('.remote-inspector')`);await b.clickText('关闭只读详情');await filter(b,'全部');check('foreign click and right-click route to read-only details while own author is hidden');
- for(const kind of ['我的标注（不含音频）','我的项目包（含音频）']){await a.menu('导出我的标注 / 项目包…');await a.label(kind);await a.clickText('选择保存位置…');await a.until(`document.querySelector('.exchange-result')&&!document.querySelector('.exchange-progress')`);await a.clickText('关闭');}
+ for(const kind of ['我的标注（不含音频）','我的项目包（含音频）']){await a.menu('导出我的标注 / 项目包…');await a.label(kind);await a.clickText('预览导出路径'); await a.until("document.querySelector('[aria-label=导出路径预览]')"); await a.clickText('选择保存位置…');await a.until(`document.querySelector('.exchange-result')&&!document.querySelector('.exchange-progress')`);await a.clickText('关闭');}
  const json=JSON.parse(await fs.readFile(exportedJson,'utf8'));
  const zipManifest=JSON.parse(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Add-Type -AssemblyName System.IO.Compression.FileSystem; $taskZip=[System.IO.Compression.ZipFile]::OpenRead('${exportedZip.replaceAll("'","''")}'); try { $taskReader=New-Object System.IO.StreamReader($taskZip.GetEntry('manifest.json').Open()); try {$taskReader.ReadToEnd()} finally {$taskReader.Dispose()} } finally {$taskZip.Dispose()}`],{encoding:'utf8',windowsHide:true}));
  for(const [kind,value]of [['json',json],['zip',zipManifest]]){const text=JSON.stringify(value);assert.ok(text.includes(aa.id));assert.ok(!text.includes(bb.id));assert.ok(!text.includes('Bob category'));assert.ok(!/password123|argon2|passwordHash|runtimeNonce|local-a|client-a/.test(text));assert.ok(!text.includes(aPrivate.edits[0].id));assert.deepEqual(value.edits,[]);assert.deepEqual(value.viewState.media,{});assert.equal(value.viewState.activeMediaId,null);assert.ok(Object.values(value.playbackMix).every(m=>m.soloChannels.length===0&&m.mutedChannels.length===0));assert.ok(value.media.every(m=>!Object.hasOwn(m,'sourceRef')));report[kind+'Export']=value;}
@@ -97,7 +98,7 @@ try{
  // changes the inspecting client's pane visibility.
  const beforeLocateB=(await snapshot(b)).document;await tab(a,'作者');const entries=await a.driver.findElements(By.css('.remote-list-entry'));await entries[3].click();await a.until(`document.querySelector('.remote-inspector')?.textContent.includes('Bob channel')`);await a.clickText('定位');await a.clickText('关闭只读详情');await a.until(`document.querySelectorAll('.channel-pane').length===2`);assert.deepEqual((await snapshot(b)).document.viewState,beforeLocateB.viewState);
  await (await a.driver.findElements(By.css('.remote-list-entry')))[1].click();await a.until(`document.querySelector('.remote-inspector')?.textContent.includes('Bob file')`);await a.clickText('定位');await a.clickText('关闭只读详情');await a.label('显示通道 2');await sync(a);check('foreign file/channel notes and categories inspect independently; channel Locate reveals only the current private pane');
- const aBeforeB=(await snapshot(a)).document;await selectOwn(b,bb.id);await b.context(`[data-annotation-id="${bb.id}"]`);await b.label('屏蔽选区');await b.until(`document.querySelector('.mask-rect')`);const bVolume=await b.element('[aria-label="播放音量"]');await bVolume.sendKeys(Key.HOME,...Array(22).fill(Key.ARROW_RIGHT));await b.label('显示通道 2');await sync(b);
+ const aBeforeB=(await snapshot(a)).document;await selectOwn(b,bb.id);await b.context(`[data-annotation-id="${bb.id}"]`);await b.label('屏蔽选区');await waitMasked(b);const bVolume=await b.element('[aria-label="播放音量"]');await bVolume.sendKeys(Key.HOME,...Array(22).fill(Key.ARROW_RIGHT));await b.label('显示通道 2');await sync(b);
  assert.equal((await snapshot(b)).document.edits.length,1);assert.equal((await status(b)).preferences.volume,.22);for(const key of ['edits','viewState','annotations'])assert.deepEqual((await snapshot(a)).document[key],aBeforeB[key]);assert.equal((await status(a)).preferences.volume,.11);check('B also persists a distinct private mask and volume/view without changing A');
  await sync(a);await sync(b);const savedA=(await snapshot(a)).document,savedB=(await snapshot(b)).document;
  await a.menu('关闭项目');await a.quit();a=null;

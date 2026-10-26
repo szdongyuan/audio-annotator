@@ -42,6 +42,7 @@ fn manifest(first: &str, second: &str) -> Vec<u8> {
 }
 fn config(kind: SourceKind, paths: Vec<PathBuf>, second: bool) -> Config {
     Config {
+        organization: Default::default(),
         kind,
         paths: paths.iter().map(|p| p.to_str().unwrap().into()).collect(),
         rules: Rules {
@@ -53,6 +54,99 @@ fn config(kind: SourceKind, paths: Vec<PathBuf>, second: bool) -> Config {
 }
 fn discover(config: &Config) -> ScanResult {
     scan(config, &AtomicBool::new(false), Limits::default(), |_| {}).unwrap()
+}
+
+#[test]
+#[ignore = "read-only external NAS fixtures require explicit root"]
+fn real_archive_metadata_plans_preserve_cleaned_sources_and_safe_fallback_groups() {
+    let root = PathBuf::from(
+        std::env::var("ANNOTATOR_IMPORT_SOURCE_FIXTURES").expect("explicit fixture root required"),
+    );
+    let mut classified = false;
+    let mut fallback = false;
+    for name in [
+        "运行记录导出20261021NG近距离.zip",
+        "2026-09-15_清洗后192条OK+NG.zip",
+    ] {
+        let source = root.join(name);
+        let mut cfg = config(SourceKind::Zip, vec![source.clone()], true);
+        cfg.organization.mode = OrganizationMode::Template;
+        cfg.organization.template =
+            "{source}/{date}/{result}/{faultType}/{model}/{record}/{route}".into();
+        let scan = discover(&cfg);
+        assert_eq!(
+            scan.candidates().len(),
+            if name.starts_with("2026-") { 384 } else { 318 }
+        );
+        let mut archive = zip::ZipArchive::new(fs::File::open(&source).unwrap()).unwrap();
+        for candidate in scan
+            .candidates()
+            .iter()
+            .filter(|c| c.logical_position == Some(1))
+        {
+            let directory = candidate.relative_path.rsplit_once("/audio/").unwrap().0;
+            let entry = archive
+                .by_name(&format!("{directory}/manifest.json"))
+                .unwrap();
+            assert!(entry.size() <= 1024 * 1024);
+            let metadata: serde_json::Value = serde_json::from_reader(entry).unwrap();
+            let fault = metadata["outcome"]["fault_type"]
+                .as_str()
+                .unwrap_or("")
+                .trim();
+            let is_fallback = fault.is_empty();
+            if (is_fallback && fallback && !name.starts_with("2026-"))
+                || (!is_fallback && classified)
+            {
+                continue;
+            }
+            let field = |value: &serde_json::Value, default: &str| {
+                let value = value.as_str().unwrap_or("").trim();
+                if value.is_empty() {
+                    default.to_owned()
+                } else {
+                    value.replace(['/', '\\'], "_")
+                }
+            };
+            let date = chrono::DateTime::parse_from_rfc3339(
+                metadata["run"]["accepted_at"].as_str().unwrap(),
+            )
+            .unwrap()
+            .format("%Y-%m-%d")
+            .to_string();
+            let expected = vec![
+                source.file_stem().unwrap().to_str().unwrap().to_owned(),
+                date,
+                field(&metadata["outcome"]["result"], "未分类"),
+                field(&metadata["outcome"]["fault_type"], "未分类"),
+                field(&metadata["run"]["model"], "型号未知"),
+                directory.rsplit('/').next().unwrap().to_owned(),
+                "第一路".into(),
+            ];
+            assert_eq!(candidate.resulting_folder_path, expected);
+            assert_eq!(
+                candidate.original_filename,
+                candidate.relative_path.rsplit('/').next().unwrap()
+            );
+            if is_fallback {
+                fallback = true;
+                assert!(scan.counts.issues > 0);
+            } else {
+                classified = true;
+            }
+            if name.starts_with("2026-") {
+                assert!(candidate.relative_path.starts_with("2026-09-15/"));
+            }
+            println!(
+                "native metadata plan {}",
+                serde_json::json!({"archive":name,"source":candidate.relative_path,"logicalPosition":candidate.logical_position,"folders":candidate.resulting_folder_path,"fallbackFault":is_fallback,"issues":scan.counts.issues})
+            );
+            if name.starts_with("2026-") || (classified && fallback) {
+                break;
+            }
+        }
+    }
+    assert!(classified && fallback);
 }
 
 #[test]
@@ -664,4 +758,153 @@ fn nine_real_archives_have_exact_logical_route_counts_and_decodable_original_byt
         both.counts.checked,
         both.counts.issues
     );
+}
+
+#[test]
+fn organization_paths_templates_and_metadata_are_native_and_bounded() {
+    let tree = Tree::new();
+    tree.file("2026/NG/record/audio/CH2.wav", b"audio");
+    tree.file("2026/NG/record/manifest.json", &serde_json::to_vec(&serde_json::json!({"schema":"jingcheng-run-export-record/v2", "audio":{"channels":[{"position":1,"path":"audio/CH2.wav"}]}, "run":{"accepted_at":"2026-09-15T12:23:01+08:00","model":" M/1 "},"outcome":{"result":"NG","fault_type":" bad\\noise "}})).unwrap());
+    let mut cfg = config(SourceKind::Folder, vec![tree.0.clone()], true);
+    cfg.organization.mode = OrganizationMode::Template;
+    cfg.organization.template =
+        "{source}/{date}/{result}/{faultType}/{model}/{record}/{route}/{relativeDir}".into();
+    cfg.organization.strip_components = vec!["AUDIO".into()];
+    let result = discover(&cfg);
+    let c = &result.candidates()[0];
+    assert_eq!(c.original_filename, "CH2.wav");
+    assert_eq!(
+        &c.resulting_folder_path[1..],
+        [
+            "2026-09-15",
+            "NG",
+            "bad_noise",
+            "M_1",
+            "record",
+            "第一路",
+            "2026",
+            "NG",
+            "record"
+        ]
+    );
+    cfg.organization.mode = OrganizationMode::Flat;
+    assert!(discover(&cfg).candidates()[0]
+        .resulting_folder_path
+        .is_empty());
+    cfg.organization.mode = OrganizationMode::SourcePath;
+    cfg.organization.wrap_source = true;
+    assert_eq!(
+        discover(&cfg).candidates()[0].resulting_folder_path.len(),
+        4
+    );
+    cfg.rules.mode = Mode::Generic;
+    cfg.organization.mode = OrganizationMode::Template;
+    assert!(cfg.validate().is_err());
+    cfg.organization.template = "{source}/bad{relativeDir}".into();
+    assert!(cfg.validate().is_err());
+    cfg.organization.template = "{source}/../x".into();
+    assert!(cfg.validate().is_err());
+}
+#[test]
+fn optional_metadata_fallback_retains_audio_and_reports_missing_fields() {
+    let tree = Tree::new();
+    tree.file("r/audio/CH2.wav", b"audio");
+    tree.file("r/audio/CH4.wav", b"audio");
+    tree.file("r/manifest.json", &manifest("CH2.wav", "CH4.wav"));
+    let mut cfg = config(SourceKind::Folder, vec![tree.0.clone()], true);
+    cfg.organization.mode = OrganizationMode::Template;
+    cfg.organization.template = "{date}/{result}/{faultType}/{model}/{record}/{route}".into();
+    let result = discover(&cfg);
+    assert_eq!(result.candidates().len(), 2);
+    assert_eq!(
+        result.candidates()[0].resulting_folder_path,
+        ["日期未知", "未分类", "未分类", "型号未知", "r", "第一路"]
+    );
+    assert!(result.counts.issues >= 4);
+    assert!(!result.folder_summary().is_empty());
+    cfg.organization.template = "x/".repeat(17);
+    cfg.organization.template.pop();
+    assert!(cfg.validate().is_err());
+}
+
+#[test]
+fn all_result_tree_includes_paths_beyond_the_first_fifty_media() {
+    let tree = Tree::new();
+    for i in 0..61 {
+        tree.file(&format!("record{i:03}/audio/original.wav"), b"audio");
+    }
+    let mut cfg = generic(SourceKind::Folder, vec![tree.0.clone()]);
+    cfg.organization.mode = OrganizationMode::SourcePath;
+    cfg.organization.strip_components = vec!["audio".into()];
+    let result = discover(&cfg);
+    assert_eq!(result.page(0, 50).unwrap().len(), 50);
+    assert!(result.page(0, 51).is_err());
+    assert_eq!(result.folder_summary().len(), 61);
+    assert!(result
+        .folder_summary()
+        .iter()
+        .any(|n| n.name == "record060"));
+    assert!(result.folder_summary().iter().all(|n| n.media_count == 1));
+    let mut result = discover(&cfg);
+    result.bind_target_path(&["目标".into()]).unwrap();
+    assert_eq!(result.folder_summary()[0].media_count, 61);
+    cfg.organization.template = "x".repeat(129);
+    cfg.organization.mode = OrganizationMode::Template;
+    assert!(cfg.validate().is_err());
+    cfg.organization.template = "x".into();
+    cfg.organization.mode = OrganizationMode::SourcePath;
+    let mut result = discover(&cfg);
+    result.bind_target_path(&vec!["深".into(); 16]).unwrap();
+    assert_eq!(result.counts.candidates, 0);
+    assert_eq!(result.counts.skipped, 61);
+    assert!(result.folder_summary().is_empty());
+}
+
+#[test]
+fn generic_rejects_manifest_tokens_before_any_source_io_even_in_dormant_template() {
+    let mut cfg = generic(
+        SourceKind::Folder,
+        vec![std::env::temp_dir().join("missing-source")],
+    );
+    for token in [
+        "{record}",
+        "{date}",
+        "{result}",
+        "{faultType}",
+        "{model}",
+        "{route}",
+    ] {
+        cfg.organization.template = token.into();
+        assert!(cfg.validate().is_err(), "{token}");
+    }
+}
+
+#[test]
+fn template_rejects_absolute_windows_paths_before_source_io() {
+    let mut cfg = generic(
+        SourceKind::Folder,
+        vec![std::env::temp_dir().join("missing-source")],
+    );
+    cfg.organization.mode = OrganizationMode::Template;
+    cfg.organization.template = "C:/record".into();
+    assert!(cfg.validate().is_err());
+}
+
+#[test]
+fn oversized_optional_metadata_is_excluded_only_when_the_layout_uses_it() {
+    let tree = Tree::new();
+    tree.file("r/audio/CH2.wav", b"audio");
+    tree.file("r/audio/CH4.wav", b"audio");
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&manifest("CH2.wav", "CH4.wav")).unwrap();
+    value["run"] = serde_json::json!({"model":"m".repeat(200_000)});
+    tree.file("r/manifest.json", &serde_json::to_vec(&value).unwrap());
+    let mut cfg = config(SourceKind::Folder, vec![tree.0.clone()], true);
+    assert_eq!(discover(&cfg).counts.candidates, 2);
+    cfg.organization.mode = OrganizationMode::Template;
+    cfg.organization.template = "{model}".into();
+    let result = discover(&cfg);
+    assert_eq!(result.counts.candidates, 0);
+    assert_eq!(result.counts.skipped, 3); // The manifest was also excluded by the audio extension rule.
+    assert_eq!(result.counts.issues, 2);
 }

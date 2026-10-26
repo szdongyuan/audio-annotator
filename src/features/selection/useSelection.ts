@@ -13,8 +13,12 @@ export function useSelection(active: ActiveProject | null, primaryId: string | n
   const context = useSyncExternalStore(state.subscribe, state.getContext);
   const gesturing = useSyncExternalStore(state.subscribe, state.getGesture);
   const actions = useMemo(() => active ? selectionActions(active, state) : null, [active, state]);
-  const [menuState, setMenu] = useState<{ owner: ActiveProject | null; value: RegionMenuTarget } | null>(null), [cancelVersion, setCancelVersion] = useState(0);
-  const menu = menuState?.owner === active ? menuState.value : null;
+  const [menuState, setMenu] = useState<{ owner: ActiveProject | null; value: RegionMenuTarget; intent: number } | null>(null), [cancelVersion, setCancelVersion] = useState(0);
+  const [gainState, setGain] = useState<{ owner: ActiveProject; target: Selection; trigger: HTMLElement | null } | null>(null);
+  const gain = gainState?.owner === active && !active?.store.editingDisabled && state.matches(gainState.target) ? gainState : null;
+  useEffect(() => { if (gainState && !gain) setGain(null); }, [gainState, gain]);
+  const menu = menuState?.owner === active && (menuState.intent === state.intentVersion || menuState.value.target && state.matches(menuState.value.target)) ? menuState.value : null;
+  useEffect(() => { if (menuState && !menu) setMenu(null); }, [menuState, menu]);
   const binding = useRef(active); binding.current = active;
   const cancel = () => { state.cancel(); setCancelVersion(v => v + 1); };
   useEffect(() => {
@@ -24,7 +28,7 @@ export function useSelection(active: ActiveProject | null, primaryId: string | n
       setMenu(current => {
         if (!current || current.owner !== active) return current;
         const target = current.value.target;
-        return active.store.editingDisabled || target && !resolveRegion(active, target) || !active.store.snapshot.document.media.some(m => m.id === current.value.mediaId) ? null : current;
+        return active.store.editingDisabled || target && !resolveRegion(active, state.follow(target)) || !active.store.snapshot.document.media.some(m => m.id === current.value.mediaId) ? null : current;
       });
     });
   }, [active, state]);
@@ -55,15 +59,20 @@ export function useSelection(active: ActiveProject | null, primaryId: string | n
     };
     window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler);
   }, [active, state, actions]);
-  return { active, state, selection, candidate, context, gesturing, actions, cancelVersion, cancel, menu,
+  return { active, state, selection, candidate, context, gesturing, actions, cancelVersion, cancel, menu, gain,
+    openGain: (target: Selection, trigger: HTMLElement | null = null) => {
+      if (!active || binding.current !== active || active.store.editingDisabled || !resolveRegion(active, target)) return;
+      const followed = state.follow(target); if (!state.matches(followed)) state.select(followed);
+      setGain({ owner: active, target: followed, trigger });
+    }, closeGain: () => setGain(null),
     withTarget: (target: Selection | null, action: (region: Region) => void) => {
       // Synchronous UI actions must re-read after any accepted native command,
       // and a retained callback must never cross a runtime replacement.
       if (!target || !active || binding.current !== active || active.store.editingDisabled) return;
-      const region = resolveRegion(active, target);
+      const region = resolveRegion(active, state.follow(target));
       if (region) action(region);
     },
-    openMenu: (target: RegionMenuTarget) => { if (binding.current === active) setMenu({ owner: active, value: target }); }, closeMenu: () => setMenu(null),
+    openMenu: (target: RegionMenuTarget) => { if (binding.current === active) setMenu({ owner: active, value: target, intent: state.intentVersion }); }, closeMenu: () => setMenu(null),
     selectObject: (kind: 'annotation' | 'mask', id: string | null) => {
       if (!id) { if (state.getActiveSelection()?.object?.kind === kind) state.select(null); return; }
       const doc = active?.store.snapshot.document, object = (kind === 'annotation' ? doc?.annotations : doc?.edits)?.find(a => a.id === id);

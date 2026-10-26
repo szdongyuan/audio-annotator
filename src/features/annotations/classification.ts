@@ -1,3 +1,4 @@
+import { toggleLabel } from './labels';
 import { annotationDisabled } from '../collaboration/capabilities';
 import type { Annotation, ProjectDocument } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
@@ -26,25 +27,28 @@ export function classifyTarget(owner: ActiveProject, target: ClassificationTarge
     await owner.lifecycle.submitDrafts();
     const doc = owner.store.snapshot.document;
     if (!current() || !resolveClassification(doc, captured) || categoryId !== null && !doc.categories.some(c => c.id === categoryId)) return;
+    const media = resolveClassification(doc, captured)!;
+    const previous = captured.channelIndex === null ? media.categoryIds : media.channelCategoryIds[captured.channelIndex];
+    const categoryIds = toggleLabel(previous, categoryId);
     const change = captured.channelIndex === null
-      ? { type: 'setMediaCategory' as const, mediaId: captured.mediaId, categoryId }
-      : { type: 'setChannelCategory' as const, mediaId: captured.mediaId, channelIndex: captured.channelIndex, categoryId };
+      ? { type: 'setMediaCategories' as const, mediaId: captured.mediaId, categoryIds }
+      : { type: 'setChannelCategories' as const, mediaId: captured.mediaId, channelIndex: captured.channelIndex, categoryIds };
     await owner.queue.enqueue(change, { owner: 'annotations' });
   }).catch(cause => owner.store.setError(normalizeError(cause)));
 }
 export function classificationMenu(doc: ProjectDocument, target: ClassificationTarget | null, classify: (target: ClassificationTarget, category: string | null) => void, label: string, disabled = false): MenuItem {
   const media = target && resolveClassification(doc, target);
-  const value = media && target ? target.channelIndex === null ? media.categoryId : media.channelCategoryIds[target.channelIndex] : null;
-  return { id: label, label, disabled: disabled || !media, children: [{ id: 'none', name: '未分类' }, ...doc.categories].map(c => ({ id: c.id, label: c.name, checked: value === (c.id === 'none' ? null : c.id), action: () => { if (target) classify(target, c.id === 'none' ? null : c.id); } })) };
+  const value = media && target ? target.channelIndex === null ? media.categoryIds : media.channelCategoryIds[target.channelIndex] : [];
+  return { id: label, label, disabled: disabled || !media, children: [{ id: 'none', name: '清空标签' }, ...doc.categories].map(c => ({ id: c.id, label: c.name, keepOpen: true, checked: c.id === 'none' ? value.length === 0 : value.includes(c.id), action: () => { if (target) classify(target, c.id === 'none' ? null : c.id); } })) };
 }
-type ResultBase = { mediaId: string; categoryId: string | null; note: string };
+type ResultBase = { mediaId: string; categoryIds: string[]; note: string };
 export type ClassificationResult = ResultBase & ({ scope: 'file' } | { scope: 'channel'; channelIndex: number } | { scope: 'region'; annotation: Annotation });
 export function classificationResults(doc: ProjectDocument): ClassificationResult[] {
   return [
-    ...doc.media.flatMap(m => [{ scope: 'file' as const, mediaId: m.id, categoryId: m.categoryId, note: m.note }, ...m.channelCategoryIds.map((categoryId, channelIndex) => ({ scope: 'channel' as const, mediaId: m.id, channelIndex, categoryId, note: m.channelNotes[channelIndex] }))]),
-    ...doc.annotations.map(annotation => ({ scope: 'region' as const, mediaId: annotation.region.mediaId, categoryId: annotation.categoryId, note: annotation.note, annotation })),
+    ...doc.media.flatMap(m => [{ scope: 'file' as const, mediaId: m.id, categoryIds: m.categoryIds, note: m.note }, ...m.channelCategoryIds.map((categoryIds, channelIndex) => ({ scope: 'channel' as const, mediaId: m.id, channelIndex, categoryIds, note: m.channelNotes[channelIndex] }))]),
+    ...doc.annotations.map(annotation => ({ scope: 'region' as const, mediaId: annotation.region.mediaId, categoryIds: annotation.categoryIds, note: annotation.note, annotation })),
   ];
 }
 export function categoryReferences(doc: ProjectDocument, id: string) {
-  return { files: doc.media.filter(m => m.categoryId === id).length, channels: doc.media.reduce((n, m) => n + m.channelCategoryIds.filter(c => c === id).length, 0), regions: doc.annotations.filter(a => a.categoryId === id).length };
+  return { files: doc.media.filter(m => m.categoryIds.includes(id)).length, channels: doc.media.reduce((n, m) => n + m.channelCategoryIds.filter(c => c.includes(id)).length, 0), regions: doc.annotations.filter(a => a.categoryIds.includes(id)).length };
 }

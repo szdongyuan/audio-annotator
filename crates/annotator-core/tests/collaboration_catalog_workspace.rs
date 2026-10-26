@@ -140,7 +140,7 @@ fn adoption_preserves_a_in_flight_b_saved_c_live_and_history_relinks_preferences
     note(&mut p, &id, "B");
     save(&mut p);
     let mut fixture =
-        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json"))
+        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v3.json"))
             .unwrap();
     let mut edit = fixture.edits.remove(0);
     edit.region.media_id = id.clone();
@@ -179,6 +179,8 @@ fn adoption_preserves_a_in_flight_b_saved_c_live_and_history_relinks_preferences
     let b = p.workspace().unwrap().envelope().pending.clone();
     note(&mut p, &id, "C");
     let prefs = PlaybackPreferences {
+        monitor_gain_db: 0.0,
+        media_monitor_gain_db: Default::default(),
         volume: 0.2,
         ..Default::default()
     };
@@ -371,7 +373,7 @@ fn v2_view_only_is_explicit_and_guards_every_public_mutation_and_direct_save() {
     let d = p.snapshot().unwrap().document;
     let id = d.media[0].id.clone();
     let fixture =
-        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json"))
+        ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v3.json"))
             .unwrap();
     let mut annotation = fixture.annotations[0].clone();
     annotation.region.media_id = id.clone();
@@ -388,14 +390,14 @@ fn v2_view_only_is_explicit_and_guards_every_public_mutation_and_direct_save() {
             note: "forbidden".into(),
             merge_key: None,
         },
-        Change::SetMediaCategory {
+        Change::SetMediaCategories {
             media_id: id.clone(),
-            category_id: None,
+            category_ids: vec![],
         },
-        Change::SetChannelCategory {
+        Change::SetChannelCategories {
             media_id: id.clone(),
             channel_index: 0,
-            category_id: None,
+            category_ids: vec![],
         },
         Change::AddCategory {
             category: category.clone(),
@@ -456,6 +458,8 @@ fn v2_view_only_is_explicit_and_guards_every_public_mutation_and_direct_save() {
     p.workspace_mut()
         .unwrap()
         .save_preferences(PlaybackPreferences {
+            monitor_gain_db: 0.0,
+            media_monitor_gain_db: Default::default(),
             volume: 0.1,
             ..Default::default()
         })
@@ -722,4 +726,47 @@ fn hidden_preferences_and_view_only_cache_are_validated_on_reopen() {
         }
         assert!(LocalProject::open_shared_view_only(f.repo.clone(), &f.local).is_err());
     }
+}
+#[test]
+fn folder_only_commits_preserve_private_draft_history_and_catalog_revision() {
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    let f = Fixture::new();
+    let mut p = f.open();
+    let media_id = f.repo.manifest().media[0].id.clone();
+    note(&mut p, &media_id, "saved");
+    save(&mut p);
+    note(&mut p, &media_id, "live draft");
+    let before = p.snapshot().unwrap();
+    let catalog = f.repo.catalog_revision().cloned();
+    let folder = uuid::Uuid::new_v4().to_string();
+    let created = f
+        .repo
+        .apply_organization(
+            &f.actor,
+            f.repo.organization().revision,
+            OrganizationOperation::CreateFolder {
+                id: folder.clone(),
+                parent_id: None,
+                name: "Shared folder".into(),
+            },
+        )
+        .unwrap();
+    f.repo
+        .apply_organization(
+            &f.actor,
+            created.revision,
+            OrganizationOperation::MoveMedia {
+                media_id: media_id.clone(),
+                folder_id: Some(folder),
+            },
+        )
+        .unwrap();
+    assert_eq!(p.snapshot().unwrap(), before);
+    assert_eq!(
+        f.repo.reload_catalog().unwrap().catalog_revision(),
+        catalog.as_ref()
+    );
+    let d = p.snapshot().unwrap().document;
+    p.undo(&d.project_id, d.revision).unwrap();
+    assert_eq!(media_note(&p, &media_id), "saved");
 }

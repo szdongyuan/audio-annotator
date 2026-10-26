@@ -43,7 +43,22 @@ pub fn write_manifest(root: &Path, manifest: &CollaborationManifest) {
         )
         .unwrap();
     }
-    let fixed = serde_json::json!({"kind":MANIFEST_KIND,"formatVersion":CURRENT_COLLABORATION_FORMAT,"projectId":manifest.project_id,"name":manifest.name,"createdAt":manifest.created_at,"catalogVersion":1});
+    let mut organization = organization::Organization::empty(manifest.project_id.clone());
+    organization.media = manifest
+        .media
+        .iter()
+        .map(|m| organization::MediaMembership {
+            media_id: m.id.clone(),
+            folder_id: None,
+            original_filename: format!("{}.wav", m.id),
+        })
+        .collect();
+    fs::write(
+        root.join("organization.json"),
+        serde_json::to_vec(&organization).unwrap(),
+    )
+    .unwrap();
+    let fixed = serde_json::json!({"kind":MANIFEST_KIND,"formatVersion":CURRENT_COLLABORATION_FORMAT,"projectId":manifest.project_id,"name":manifest.name,"createdAt":manifest.created_at,"catalogVersion":2});
     fs::write(
         root.join("collaboration.json"),
         serde_json::to_vec(&fixed).unwrap(),

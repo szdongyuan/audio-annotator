@@ -4,21 +4,22 @@ import { audioSignature,actualSource,playbackShortcut } from './usePlayback';
 import { ChannelMixer } from './ChannelMixer';
 import { PlaybackModeControl } from './PlaybackMode';
 import { usePlayback } from './usePlayback';
-import {emptyPlayback,type PlaybackRequest,type PlaybackStatus} from '../../bridge/playback';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import {emptyPlayback,type PlaybackRequest,type PlaybackStatus,type MonitorGainRequest} from '../../bridge/playback';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { parseProjectDocument,type Change } from '../../bridge/types';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue } from '../../app/commands';
 import { ProjectLifecycle } from '../project/lifecycle';
 import { useMasks } from './useMasks';
+import { PreferenceDraft } from '../collaboration/controller';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 it('restores private options only when adopting a runtime and clears ephemeral cues',()=>{
  const a:ActiveProject=activeProject().active,b:ActiveProject=activeProject().active;
- Object.assign(a,{collaboration:{runtimeNonce:'a',actor:null,preferences:{volume:.2,deviceId:'speaker-a',loopEnabled:true,source:'original'}}});
- Object.assign(b,{collaboration:{runtimeNonce:'b',actor:null,preferences:{volume:.75,deviceId:null,loopEnabled:false,source:'processed'}}});
+ Object.assign(a,{collaboration:{runtimeNonce:'a',actor:null,preferences:{monitorGainDb:6,mediaMonitorGainDb:{[fixture.media[0].id]:3},volume:.2,deviceId:'speaker-a',loopEnabled:true,source:'original'}}});
+ Object.assign(b,{collaboration:{runtimeNonce:'b',actor:null,preferences:{monitorGainDb:0,mediaMonitorGainDb:{},volume:.75,deviceId:null,loopEnabled:false,source:'processed'}}});
  const api={available:()=>false,devices:async()=>[],listen:async()=>()=>{},control:async()=>emptyPlayback,configure:async()=>emptyPlayback};
  const hook=renderHook(({owner})=>usePlayback(owner,fixture.media[0].id,undefined,api),{initialProps:{owner:a}});
- expect(hook.result.current.options).toMatchObject({volume:.2,deviceId:'speaker-a',looping:true});expect(hook.result.current.workspaceSource).toBe('original');
+ expect(hook.result.current.options).toMatchObject({volume:.2,deviceId:'speaker-a',looping:true});expect(hook.result.current.workspaceSource).toBe('original');expect(hook.result.current.effectiveMonitorGainDb).toBe(3);
  act(()=>{hook.result.current.update({volume:.4});hook.result.current.setCue(a,fixture.media[0].id,1);});hook.rerender({owner:a});expect(hook.result.current.options.volume).toBe(.4);
  hook.rerender({owner:b});expect(hook.result.current.options).toMatchObject({volume:.75,deviceId:null,looping:false});expect(hook.result.current.cues).toEqual({});expect(hook.result.current.workspaceSource).toBe('processed');hook.unmount();a.lifecycle.dispose();b.lifecycle.dispose();
 });
@@ -200,7 +201,7 @@ it('ended clears explicit source and range, workspace source changes stop, and a
 it('a blank-tail cue remains a marker but cannot become an ordinary playback seek',async()=>{
  const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;let generation=0;
  const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:async()=>({...emptyPlayback,generation:++generation}),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
- const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.setCue(s.active,id,99));
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.setCue(s.active,id,99));expect(hook.result.current.cues[id]).toBe(99);
  act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());expect(api.configure.mock.calls[0][0].seekSeconds).toBe(0);
  hook.unmount();s.active.lifecycle.dispose();
 });
@@ -222,4 +223,126 @@ it('ordinary stopped playback without a cue retains its current file position',a
  const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.seek(.5));await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
  act(()=>hook.result.current.stop());await waitFor(()=>expect(hook.result.current.status.positionSeconds).toBe(.5));act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0].seekSeconds).toBe(.5);
  hook.unmount();s.active.lifecycle.dispose();
+});
+
+it('monitor gain uses private absolute overrides and realtime updates without configuring or history',async()=>{
+ const s=activeProject(),doc=s.active.store.snapshot.document,id=doc.media[0].id;
+ const other={...doc.media[0],id:'00000000-0000-4000-8000-000000000090'};doc.media.push(other);
+ const preferences=vi.fn();Object.assign(s.active,{preferences:{update:preferences}});
+ let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const})),monitorGain:vi.fn(async(r:MonitorGainRequest)=>({...emptyPlayback,...r,state:'playing' as const}))};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));
+ act(()=>hook.result.current.setGlobalMonitorGain(6));
+ expect(hook.result.current.effectiveMonitorGainDb).toBe(6);expect(api.configure).not.toHaveBeenCalled();
+ act(()=>hook.result.current.setMediaMonitorGain(id,3));expect(hook.result.current.effectiveMonitorGainDb).toBe(3);
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ expect(api.configure.mock.calls[0][0]).toMatchObject({monitorGainDb:3,volume:.75});
+ act(()=>hook.result.current.setGlobalMonitorGain(-6));await act(async()=>{});
+ expect(hook.result.current.effectiveMonitorGainDb).toBe(3);
+ act(()=>hook.result.current.setMediaMonitorGain(id,-6));
+ await waitFor(()=>expect(api.monitorGain).toHaveBeenCalled());
+ expect(hook.result.current.monitor.mediaMonitorGainDb[id]).toBe(-6);
+ act(()=>hook.result.current.setMediaMonitorGain(id,null));await act(async()=>{});
+ expect(hook.result.current.monitor.mediaMonitorGainDb[id]).toBeNull();expect(hook.result.current.effectiveMonitorGainDb).toBe(-6);
+ act(()=>hook.result.current.setGlobalMonitorGain(12));await waitFor(()=>expect(api.monitorGain).toHaveBeenLastCalledWith(expect.objectContaining({monitorGainDb:12,mediaId:id})));
+ expect(api.configure).toHaveBeenCalledOnce();expect(s.applyChange).not.toHaveBeenCalled();
+ expect(preferences).toHaveBeenLastCalledWith(expect.objectContaining({monitorGainDb:12,mediaMonitorGainDb:{[id]:null},volume:.75}));
+ act(()=>hook.result.current.selectSource(other.id));act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0].monitorGainDb).toBe(12);
+ hook.unmount();s.active.lifecycle.dispose();
+});
+
+it('buffering configure and rapid monitor updates apply latest gain to only the new stream',async()=>{
+ const s=activeProject(),doc=s.active.store.snapshot.document,id=doc.media[0].id;
+ let release!:(s:PlaybackStatus)=>void,generation=0,releaseGain!:()=>void;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:async()=>({...emptyPlayback,generation:++generation}),configure:vi.fn(async(_r:PlaybackRequest):Promise<PlaybackStatus>=>new Promise(r=>{release=r;})),monitorGain:vi.fn(async(r:MonitorGainRequest)=>({...emptyPlayback,...r,state:'playing' as const}))};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ act(()=>{hook.result.current.setGlobalMonitorGain(6);hook.result.current.setGlobalMonitorGain(12);});
+ await act(async()=>release({...emptyPlayback,generation:++generation,projectId:doc.projectId,mediaId:id,state:'buffering'}));
+ await waitFor(()=>expect(api.monitorGain).toHaveBeenCalled());
+ expect(api.monitorGain.mock.calls.every(([r])=>r.monitorGainDb===12)).toBe(true);
+ api.monitorGain.mockImplementationOnce(async r=>{await new Promise<void>(resolve=>{releaseGain=resolve;});return {...emptyPlayback,...r,state:'playing'};});
+ act(()=>hook.result.current.setGlobalMonitorGain(3));await waitFor(()=>expect(releaseGain).toBeTypeOf('function'));
+ act(()=>{hook.result.current.setGlobalMonitorGain(-3);hook.result.current.setGlobalMonitorGain(-9);});
+ await act(async()=>releaseGain());
+ await waitFor(()=>expect(api.monitorGain).toHaveBeenLastCalledWith(expect.objectContaining({monitorGainDb:-9,generation:2})));
+ expect(api.configure).toHaveBeenCalledOnce();expect(hook.result.current.effectiveMonitorGainDb).toBe(-9);
+ hook.unmount();s.active.lifecycle.dispose();
+});
+it('monitor failures retry independently while retired owner and source updates cannot reach replacement streams',async()=>{
+ const a=activeProject(),b=activeProject(),id=fixture.media[0].id;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:async()=>({...emptyPlayback,generation:++generation}),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const})),monitorGain:vi.fn(async(r:MonitorGainRequest)=>({...emptyPlayback,...r,state:'playing' as const}))};
+ const hook=renderHook(({owner})=>usePlayback(owner,id,undefined,api),{initialProps:{owner:a.active}});
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ api.monitorGain.mockRejectedValueOnce({code:'DeviceFailed',message:'retry',retryable:true});
+ act(()=>hook.result.current.setGlobalMonitorGain(6));await waitFor(()=>expect(hook.result.current.monitorError?.message).toBe('retry'));
+ expect(hook.result.current.effectiveMonitorGainDb).toBe(6);expect(hook.result.current.playing).toBe(true);
+ act(()=>hook.result.current.retryMonitor());await waitFor(()=>expect(hook.result.current.monitorError).toBeNull());
+ const old=hook.result.current;hook.rerender({owner:b.active});act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));
+ const calls=api.monitorGain.mock.calls.length;act(()=>{old.setGlobalMonitorGain(24);old.setMediaMonitorGain(id,24);});await act(async()=>{});
+ expect(api.monitorGain).toHaveBeenCalledTimes(calls);expect(hook.result.current.effectiveMonitorGainDb).toBe(0);expect(api.configure.mock.calls[1][0].monitorGainDb).toBe(0);
+ hook.unmount();a.active.lifecycle.dispose();b.active.lifecycle.dispose();
+});
+
+it('monitor remains effective after preference save failure and retry preserves both private and output state',async()=>{
+ const s=activeProject(),id=fixture.media[0].id;Object.assign(s.active,{collaboration:{runtimeNonce:'11111111-1111-4111-8111-111111111111'}});
+ const saving=vi.fn().mockRejectedValueOnce({code:'SaveFailed',message:'prefs disk',retryable:true}).mockResolvedValue({});
+ const draft=new PreferenceDraft(s.active,{preferences:saving} as never);Object.assign(s.active,{preferences:draft});let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:async()=>({...emptyPlayback,generation:++generation}),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const})),monitorGain:vi.fn(async(r:MonitorGainRequest)=>({...emptyPlayback,...r,state:'playing' as const}))};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ act(()=>hook.result.current.setGlobalMonitorGain(6));await waitFor(()=>expect(api.monitorGain).toHaveBeenCalledOnce());
+ await expect(s.active.lifecycle.submitDrafts()).rejects.toMatchObject({code:'SaveFailed'});
+ expect(hook.result.current.effectiveMonitorGainDb).toBe(6);expect(hook.result.current.monitorError).toBeNull();expect(s.active.store.drafts.size).toBe(1);
+ await s.active.lifecycle.submitDrafts();expect(saving).toHaveBeenLastCalledWith(expect.anything(),expect.objectContaining({monitorGainDb:6}));expect(s.active.store.drafts.size).toBe(0);expect(api.configure).toHaveBeenCalledOnce();
+ hook.unmount();draft.dispose();s.active.lifecycle.dispose();
+});
+it('file and selection configure both sound sources with current scalar product and prune only removed media overrides',async()=>{
+ const s=activeProject(),id=fixture.media[0].id,region=fixture.annotations[0].region;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:async()=>({...emptyPlayback,generation:++generation}),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const})),monitorGain:vi.fn(async(r:MonitorGainRequest)=>({...emptyPlayback,...r,state:'playing' as const}))};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));
+ act(()=>{hook.result.current.setGlobalMonitorGain(6);hook.result.current.update({volume:.5});});
+ for(const source of ['original','processed'] as const){
+  act(()=>hook.result.current.updateWorkspaceSource(source));act(()=>hook.result.current.playFile());await waitFor(()=>expect(api.configure.mock.calls.at(-1)?.[0].mode).toEqual({mode:source}));
+  expect(api.configure.mock.calls.at(-1)?.[0]).toMatchObject({monitorGainDb:6,volume:.5});
+  act(()=>hook.result.current.playSelection(region,source));await waitFor(()=>expect(api.configure.mock.calls.at(-1)?.[0].mode).toMatchObject({mode:'selection',selectionSource:source}));expect(api.configure.mock.calls.at(-1)?.[0]).toMatchObject({monitorGainDb:6,volume:.5});
+ }
+ act(()=>hook.result.current.setMediaMonitorGain(id,6));expect(hook.result.current.monitor.mediaMonitorGainDb[id]).toBe(6);
+ const other='00000000-0000-4000-8000-000000000090';s.active.store.snapshot.document.media.push({...fixture.media[0],id:other});
+ act(()=>hook.result.current.setMediaMonitorGain(other,-3));
+ s.active.store.snapshot.document.media=s.active.store.snapshot.document.media.filter(m=>m.id!==id);hook.rerender();
+ expect(hook.result.current.monitor.mediaMonitorGainDb).toEqual({[other]:-3});
+ hook.unmount();s.active.lifecycle.dispose();
+});
+it('a new cue replaces a paused resumable intent and a playing cue waits for the next start',async()=>{
+ const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation,state:'paused' as const})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));
+ act(()=>hook.result.current.playFrom(s.active,id,.2));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(1));
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(hook.result.current.playing).toBe(false));
+ act(()=>hook.result.current.setCue(s.active,id,1.2));act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0].seekSeconds).toBe(1.2);
+ act(()=>hook.result.current.setCue(s.active,id,1.7));await act(async()=>{});expect(api.configure).toHaveBeenCalledTimes(2);expect(hook.result.current.playing).toBe(true);
+ act(()=>hook.result.current.stop());await act(async()=>{});act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(3));expect(api.configure.mock.calls[2][0].seekSeconds).toBe(1.7);hook.unmount();s.active.lifecycle.dispose();
+});
+it('retires a paused stream only on fresh cue Play so the new session start and Stop return use that cue',async()=>{
+ const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;let stream={...emptyPlayback},generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async(action:string)=>{stream={...stream,generation:++generation,state:action==='pause'?'paused':'stopped',positionSeconds:action==='stop'?stream.startSeconds:stream.positionSeconds};return stream;}),configure:vi.fn(async(q:PlaybackRequest)=>{const position=q.seekSeconds??stream.positionSeconds;stream={...stream,projectId:q.projectId,mediaId:q.mediaId,generation:++generation,state:'playing',positionSeconds:position,startSeconds:stream.state==='paused'?stream.startSeconds:position};return stream;})};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.setCue(s.active,id,.2));act(()=>hook.result.current.toggle());await waitFor(()=>expect(hook.result.current.status.state).toBe('playing'));act(()=>hook.result.current.toggle());await waitFor(()=>expect(hook.result.current.status.state).toBe('paused'));
+ const controls=api.control.mock.calls.length;act(()=>hook.result.current.setCue(s.active,id,1.2));await act(async()=>{});expect(api.control).toHaveBeenCalledTimes(controls);expect(api.configure).toHaveBeenCalledOnce();
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(hook.result.current.status.startSeconds).toBe(1.2);act(()=>hook.result.current.stop());await waitFor(()=>expect(hook.result.current.status.state).toBe('stopped'));expect(hook.result.current.status.positionSeconds).toBe(1.2);hook.unmount();s.active.lifecycle.dispose();
+});
+it('queues fresh cue retirement when Play follows Pause before its acknowledgement',async()=>{
+ const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;let stream={...emptyPlayback},generation=0,releasePause!:()=>void;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async(action:string)=>{if(action==='pause')await new Promise<void>(resolve=>releasePause=resolve);stream={...stream,generation:++generation,state:action==='pause'?'paused':'stopped',positionSeconds:action==='stop'?stream.startSeconds:stream.positionSeconds};return stream;}),configure:vi.fn(async(q:PlaybackRequest)=>{const position=q.seekSeconds??stream.positionSeconds;stream={...stream,projectId:q.projectId,mediaId:q.mediaId,generation:++generation,state:'playing',positionSeconds:position,startSeconds:stream.state==='paused'?stream.startSeconds:position};return stream;})};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.setCue(s.active,id,.2));act(()=>hook.result.current.toggle());await waitFor(()=>expect(hook.result.current.status.state).toBe('playing'));
+ const controls=api.control.mock.calls.length;act(()=>hook.result.current.setCue(s.active,id,1.2));expect(api.control).toHaveBeenCalledTimes(controls);act(()=>{hook.result.current.toggle();hook.result.current.toggle();});await waitFor(()=>expect(releasePause).toBeTypeOf('function'));await act(async()=>releasePause());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(hook.result.current.status.startSeconds).toBe(1.2);act(()=>hook.result.current.stop());await waitFor(()=>expect(hook.result.current.status.state).toBe('stopped'));expect(hook.result.current.status.positionSeconds).toBe(1.2);hook.unmount();s.active.lifecycle.dispose();
+});
+it('blank cue plus selection deactivation during playback does not interrupt the current stream',async()=>{
+ const s=activeProject(),r=s.active.store.snapshot.document.annotations[0].region;let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(q:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:q.projectId,mediaId:q.mediaId,state:'playing' as const}))};
+ const hook=renderHook(({selection})=>usePlayback(s.active,r.mediaId,selection,api),{initialProps:{selection:r as typeof r|undefined}});act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());const controls=api.control.mock.calls.length;
+ act(()=>{hook.result.current.setCue(s.active,r.mediaId,1.7);hook.rerender({selection:undefined});});await act(async()=>{});expect(hook.result.current.playing).toBe(true);expect(api.control).toHaveBeenCalledTimes(controls);expect(api.configure).toHaveBeenCalledOnce();
+ hook.unmount();s.active.lifecycle.dispose();
+});
+it('a retained reset-mask command cannot cross a runtime replacement',async()=>{
+ const first=activeProject(),second=activeProject(),hook=renderHook(({owner})=>useMasks(owner),{initialProps:{owner:first.active}}),command=hook.result.current.command;hook.rerender({owner:second.active});act(()=>command({type:'resetMediaMasks',mediaId:first.active.store.snapshot.document.media[0].id}));await act(async()=>{});expect(first.applyChange).not.toHaveBeenCalled();expect(second.applyChange).not.toHaveBeenCalled();hook.unmount();first.active.lifecycle.dispose();second.active.lifecycle.dispose();
 });

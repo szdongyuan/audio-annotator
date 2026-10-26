@@ -1,4 +1,4 @@
-//! Immutable v2 metadata plus one immutable record per committed media item.
+//! Prepared media capabilities and transactional publication through the organization head.
 use super::{atomic, atomic::short_lock, validation::*, *};
 use crate::{
     error::{AppError, ErrorCode, Result},
@@ -7,7 +7,6 @@ use crate::{
         identity::{check_cancel, fingerprint, SourceStamp},
     },
 };
-use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -15,194 +14,13 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-const MAX_RECORD_BYTES: usize = 65536;
-const MAX_CATALOG_ENTRIES: usize = MAX_MEDIA + 256;
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct DefaultManifest {
-    kind: String,
-    format_version: u32,
-    project_id: String,
-    name: String,
-    created_at: String,
-    catalog_version: u32,
-}
-impl DefaultManifest {
-    fn effective(self) -> Result<CollaborationManifest> {
-        require(self.kind == MANIFEST_KIND, "Invalid default manifest kind")?;
-        if self.format_version != crate::collaboration::CURRENT_COLLABORATION_FORMAT
-            || self.catalog_version != 1
-        {
-            return Err(AppError::new(
-                ErrorCode::UnsupportedVersion,
-                "Unsupported default catalog format",
-            ));
-        }
-        let manifest = CollaborationManifest {
-            kind: self.kind,
-            format_version: CURRENT_COLLABORATION_FORMAT,
-            project_id: self.project_id,
-            name: self.name,
-            created_at: self.created_at,
-            media: vec![],
-        };
-        manifest.validate()?;
-        Ok(manifest)
-    }
-}
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct CatalogRecord {
-    kind: String,
-    format_version: u32,
-    project_id: String,
-    media: PublicMedia,
-}
-impl CatalogRecord {
-    fn new(project_id: &str, media: PublicMedia) -> Self {
-        Self {
-            kind: "audio-annotator-media-record".into(),
-            format_version: 1,
-            project_id: project_id.into(),
-            media,
-        }
-    }
-    fn parse(bytes: &[u8], manifest: &CollaborationManifest) -> Result<Self> {
-        let record: Self = decode(bytes, MAX_RECORD_BYTES, "audio-annotator-media-record")?;
-        require(
-            record.project_id == manifest.project_id,
-            "Catalog project mismatch",
-        )?;
-        let mut check = manifest.clone();
-        check.media = vec![record.media.clone()];
-        check.validate()?;
-        Ok(record)
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CatalogRevision {
-    pub media_count: usize,
-    pub byte_length: usize,
-    pub digest: String,
-}
-/// Native result. Deferred layers retain their complete verified payload and original hash.
-pub struct CatalogSnapshot {
-    pub snapshot: CollaborationSnapshot,
-    pub catalog_update_available: bool,
-    pub revision: Option<CatalogRevision>,
-    pub deferred_authors: Vec<AuthorLayer>,
-}
-
-pub(super) struct LoadedCatalog {
-    pub manifest: CollaborationManifest,
-    pub revision: Option<CatalogRevision>,
-    pub record_hashes: Vec<(String, String)>,
-}
-fn record_digest(records: &[(String, String)]) -> Result<String> {
-    Ok(hash(
-        &serde_json::to_vec(records).map_err(|_| AppError::invalid("Cannot hash catalog"))?,
-    ))
-}
+pub(super) use super::catalog_storage::load;
 #[cfg(test)]
-std::thread_local! {
-    static CATALOG_LOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-pub(super) fn load(
-    root: &Path,
-    bytes: &[u8],
-    after_entry: &mut impl FnMut(&Path) -> Result<()>,
-) -> Result<LoadedCatalog> {
-    #[cfg(test)]
-    CATALOG_LOADS.with(|count| count.set(count.get() + 1));
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Header {
-        format_version: u32,
-    }
-    limit(bytes.len() <= MAX_LAYER_BYTES)?;
-    let header: Header =
-        serde_json::from_slice(bytes).map_err(|_| AppError::invalid("Invalid manifest header"))?;
-    if header.format_version != crate::collaboration::CURRENT_COLLABORATION_FORMAT {
-        return Err(AppError::new(
-            ErrorCode::UnsupportedVersion,
-            "Unsupported collaboration version; use the prior app or exchange/export workflow",
-        ));
-    }
-    let fixed: DefaultManifest = serde_json::from_slice(bytes)
-        .map_err(|_| AppError::invalid("Invalid default manifest structure"))?;
-    let mut manifest = fixed.effective()?;
-    let dir = root.join("catalog");
-    atomic::safe_existing(&dir)?;
-    let mut records = Vec::new();
-    let mut byte_length = bytes.len();
-    for (index, entry) in fs::read_dir(&dir).map_err(atomic::io)?.enumerate() {
-        limit(index < MAX_CATALOG_ENTRIES)?;
-        let entry = entry.map_err(atomic::io)?;
-        after_entry(&entry.path())?;
-        let name = entry.file_name();
-        let name = name
-            .to_str()
-            .ok_or_else(|| AppError::invalid("Invalid catalog filename"))?;
-        if name.starts_with('.') && name.ends_with(".tmp") {
-            atomic::safe_existing(&dir)?;
-            // Publication may rename/remove a temporary after read_dir yielded its name.
-            // Existing links still fail closed; absence is normal only for ignored temporaries.
-            match fs::symlink_metadata(entry.path()) {
-                Ok(metadata) => require(
-                    !atomic::is_link(&metadata),
-                    "Symlink/reparse paths are forbidden",
-                )?,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
-                Err(error) => return Err(atomic::io(error)),
-            }
-            continue;
-        }
-        atomic::safe_existing(&entry.path())?;
-        if name == ".commit.lock" {
-            continue;
-        }
-        limit(records.len() < MAX_MEDIA)?;
-        let id = name
-            .strip_suffix(".json")
-            .ok_or_else(|| AppError::invalid("Unknown catalog entry"))?;
-        uuid(id)?;
-        let bytes = atomic::read(
-            &entry.path(),
-            MAX_RECORD_BYTES.min(MAX_LAYER_BYTES - byte_length),
-        )?;
-        byte_length += bytes.len();
-        let record = CatalogRecord::parse(&bytes, &manifest)?;
-        require(record.media.id == id, "Catalog filename identity mismatch")?;
-        let path = root.join(&record.media.source_ref);
-        atomic::safe_existing(&path)?;
-        require(
-            path.is_file()
-                && fs::metadata(&path).map_err(atomic::io)?.len() == record.media.byte_length,
-            "Missing or changed catalog media",
-        )?;
-        records.push((record.media, hash(&bytes)));
-    }
-    records.sort_by(|a, b| a.0.id.cmp(&b.0.id));
-    let record_hashes = records
-        .iter()
-        .map(|r| (r.0.id.clone(), r.1.clone()))
-        .collect::<Vec<_>>();
-    let digest = record_digest(&record_hashes)?;
-    manifest.media = records.into_iter().map(|r| r.0).collect();
-    manifest.validate()?;
-    let revision = CatalogRevision {
-        media_count: manifest.media.len(),
-        byte_length,
-        digest,
-    };
-    Ok(LoadedCatalog {
-        manifest,
-        revision: Some(revision),
-        record_hashes,
-    })
-}
+use super::catalog_storage::CATALOG_LOADS;
+use super::catalog_storage::{
+    record_digest, CatalogRecord, DefaultManifest, MAX_CATALOG_ENTRIES, MAX_RECORD_BYTES,
+};
+pub use super::catalog_storage::{CatalogRevision, CatalogSnapshot};
 
 /// Caller owns precopy staging until it drops this capability. No DTO constructor or serde.
 pub struct PreparedCatalogMedia {
@@ -214,6 +32,7 @@ pub struct PreparedCatalogMedia {
     source: PathBuf,
     stamp: SourceStamp,
     decoded: Arc<decode::DecodedMedia>,
+    placement: organization::NativePlacementPlan,
 }
 fn placement_identity_handle(file: &File) -> std::io::Result<File> {
     #[cfg(windows)]
@@ -248,6 +67,15 @@ fn placement_identity_handle(file: &File) -> std::io::Result<File> {
     file.try_clone()
 }
 impl PreparedCatalogMedia {
+    /// Attach native validated placement before passing the capability to consumers.
+    pub fn with_placement(mut self, plan: organization::NativePlacementPlan) -> Result<Self> {
+        require(
+            plan.project_id == self.project_id,
+            "Placement belongs to another project",
+        )?;
+        self.placement = plan;
+        Ok(self)
+    }
     pub fn media(&self) -> &PublicMedia {
         &self.media
     }
@@ -322,7 +150,7 @@ impl CollaborationRepository {
             project_id: document.project_id,
             name: document.name,
             created_at: document.created_at,
-            catalog_version: 1,
+            catalog_version: 2,
         };
         // Do not recursively remove a caller's root after an error; native owns target cleanup.
         for dir in ["media", "authors", "annotations", "catalog"] {
@@ -331,6 +159,12 @@ impl CollaborationRepository {
         atomic::publish_new(
             &root.join("collaboration.json"),
             &serde_json::to_vec(&fixed).map_err(|_| AppError::invalid("Cannot encode manifest"))?,
+            None,
+            None,
+        )?;
+        atomic::publish_new(
+            &root.join("organization.json"),
+            &organization::encode(&organization::Organization::empty(fixed.project_id.clone()))?,
             None,
             None,
         )?;
@@ -370,7 +204,31 @@ impl CollaborationRepository {
         cancel: &AtomicBool,
         mut progress: impl FnMut(&str, u64),
     ) -> Result<PreparedCatalogMedia> {
-        self.prepare_media_inner(source, cache_root, cancel, &mut progress, None)
+        self.prepare_media_inner(source, cache_root, cancel, &mut progress, None, None, None)
+    }
+    /// Consume a plan sealed from the batch's immutable native head capture.
+    /// Publication still revalidates the current head/layout under the commit lock.
+    pub fn prepare_media_with_placement(
+        &self,
+        source: &Path,
+        cache_root: &Path,
+        cancel: &AtomicBool,
+        placement: organization::NativePlacementPlan,
+        progress: impl FnMut(&str, u64),
+    ) -> Result<PreparedCatalogMedia> {
+        require(
+            placement.project_id == self.manifest.project_id,
+            "Placement belongs to another project",
+        )?;
+        self.prepare_media_inner(
+            source,
+            cache_root,
+            cancel,
+            progress,
+            None,
+            Some(placement),
+            None,
+        )
     }
     /// Independently decode/copy existing document media, retaining its validated UUID.
     /// A supplied descriptor is never proof: every identity field is checked against decoder output.
@@ -382,8 +240,63 @@ impl CollaborationRepository {
         expected: &crate::model::MediaDescriptor,
         progress: impl FnMut(&str, u64),
     ) -> Result<PreparedCatalogMedia> {
-        self.prepare_media_inner(source, cache_root, cancel, progress, Some(expected))
+        self.prepare_media_inner(
+            source,
+            cache_root,
+            cancel,
+            progress,
+            Some(expected),
+            None,
+            None,
+        )
     }
+    /// Verified copy with a trusted placement sealed once from the target layout capture.
+    #[allow(clippy::too_many_arguments)]
+    pub fn prepare_media_copy_with_placement(
+        &self,
+        source: &Path,
+        cache_root: &Path,
+        cancel: &AtomicBool,
+        expected: &crate::model::MediaDescriptor,
+        placement: organization::NativePlacementPlan,
+        progress: impl FnMut(&str, u64),
+    ) -> Result<PreparedCatalogMedia> {
+        require(
+            placement.project_id == self.manifest.project_id,
+            "Placement belongs to another project",
+        )?;
+        self.prepare_media_inner(
+            source,
+            cache_root,
+            cancel,
+            progress,
+            Some(expected),
+            Some(placement),
+            None,
+        )
+    }
+    /// Legacy ordinary copies reuse one target capture, deriving names after verified decode.
+    #[allow(clippy::too_many_arguments)]
+    pub fn prepare_media_copy_in_capture(
+        &self,
+        source: &Path,
+        cache_root: &Path,
+        cancel: &AtomicBool,
+        expected: &crate::model::MediaDescriptor,
+        capture: &organization::NativePlacementCapture,
+        progress: impl FnMut(&str, u64),
+    ) -> Result<PreparedCatalogMedia> {
+        self.prepare_media_inner(
+            source,
+            cache_root,
+            cancel,
+            progress,
+            Some(expected),
+            None,
+            Some(capture),
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
     fn prepare_media_inner(
         &self,
         source: &Path,
@@ -391,6 +304,8 @@ impl CollaborationRepository {
         cancel: &AtomicBool,
         mut progress: impl FnMut(&str, u64),
         expected: Option<&crate::model::MediaDescriptor>,
+        placement: Option<organization::NativePlacementPlan>,
+        placement_capture: Option<&organization::NativePlacementCapture>,
     ) -> Result<PreparedCatalogMedia> {
         self.authority()?;
         require(
@@ -437,6 +352,25 @@ impl CollaborationRepository {
         let mut check = self.manifest.clone();
         check.media = vec![media.clone()];
         check.validate()?;
+        // Complete all placement preflight before creating an owned staging file.
+        let placement = if let Some(placement) = placement {
+            placement
+        } else {
+            let owned_capture;
+            let capture = if let Some(capture) = placement_capture {
+                capture
+            } else {
+                owned_capture = self.capture_media_placement(None)?;
+                &owned_capture
+            };
+            let original_filename =
+                native_original_filename(source, expected, extension, &media.id)?;
+            capture.seal(vec![], original_filename)?
+        };
+        require(
+            placement.project_id == self.manifest.project_id,
+            "Placement belongs to another project",
+        )?;
         let staged = self
             .root
             .join("media")
@@ -463,6 +397,7 @@ impl CollaborationRepository {
             source: decoded.source_path.clone(),
             stamp: decoded.stamp.clone(),
             decoded: decoded.clone(),
+            placement,
         };
         let mut input = File::open(&prepared.source).map_err(atomic::io)?;
         let mut buffer = [0u8; 65536];
@@ -499,7 +434,7 @@ impl CollaborationRepository {
     ) -> Result<PublicMedia> {
         self.append_media_controlled(session, prepared, cancel, None)
     }
-    /// Fault points affect only the catalog-record publication, after verified media placement.
+    /// BeforeRecord/AfterRecord bracket immutable publication; other points affect the head.
     pub fn append_media_controlled(
         &self,
         session: &AuthorSession,
@@ -604,6 +539,10 @@ impl CollaborationRepository {
             return Ok((existing.clone(), current));
         }
         limit(current.manifest.media.len() < MAX_MEDIA)?;
+        let next_organization = current
+            .organization
+            .add_media(&prepared.media.id, &prepared.placement)?;
+        let head_bytes = organization::encode(&next_organization)?;
         check_cancel(cancel)?;
         atomic::safe_existing(&prepared.source)?;
         prepared.stamp.verify(&prepared.source)?;
@@ -649,7 +588,31 @@ impl CollaborationRepository {
         revision.media_count = current.manifest.media.len();
         revision.byte_length += record.len();
         revision.digest = digest;
-        let result = atomic::publish_new(&record_path, &record, fault, Some(cancel));
+        let result = (|| {
+            if fault == Some(atomic::PublishFault::BeforeRecord) {
+                return Err(atomic::io(std::io::Error::other("Injected before record")));
+            }
+            // A prior failed head write may have left our immutable record. Reuse only exact bytes.
+            if record_path.try_exists().map_err(atomic::io)? {
+                require(
+                    atomic::read(&record_path, MAX_RECORD_BYTES)? == record,
+                    "Uncommitted record differs",
+                )?;
+            } else {
+                atomic::publish_new(&record_path, &record, None, Some(cancel))?;
+            }
+            if fault == Some(atomic::PublishFault::AfterRecord) {
+                return Err(atomic::io(std::io::Error::other("Injected after record")));
+            }
+            atomic::replace_metadata_controlled(
+                &self.root.join("organization.json"),
+                &head_bytes,
+                fault,
+                Some(cancel),
+            )?;
+            current.organization = next_organization;
+            Ok(())
+        })();
         if result.is_err()
             && !record_path
                 .try_exists()
@@ -769,5 +732,51 @@ mod import_scan_regression {
             count, 1,
             "new UUID publication must read the full catalog only under its commit lock"
         );
+    }
+}
+
+fn native_original_filename(
+    source: &Path,
+    expected: Option<&crate::model::MediaDescriptor>,
+    extension: &str,
+    id: &str,
+) -> Result<String> {
+    let valid = |candidate: &str| {
+        candidate.chars().count() <= 255
+            && candidate.len() <= 1024
+            && !candidate
+                .chars()
+                .any(|c| c.is_control() || c == '/' || c == '\\')
+            && candidate != "."
+            && candidate != ".."
+            && !candidate.is_empty()
+    };
+    let Some(expected) = expected else {
+        // Direct imports preserve the native basename exactly, including no extension.
+        return source
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| valid(name))
+            .map(str::to_owned)
+            .ok_or_else(|| AppError::invalid("Invalid original filename"));
+    };
+    let candidate = expected
+        .display_name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("");
+    // Invalid legacy names must fall back before an extension could disguise them.
+    if !valid(candidate) {
+        return Ok(format!("{id}.{extension}"));
+    }
+    let candidate = if Path::new(candidate).extension().is_none() {
+        format!("{candidate}.{extension}")
+    } else {
+        candidate.to_owned()
+    };
+    if valid(&candidate) {
+        Ok(candidate)
+    } else {
+        Ok(format!("{id}.{extension}"))
     }
 }

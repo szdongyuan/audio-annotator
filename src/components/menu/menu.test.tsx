@@ -27,3 +27,11 @@ it('an entirely disabled menu keeps keyboard focus and still closes with Escape'
   fireEvent.keyDown(document.activeElement!, { key: 'Home' }); fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
   fireEvent.keyDown(document.activeElement!, { key: 'Escape' }); expect(close).toHaveBeenCalledOnce();
 });
+it('checkbox actions stay open and expose checked state for mouse, Space and Enter',()=>{
+ const action=vi.fn(),close=vi.fn();const view=render(<Menu anchor={{x:5,y:5}} onClose={close} items={[{id:'a',label:'A',checked:false,keepOpen:true,action} as never]}/>);
+ const item=screen.getByRole('menuitemcheckbox',{name:'A'});expect(item).toHaveAttribute('aria-checked','false');fireEvent.click(item);fireEvent.keyDown(item,{key:' '});fireEvent.keyDown(item,{key:'Enter'});expect(action).toHaveBeenCalledTimes(3);expect(close).not.toHaveBeenCalled();view.unmount();
+});
+it('keyboard toggle after a checkbox click acts on the clicked checkbox',()=>{
+ const a=vi.fn(),b=vi.fn();render(<Menu anchor={{x:5,y:5}} onClose={vi.fn()} items={[{id:'a',label:'A',keepOpen:true,checked:false,action:a},{id:'b',label:'B',keepOpen:true,checked:false,action:b}]}/>);
+ const second=screen.getByRole('menuitemcheckbox',{name:'B'});fireEvent.click(second);fireEvent.keyDown(second,{key:' '});expect(b).toHaveBeenCalledTimes(2);expect(a).not.toHaveBeenCalled();
+});

@@ -27,7 +27,7 @@ export function workspaceMenus({identity,collaboration,project,mediaUI,exchange,
  const timeLimit=media?(workspace.state.linkedTime?Math.max(duration(media),...pair.map(duration)):duration(media)):0;
  const guard=(action:()=>void)=>()=>{if(owner&&!owner.store.editingDisabled)action();};
  const patch=(p:Parameters<WorkspaceUI['patch']>[1])=>{if(media)workspace.patch(media.id,p);};
- const reset=()=>{if(media)patch({startSeconds:0,endSeconds:Math.min(10,timeLimit),lowHz:0,highHz:media.sampleRate/2});};
+ const reset=()=>{if(media)patch({startSeconds:0,endSeconds:duration(media),lowHz:0,highHz:media.sampleRate/2});};
  const ready=!!region&&mediaUI?.statuses.some(s=>s.mediaId===region.mediaId&&s.status==='ready');
  return [
   {id:'file',label:'文件',items:project?projectMenuItems({project,onImport:mediaUI?.choose,onImportFolder:mediaUI?.chooseSourceFolder,onImportZip:mediaUI?.chooseSourceZip,sourceDisabled:mediaUI?.sourceDisabled,importDisabled:mediaUI?.disabled,exchange,onCreateCollaboration:collaboration?()=>void collaboration.show('create'):undefined}):[{id:'new',label:'新建项目',disabled:true}]},
@@ -48,7 +48,7 @@ export function workspaceMenus({identity,collaboration,project,mediaUI,exchange,
    {id:'kind',label:'频谱类型',disabled:disabled||!media,children:([{id:'stft',label:'STFT 频谱'},{id:'mel',label:'梅尔频谱'}] as const).map(k=>({...k,checked:view?.spectrumKind===k.id,action:()=>patch({spectrumKind:k.id})}))},
    {id:'settings',label:'分析 / 显示设置…',disabled:disabled||!media,action:()=>{if(media)settings(media.id);}}]},
   {id:'annotation',label:'标注',items:[
-   {id:'category',label:'标注类型',disabled:regionDisabled||annotationDisabled(owner),children:[{id:'none',label:'未分类',action:()=>{if(target)void selection.actions?.classify(target,null);}},...(doc?.categories??[]).map(c=>({id:c.id,label:c.name,action:()=>{if(target)void selection.actions?.classify(target,c.id);}}))]},
+   {id:'category',label:'标注类型',disabled:regionDisabled||annotationDisabled(owner),children:[{id:'none',label:'清空标签',keepOpen:true,checked:false,action:()=>{if(target)void selection.actions?.classify(target,null);}},...(doc?.categories??[]).map(c=>({id:c.id,label:c.name,keepOpen:true,checked:doc?.annotations.find(a=>a.id===target?.object?.id)?.categoryIds.includes(c.id)??false,action:()=>{if(target)void selection.actions?.classify(target,c.id);}}))]},
    {id:'note',label:'备注',disabled:regionDisabled||annotationDisabled(owner),action:()=>{if(target)void selection.actions?.note(target,focusNote);}},
    ...(doc ? [classificationMenu(doc, media ? { mediaId: media.id, channelIndex: null } : null, annotations.classify, '当前文件分类', annotationDisabled(owner)), classificationMenu(doc, media && view && (selection.context?.channelIndex ?? view.visibleChannels[0]) !== undefined ? { mediaId: media.id, channelIndex: selection.context?.channelIndex ?? view.visibleChannels[0] } : null, annotations.classify, '当前通道分类', annotationDisabled(owner))] : []),
    {id:'categories',label:'类别管理',disabled,action:()=>inspector('categories')}, {id:'list',label:'标注列表',disabled,action:()=>inspector('list')}]},

@@ -30,7 +30,7 @@ try {
   const id = JSON.parse(await fs.readFile(path.join(project, 'collaboration.json'), 'utf8')).projectId;
   await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.innerText.includes('导入完成')`); await h.clickText('关闭导入结果');await h.selectMedia('stereo.mp3');
   await h.until(`document.querySelectorAll('canvas').length===2 && !document.querySelector('.tile-status')`);
-  await h.drag('.annotation-overlay', [.2, .25], [.6, .7]); await h.context('.annotation-overlay', [.4, .45]); await h.label('标注类型'); await h.clickText('未分类');
+  await h.drag('.annotation-overlay', [.2, .25], [.6, .7]); await h.context('.annotation-overlay', [.4, .45]); await h.label('标注类型'); await h.clickText('清空标签');await h.driver.actions().sendKeys('\uE00C','\uE00C').perform();
   await h.until(`document.querySelector('.annotation-inspector')`);
   const original = (await h.snapshot(id)).document, media = original.media.find(m=>m.displayName==='stereo.mp3'), annotation = original.annotations[0];
   const snapshot = async () => { await wait(350); return (await h.snapshot(id)).document; };

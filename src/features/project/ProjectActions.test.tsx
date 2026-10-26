@@ -20,3 +20,4 @@ it('names the local project copy accurately and calls the existing saveAs action
  fireEvent.click(screen.getByRole('menuitem',{name:'另存我的项目副本…'}));
  expect(project.saveAs).toHaveBeenCalledOnce();
 });
+it('forwards the stable File menu trigger before opening exchange modals',()=>{const show=vi.fn(),project={busy:false,recovery:null,active:{store:{editingDisabled:false}}} as unknown as ProjectLifecycleUI;render(<AppMenu owner={null} menus={[{id:'file',label:'文件',items:projectMenuItems({project,exchange:{show} as never})}]}/>);const trigger=screen.getByRole('menuitem',{name:'文件'});fireEvent.click(trigger);fireEvent.click(screen.getByRole('menuitem',{name:'分享项目…'}));expect(show).toHaveBeenCalledWith('export',trigger);});

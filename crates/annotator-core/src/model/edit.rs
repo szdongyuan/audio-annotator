@@ -8,6 +8,27 @@ pub struct SpectralEdit {
     pub region: Region,
     pub enabled: bool,
     pub processing_version: u32,
+    pub operation: EditOperation,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+pub enum EditOperation {
+    Mask,
+    Gain {
+        #[serde(rename = "gainDb")]
+        gain_db: f64,
+    },
+}
+impl EditOperation {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if let Self::Gain { gain_db } = self {
+            if !gain_db.is_finite() || !(-60.0..=24.0).contains(gain_db) {
+                return Err(crate::error::AppError::invalid("Invalid regional gain"));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -27,16 +48,14 @@ pub enum Change {
     RemoveMedia {
         media_id: String,
     },
-    SetMediaCategory {
+    SetMediaCategories {
         media_id: String,
-        #[serde(deserialize_with = "super::required_nullable")]
-        category_id: Option<String>,
+        category_ids: Vec<String>,
     },
-    SetChannelCategory {
+    SetChannelCategories {
         media_id: String,
         channel_index: u8,
-        #[serde(deserialize_with = "super::required_nullable")]
-        category_id: Option<String>,
+        category_ids: Vec<String>,
     },
     UpdateMediaNote {
         media_id: String,
@@ -83,6 +102,9 @@ pub enum Change {
     },
     RemoveEdit {
         id: String,
+    },
+    ResetMediaMasks {
+        media_id: String,
     },
     SetEditEnabled {
         id: String,

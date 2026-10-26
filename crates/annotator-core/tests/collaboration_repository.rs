@@ -36,7 +36,7 @@ impl Drop for Temp {
 }
 fn payload() -> LayerPayload {
     LayerPayload::from_document(
-        &ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json"))
+        &ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v3.json"))
             .unwrap(),
     )
     .unwrap()
@@ -267,7 +267,7 @@ fn tampered_layers_versions_sizes_and_enumeration_fail_closed() {
     let path = dir.join("00000000000000000001.json");
     let original: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     for (field, value) in [
-        ("formatVersion", json!(2)),
+        ("formatVersion", json!(1)),
         ("authorId", json!(uuid::Uuid::new_v4().to_string())),
         ("hash", json!("0".repeat(64))),
         ("viewState", json!({})),
@@ -510,7 +510,7 @@ fn real_process_no_clobber_registration_and_independent_author_publication() {
 
 fn manifest_json() -> Value {
     let doc: Value =
-        serde_json::from_str(include_str!("../../../tests/fixtures/document-v2.json")).unwrap();
+        serde_json::from_str(include_str!("../../../tests/fixtures/document-v3.json")).unwrap();
     let media: Vec<Value> = doc["media"]
         .as_array()
         .unwrap()
@@ -519,14 +519,14 @@ fn manifest_json() -> Value {
             let mut m = m.clone();
             let path = format!("media/{}.wav", m["id"].as_str().unwrap());
             let object = m.as_object_mut().unwrap();
-            for key in ["note", "channelNotes", "categoryId", "channelCategoryIds"] {
+            for key in ["note", "channelNotes", "categoryIds", "channelCategoryIds"] {
                 object.remove(key);
             }
             object.insert("sourceRef".into(), json!(path));
             m
         })
         .collect();
-    json!({"kind":"audio-annotator-collaboration", "formatVersion":3, "projectId":doc["projectId"], "name":doc["name"], "createdAt":doc["createdAt"], "media":media})
+    json!({"kind":"audio-annotator-collaboration", "formatVersion":CURRENT_COLLABORATION_FORMAT, "projectId":doc["projectId"], "name":doc["name"], "createdAt":doc["createdAt"], "media":media})
 }
 
 #[test]
@@ -661,7 +661,7 @@ fn account_count_and_collection_limits_are_explicit() {
         ErrorCode::ResourceLimit
     );
     let mut manifest = manifest;
-    manifest.media = vec![manifest.media[0].clone(); 4097];
+    manifest.media = vec![manifest.media[0].clone(); 10_001];
     assert_eq!(
         manifest.validate().unwrap_err().code,
         ErrorCode::ResourceLimit

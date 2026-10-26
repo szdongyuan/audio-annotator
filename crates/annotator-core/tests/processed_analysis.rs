@@ -39,7 +39,8 @@ fn edit(channel: u8) -> SpectralEdit {
             high_hz: 2000.,
         },
         enabled: true,
-        processing_version: 1,
+        processing_version: 2,
+        operation: annotator_core::model::EditOperation::Mask,
     }
 }
 fn request(
@@ -63,7 +64,7 @@ fn request(
         config_hash: config_hash(&settings),
         settings,
         analysis_source: source,
-        processing_version: 1,
+        processing_version: 2,
         edit_signature: if source == AnalysisSource::Processed {
             edit_signature("m", edits)
         } else {
@@ -96,6 +97,14 @@ fn processed_tiles_match_independent_dsp_then_stft_for_masks_channels_and_large_
         vec![edit(0)],
         vec![edit(0), edit(0), edit(1)],
         vec![moved],
+        vec![SpectralEdit {
+            operation: annotator_core::model::EditOperation::Gain { gain_db: 6.0 },
+            ..edit(0)
+        }],
+        vec![SpectralEdit {
+            operation: annotator_core::model::EditOperation::Gain { gain_db: -6.0 },
+            ..edit(0)
+        }],
         vec![edit(0)],
     ] {
         let mut reference =
@@ -118,7 +127,7 @@ fn processed_tiles_match_independent_dsp_then_stft_for_masks_channels_and_large_
                 r.frequency_lod = 0;
             }
             let mut reader =
-                SourceReader::new(info(), r.analysis_source, 1, &edits, channel).unwrap();
+                SourceReader::new(info(), r.analysis_source, DSP_VERSION, &edits, channel).unwrap();
             let got = compute_tile(
                 &r,
                 48000,
@@ -158,8 +167,9 @@ fn random_access_head_tail_overlap_reuse_and_cancellation_are_bounded() {
     let input = audio();
     let cancel = AtomicBool::new(false);
     let edits = [edit(0)];
-    let mut reader = SourceReader::new(info(), AnalysisSource::Processed, 1, &edits, 0).unwrap();
-    let mut dsp = DspProcessor::new(info(), 1, PlaybackMode::Processed, &edits).unwrap();
+    let mut reader =
+        SourceReader::new(info(), AnalysisSource::Processed, DSP_VERSION, &edits, 0).unwrap();
+    let mut dsp = DspProcessor::new(info(), DSP_VERSION, PlaybackMode::Processed, &edits).unwrap();
     for (start, count) in [(0, 1), (47016, 997), (9517, 121), (1, 32768), (513, 32768)] {
         let got = reader
             .read_channel(start, count, &cancel, |s, n| {
@@ -193,7 +203,8 @@ fn random_access_head_tail_overlap_reuse_and_cancellation_are_bounded() {
         ErrorCode::Cancelled
     );
     cancel.store(false, Ordering::Release);
-    let mut reader = SourceReader::new(info(), AnalysisSource::Processed, 1, &edits, 0).unwrap();
+    let mut reader =
+        SourceReader::new(info(), AnalysisSource::Processed, DSP_VERSION, &edits, 0).unwrap();
     assert_eq!(
         reader
             .read_channel(0, 32768, &cancel, |s, n| {
@@ -240,7 +251,7 @@ fn original_and_processed_cache_identities_never_alias_and_geometry_is_authorita
         processed.cache_key("hash", 48000, 48013),
         different.cache_key("hash", 48000, 48013)
     );
-    different.processing_version = 2;
+    different.processing_version = 1;
     assert!(different.validate().is_err());
     different = processed.clone();
     different.edit_signature = "untrusted".into();
@@ -257,7 +268,8 @@ fn original_and_processed_cache_identities_never_alias_and_geometry_is_authorita
         edit_signature("m", &[unrelated, disabled, renamed, edit(0)])
     );
     let input = audio();
-    let mut raw = SourceReader::new(info(), AnalysisSource::Original, 1, &edits, 1).unwrap();
+    let mut raw =
+        SourceReader::new(info(), AnalysisSource::Original, DSP_VERSION, &edits, 1).unwrap();
     assert_eq!(
         raw.read_channel(17, 32768, &AtomicBool::new(false), |s, n| {
             assert!(n <= 4096);
@@ -269,4 +281,76 @@ fn original_and_processed_cache_identities_never_alias_and_geometry_is_authorita
             .map(|f| f[1])
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn gain_cache_identity_preserves_value_and_multiplicity() {
+    use annotator_core::model::EditOperation;
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/analysis-signature.json"
+    ))
+    .unwrap();
+    let shared: Vec<SpectralEdit> = serde_json::from_value(fixture["gainEdits"].clone()).unwrap();
+    assert_eq!(
+        annotator_core::analysis::source::canonical_edits("m", &shared),
+        fixture["gainCanonical"].as_str().unwrap()
+    );
+    assert_eq!(
+        edit_signature("m", &shared),
+        fixture["gainSignature"].as_str().unwrap()
+    );
+    let mut gain = edit(0);
+    gain.operation = EditOperation::Gain { gain_db: 6.0 };
+    let one = edit_signature("m", &[gain.clone()]);
+    assert_ne!(one, edit_signature("m", &[gain.clone(), gain.clone()]));
+    let mut disabled = gain.clone();
+    disabled.enabled = false;
+    assert_eq!(one, edit_signature("m", &[gain.clone(), disabled]));
+    gain.operation = EditOperation::Gain { gain_db: -6.0 };
+    assert_ne!(one, edit_signature("m", &[gain.clone()]));
+    gain.operation = EditOperation::Mask;
+    assert_ne!(one, edit_signature("m", &[gain]));
+}
+
+#[test]
+fn processed_spectrum_measures_regional_gain_in_real_numeric_tiles() {
+    let input = audio();
+    let cancel = AtomicBool::new(false);
+    let mut gain = edit(0);
+    gain.region.low_hz = 0.0;
+    gain.region.high_hz = 24000.0;
+    gain.operation = annotator_core::model::EditOperation::Gain { gain_db: 6.0 };
+    let tiles: Vec<_> = [AnalysisSource::Original, AnalysisSource::Processed]
+        .into_iter()
+        .map(|source| {
+            let mut r = request(source, std::slice::from_ref(&gain), 2048, 0);
+            r.start_frame = 20;
+            r.frame_count = 8;
+            r.frequency_start = 64;
+            r.frequency_count = 1;
+            r.frequency_lod = 0;
+            let mut reader =
+                SourceReader::new(info(), source, DSP_VERSION, std::slice::from_ref(&gain), 0)
+                    .unwrap();
+            compute_tile(
+                &r,
+                48000,
+                info().frame_count,
+                &cancel,
+                |s, n| {
+                    reader.read_channel(s, n, &cancel, |s, n| {
+                        Ok(input[s as usize * 2..(s as usize + n) * 2].to_vec())
+                    })
+                },
+                |_, _| {},
+            )
+            .unwrap()
+        })
+        .collect();
+    for (original, processed) in tiles[0].values.iter().zip(&tiles[1].values) {
+        assert!(
+            (processed - original - 6.0).abs() < 0.001,
+            "{original}->{processed}"
+        );
+    }
 }

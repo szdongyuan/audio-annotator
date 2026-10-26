@@ -4,7 +4,7 @@ use annotator_core::{
     media::{decode::decode, identity::SourceStamp, registry::same_identity},
     model::MediaDescriptor,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
     sync::atomic::Ordering,
@@ -43,9 +43,27 @@ pub enum MediaEvent {
     },
 }
 
+fn required_nullable<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Option<String>, D::Error> {
+    Option::<String>::deserialize(d)
+}
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DirectTarget {
+    #[serde(deserialize_with = "required_nullable")]
+    pub folder_id: Option<String>,
+    pub layout_revision: u64,
+}
+mod placement;
 enum Inputs {
-    Paths(Vec<String>),
+    Paths(Vec<String>, Option<DirectTarget>),
     Sources(super::source_import::Token, Vec<usize>),
+    PreparedSources(super::source_import::PreparedBatch),
+    PreparedPaths(
+        Vec<String>,
+        Vec<annotator_core::collaboration::organization::NativePlacementPlan>,
+    ),
 }
 pub(crate) async fn start_sources(
     state: &AppState,
@@ -75,8 +93,26 @@ pub(crate) async fn start(
         state,
         runtime_nonce,
         project_id,
-        Inputs::Paths(paths),
+        Inputs::Paths(paths, None),
         relink,
+        on_event,
+    )
+    .await
+}
+pub(crate) async fn start_targeted(
+    state: &AppState,
+    runtime_nonce: Option<String>,
+    project_id: String,
+    paths: Vec<String>,
+    target: Option<DirectTarget>,
+    on_event: Channel<MediaEvent>,
+) -> Result<String> {
+    start_inner(
+        state,
+        runtime_nonce,
+        project_id,
+        Inputs::Paths(paths, target),
+        None,
         on_event,
     )
     .await
@@ -90,17 +126,49 @@ async fn start_inner(
     on_event: Channel<MediaEvent>,
 ) -> Result<String> {
     let count = match &inputs {
-        Inputs::Paths(p) => p.len(),
+        Inputs::Paths(p, _) => p.len(),
         Inputs::Sources(_, i) => i.len(),
+        Inputs::PreparedSources(batch) => batch.indices.len(),
+        Inputs::PreparedPaths(paths, _) => paths.len(),
     };
     if count == 0 || count > 256 {
         return Err(AppError::invalid("请选择 1–256 个音频文件"));
     }
+    let inputs = match inputs {
+        Inputs::Sources(token, indices) => Inputs::PreparedSources(
+            super::source_import::prepare_batch(state, token, indices).await?,
+        ),
+        Inputs::Paths(paths, target) if relink.is_none() => {
+            match placement::prepare_direct(
+                state,
+                runtime_nonce.clone(),
+                project_id.clone(),
+                paths.clone(),
+                target,
+            )
+            .await?
+            {
+                Some(placements) => Inputs::PreparedPaths(paths, placements),
+                None => Inputs::Paths(paths, None),
+            }
+        }
+        other => other,
+    };
     let service = state.6.clone();
     let tasks = state.1.clone();
     let task_id = uuid::Uuid::new_v4().to_string();
     let id = task_id.clone();
-    let (generation, cancel, root, expected, catalog, preparation, paths, sources) = state
+    let (
+        generation,
+        cancel,
+        root,
+        expected,
+        catalog,
+        preparation,
+        paths,
+        sources,
+        direct_placements,
+    ) = state
         .run(move |s| {
             let project = s
                 .as_ref()
@@ -117,39 +185,42 @@ async fn start_inner(
             if !super::collaboration::catalog::can_import(project) && relink.is_none() {
                 return Err(AppError::invalid("Shared media catalog is immutable"));
             }
-            let (paths, sources) = {
+            let (paths, sources, direct_placements) = {
                 let registry = service
                     .sources
                     .lock()
                     .map_err(|_| super::collaboration::runtime::unavailable())?;
                 match inputs {
-                    Inputs::Paths(paths) => {
+                    Inputs::Paths(paths, _) => {
                         if registry.active() {
                             return Err(AppError::invalid("请先关闭当前导入预览"));
                         }
-                        (paths, None)
+                        (paths, None, vec![])
                     }
-                    Inputs::Sources(token, indices) => {
-                        if !project.is_shared()
-                            || !super::collaboration::catalog::can_import(project)
-                        {
-                            return Err(AppError::invalid("可配置导入需要可写的协作项目"));
+                    Inputs::PreparedPaths(paths, placements) => {
+                        if registry.active() {
+                            return Err(AppError::invalid("请先关闭当前导入预览"));
                         }
-                        let scan = registry.result(&token)?;
-                        let mut seen = std::collections::HashSet::new();
-                        let paths = indices
+                        (paths, None, placements)
+                    }
+                    Inputs::PreparedSources(batch) => {
+                        let current = registry.result(&batch.token)?;
+                        if !std::sync::Arc::ptr_eq(&current, &batch.scan) {
+                            return Err(super::collaboration::runtime::stale());
+                        }
+                        let paths = batch
+                            .indices
                             .iter()
-                            .map(|i| {
-                                if !seen.insert(*i) {
-                                    return Err(AppError::invalid("重复候选索引"));
-                                }
-                                scan.candidates()
-                                    .get(*i)
-                                    .map(|c| c.display_name.clone())
-                                    .ok_or_else(|| AppError::invalid("候选音频索引越界"))
-                            })
-                            .collect::<Result<Vec<_>>>()?;
-                        (paths, Some((scan, indices)))
+                            .map(|i| batch.scan.candidates()[*i].display_name.clone())
+                            .collect();
+                        (
+                            paths,
+                            Some((batch.scan, batch.indices, batch.placements)),
+                            vec![],
+                        )
+                    }
+                    Inputs::Sources(_, _) => {
+                        unreachable!("native source preflight precedes admission")
                     }
                 }
             };
@@ -202,6 +273,7 @@ async fn start_inner(
                 preparation,
                 paths,
                 sources,
+                direct_placements,
             ))
         })
         .await?;
@@ -214,7 +286,12 @@ async fn start_inner(
         let cache = std::env::temp_dir().join("audio-annotator-pcm");
         #[cfg(test)]
         service.run_hook();
+        let (sources, mut placements) = match sources {
+            Some((scan, indices, placements)) => (Some((scan, indices)), placements.into_iter()),
+            None => (None, direct_placements.into_iter()),
+        };
         for (index, raw) in paths.iter().enumerate() {
+            let placement = placements.next();
             if cancel.load(Ordering::Relaxed) {
                 break;
             }
@@ -253,24 +330,30 @@ async fn start_inner(
             let result = staged.and_then(|staged| {
                 let path = staged.as_ref().map_or(path.as_path(), |s| s.path());
                 if let Some((repo, nonce)) = &catalog {
-                    repo.prepare_media_with_progress(path, &cache, &cancel, progress)
-                        .and_then(|prepared| {
-                            let prepared = if sources.is_some() {
-                                prepared.with_display_name(raw.clone())?
-                            } else {
-                                prepared
-                            };
-                            annotator_core::media::identity::check_cancel(&cancel)?;
-                            if staged.is_some() {
-                                super::collaboration::catalog::store_prepared_source(
-                                    &service, nonce, &id, prepared, staged,
-                                )
-                            } else {
-                                super::collaboration::catalog::store_prepared(
-                                    &service, nonce, &id, prepared,
-                                )
-                            }
-                        })
+                    let prepared = if let Some(placement) = placement {
+                        repo.prepare_media_with_placement(
+                            path, &cache, &cancel, placement, progress,
+                        )
+                    } else {
+                        repo.prepare_media_with_progress(path, &cache, &cancel, progress)
+                    };
+                    prepared.and_then(|prepared| {
+                        let prepared = if sources.is_some() {
+                            prepared.with_display_name(raw.clone())?
+                        } else {
+                            prepared
+                        };
+                        annotator_core::media::identity::check_cancel(&cancel)?;
+                        if staged.is_some() {
+                            super::collaboration::catalog::store_prepared_source(
+                                &service, nonce, &id, prepared, staged,
+                            )
+                        } else {
+                            super::collaboration::catalog::store_prepared(
+                                &service, nonce, &id, prepared,
+                            )
+                        }
+                    })
                 } else {
                     decode(path, &cache, &cancel, progress).and_then(|mut decoded| {
                         if let Some(expected) = &expected {
@@ -332,9 +415,10 @@ pub async fn import_media(
     runtime_nonce: Option<String>,
     project_id: String,
     paths: Vec<String>,
+    target: Option<DirectTarget>,
     on_event: Channel<MediaEvent>,
 ) -> Result<String> {
-    start(&state, runtime_nonce, project_id, paths, None, on_event).await
+    start_targeted(&state, runtime_nonce, project_id, paths, target, on_event).await
 }
 #[tauri::command]
 pub async fn relink_media(

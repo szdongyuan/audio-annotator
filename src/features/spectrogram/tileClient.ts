@@ -65,7 +65,7 @@ const uint = (value: unknown, min = 0): number => {
 const finite = (value: unknown): number => { if (typeof value !== 'number' || !Number.isFinite(value)) throw invalid(); return value; };
 const exactKeys = (value: Record<string, unknown>, keys: string[]) => { if (Object.keys(value).length !== keys.length || keys.some(key => !Object.hasOwn(value, key))) throw invalid(); };
 function validateIdentity(r: AnalysisIdentity) {
-  if (r.processingVersion !== 1 || (r.analysisSource !== 'original' && r.analysisSource !== 'processed')
+  if (r.processingVersion !== 2 || (r.analysisSource !== 'original' && r.analysisSource !== 'processed')
     || typeof r.editSignature !== 'string' || (r.analysisSource === 'original' ? r.editSignature !== '' : !/^[a-f0-9]{64}$/.test(r.editSignature))) throw invalid();
 }
 /** One binary envelope associates compact JSON geometry and raw f32 bytes atomically.

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { useIdentity } from './useIdentity';
 import { useProjectLifecycle } from '../project/useProjectLifecycle';
 import type { LocalProjectCommands, OpenedProject } from '../../bridge/projects';
@@ -11,7 +11,7 @@ const invoke=vi.hoisted(()=>vi.fn());
 vi.mock('@tauri-apps/api/core',()=>({invoke,isTauri:()=>false,Channel:class{onmessage=()=>{};}}));
 const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222';
 const profile=(authorId=a)=>({authorId,displayName:authorId===a?'默认':'另一身份',createdAt:'2026-10-26T00:00:00Z'});
-function opened(nonce=a,mode:'profile'|'viewOnly'='profile'):OpenedProject{return{snapshot:{document:structuredClone(fixture) as never,canUndo:true,canRedo:false},persistedRevision:fixture.revision,recovery:null,path:'shared',collaboration:{projectFlavor:'default',identityMode:mode,canWriteAnnotations:mode==='profile',canImportMedia:mode==='profile',hiddenMediaIds:[],catalogPending:false,runtimeNonce:nonce,actor:mode==='profile'?profile(nonce):null,preferences:{volume:.25,deviceId:null,loopEnabled:false,source:'original'}}};}
+function opened(nonce=a,mode:'profile'|'viewOnly'='profile'):OpenedProject{return{snapshot:{document:structuredClone(fixture) as never,canUndo:true,canRedo:false},persistedRevision:fixture.revision,recovery:null,path:'shared',collaboration:{projectFlavor:'default',identityMode:mode,canWriteAnnotations:mode==='profile',canImportMedia:mode==='profile',hiddenMediaIds:[],catalogPending:false,runtimeNonce:nonce,actor:mode==='profile'?profile(nonce):null,preferences:{monitorGainDb:0,mediaMonitorGainDb:{},volume:.25,deviceId:null,loopEnabled:false,source:'original'}}};}
 function setup(initial=opened(),strict=false){
  let closeRequested=()=>{};const order:string[]=[];
  const api:LocalProjectCommands={choose:vi.fn(async()=>'/project'),open:async()=>initial,create:vi.fn(),save:vi.fn(async(_id,r)=>r),close:vi.fn(),recover:vi.fn(),saveAs:vi.fn(),cancelRecovery:vi.fn(),onCloseRequested:async(fn)=>{closeRequested=fn;return()=>{};},destroyWindow:vi.fn()};

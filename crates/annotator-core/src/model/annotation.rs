@@ -15,8 +15,7 @@ pub struct Region {
 pub struct Annotation {
     pub id: String,
     pub region: Region,
-    #[serde(deserialize_with = "super::required_nullable")]
-    pub category_id: Option<String>,
+    pub category_ids: Vec<String>,
     pub note: String,
     pub created_at: String,
     pub updated_at: String,

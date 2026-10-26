@@ -74,7 +74,8 @@ try {
   };
   const expected = { projectId: nextId, expectedRevision: 0 };
   const exported = path.join(output, 'exchange.json');
-  assert.equal((await exchange('export_annotations', { expected, path: exported })).type, 'completed');
+  const exportPreview=await invoke('export_path_preview',{expected,bundle:false,preserveFolders:true});
+  assert.equal((await exchange('export_annotations', { expected, path: exported,previewToken:exportPreview.token })).type, 'completed');
   assert.equal((await exchange('import_exchange', { expected, source: path.join(output, 'absent.json'), parent: output })).type, 'failed');
   assert.equal((await page(token)).total, 260);
   const imported = await exchange('import_exchange', { expected, source: exported, parent: output });

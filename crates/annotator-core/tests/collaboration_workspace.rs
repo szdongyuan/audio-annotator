@@ -77,7 +77,7 @@ impl Drop for Fixture {
     }
 }
 fn fixture_document() -> ProjectDocument {
-    ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v2.json")).unwrap()
+    ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v3.json")).unwrap()
 }
 fn change(p: &mut LocalProject, c: Change) {
     let d = p.snapshot().unwrap().document;
@@ -113,6 +113,8 @@ fn private_actor_caches_are_isolated_and_locked() {
     assert!(pb.snapshot().unwrap().document.annotations.is_empty());
     assert!(pg.snapshot().unwrap().document.annotations.is_empty());
     let preferences = PlaybackPreferences {
+        monitor_gain_db: 0.0,
+        media_monitor_gain_db: Default::default(),
         volume: 0.25,
         device_id: Some("author-a-device".into()),
         loop_enabled: true,
@@ -140,7 +142,7 @@ fn private_actor_caches_are_isolated_and_locked() {
 
 fn annotation() -> Annotation {
     let mut a = fixture_document().annotations[0].clone();
-    a.category_id = None;
+    a.category_ids = vec![];
     a
 }
 
@@ -185,6 +187,8 @@ fn publication_a_in_flight_preserves_saved_b_and_private_state_across_restart() 
     );
     save(&mut p);
     let prefs = PlaybackPreferences {
+        monitor_gain_db: 0.0,
+        media_monitor_gain_db: Default::default(),
         volume: 0.2,
         device_id: Some("local-speaker".into()),
         loop_enabled: true,
@@ -534,7 +538,7 @@ fn malformed_cache_recovers_from_valid_copy_and_rejects_invalid_identity_pending
             "unknown" => v["password"] = serde_json::json!("forbidden"),
             "actor" => v["actor"] = serde_json::json!(uuid::Uuid::new_v4().to_string()),
             "generation" => v["generation"] = serde_json::json!(0),
-            "formatVersion" => v["formatVersion"] = serde_json::json!(2),
+            "formatVersion" => v["formatVersion"] = serde_json::json!(1),
             "document" => v["document"]["media"][0]["sha256"] = serde_json::json!("b".repeat(64)),
             "pending" => v["pending"]["hash"] = serde_json::json!("c".repeat(64)),
             _ => unreachable!(),
@@ -648,7 +652,7 @@ fn failed_identity_preparation_keeps_old_session_and_rejects_cross_root_capabili
 }
 
 #[test]
-fn shared_export_is_sanitized_and_save_as_is_personal_ordinary_v2() {
+fn shared_export_is_sanitized_and_save_as_is_personal_ordinary_v3() {
     let f = Fixture::new();
     let actor = f.actor("a");
     let mut p = f.open(Some(actor));
@@ -891,6 +895,8 @@ fn disk_inventory_proves_private_save_does_not_touch_share() {
     p.workspace_mut()
         .unwrap()
         .save_preferences(PlaybackPreferences {
+            monitor_gain_db: 6.0,
+            media_monitor_gain_db: [(fixture_document().media[0].id.clone(), Some(-3.0))].into(),
             volume: 0.1,
             device_id: Some("private-output".into()),
             loop_enabled: true,
@@ -1034,6 +1040,8 @@ fn failed_discard_suppression_requires_choice_and_recovers_full_accepted_checkpo
     p.workspace_mut()
         .unwrap()
         .save_preferences(PlaybackPreferences {
+            monitor_gain_db: 6.0,
+            media_monitor_gain_db: [(fixture_document().media[0].id.clone(), Some(3.0))].into(),
             volume: 0.2,
             device_id: Some("accepted-device".into()),
             loop_enabled: true,
@@ -1196,4 +1204,233 @@ fn explicit_recovery_preserves_inflight_a_and_newer_b_after_lost_ack() {
             .revision,
         3
     );
+}
+
+#[test]
+fn multilabel_private_roundtrip_publication_and_author_category_authority() {
+    let f = Fixture::new();
+    let a = f.actor("multilabel-a");
+    let b = f.actor("multilabel-b");
+    let mut p = f.open(Some(a.clone()));
+    let template = fixture_document();
+    let first = template.categories[0].clone();
+    let second = Category {
+        id: "00000000-0000-4000-8000-000000000077".into(),
+        name: "第二标签".into(),
+        color: "#123456".into(),
+    };
+    for category in [first.clone(), second.clone()] {
+        change(&mut p, Change::AddCategory { category });
+    }
+    let ids = vec![second.id.clone(), first.id.clone()];
+    change(
+        &mut p,
+        Change::SetMediaCategories {
+            media_id: template.media[0].id.clone(),
+            category_ids: ids.clone(),
+        },
+    );
+    change(
+        &mut p,
+        Change::SetChannelCategories {
+            media_id: template.media[0].id.clone(),
+            channel_index: 0,
+            category_ids: ids.clone(),
+        },
+    );
+    change(
+        &mut p,
+        Change::AddAnnotation {
+            annotation: Annotation {
+                category_ids: ids.clone(),
+                ..template.annotations[0].clone()
+            },
+        },
+    );
+    change(
+        &mut p,
+        Change::AddEdit {
+            edit: template.edits[0].clone(),
+        },
+    );
+    save(&mut p);
+    let expected = p.snapshot().unwrap().document;
+    let private: serde_json::Value =
+        serde_json::from_slice(&fs::read(p.storage_root().join("workspace.json")).unwrap())
+            .unwrap();
+    assert_eq!(private["formatVersion"], 2);
+    drop(p);
+    let mut p = f.open(Some(a.clone()));
+    assert_eq!(p.snapshot().unwrap().document, expected);
+    let payload = LayerPayload::from_document(&expected).unwrap();
+    f.repo.publish(&a, None, &payload).unwrap();
+    let read = f.repo.snapshot().unwrap();
+    let published = read
+        .authors
+        .iter()
+        .find(|x| x.identity.author_id == a.identity().author_id)
+        .unwrap()
+        .layer
+        .as_ref()
+        .unwrap();
+    assert_eq!(published.format_version, 2);
+    assert_eq!(published.payload, payload);
+    let pb = f.open(Some(b.clone()));
+    assert!(pb.snapshot().unwrap().document.categories.is_empty());
+    assert!(pb.snapshot().unwrap().document.media[0]
+        .category_ids
+        .is_empty());
+    let mut foreign_reference =
+        LayerPayload::from_document(&pb.snapshot().unwrap().document).unwrap();
+    foreign_reference.media_labels[0].category_ids = ids;
+    assert!(f.repo.publish(&b, None, &foreign_reference).is_err());
+    let mut retired = serde_json::to_value(published).unwrap();
+    retired["formatVersion"] = 1.into();
+    assert_eq!(
+        AuthorLayer::parse(
+            &serde_json::to_vec(&retired).unwrap(),
+            f.repo.manifest(),
+            &a.identity().author_id
+        )
+        .unwrap_err()
+        .code,
+        annotator_core::error::ErrorCode::UnsupportedVersion
+    );
+    assert_eq!(expected.edits.len(), 1);
+    assert!(published
+        .payload
+        .project(f.repo.manifest())
+        .unwrap()
+        .edits
+        .is_empty());
+    let copy_root = f.local.join("多标签副本");
+    fs::create_dir(&copy_root).unwrap();
+    let shared_before = fs::read(f.root.join("collaboration.json")).unwrap();
+    p.save_as(&copy_root, &expected.project_id, expected.revision)
+        .unwrap();
+    assert!(!p.is_shared());
+    let mut copy_expected = expected.clone();
+    for media in &mut copy_expected.media {
+        media.source_ref = f
+            .repo
+            .root()
+            .join(&media.source_ref)
+            .to_string_lossy()
+            .into_owned();
+    }
+    assert_eq!(p.snapshot().unwrap().document, copy_expected);
+    drop(p);
+    let copy = LocalProject::open(&copy_root).unwrap();
+    assert_eq!(copy.snapshot().unwrap().document, copy_expected);
+    assert_eq!(
+        fs::read(f.root.join("collaboration.json")).unwrap(),
+        shared_before
+    );
+}
+
+#[test]
+fn monitor_preferences_are_private_bounded_and_roundtrip_explicit_overrides() {
+    let f = Fixture::new();
+    let actor = f.actor("monitor");
+    let mut p = f.open(Some(actor.clone()));
+    let doc = p.snapshot().unwrap().document;
+    let mut value = serde_json::to_value(PlaybackPreferences::default()).unwrap();
+    value["monitorGainDb"] = 6.0.into();
+    value["mediaMonitorGainDb"] = serde_json::json!({doc.media[0].id.clone():6.0});
+    let preferences: PlaybackPreferences = serde_json::from_value(value.clone()).unwrap();
+    p.workspace_mut()
+        .unwrap()
+        .save_preferences(preferences.clone())
+        .unwrap();
+    assert_eq!(p.snapshot().unwrap().document, doc);
+    drop(p);
+    let mut p = f.open(Some(actor));
+    assert_eq!(
+        serde_json::to_value(p.workspace().unwrap().preferences()).unwrap(),
+        value
+    );
+    for bad in [serde_json::json!(24.1), serde_json::json!(-60.1)] {
+        let mut invalid = value.clone();
+        invalid["monitorGainDb"] = bad;
+        let invalid: PlaybackPreferences = serde_json::from_value(invalid).unwrap();
+        assert!(p
+            .workspace_mut()
+            .unwrap()
+            .save_preferences(invalid)
+            .is_err());
+    }
+    let mut invalid = value.clone();
+    invalid["mediaMonitorGainDb"] = serde_json::json!({"00000000-0000-4000-8000-000000000099":3.0});
+    assert!(p
+        .workspace_mut()
+        .unwrap()
+        .save_preferences(serde_json::from_value(invalid).unwrap())
+        .is_err());
+    value["mediaMonitorGainDb"][&doc.media[0].id] = serde_json::Value::Null;
+    p.workspace_mut()
+        .unwrap()
+        .save_preferences(serde_json::from_value(value.clone()).unwrap())
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(p.workspace().unwrap().preferences()).unwrap(),
+        value
+    );
+    assert_eq!(p.snapshot().unwrap().document, doc);
+}
+
+#[test]
+fn private_view_only_gain_reset_and_monitor_preserve_annotation_permissions() {
+    let f = Fixture::new();
+    let mut p = LocalProject::open_shared_view_only(f.repo.clone(), &f.local).unwrap();
+    let before = p.snapshot().unwrap().document;
+    let mut gain = fixture_document().edits[0].clone();
+    gain.id = uuid::Uuid::new_v4().to_string();
+    gain.operation = EditOperation::Gain { gain_db: -6.0 };
+    change(&mut p, Change::AddEdit { edit: gain.clone() });
+    change(
+        &mut p,
+        Change::AddEdit {
+            edit: fixture_document().edits[0].clone(),
+        },
+    );
+    change(
+        &mut p,
+        Change::ResetMediaMasks {
+            media_id: gain.region.media_id.clone(),
+        },
+    );
+    assert_eq!(p.snapshot().unwrap().document.edits, vec![gain]);
+    let d = p.snapshot().unwrap().document;
+    assert!(p
+        .apply_change(
+            &d.project_id,
+            d.revision,
+            Change::AddAnnotation {
+                annotation: annotation()
+            }
+        )
+        .is_err());
+    p.workspace_mut()
+        .unwrap()
+        .save_preferences(PlaybackPreferences {
+            monitor_gain_db: 6.0,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(p.snapshot().unwrap().document, d);
+    assert_eq!(d.annotations, before.annotations);
+    assert!(p
+        .workspace_mut()
+        .unwrap()
+        .prepare_publication()
+        .unwrap()
+        .is_none());
+}
+#[test]
+fn private_monitor_map_rejects_duplicate_media_keys() {
+    let id = fixture_document().media[0].id.clone();
+    let json = format!(
+        r#"{{"volume":0.75,"deviceId":null,"loopEnabled":false,"source":"processed","monitorGainDb":0,"mediaMonitorGainDb":{{"{id}":3,"{id}":6}}}}"#
+    );
+    assert!(serde_json::from_str::<PlaybackPreferences>(&json).is_err());
 }

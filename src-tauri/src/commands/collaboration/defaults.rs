@@ -58,6 +58,13 @@ pub(super) fn empty(
         transfer(&staging.join(name), &target.join(name), &mut owned, cancel)?;
     }
     atomic::publish_new(
+        &target.join("organization.json"),
+        &fs::read(staging.join("organization.json")).map_err(|_| runtime::unavailable())?,
+        None,
+        Some(cancel),
+    )?;
+    owned.record_file(target.join("organization.json"))?;
+    atomic::publish_new(
         &target.join("collaboration.json"),
         &bytes,
         None,
@@ -81,8 +88,68 @@ pub(super) fn copy(
     local: &Path,
     identity: &profiles::Profile,
     cancel: &AtomicBool,
+    progress: impl FnMut(&str, u64),
+) -> Result<PreparedCopy> {
+    let shared = source
+        .join("collaboration.json")
+        .try_exists()
+        .map_err(|_| runtime::unavailable())?;
+    let organization = if shared {
+        annotator_core::exchange::capture_organization(
+            document,
+            &CollaborationRepository::open(source)?.read_organization()?,
+        )?
+    } else {
+        annotator_core::exchange::root_organization(document)?
+    };
+    copy_inner(
+        document,
+        &organization,
+        source,
+        target,
+        local,
+        identity,
+        cancel,
+        !shared,
+        progress,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn copy_with_organization(
+    document: &annotator_core::model::ProjectDocument,
+    organization: &organization::Organization,
+    source: &Path,
+    target: &Path,
+    local: &Path,
+    identity: &profiles::Profile,
+    cancel: &AtomicBool,
+    progress: impl FnMut(&str, u64),
+) -> Result<PreparedCopy> {
+    copy_inner(
+        document,
+        organization,
+        source,
+        target,
+        local,
+        identity,
+        cancel,
+        false,
+        progress,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn copy_inner(
+    document: &annotator_core::model::ProjectDocument,
+    organization: &organization::Organization,
+    source: &Path,
+    target: &Path,
+    local: &Path,
+    identity: &profiles::Profile,
+    cancel: &AtomicBool,
+    legacy_filenames: bool,
     mut progress: impl FnMut(&str, u64),
 ) -> Result<PreparedCopy> {
+    let organization = annotator_core::exchange::capture_organization(document, organization)?;
     atomic::safe_existing(target)?;
     let target = target.canonicalize().map_err(|_| runtime::unavailable())?;
     let source = source.canonicalize().map_err(|_| runtime::unavailable())?;
@@ -109,21 +176,55 @@ pub(super) fn copy(
     let result = (|| {
         let (repo, actor) =
             CollaborationRepository::create_default(&staging, &document.name, identity)?;
+        let repo = repo.initialize_copy_layout(&actor, &organization)?;
+        let capture = repo.capture_media_placement(None)?;
+        let folders: std::collections::HashMap<_, _> = organization
+            .folders
+            .iter()
+            .map(|f| (f.id.as_str(), f))
+            .collect();
+        let members: std::collections::HashMap<_, _> = organization
+            .media
+            .iter()
+            .map(|m| (m.media_id.as_str(), m))
+            .collect();
         for media in &document.media {
             check_cancel(cancel)?;
+            let member = members[media.id.as_str()];
+            let mut segments = vec![];
+            let mut parent = member.folder_id.as_deref();
+            while let Some(id) = parent {
+                let f = folders[id];
+                segments.push(f.name.clone());
+                parent = f.parent_id.as_deref();
+            }
+            segments.reverse();
+            let placement = capture.seal(segments, member.original_filename.clone())?;
             let path = Path::new(&media.source_ref);
             let path = if path.is_absolute() {
                 path.to_path_buf()
             } else {
                 source.join(path)
             };
-            let prepared = repo.prepare_media_copy(
-                &path,
-                &std::env::temp_dir().join("audio-annotator-pcm"),
-                cancel,
-                media,
-                &mut progress,
-            )?;
+            let prepared = if legacy_filenames {
+                repo.prepare_media_copy_in_capture(
+                    &path,
+                    &std::env::temp_dir().join("audio-annotator-pcm"),
+                    cancel,
+                    media,
+                    &capture,
+                    &mut progress,
+                )?
+            } else {
+                repo.prepare_media_copy_with_placement(
+                    &path,
+                    &std::env::temp_dir().join("audio-annotator-pcm"),
+                    cancel,
+                    media,
+                    placement,
+                    &mut progress,
+                )?
+            };
             repo.append_media(&actor, &prepared, cancel)?;
         }
         let repo = repo.reload_catalog()?;
@@ -159,6 +260,13 @@ pub(super) fn copy(
         }
     }
     progress("publishManifest", document.media.len() as u64);
+    atomic::publish_new(
+        &target.join("organization.json"),
+        &fs::read(staging.join("organization.json")).map_err(|_| runtime::unavailable())?,
+        None,
+        Some(cancel),
+    )?;
+    owned.record_file(target.join("organization.json"))?;
     atomic::publish_new(
         &target.join("collaboration.json"),
         &bytes,
@@ -490,6 +598,8 @@ mod tests {
             p.workspace_mut()
                 .unwrap()
                 .save_preferences(annotator_core::collaboration::PlaybackPreferences {
+                    monitor_gain_db: 6.0,
+                    media_monitor_gain_db: [(ready.id.clone(), Some(3.0))].into(),
                     volume: 0.35,
                     ..Default::default()
                 })
@@ -512,6 +622,11 @@ mod tests {
                 std::slice::from_ref(&ready.id)
             );
             assert_eq!(workspace.preferences().volume, 0.35);
+            assert_eq!(workspace.preferences().monitor_gain_db, 6.0);
+            assert_eq!(
+                workspace.preferences().media_monitor_gain_db.get(&ready.id),
+                Some(&Some(3.0))
+            );
         }
         assert!(
             tauri::async_runtime::block_on(super::super::catalog::import(
@@ -781,7 +896,8 @@ mod tests {
                             high_hz: 100.0,
                         },
                         enabled: true,
-                        processing_version: 1,
+                        processing_version: 2,
+                        operation: annotator_core::model::EditOperation::Mask,
                     },
                 },
             )
@@ -1122,5 +1238,172 @@ mod tests {
         .is_err());
         drop(corrupt);
         fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn copying_shared_tree_filters_pending_media_and_preserves_empty_folders_and_native_names() {
+        use annotator_core::{
+            collaboration::{
+                organization::{Folder, OrganizationOperation},
+                profiles, CollaborationRepository,
+            },
+            project::LocalProject,
+        };
+        use std::sync::{atomic::AtomicBool, Arc};
+        let root = std::env::temp_dir().join(format!("copy-layout-{}", uuid::Uuid::new_v4()));
+        for dir in ["source", "target", "local"] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        let identity = profiles::Profile::new("Tree owner").unwrap();
+        let cancel = AtomicBool::new(false);
+        let (repo, actor) =
+            CollaborationRepository::create_default(&root.join("source"), "Tree", &identity)
+                .unwrap();
+        let folder = Folder {
+            id: uuid::Uuid::new_v4().to_string(),
+            parent_id: None,
+            name: "中文业务目录".into(),
+        };
+        let empty = Folder {
+            id: uuid::Uuid::new_v4().to_string(),
+            parent_id: None,
+            name: "空目录".into(),
+        };
+        let mut head = repo
+            .apply_organization(
+                &actor,
+                0,
+                OrganizationOperation::CreateFolder {
+                    id: folder.id.clone(),
+                    parent_id: None,
+                    name: folder.name.clone(),
+                },
+            )
+            .unwrap();
+        head = repo
+            .apply_organization(
+                &actor,
+                head.revision,
+                OrganizationOperation::CreateFolder {
+                    id: empty.id.clone(),
+                    parent_id: None,
+                    name: empty.name.clone(),
+                },
+            )
+            .unwrap();
+        let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/fixtures/audio/mono16.wav");
+        let prepared = repo
+            .prepare_media_with_placement(
+                &file,
+                &root.join("pcm"),
+                &cancel,
+                repo.seal_media_placement(
+                    head.layout_revision,
+                    Some(folder.id.clone()),
+                    vec![],
+                    "可信原始名称.wav".into(),
+                )
+                .unwrap(),
+                |_, _| {},
+            )
+            .unwrap();
+        repo.append_media(&actor, &prepared, &cancel).unwrap();
+        let repo = Arc::new(repo.reload_catalog().unwrap());
+        let actor = Arc::new(actor);
+        let mut source =
+            LocalProject::open_shared(repo.clone(), Some(actor.clone()), &root.join("local"))
+                .unwrap();
+        let document = source.snapshot().unwrap().document;
+        source
+            .workspace_mut()
+            .unwrap()
+            .set_media_hidden(&document.media[0].id, true)
+            .unwrap();
+        let pending = repo
+            .prepare_media(&file, &root.join("pcm"), &cancel)
+            .unwrap();
+        repo.append_media(&actor, &pending, &cancel).unwrap();
+        let original = std::fs::read(root.join("source/organization.json")).unwrap();
+        let (copy, copied) = super::copy(
+            &document,
+            &root.join("source"),
+            &root.join("target"),
+            &root.join("local"),
+            &identity,
+            &cancel,
+            |_, _| {},
+        )
+        .unwrap()
+        .commit();
+        let head = copied.read_organization().unwrap();
+        assert_eq!(head.folders, vec![folder, empty]);
+        assert_eq!(head.media.len(), 1);
+        assert_eq!(head.media[0].media_id, document.media[0].id);
+        assert_eq!(head.media[0].original_filename, "可信原始名称.wav");
+        assert!(head.media[0].folder_id.is_some());
+        assert_eq!(head.project_id, copied.manifest().project_id);
+        assert_ne!(head.project_id, document.project_id);
+        assert_eq!(copy.snapshot().unwrap().document.media.len(), 1);
+        assert_eq!(
+            copy.workspace().unwrap().actor().unwrap().author_id,
+            identity.author_id
+        );
+        assert_eq!(
+            std::fs::read(root.join("source/organization.json")).unwrap(),
+            original
+        );
+        let state = crate::state::AppState::default();
+        state.6.set_local(root.join("local")).unwrap();
+        state.6.install(Some(repo.clone())).unwrap();
+        *state.0.lock().unwrap() = Some(source);
+        let expected:crate::commands::exchange::ExpectedProject=serde_json::from_value(serde_json::json!({"runtimeNonce":state.6.current.lock().unwrap().nonce,"projectId":document.project_id,"expectedRevision":document.revision})).unwrap();
+        let export = tauri::async_runtime::block_on(crate::commands::exchange::preview(
+            &state, expected, true, true,
+        ))
+        .unwrap();
+        let export = serde_json::to_value(export).unwrap();
+        assert_eq!(export["mediaPaths"].as_object().unwrap().len(), 1);
+        assert!(export["mediaPaths"].get(&document.media[0].id).is_some());
+        drop((copy, copied, state, repo, actor, prepared, pending));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn ordinary_copy_keeps_verified_legacy_filename_fallback_and_extension() {
+        use annotator_core::{
+            collaboration::profiles, media::decode::decode, model::Change, project::LocalProject,
+        };
+        let root = std::env::temp_dir().join(format!("copy-filename-{}", uuid::Uuid::new_v4()));
+        for d in ["source", "target", "local"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let mut project = LocalProject::create(&root.join("source"), "Legacy".into()).unwrap();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/fixtures/audio/mono16.wav");
+        let decoded = decode(&source, &root.join("pcm"), &cancel, |_, _| {}).unwrap();
+        let mut media = decoded.descriptor.clone();
+        media.display_name = "source/".into();
+        let doc = project.snapshot().unwrap().document;
+        let doc = project
+            .apply_change(&doc.project_id, doc.revision, Change::ImportMedia { media })
+            .unwrap()
+            .document;
+        let (copy, repo) = super::copy(
+            &doc,
+            &root.join("source"),
+            &root.join("target"),
+            &root.join("local"),
+            &profiles::Profile::new("Legacy").unwrap(),
+            &cancel,
+            |_, _| {},
+        )
+        .unwrap()
+        .commit();
+        assert_eq!(
+            repo.organization().media[0].original_filename,
+            format!("{}.wav", doc.media[0].id)
+        );
+        drop((project, decoded, copy, repo));
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

@@ -3,7 +3,9 @@ use super::collaboration::runtime;
 use crate::state::AppState;
 use annotator_core::{
     error::{AppError, Result},
-    media::import_source::{self, Candidate, Config, Counts, Issue, Limits, ScanResult},
+    media::import_source::{
+        self, Candidate, Config, Counts, FolderSummary, Issue, Limits, ScanResult,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::sync::{
@@ -36,11 +38,17 @@ pub struct Page {
     pub candidates: Vec<Candidate>,
     pub issues: Vec<Issue>,
     pub counts: Counts,
+    pub folder_summary: Vec<FolderSummary>,
 }
+mod placement;
+use placement::CapturedLayout;
+pub(crate) use placement::{prepare_batch, PreparedBatch};
+
 struct Entry {
     token: Token,
     cancel: Arc<AtomicBool>,
     result: Option<Arc<ScanResult>>,
+    layout: Option<CapturedLayout>,
 }
 #[derive(Default)]
 pub struct Registry {
@@ -60,6 +68,12 @@ impl Registry {
             .as_ref()
             .filter(|e| e.token == *token)
             .ok_or_else(runtime::stale)
+    }
+    pub(crate) fn layout(&self, token: &Token) -> Result<CapturedLayout> {
+        self.get(token)?
+            .layout
+            .clone()
+            .ok_or_else(|| AppError::invalid("扫描尚未完成"))
     }
     pub(crate) fn result(&self, token: &Token) -> Result<Arc<ScanResult>> {
         let e = self.get(token)?;
@@ -108,7 +122,8 @@ pub(crate) async fn start(
     };
     let s = state.clone();
     let t = token.clone();
-    let (cancel, existing) = state
+    let target = config.organization.target_folder_id.clone();
+    let (cancel, existing, repo) = state
         .run(move |p| {
             check(
                 p.as_ref().ok_or_else(runtime::stale)?,
@@ -117,6 +132,16 @@ pub(crate) async fn start(
                 &t.project_id,
             )?;
             let project = p.as_ref().ok_or_else(runtime::stale)?;
+            if project.recovery().is_some() {
+                return Err(AppError::invalid("请先处理项目恢复"));
+            }
+            let repo =
+                s.6.current
+                    .lock()
+                    .map_err(|_| runtime::unavailable())?
+                    .repo
+                    .clone()
+                    .ok_or_else(runtime::stale)?;
             let existing = project
                 .snapshot()?
                 .document
@@ -137,8 +162,9 @@ pub(crate) async fn start(
                 token: t,
                 cancel: cancel.clone(),
                 result: None,
+                layout: None,
             });
-            Ok((cancel, existing))
+            Ok((cancel, existing, repo))
         })
         .await?;
     let s = state.clone();
@@ -147,32 +173,43 @@ pub(crate) async fn start(
         #[cfg(test)]
         s.6.run_hook();
         let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
-        let existing = existing
-            .into_iter()
-            .take_while(|_| {
-                config.kind == import_source::SourceKind::Folder && !cancel.load(Ordering::Relaxed)
-            })
-            .filter_map(|p| p.canonicalize().ok())
-            .collect::<Vec<_>>();
-        let result = import_source::scan(&config, &cancel, Limits::default(), |counts| {
-            if last.elapsed() < std::time::Duration::from_millis(100) {
-                return;
-            }
-            last = std::time::Instant::now();
-            if on_event
-                .send(ScanEvent::Progress {
-                    token: t.clone(),
-                    counts: counts.clone(),
+        let result = (|| -> Result<(ScanResult, CapturedLayout)> {
+            let capture = repo.capture_media_placement(target.clone())?;
+            let layout = CapturedLayout::from_capture(&capture, target);
+            let existing = existing
+                .into_iter()
+                .take_while(|_| {
+                    config.kind == import_source::SourceKind::Folder
+                        && !cancel.load(Ordering::Relaxed)
                 })
-                .is_err()
-            {
-                cancel.store(true, Ordering::Relaxed);
-            }
-        });
-        let result = result.map(|mut result| {
-            result.exclude_folder_paths(&existing);
-            result
-        });
+                .filter_map(|p| p.canonicalize().ok())
+                .collect::<Vec<_>>();
+            let result = import_source::scan(&config, &cancel, Limits::default(), |counts| {
+                if last.elapsed() < std::time::Duration::from_millis(100) {
+                    return;
+                }
+                last = std::time::Instant::now();
+                if on_event
+                    .send(ScanEvent::Progress {
+                        token: t.clone(),
+                        counts: counts.clone(),
+                    })
+                    .is_err()
+                {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+            });
+            result.and_then(|mut result| {
+                result.exclude_folder_paths(&existing);
+                result.validate_placements(|c| {
+                    capture
+                        .seal(c.resulting_folder_path.clone(), c.original_filename.clone())
+                        .map(|_| ())
+                })?;
+                result.bind_target_path(&layout.target_path)?;
+                Ok((result, layout))
+            })
+        })();
         // Recheck runtime authority after filesystem work; no project lock during traversal.
         let event = (|| -> Result<ScanEvent> {
             authority(&s, &t)?;
@@ -187,8 +224,9 @@ pub(crate) async fn start(
                 Ok(r)
             });
             Ok(match result {
-                Ok(r) => {
+                Ok((r, layout)) => {
                     let counts = r.counts.clone();
+                    entry.layout = Some(layout);
                     entry.result = Some(Arc::new(r));
                     ScanEvent::Result {
                         token: t.clone(),
@@ -218,6 +256,7 @@ pub(crate) async fn start(
 }
 pub(crate) fn page(state: &AppState, token: &Token, offset: usize, limit: usize) -> Result<Page> {
     authority(state, token)?;
+    validate_layout(state, token)?;
     let r = state
         .6
         .sources
@@ -228,7 +267,25 @@ pub(crate) fn page(state: &AppState, token: &Token, offset: usize, limit: usize)
         candidates: r.page(offset, limit)?.to_vec(),
         issues: r.issues.clone(),
         counts: r.counts.clone(),
+        folder_summary: r.folder_summary().to_vec(),
     })
+}
+pub(crate) fn validate_layout(state: &AppState, token: &Token) -> Result<()> {
+    let layout = state
+        .6
+        .sources
+        .lock()
+        .map_err(|_| runtime::unavailable())?
+        .layout(token)?;
+    let repo = state
+        .6
+        .current
+        .lock()
+        .map_err(|_| runtime::unavailable())?
+        .repo
+        .clone()
+        .ok_or_else(runtime::stale)?;
+    layout.check(&repo)
 }
 pub(crate) fn cancel(state: &AppState, token: &Token, release: bool) -> Result<()> {
     authority(state, token)?;
@@ -253,13 +310,16 @@ pub async fn scan_import_sources(
     start(&state, runtime_nonce, project_id, config, on_event).await
 }
 #[tauri::command]
-pub fn import_source_page(
+pub async fn import_source_page(
     state: State<'_, AppState>,
     token: Token,
     offset: usize,
     limit: usize,
 ) -> Result<Page> {
-    page(&state, &token, offset, limit)
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || page(&state, &token, offset, limit))
+        .await
+        .map_err(|_| runtime::unavailable())?
 }
 #[tauri::command]
 pub fn cancel_import_source_scan(state: State<'_, AppState>, token: Token) -> Result<()> {

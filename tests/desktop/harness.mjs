@@ -13,6 +13,14 @@ export async function clickFresh(find) {
   }
 }
 export const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+export async function revealMedia(h, name) {
+  const selector = `.media-select[aria-label=${JSON.stringify(name)}]`;
+  if (!(await h.driver.findElements(By.css(selector))).length) {
+    await h.input('搜索音频', name);
+    await h.until(`document.querySelector(${JSON.stringify(selector)})`, 'search reveals media ancestors');
+  }
+  await clickFresh(async () => (await h.driver.findElements(By.css(selector)))[0]);
+}
 const portOccupied = port => new Promise(resolve => { const socket=net.connect({host:'127.0.0.1',port});socket.setTimeout(500);socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',()=>resolve(false));socket.once('timeout',()=>{socket.destroy();resolve(false);}); });
 export function instanceOptions(options = {}) {
   const ports = { driver: 4445, native: 4446, debug: 9235, ...options.ports }, values = Object.values(ports);
@@ -79,12 +87,12 @@ export async function start(paths, output, executable = path.resolve('target/deb
     evaluate: (script, ...args) => driver.executeScript(script, ...args),
     async until(script, label = script, timeout = 60000) { await driver.wait(async () => !!await driver.executeScript(`return (${script})`), timeout, label, 50); },
     element: selector => driver.findElement(By.css(selector)),
-    async selectMedia(name) { await driver.findElement(By.xpath(`//button[contains(@class,'media-select') and @aria-label='${name}']`)).click(); await h.until(`document.querySelector('.file-pane h2')?.textContent===${JSON.stringify(name)}&&!document.querySelector('.tile-status')`); },
+    async selectMedia(name) { await revealMedia(h,name); await h.until(`document.querySelector('.file-pane h2')?.textContent===${JSON.stringify(name)}&&!document.querySelector('.tile-status')`); },
     async bindSources(names) { await h.until(`document.querySelector('[aria-label="关联原始音频"]')`); for(const name of names) await driver.findElement(By.xpath(`//div[@aria-label='关联原始音频']/div[span[normalize-space(.)='${name}']]/button`)).click(); await h.clickText('校验并导入'); },
-    async clickText(text) { const elements = await driver.findElements(By.xpath(`//button[normalize-space(.)='${text}']`)); for (const e of elements) if (await e.isDisplayed()) { await e.click(); return; } throw new Error(`No visible button: ${text}`); },
+    async clickText(text) { const button=await driver.wait(async()=>{ const elements = await driver.findElements(By.xpath(`//button[normalize-space(.)='${text}']`)); for (const e of elements) if (await e.isDisplayed() && await e.isEnabled()) return e; return false; },10000,`visible enabled button: ${text}`,50);await button.click(); },
     async click(selector) { await (await h.element(selector)).click(); },
-    async label(label) { await clickFresh(async()=>{ const menu=await driver.findElements(By.css(`[role="menu"] [aria-label="${label}"]`)); for(const item of menu)if(await item.isDisplayed())return item; return h.element(`[aria-label="${label}"]`); }); },
-    async input(label, text) { const e = await h.element(`[aria-label="${label}"]`); await e.click(); await e.sendKeys(Key.CONTROL, 'a', Key.NULL, text, Key.TAB); },
+    async label(label) { await clickFresh(()=>driver.wait(async()=>{for(const selector of [`[role="menu"] [aria-label="${label}"]`,`[aria-label="${label}"]`])for(const item of await driver.findElements(By.css(selector)))if(await item.isDisplayed())return item;return false;},10000,`visible control: ${label}`,50)); },
+    async input(label, text) { const e = await h.element(`[aria-label="${label}"]`); await e.click(); await e.sendKeys(Key.CONTROL, 'a', Key.NULL, Key.BACK_SPACE, text, Key.TAB); },
     async select(label, text) { const e = await h.element(`select[aria-label="${label}"]`); await e.findElement(By.xpath(`.//option[normalize-space(.)='${text}']`)).click(); },
     async menu(text, group='文件') { await clickFresh(()=>driver.findElement(By.xpath(`//nav[@role='menubar']/button[normalize-space(.)='${group}']`))); await clickFresh(()=>driver.findElement(By.xpath(`//div[@role='menu']/button[starts-with(@aria-label,'${text}')]`))); },
     async screenshot(name) { await fs.writeFile(path.join(output, `${name}.png`), await driver.takeScreenshot(), 'base64'); },

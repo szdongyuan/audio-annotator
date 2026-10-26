@@ -5,7 +5,7 @@ use crate::{
     audio::{DspProcessor, PlaybackMode, SourceInfo, MAX_BLOCK_FRAMES},
     error::{AppError, Result},
     media::identity::check_cancel,
-    model::SpectralEdit,
+    model::{EditOperation, SpectralEdit},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -20,9 +20,9 @@ pub enum AnalysisSource {
     Processed,
 }
 
-/// Shared with analysisSource.ts: sorted unique channel/version/IEEE754-bit
-/// records, with zero normalized. JSON decimal formatting is intentionally absent.
-/// Only enabled geometry for this file contributes; IDs/order/notes do not.
+/// Shared with analysisSource.ts: sorted channel/version/IEEE754-bit operation
+/// records, with zero normalized. Masks deduplicate; repeated gains accumulate.
+/// Only enabled edits for this file contribute; IDs/order/notes do not.
 pub fn canonical_edits(media_id: &str, edits: &[SpectralEdit]) -> String {
     let mut records: Vec<_> = edits
         .iter()
@@ -31,19 +31,23 @@ pub fn canonical_edits(media_id: &str, edits: &[SpectralEdit]) -> String {
             let r = &e.region;
             let bits = |v: f64| format!("{:016x}", if v == 0. { 0 } else { v.to_bits() });
             format!(
-                "{}|{}|{}|{}|{}|{}",
+                "{}|{}|{}|{}|{}|{}|{}",
                 r.channel_index,
                 e.processing_version,
                 bits(r.start_seconds),
                 bits(r.end_seconds),
                 bits(r.low_hz),
-                bits(r.high_hz)
+                bits(r.high_hz),
+                match e.operation {
+                    EditOperation::Mask => "mask".into(),
+                    EditOperation::Gain { gain_db } => format!("gain:{}", bits(gain_db)),
+                }
             )
         })
         .collect();
     records.sort();
-    records.dedup();
-    format!("analysis-edits-v1|{}", records.join(";"))
+    records.dedup_by(|a, b| a == b && a.ends_with("|mask"));
+    format!("analysis-edits-v2|{}", records.join(";"))
 }
 pub fn edit_signature(media_id: &str, edits: &[SpectralEdit]) -> String {
     format!("{:x}", Sha256::digest(canonical_edits(media_id, edits)))

@@ -10,6 +10,8 @@ use std::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PublishFault {
+    BeforeRecord,
+    AfterRecord,
     PartialWrite,
     Sync,
     Rename,
@@ -409,6 +411,14 @@ pub(crate) fn short_lock(path: &Path) -> Result<File> {
 
 /// Atomic replacement for bounded mutable metadata; never used for immutable layers/catalogs.
 pub(crate) fn replace_metadata(target: &Path, bytes: &[u8]) -> Result<()> {
+    replace_metadata_controlled(target, bytes, None, None)
+}
+pub(crate) fn replace_metadata_controlled(
+    target: &Path,
+    bytes: &[u8],
+    fault: Option<PublishFault>,
+    cancel: Option<&AtomicBool>,
+) -> Result<()> {
     let parent = target
         .parent()
         .ok_or_else(|| AppError::invalid("Missing metadata parent"))?;
@@ -422,11 +432,15 @@ pub(crate) fn replace_metadata(target: &Path, bytes: &[u8]) -> Result<()> {
             .open(&temporary)
             .map_err(io)?;
         owned = true;
+        check(fault, PublishFault::PartialWrite, cancel)?;
         file.write_all(bytes).map_err(io)?;
+        check(fault, PublishFault::Sync, cancel)?;
         file.sync_all().map_err(io)?;
         drop(file);
+        check(fault, PublishFault::Rename, cancel)?;
         safe_existing(target)?;
-        crate::project::store::atomic_replace(&temporary, target).map_err(io)
+        crate::project::store::atomic_replace(&temporary, target).map_err(io)?;
+        check(fault, PublishFault::AfterPublish, None)
     })();
     if owned && result.is_err() {
         let _ = fs::remove_file(&temporary);

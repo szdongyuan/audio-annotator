@@ -19,9 +19,8 @@ pub struct PortableMedia {
     pub channel_layout: Option<Vec<String>>,
     pub note: String,
     pub channel_notes: Vec<String>,
-    #[serde(deserialize_with = "crate::model::required_nullable")]
-    pub category_id: Option<String>,
-    pub channel_category_ids: Vec<Option<String>>,
+    pub category_ids: Vec<String>,
+    pub channel_category_ids: Vec<Vec<String>>,
     pub media_path: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +32,8 @@ pub struct Manifest {
     pub revision: u64,
     pub created_at: String,
     pub updated_at: String,
+    pub organization: crate::collaboration::organization::Organization,
+    pub preserve_folders: bool,
     pub media: Vec<PortableMedia>,
     pub categories: Vec<Category>,
     pub annotations: Vec<Annotation>,
@@ -47,9 +48,16 @@ pub fn media_path(id: &str) -> String {
 }
 impl Manifest {
     pub fn capture(doc: &ProjectDocument, bundle: bool) -> Result<Self> {
-        doc.validate()?;
+        let plan =
+            super::ExportPathPlan::build(doc, &super::root_organization(doc)?, bundle, true)?;
+        Self::capture_with_plan(doc, &plan)
+    }
+    pub fn capture_with_plan(doc: &ProjectDocument, plan: &super::ExportPathPlan) -> Result<Self> {
+        plan.validate_document(doc)?;
         Ok(Self {
-            format_version: 2,
+            format_version: 4,
+            organization: plan.organization.clone(),
+            preserve_folders: plan.preserve_folders,
             project_id: doc.project_id.clone(),
             name: doc.name.clone(),
             revision: doc.revision,
@@ -69,9 +77,9 @@ impl Manifest {
                     channel_layout: m.channel_layout.clone(),
                     note: m.note.clone(),
                     channel_notes: m.channel_notes.clone(),
-                    category_id: m.category_id.clone(),
+                    category_ids: m.category_ids.clone(),
                     channel_category_ids: m.channel_category_ids.clone(),
-                    media_path: bundle.then(|| media_path(&m.id)),
+                    media_path: plan.media_paths.get(&m.id).cloned(),
                 })
                 .collect(),
             categories: doc.categories.clone(),
@@ -87,7 +95,7 @@ impl Manifest {
         let v: serde_json::Value =
             serde_json::from_slice(bytes).map_err(|_| super::invalid("无效的 UTF-8 JSON 清单"))?;
         match v.get("formatVersion").and_then(|v| v.as_u64()) {
-            Some(2) => (),
+            Some(4) => (),
             Some(_) => {
                 return Err(AppError::new(
                     ErrorCode::UnsupportedVersion,
@@ -103,19 +111,33 @@ impl Manifest {
         }) {
             return Err(super::invalid("缺少媒体字段"));
         }
-        let m: Self =
-            serde_json::from_value(v).map_err(|_| super::invalid("清单结构无效或含未知字段"))?;
+        let m: Self = serde_json::from_slice(bytes)
+            .map_err(|_| super::invalid("清单结构无效或含未知/重复字段"))?;
+        let document = m.document(false)?;
+        let plan =
+            super::ExportPathPlan::build(&document, &m.organization, bundle, m.preserve_folders)?;
+        if plan.organization != m.organization {
+            return Err(super::invalid(
+                "Organization membership differs from manifest",
+            ));
+        }
         for media in &m.media {
-            if media.media_path != bundle.then(|| media_path(&media.id)) {
-                return Err(super::invalid("媒体路径与包类型或媒体 ID 不一致"));
+            if media.media_path != plan.media_paths.get(&media.id).cloned() {
+                return Err(super::invalid("媒体路径与原生规划不一致"));
             }
         }
         m.document(false)?.validate()?;
         Ok(m)
     }
     pub fn document(&self, independent: bool) -> Result<ProjectDocument> {
+        if self.format_version != 4 {
+            return Err(AppError::new(
+                ErrorCode::UnsupportedVersion,
+                "Unsupported exchange format version",
+            ));
+        }
         let d = ProjectDocument {
-            format_version: 2,
+            format_version: 3,
             project_id: if independent {
                 uuid::Uuid::new_v4().to_string()
             } else {
@@ -131,7 +153,7 @@ impl Manifest {
                 .map(|m| MediaDescriptor {
                     id: m.id.clone(),
                     display_name: m.display_name.clone(),
-                    source_ref: media_path(&m.id),
+                    source_ref: m.media_path.clone().unwrap_or_else(|| media_path(&m.id)),
                     sha256: m.sha256.clone(),
                     byte_length: m.byte_length,
                     sample_rate: m.sample_rate,
@@ -140,7 +162,7 @@ impl Manifest {
                     channel_layout: m.channel_layout.clone(),
                     note: m.note.clone(),
                     channel_notes: m.channel_notes.clone(),
-                    category_id: m.category_id.clone(),
+                    category_ids: m.category_ids.clone(),
                     channel_category_ids: m.channel_category_ids.clone(),
                 })
                 .collect(),

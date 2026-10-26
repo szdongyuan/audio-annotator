@@ -121,7 +121,7 @@ pub(crate) fn prepare(
         return Err(AppError::invalid("Exchange source changed during import"));
     }
     if let Some(bindings) = bindings {
-        if bindings.media.len() != imported.document.media.len() || bindings.media.len() > 4096 {
+        if bindings.media.len() != imported.document.media.len() || bindings.media.len() > 10000 {
             return Err(AppError::invalid(
                 "Provide exactly one file for every required medium",
             ));
@@ -148,8 +148,9 @@ pub(crate) fn prepare(
     // The PreparedCopy owns its outer directory too, so a failed authority check removes only it.
     let mut target_owner = Owned::new();
     target_owner.dir(&target)?;
-    let mut prepared = defaults::copy(
+    let mut prepared = defaults::copy_with_organization(
         &imported.document,
+        &imported.organization,
         &imported.path,
         &target,
         local,
@@ -194,8 +195,26 @@ mod tests {
             .unwrap()
             .document;
         let json = root.join("share.json");
-        annotator_core::exchange::export_annotations(
+        let mut organization = exchange::root_organization(&d).unwrap();
+        let folder = annotator_core::collaboration::organization::Folder {
+            id: uuid::Uuid::new_v4().to_string(),
+            parent_id: None,
+            name: "中文目录".into(),
+        };
+        organization.folders = vec![
+            folder.clone(),
+            annotator_core::collaboration::organization::Folder {
+                id: uuid::Uuid::new_v4().to_string(),
+                parent_id: None,
+                name: "空目录".into(),
+            },
+        ];
+        organization.media[0].folder_id = Some(folder.id);
+        organization.media[0].original_filename = "原始名称.wav".into();
+        let plan = exchange::ExportPathPlan::build(&d, &organization, false, true).unwrap();
+        annotator_core::exchange::export_annotations_with_plan(
             &d,
+            &plan,
             &json,
             &cancel,
             annotator_core::exchange::Limits::default(),
@@ -292,10 +311,15 @@ mod tests {
             annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
         );
         assert_eq!(repo.manifest().media[0].id, d.media[0].id);
+        assert_eq!(repo.organization().folders, organization.folders);
+        assert_eq!(repo.organization().media, organization.media);
+        assert_eq!(repo.organization().project_id, repo.manifest().project_id);
         assert!(copy.snapshot().unwrap().document.edits.is_empty());
         let bundle = root.join("share.zip");
-        exchange::export_bundle(
+        let plan = exchange::ExportPathPlan::build(&d, &organization, true, false).unwrap();
+        exchange::export_bundle_with_plan(
             &d,
+            &plan,
             project.root(),
             &bundle,
             &cancel,
@@ -318,6 +342,14 @@ mod tests {
         assert_eq!(
             bundle_prepared.repo.manifest().format_version,
             annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
+        );
+        assert_eq!(
+            bundle_prepared.repo.organization().folders,
+            organization.folders
+        );
+        assert_eq!(
+            bundle_prepared.repo.organization().media,
+            organization.media
         );
         let unadopted = bundle_prepared.repo.root().to_path_buf();
         drop(bundle_prepared);

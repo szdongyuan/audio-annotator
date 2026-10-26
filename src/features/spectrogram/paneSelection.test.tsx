@@ -1,12 +1,13 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { parseProjectDocument } from '../../bridge/types';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue, type ProjectCommands } from '../../app/commands';
 import { ProjectLifecycle } from '../project/lifecycle';
 import { useSelection } from '../selection/useSelection';
 import { useWorkspace } from './useWorkspace';
+import { defaultView } from './workspace';
 import { AppShell } from '../../app/AppShell';
 import type { ProjectLifecycleUI } from '../project/useProjectLifecycle';
 import type { MediaUI } from '../media/useMedia';
@@ -149,4 +150,30 @@ it('links time without identities, saves/reopens independent views and reconcile
   act(() => active.store.accept({ ...active.store.snapshot, document: { ...active.store.snapshot.document, media: active.store.snapshot.document.media.filter(m => m.id !== '22222222-2222-4222-8222-222222222222') } }));
   expect(reopened.result.current.state.compareMediaId).toBeNull();
   reopened.unmount(); active.lifecycle.dispose();
+});
+it('central transport and resets belong to the current playback audio and preserve display settings',async()=>{
+ const active=setup(),[a,b]=active.store.snapshot.document.media;a.displayName='A.wav';b.displayName='B.wav';b.frameCount=b.sampleRate*30;const preserved={gainDb:12,dynamicRangeDb:80,palette:'viridis' as const,frequencyMix:.4,spectrumKind:'mel' as const,visibleChannels:[1]};active.store.snapshot.document.viewState.media[b.id]={...defaultView(b),...preserved,startSeconds:10,endSeconds:12,lowHz:500,highHz:1000};
+ const props={project:{active,busy:false} as unknown as ProjectLifecycleUI,mediaUI:{selected:a,selectedId:a.id,statuses:[a,b].map(m=>({mediaId:m.id,status:'missing'})),disabled:false} as unknown as MediaUI};
+ const ui=render(<AppShell {...props}/>);const transport=screen.getByLabelText('播放控制');expect(transport.closest('.analysis-workspace')).toBeTruthy();expect(transport.closest('.analysis-workspace')?.lastElementChild).toBe(transport);
+ fireEvent.click(screen.getByRole('button',{name:`${b.displayName} 设为播放源`}));
+ fireEvent.click(screen.getByRole('button',{name:'更多播放操作'}));fireEvent.click(screen.getByRole('menuitem',{name:'重置视图'}));await act(async()=>active.lifecycle.submitDrafts());
+ expect(active.store.snapshot.document.viewState.media[b.id]).toMatchObject({startSeconds:0,endSeconds:b.frameCount/b.sampleRate,lowHz:0,highHz:b.sampleRate/2,...preserved});ui.unmount();active.lifecycle.dispose();
+});
+it('reset masks uses one current-media change, preserves gain and other media, and the processing list only locates views',async()=>{
+ const active=setup(),[a,b]=active.store.snapshot.document.media;a.displayName='A.wav';b.displayName='B.wav';const region=active.store.snapshot.document.annotations[0]?.region??{mediaId:a.id,channelIndex:0,startSeconds:.01,endSeconds:.05,lowHz:100,highHz:1000};
+ const edit=(id:string,mediaId:string,channelIndex:number,operation:{type:'mask'}|{type:'gain';gainDb:number})=>({id,region:{...region,mediaId,channelIndex},enabled:false,processingVersion:2 as const,operation});active.store.snapshot.document.edits=[edit('00000000-0000-4000-8000-000000000081',b.id,0,{type:'mask'}),edit('00000000-0000-4000-8000-000000000082',b.id,1,{type:'mask'}),edit('00000000-0000-4000-8000-000000000083',b.id,0,{type:'gain',gainDb:-6}),edit('00000000-0000-4000-8000-000000000084',a.id,0,{type:'mask'})];
+ const original=active.apply.getMockImplementation()!;active.apply.mockImplementation(async(id,revision,change)=>{if(change.type==='resetMediaMasks')return{...active.store.snapshot,document:{...active.store.snapshot.document,revision:revision+1,edits:active.store.snapshot.document.edits.filter(e=>e.region.mediaId!==change.mediaId||e.operation.type!=='mask')}};return original(id,revision,change);});
+ const props={project:{active,busy:false} as unknown as ProjectLifecycleUI,mediaUI:{selected:a,selectedId:a.id,statuses:[a,b].map(m=>({mediaId:m.id,status:'missing'})),disabled:false} as unknown as MediaUI};const ui=render(<AppShell {...props}/>);
+ fireEvent.click(screen.getByRole('button',{name:'B.wav 设为播放源'}));fireEvent.click(screen.getByRole('button',{name:'更多播放操作'}));fireEvent.click(screen.getByRole('menuitem',{name:'重置屏蔽'}));await act(async()=>active.lifecycle.submitDrafts());expect(active.apply.mock.calls.filter(c=>c[2].type==='resetMediaMasks')).toHaveLength(1);expect(active.store.snapshot.document.edits.map(e=>e.operation.type)).toEqual(['gain','mask']);
+ fireEvent.click(screen.getByRole('button',{name:'更多播放操作'}));expect(screen.getByRole('menuitem',{name:'重置屏蔽'})).toHaveAttribute('aria-disabled','true');fireEvent.keyDown(screen.getByRole('menu'),{key:'Escape'});
+ fireEvent.click(screen.getByRole('tab',{name:'处理'}));fireEvent.click(screen.getByRole('button',{name:'定位增益 -6.0 dB 1'}));await act(async()=>{});expect(screen.queryByRole('toolbar',{name:'选区操作'})).toBeNull();expect(document.querySelector('[data-edit-id]')).toBeNull();ui.unmount();active.lifecycle.dispose();
+});
+import { emptyPlayback, type PlaybackRequest } from '../../bridge/playback';
+it('actual pane interaction switches operation source and stops the old stream without autoplay; selectors and settings preserve it',async()=>{
+ const active=setup(),[a,b,c]=active.store.snapshot.document.media;[a,b,c].forEach((m,i)=>{m.displayName=`${'ABC'[i]}.wav`;});let generation=0;
+ const playback={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(q:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:q.projectId,mediaId:q.mediaId,state:'playing' as const}))};Object.assign(active,{commands:{playback}});
+ const props={project:{active,busy:false} as unknown as ProjectLifecycleUI,mediaUI:{selected:a,selectedId:a.id,statuses:[a,b,c].map(m=>({mediaId:m.id,status:'missing'})),disabled:false} as unknown as MediaUI};const ui=render(<AppShell {...props}/>);
+ fireEvent.click(screen.getByRole('button',{name:'播放 · 空格'}));await act(async()=>{});expect(playback.configure).toHaveBeenCalledOnce();const controls=playback.control.mock.calls.length;
+ fireEvent.pointerDown(screen.getByRole('combobox',{name:'对比面板音频'}),{button:0});fireEvent.change(screen.getByRole('combobox',{name:'对比面板音频'}),{target:{value:c.id}});fireEvent.click(screen.getByRole('button',{name:'C.wav 分析设置'}));expect(playback.control).toHaveBeenCalledTimes(controls);expect(ui.container.querySelector('[data-pane="primary"]')).toHaveClass('is-playback-source');fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});
+ fireEvent(ui.container.querySelector('[data-pane="compare"]')!,new MouseEvent('pointerdown',{bubbles:true,button:0}));await act(async()=>{});expect(playback.control).toHaveBeenLastCalledWith('reset');expect(playback.configure).toHaveBeenCalledOnce();expect(ui.container.querySelector('[data-pane="compare"]')).toHaveClass('is-playback-source');expect(screen.getByRole('button',{name:'播放 · 空格'})).toBeInTheDocument();ui.unmount();active.lifecycle.dispose();
 });

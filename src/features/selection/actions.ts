@@ -1,3 +1,4 @@
+import { toggleLabel } from '../annotations/labels';
 import { annotationDisabled } from '../collaboration/capabilities';
 import type { Annotation, Region } from '../../bridge/types';
 import { normalizeError } from '../../bridge/client';
@@ -12,7 +13,7 @@ export function selectionActions(owner: ActiveProject, state: SelectionState) {
   const createdAnnotations = new WeakMap<Selection, string>();
   const run = (action: () => Promise<unknown>) => {
     if (owner.store.editingDisabled) return Promise.resolve();
-    return owner.lifecycle.enqueueEdit(async () => { await owner.lifecycle.submitDrafts(); await action(); }).catch(cause => { owner.store.setError(normalizeError(cause)); });
+    return owner.lifecycle.enqueueEdit(async () => { await owner.lifecycle.submitDrafts(); return action(); }).catch(cause => { owner.store.setError(normalizeError(cause)); });
   };
   const resolve = (target: Selection) => resolveRegion(owner, target);
   const annotate = (target: Selection, categoryId: string | null | undefined, focus?: (id: string) => void) => run(async () => {
@@ -25,15 +26,15 @@ export function selectionActions(owner: ActiveProject, state: SelectionState) {
     let annotation: Annotation;
     if (existing) {
       annotation = existing;
-      if (categoryId !== undefined && existing.categoryId !== categoryId) {
-        annotation = { ...existing, categoryId, updatedAt: new Date().toISOString() };
+      if (categoryId !== undefined && (categoryId !== null || existing.categoryIds.length > 0)) {
+        annotation = { ...existing, categoryIds: toggleLabel(existing.categoryIds, categoryId), updatedAt: new Date().toISOString() };
         await owner.queue.enqueue({ type: 'updateAnnotation', annotation }, { owner: 'annotations' });
       }
     } else {
       // An earlier creation that was subsequently removed must not resurrect itself.
       if (id) return;
       const now = new Date().toISOString();
-      annotation = { id: crypto.randomUUID(), region: { ...region }, categoryId: categoryId ?? null, note: '', createdAt: now, updatedAt: now };
+      annotation = { id: crypto.randomUUID(), region: { ...region }, categoryIds: categoryId ? [categoryId] : [], note: '', createdAt: now, updatedAt: now };
       await owner.queue.enqueue({ type: 'addAnnotation', annotation }, { owner: 'annotations' });
       createdAnnotations.set(target, annotation.id);
     }
@@ -44,12 +45,18 @@ export function selectionActions(owner: ActiveProject, state: SelectionState) {
   return {
     classify: (target: Selection, categoryId: string | null) => annotate(target, categoryId),
     note: (target: Selection, focus: (id: string) => void) => annotate(target, undefined, focus),
+    gain: (target: Selection, gainDb: number) => run(async () => {
+      const region = resolve(target); if (!region || !Number.isFinite(gainDb) || gainDb < -60 || gainDb > 24) return false;
+      if (gainDb === 0) return true;
+      await owner.queue.enqueue({ type: 'addEdit', edit: { id: crypto.randomUUID(), region: { ...region }, enabled: true, processingVersion: 2, operation: { type: 'gain', gainDb } } }, { owner: 'masks', onAccepted: () => state.clear(target) });
+      state.clear(target); return true;
+    }),
     mask: (target: Selection) => run(async () => {
       const region = resolve(target); if (!region) return;
-      const existing = owner.store.snapshot.document.edits.find(e => sameRegion(e.region, region));
-      const edit = existing ? { ...existing, enabled: true } : { id: crypto.randomUUID(), region: { ...region }, enabled: true, processingVersion: 1 as const };
-      if (!existing || !existing.enabled) await owner.queue.enqueue(existing ? { type: 'updateEdit', edit } : { type: 'addEdit', edit }, { owner: 'masks' });
-      state.bind(target, { kind: 'mask', id: edit.id });
+      const existing = owner.store.snapshot.document.edits.find(e => e.operation.type==='mask' && sameRegion(e.region, region));
+      const edit = existing ? { ...existing, enabled: true } : { id: crypto.randomUUID(), region: { ...region }, enabled: true, processingVersion: 2 as const, operation: {type: 'mask' as const} };
+      if (!existing || !existing.enabled) await owner.queue.enqueue(existing ? { type: 'updateEdit', edit } : { type: 'addEdit', edit }, { owner: 'masks', onAccepted: () => state.clear(target) });
+      state.clear(target);
     }),
     remove: (target: Selection) => run(async () => {
       if (!target.object || !resolve(target)) return;

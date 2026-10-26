@@ -4,7 +4,7 @@
     {
       "id": "one",
       "enabled": true,
-      "processingVersion": 1,
+      "processingVersion": 2,
       "region": {
         "mediaId": "m",
         "channelIndex": 0,
@@ -12,12 +12,15 @@
         "endSeconds": 1.0,
         "lowHz": 1000.0,
         "highHz": 2000.0
+      },
+      "operation": {
+        "type": "mask"
       }
     },
     {
       "id": "two",
       "enabled": true,
-      "processingVersion": 1,
+      "processingVersion": 2,
       "region": {
         "mediaId": "m",
         "channelIndex": 1,
@@ -25,9 +28,67 @@
         "endSeconds": 1.0000000000000002,
         "lowHz": 1e-06,
         "highHz": 23999.999999999996
+      },
+      "operation": {
+        "type": "mask"
       }
     }
   ],
-  "canonical": "analysis-edits-v1|0|1|0000000000000000|3ff0000000000000|408f400000000000|409f400000000000;1|1|3e7ad7f29abcaf48|3ff0000000000001|3eb0c6f7a0b5ed8d|40d76fffffffffff",
-  "signature": "2762ea8cad5c20e7c8d86e6b820c381c6397c1ab84adbd012287166e6704cf7d"
+  "canonical": "analysis-edits-v2|0|2|0000000000000000|3ff0000000000000|408f400000000000|409f400000000000|mask;1|2|3e7ad7f29abcaf48|3ff0000000000001|3eb0c6f7a0b5ed8d|40d76fffffffffff|mask",
+  "signature": "c7d1b1a24b5ce89b78c48a23268da64c42b96e84a506f05fe145cb2d2a1dd3c0",
+  "gainEdits": [
+    {
+      "id": "one",
+      "enabled": true,
+      "processingVersion": 2,
+      "region": {
+        "mediaId": "m",
+        "channelIndex": 0,
+        "startSeconds": -0.0,
+        "endSeconds": 1.0,
+        "lowHz": 1000.0,
+        "highHz": 2000.0
+      },
+      "operation": {
+        "type": "gain",
+        "gainDb": 6
+      }
+    },
+    {
+      "id": "one",
+      "enabled": true,
+      "processingVersion": 2,
+      "region": {
+        "mediaId": "m",
+        "channelIndex": 0,
+        "startSeconds": -0.0,
+        "endSeconds": 1.0,
+        "lowHz": 1000.0,
+        "highHz": 2000.0
+      },
+      "operation": {
+        "type": "gain",
+        "gainDb": 6
+      }
+    },
+    {
+      "id": "two",
+      "enabled": true,
+      "processingVersion": 2,
+      "region": {
+        "mediaId": "m",
+        "channelIndex": 1,
+        "startSeconds": 1e-07,
+        "endSeconds": 1.0000000000000002,
+        "lowHz": 1e-06,
+        "highHz": 23999.999999999996
+      },
+      "operation": {
+        "type": "gain",
+        "gainDb": -6
+      }
+    }
+  ],
+  "gainCanonical": "analysis-edits-v2|0|2|0000000000000000|3ff0000000000000|408f400000000000|409f400000000000|gain:4018000000000000;0|2|0000000000000000|3ff0000000000000|408f400000000000|409f400000000000|gain:4018000000000000;1|2|3e7ad7f29abcaf48|3ff0000000000001|3eb0c6f7a0b5ed8d|40d76fffffffffff|gain:c018000000000000",
+  "gainSignature": "1f78f7833b9da9cb913375e2c3dae8a38bf51ef1f01d3a5758458f76c4b50d74"
 }

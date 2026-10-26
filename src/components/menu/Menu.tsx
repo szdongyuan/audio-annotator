@@ -14,7 +14,7 @@ function Panel({ items, anchor, parentLeft, close, back, navigate, returnFocus }
   }, [anchor.x, anchor.y, parentLeft]);
   const focus = (next: number) => { if (!Number.isInteger(next) || next < 0) return; setIndex(next); buttons.current[next]?.focus(); };
   const open = (i: number) => { const b = buttons.current[i]?.getBoundingClientRect(); if (b && items[i].children && !items[i].disabled) setChild({ index: i, anchor: { x: b.right, y: b.top }, left: b.left }); };
-  const activate = (i: number) => { const item = items[i]; if (!item || item.disabled) return; if (item.children) open(i); else { close(); item.action?.(returnFocus); } };
+  const activate = (i: number) => { const item = items[i]; if (!item || item.disabled) return; focus(i); if (item.children) open(i); else { if (!item.keepOpen) close(); item.action?.(returnFocus); } };
   return <div ref={ref} role="menu" tabIndex={-1} className="app-menu" style={position} onKeyDown={e => {
     e.stopPropagation();
     if (['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Enter', ' ', 'Escape', 'Home', 'End', 'Tab'].includes(e.key)) e.preventDefault();
@@ -27,7 +27,7 @@ function Panel({ items, anchor, parentLeft, close, back, navigate, returnFocus }
       for (let n = 1; n <= items.length; n++) { const next = (index + (e.key === 'ArrowDown' ? n : -n) + items.length * 2) % items.length; if (!items[next].disabled) { setChild(null); focus(next); break; } }
     }
   }}>
-    {items.map((item, i) => <button key={item.id} ref={el => { buttons.current[i] = el; }} role="menuitem" title={item.title} aria-label={item.label} aria-disabled={!!item.disabled} aria-haspopup={item.children ? 'menu' : undefined} aria-expanded={item.children ? child?.index === i : undefined} tabIndex={i === index ? 0 : -1} className={i === index ? 'is-current' : ''}
+    {items.map((item, i) => <button key={item.id} ref={el => { buttons.current[i] = el; }} role={item.keepOpen ? 'menuitemcheckbox' : 'menuitem'} aria-checked={item.keepOpen ? !!item.checked : undefined} title={item.title} aria-label={item.label} aria-disabled={!!item.disabled} aria-haspopup={item.children ? 'menu' : undefined} aria-expanded={item.children ? child?.index === i : undefined} tabIndex={i === index ? 0 : -1} className={i === index ? 'is-current' : ''}
       onPointerEnter={() => { if (item.disabled) return; focus(i); if (item.children) open(i); else setChild(null); }} onClick={() => activate(i)}><span>{item.checked ? '✓ ' : ''}{item.label}</span>{item.children && <span aria-hidden="true">›</span>}</button>)}
     {child && items[child.index]?.children && <Panel items={items[child.index].children!} anchor={child.anchor} parentLeft={child.left} returnFocus={returnFocus} close={close} back={() => { setChild(null); focus(child.index); }} />}
   </div>;

@@ -11,7 +11,7 @@ export interface ProjectCommands {
 type CommandOwner = 'annotations' | 'masks' | 'playback' | `media:${string}`;
 type QueuedCommand = (
   | { kind: 'change'; change: Change; draftKey?: string; draft?: string }
-  | { kind: 'undo' | 'redo' }) & { owner?: CommandOwner };
+  | { kind: 'undo' | 'redo' }) & { owner?: CommandOwner; onAccepted?: () => void };
 export interface CommandFailure { id: number; error: AppError; draftKey?: string; owner?: CommandOwner }
 interface FailedCommand { command: QueuedCommand; error: AppError }
 
@@ -34,11 +34,11 @@ export class CommandQueue {
   private readonly retrying = new Set<number>();
   constructor(private readonly store: ProjectStore, private readonly api: ProjectCommands) {}
 
-  enqueue(change: Change, options: { draftKey?: string; owner?: CommandOwner } = {}): Promise<ProjectSnapshot> {
+  enqueue(change: Change, options: { draftKey?: string; owner?: CommandOwner; onAccepted?: () => void } = {}): Promise<ProjectSnapshot> {
     // Capture caller values now; text may continue changing while the queue runs.
     const captured = structuredClone(parseChange(change));
     const draft = options.draftKey === undefined ? undefined : this.store.drafts.get(options.draftKey);
-    return this.run({ kind: 'change', change: captured, draftKey: options.draftKey, draft, owner: options.owner });
+    return this.run({ kind: 'change', change: captured, draftKey: options.draftKey, draft, owner: options.owner, onAccepted: options.onAccepted });
   }
   undo(options: { owner?: CommandOwner } = {}) { return this.run({ kind: 'undo', owner: options.owner }); }
   redo(options: { owner?: CommandOwner } = {}) { return this.run({ kind: 'redo', owner: options.owner }); }
@@ -134,7 +134,10 @@ export class CommandQueue {
         throw error;
       }
     });
-    this.tail = next.catch(() => undefined);
-    return next;
+    // UI completion belongs after native acknowledgement. A local observer
+    // error must never make an accepted edit available for replay.
+    const accepted = next.then(snapshot => { command.onAccepted?.(); return snapshot; });
+    this.tail = accepted.catch(() => undefined);
+    return accepted;
   }
 }

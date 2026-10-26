@@ -6,7 +6,7 @@ import { canonicalEdits } from '../../src/features/spectrogram/analysisSource.ts
 import { processedUI } from './task5-ui.mjs';
 import { start } from './harness.mjs';
 
-const output = path.resolve(process.env.ANNOTATOR_PROCESSED_OUTPUT ?? '.test-output/fidelity-task5/processed');
+const output = path.resolve(process.env.ANNOTATOR_PROCESSED_OUTPUT ?? process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/fidelity-task5/processed');
 await fs.mkdir(output, { recursive: true });
 const rate = 48000, frames = rate * 2, channels = 2;
 const wav = Buffer.alloc(44 + frames * channels * 2);
@@ -50,7 +50,7 @@ try {
   const change = async change => { document = (await rpc('apply_change', { projectId, expectedRevision: document.revision, change })).document; };
   const history = async command => { document = (await rpc(command, { projectId, expectedRevision: document.revision })).document; };
   const request = async (analysisSource = 'processed', editSignature = signature(), patch = {}) => {
-    const request = { requestId: randomUUID(), viewId, projectId, mediaId: media.id, generation: 1, analysisSource, processingVersion: 1, editSignature: analysisSource === 'original' ? '' : editSignature, configHash, settings, channelIndex: 0, kind: 'stft', startFrame: 40, frameCount: 8, timeLod: 0, frequencyStart: 0, frequencyCount: 1025, frequencyLod: 0, visible: true, ...patch };
+    const request = { requestId: randomUUID(), viewId, projectId, mediaId: media.id, generation: 1, analysisSource, processingVersion: 2, editSignature: analysisSource === 'original' ? '' : editSignature, configHash, settings, channelIndex: 0, kind: 'stft', startFrame: 40, frameCount: 8, timeLod: 0, frequencyStart: 0, frequencyCount: 1025, frequencyLod: 0, visible: true, ...patch };
     const result = await h.driver.executeAsyncScript(`const [request,done]=arguments;const api=window.__TAURI_INTERNALS__,callback=api.transformCallback(()=>{});api.invoke('collaboration_status').then(s=>api.invoke('request_tile',{runtimeNonce:s.runtimeNonce,request,onEvent:'__CHANNEL__:'+callback})).then(buffer=>{const view=new DataView(buffer),length=view.getUint32(4,true),offset=Math.ceil((8+length)/4)*4,header=JSON.parse(new TextDecoder().decode(new Uint8Array(buffer,8,length)));done({header,values:Array.from(new Float32Array(buffer,offset))});},error=>done({error})).finally(()=>api.unregisterCallback(callback));`, request);
     if (result.error) throw result.error;
     assert.deepEqual(result.header.request, request);
@@ -62,7 +62,7 @@ try {
   };
   const original = await request('original'), emptySignature = signature(), unedited = await request();
   for (const hz of [1500, 6000]) assert.ok(Math.abs(energy(unedited, hz) - energy(original, hz)) < .001);
-  const edit = { id: randomUUID(), region: { mediaId: media.id, channelIndex: 0, startSeconds: 0, endSeconds: 2, lowHz: 1000, highHz: 2000 }, enabled: true, processingVersion: 1 };
+  const edit = { id: randomUUID(), region: { mediaId: media.id, channelIndex: 0, startSeconds: 0, endSeconds: 2, lowHz: 1000, highHz: 2000 }, enabled: true, operation: { type: 'mask' }, processingVersion: 2 };
   await change({ type: 'addEdit', edit });
   const editedSignature = signature(); assert.notEqual(editedSignature, emptySignature);
   await rpc('save_project', { projectId, expectedRevision: document.revision });
@@ -72,7 +72,7 @@ try {
   report.checks.push({ name: 'saved mask uses real processed PCM', rejectionDb, retainedDb, editedSignature });
   await assert.rejects(request('processed', emptySignature), error => error.code === 'Cancelled');
   await assert.rejects(request('processed', '0'.repeat(64)), error => error.code === 'Cancelled');
-  await assert.rejects(request('processed', editedSignature, { processingVersion: 2 }), error => error.code === 'InvalidInput');
+  await assert.rejects(request('processed', editedSignature, { processingVersion: 1 }), error => error.code === 'InvalidInput');
   await assert.rejects(request('processed', editedSignature, { extraAuthority: true }), error => !!error);
   assert.deepEqual(await request('original'), original);
   const right = await request('processed', editedSignature, { channelIndex: 1 });
@@ -94,7 +94,7 @@ try {
   assert.equal(signature(), movedSignature); assert.deepEqual(await request('processed', movedSignature), movedValues);
   await rpc('save_project', { projectId, expectedRevision: document.revision });
   const saved = (await h.snapshot(projectId)).document;
-  assert.equal(saved.formatVersion, 2); assert.deepEqual(saved.edits, document.edits);
+  assert.equal(saved.formatVersion, 3); assert.deepEqual(saved.edits, document.edits);
   const oldView = viewId;
   await rpc('close_project', { projectId, expectedRevision: document.revision, discard: false });
   const reopened = await rpc('open_project', { path: project }); assert.equal(reopened.recovery, null); document = reopened.snapshot.document;

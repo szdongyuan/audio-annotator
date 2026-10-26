@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 pub const MANIFEST_KIND: &str = "audio-annotator-collaboration";
 pub const LAYER_KIND: &str = "audio-annotator-author-layer";
 pub const AUTHOR_KIND: &str = "audio-annotator-author";
-pub const CURRENT_COLLABORATION_FORMAT: u32 = 3;
+pub const CURRENT_COLLABORATION_FORMAT: u32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -43,8 +43,8 @@ impl PublicMedia {
             channel_layout: self.channel_layout.clone(),
             note: String::new(),
             channel_notes: vec![String::new(); self.channel_count as usize],
-            category_id: None,
-            channel_category_ids: vec![None; self.channel_count as usize],
+            category_ids: vec![],
+            channel_category_ids: vec![vec![]; self.channel_count as usize],
         }
     }
 }
@@ -54,9 +54,8 @@ pub struct MediaLabels {
     pub media_id: String,
     pub note: String,
     pub channel_notes: Vec<String>,
-    #[serde(deserialize_with = "crate::model::required_nullable")]
-    pub category_id: Option<String>,
-    pub channel_category_ids: Vec<Option<String>>,
+    pub category_ids: Vec<String>,
+    pub channel_category_ids: Vec<Vec<String>>,
 }
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

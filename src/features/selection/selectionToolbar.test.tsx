@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import { parseProjectDocument, type Change, type MediaView } from '../../bridge/types';
 import type { MediaStatus } from '../../bridge/media';
 import { ProjectStore } from '../../app/store';
@@ -50,7 +50,7 @@ function setup(kind: 'temporary' | 'annotation' | 'mask' = 'temporary', actualPa
   let status: MediaStatus['status'] = 'ready', active = owner;
   function App() {
     ui = useSelection(active, media.id);
-    return <CollaborationContext.Provider value={collaboration}><SelectionContext.Provider value={ui}><PlaybackContext.Provider value={{ playSelection, selectSource, cues: {}, options: {} } as unknown as PlaybackUI}>
+    return <CollaborationContext.Provider value={collaboration}><SelectionContext.Provider value={ui}><PlaybackContext.Provider value={{ playSelection, selectSource, setCue: vi.fn(), cues: {}, options: {} } as unknown as PlaybackUI}>
       {actualPane ? <FilePane active={active} media={media} settings={doc.analysis[media.id]} view={view} status={status} timeLimit={2} onView={() => {}} onSettings={() => {}} onRelink={() => {}} pane="primary" choices={[media]} duplicate={false} onSelect={() => {}} /> : <div onPointerDownCapture={e => { if (!(e.target as Element).closest('[data-pane-control]')) selectSource(); }}>
         <div className="channel-scroll" onPointerDown={penetrate}><SpectrogramCanvas active={active} media={media} channel={1} view={view} status={status} settings={doc.analysis[media.id]} timeLimit={2} onView={patch => { view = { ...view, ...patch }; rerender(); }}>
           <AnnotationOverlay media={media} channel={1} view={view} />
@@ -70,7 +70,7 @@ function setup(kind: 'temporary' | 'annotation' | 'mask' = 'temporary', actualPa
   };
 }
 const toolbar = () => screen.queryByRole('toolbar', { name: '选区操作' });
-const category = (name = '未分类') => { fireEvent.click(screen.getByRole('button', { name: '标注' })); fireEvent.click(screen.getByRole('menuitem', { name })); };
+const category = (name = '清空标签') => { fireEvent.click(screen.getByRole('button', { name: '标注' })); fireEvent.click(screen.getByRole('menuitemcheckbox', { name })); fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); };
 it('hidden own annotation has no floating toolbar but keeps its writable selection and restores with the filter',()=>{
  let visible=true;const collaboration={controller:{visible:()=>visible}} as unknown as CollaborationUI,s=setup('annotation',false,collaboration),selected=s.ui().selection;
  expect(toolbar()).toBeTruthy();visible=false;s.view({});expect(toolbar()).toBeNull();expect(s.ui().selection).toBe(selected);visible=true;s.view({});expect(toolbar()).toBeTruthy();s.dispose();
@@ -106,7 +106,7 @@ it('creates once, binds the new ID, then updates its category; mask classificati
     const s = setup(kind); category(); await s.settle();
     const id = s.ui().selection?.object?.id; expect(id).toBeTruthy(); expect(s.owner.store.snapshot.document.annotations).toHaveLength(2);
     category('鸟声'); await s.settle(); expect(s.ui().selection?.object?.id).toBe(id);
-    expect(s.changes.filter(c => c.type === 'addAnnotation')).toHaveLength(1); expect(s.owner.store.snapshot.document.annotations.find(a => a.id === id)?.categoryId).toBe(s.owner.store.snapshot.document.categories[0].id);
+    expect(s.changes.filter(c => c.type === 'addAnnotation')).toHaveLength(1); expect(s.owner.store.snapshot.document.annotations.find(a => a.id === id)?.categoryIds).toEqual([s.owner.store.snapshot.document.categories[0].id]);
     expect(s.owner.store.snapshot.document.edits).toHaveLength(1); s.dispose();
   }
 });
@@ -144,7 +144,7 @@ it.each(['missing', 'changed'] as const)('retains a valid selection and classifi
   const s = setup('annotation', true), canvas = document.querySelector('canvas')!; canvas.width = 123;
   s.ready(status); expect(toolbar()).toBeInTheDocument(); expect(screen.getByRole('button', { name: '播放' })).toBeDisabled();
   expect(document.querySelector('canvas')?.width).toBe(0);
-  category(); await s.settle(); expect(s.owner.store.snapshot.document.annotations[0].categoryId).toBeNull();
+  category(); await s.settle(); expect(s.owner.store.snapshot.document.annotations[0].categoryIds).toEqual([]);
   expect(s.playSelection).not.toHaveBeenCalled(); s.dispose();
 });
 it('tracks nonlinear axis changes and hides through real resize and fresh draw gestures', () => {
@@ -159,7 +159,7 @@ it('tracks nonlinear axis changes and hides through real resize and fresh draw g
 });
 it('invalidates a deleted captured target and cannot classify through its old menu', async () => {
   const s = setup('annotation'); fireEvent.click(screen.getByRole('button', { name: '标注' }));
-  const retainedButton = screen.getByRole('menuitem', { name: '未分类' });
+  const retainedButton = screen.getByRole('menuitemcheckbox', { name: '清空标签' });
   await act(async () => { await s.owner.queue.enqueue({ type: 'removeAnnotation', id: s.target.object!.id }); });
   expect(screen.queryByRole('menu')).not.toBeInTheDocument(); expect(toolbar()).not.toBeInTheDocument(); fireEvent.click(retainedButton);
   await s.settle(); expect(s.owner.store.snapshot.document.annotations).toHaveLength(0); s.dispose();
@@ -174,4 +174,17 @@ it('an accepted asynchronous classification never steals a newer active selectio
 
 it('view-only floating toolbar permits playback and disables annotation creation',()=>{
  const s=setup();Object.assign(s.owner,{collaboration:{canWriteAnnotations:false}});s.ready('ready');expect(screen.getByRole('button',{name:'标注'})).toBeDisabled();expect(screen.getByRole('button',{name:/^播放$/})).toBeEnabled();s.dispose();
+});
+it('continuous toolbar labels survive first bind, merge rapid toggles into one annotation and retire on a new intent',async()=>{
+ const s=setup();const doc=s.owner.store.snapshot.document;doc.categories.push({id:'00000000-0000-4000-8000-000000000077',name:'风声',color:'#123456'});s.ready('ready');
+ fireEvent.click(screen.getByRole('button',{name:'标注'}));fireEvent.click(screen.getByRole('menuitemcheckbox',{name:'鸟声'}));await s.settle();
+ expect(screen.getByRole('menu')).toBeInTheDocument();expect(screen.getByRole('menuitemcheckbox',{name:'鸟声'})).toHaveAttribute('aria-checked','true');
+ fireEvent.click(screen.getByRole('menuitemcheckbox',{name:'风声'}));fireEvent.click(screen.getByRole('menuitemcheckbox',{name:'鸟声'}));await s.settle();
+ expect(s.owner.store.snapshot.document.annotations.at(-1)?.categoryIds).toEqual([doc.categories[1].id]);expect(s.changes.filter(c=>c.type==='addAnnotation')).toHaveLength(1);
+ const retained=screen.getByRole('menuitemcheckbox',{name:'鸟声'});act(()=>s.ui().state.select({region:{...s.target.region,startSeconds:1.3,endSeconds:1.7},object:null}));expect(screen.queryByRole('menu')).toBeNull();fireEvent.click(retained);await s.settle();expect(s.changes.filter(c=>c.type==='addAnnotation')).toHaveLength(1);s.dispose();
+});
+it('rapid pre-ack toolbar clicks and repeated same label produce one annotation with latest toggle intent',async()=>{
+ const s=setup(),doc=s.owner.store.snapshot.document;doc.categories.push({id:'00000000-0000-4000-8000-000000000077',name:'风声',color:'#123456'});s.ready('ready');let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});const hold=s.owner.lifecycle.enqueueEdit(()=>gate);
+ fireEvent.click(screen.getByRole('button',{name:'标注'}));fireEvent.click(screen.getByRole('menuitemcheckbox',{name:'鸟声'}));fireEvent.click(screen.getByRole('menuitemcheckbox',{name:'风声'}));fireEvent.click(screen.getByRole('menuitemcheckbox',{name:'鸟声'}));await act(async()=>{release();await hold;});await s.settle();
+ expect(s.owner.store.snapshot.document.annotations.at(-1)?.categoryIds).toEqual([doc.categories[1].id]);expect(s.changes.filter(c=>c.type==='addAnnotation')).toHaveLength(1);expect(screen.getByRole('menu')).toBeInTheDocument();s.dispose();
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/react';
-import fixture from '../../../tests/fixtures/document-v2.json';
+import fixture from '../../../tests/fixtures/document-v3.json';
 import type { MediaDescriptor, ViewState } from '../../bridge/types';
 import { defaultView, changeView, toggleLinked, analysisError, tilePlan, analysisKey } from './workspace';
 import { TileCache } from './tileCache';

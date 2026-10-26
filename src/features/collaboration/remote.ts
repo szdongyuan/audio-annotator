@@ -1,3 +1,4 @@
+import { labelText } from '../annotations/labels';
 import { createContext, useContext, useRef, useState } from 'react';
 import type { AuthorSnapshot } from '../../bridge/collaboration';
 import type { Annotation, Category, MediaDescriptor } from '../../bridge/types';
@@ -12,7 +13,7 @@ export type RemoteTarget = { owner: ActiveProject; authorId: string } & (
   { scope: 'file'; mediaId: string } |
   { scope: 'channel'; mediaId: string; channelIndex: number }
 );
-export interface RemoteValue { author: AuthorSnapshot; media: MediaDescriptor; category: Category | undefined; note: string; annotation?: Annotation; channelIndex?: number }
+export interface RemoteValue { author: AuthorSnapshot; media: MediaDescriptor; category: Category | undefined; categoryText: string; note: string; annotation?: Annotation; channelIndex?: number }
 export const remoteKey = (authorId: string, annotationId: string) => `${authorId}:${annotationId}`;
 export function foreignAuthors(ui: CollaborationUI | null | undefined): AuthorSnapshot[] {
   if (!ui?.active?.collaboration || ui.controller?.owner !== ui.active) return [];
@@ -32,8 +33,8 @@ export function resolveRemote(ui: CollaborationUI | null | undefined, target: Re
   const channelIndex = target.scope === 'region' ? annotation!.region.channelIndex : target.scope === 'channel' ? target.channelIndex : undefined;
   if (channelIndex !== undefined && (channelIndex < 0 || channelIndex >= media.channelCount)) return null;
   if (target.scope !== 'region' && !labels) return null;
-  const categoryId = annotation ? annotation.categoryId : channelIndex === undefined ? labels!.categoryId : labels!.channelCategoryIds[channelIndex];
-  return { author, media, annotation, channelIndex, category: payload.categories.find(c => c.id === categoryId), note: annotation ? annotation.note : channelIndex === undefined ? labels!.note : labels!.channelNotes[channelIndex] };
+  const categoryIds = annotation ? annotation.categoryIds : channelIndex === undefined ? labels!.categoryIds : labels!.channelCategoryIds[channelIndex];
+  return { author, media, annotation, channelIndex, category: payload.categories.find(c => categoryIds.includes(c.id)), categoryText: labelText(payload.categories, categoryIds), note: annotation ? annotation.note : channelIndex === undefined ? labels!.note : labels!.channelNotes[channelIndex] };
 }
 export function useRemoteInspection(ui: CollaborationUI | null | undefined, workspace: WorkspaceUI, playback: PlaybackUI) {
   const [target, setTarget] = useState<RemoteTarget | null>(null);

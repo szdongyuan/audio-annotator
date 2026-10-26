@@ -15,9 +15,10 @@ export function targetCommands(ui: SelectionUI, target: Selection | null, playba
     },
     edit: (action: (selected: Selection) => void) => {
       if (!isCurrent()) return;
-      ui.withTarget(target, region => {
-        const selected = sameRegion(target!.region, region) ? target! : { ...target!, region };
-        ui.state.select(selected); action(selected);
+      const followed = target && ui.state.follow(target);
+      ui.withTarget(followed, region => {
+        const selected = sameRegion(followed!.region, region) ? followed! : { ...followed!, region };
+        if (!ui.state.matches(selected)) ui.state.select(selected); action(selected);
       });
     },
   };
