@@ -18,7 +18,17 @@ async function category(selector, scope, value = '分类甲', right = false) { i
 const semantics = doc => { const d = structuredClone(doc); delete d.projectId; delete d.revision; delete d.updatedAt; for (const m of d.media) delete m.sourceRef; return d; };
 async function locateResult(scope, name) {
  const rows = await h.driver.findElements(By.xpath(`//button[contains(@class,'annotation-row') and .//small[normalize-space(.)='${scope}'] and ./span[normalize-space(.)='${name}']]`));
- assert.equal(rows.length, 1, `unique ${scope} result for ${name}`); await rows[0].click();
+ assert.equal(rows.length, 1, `unique ${scope} result for ${name}`);
+ const before=await h.evaluate(`return [...document.querySelectorAll('.annotation-filters select,.annotation-filters input')].map(e=>e.value)`);
+ const panes=await h.evaluate(`return [...document.querySelectorAll('.file-pane h2')].map(e=>e.textContent)`);
+ await rows[0].click();
+ await h.until(`document.querySelector('[role=tab][aria-selected=true]')?.textContent==='列表'&&!document.querySelector('.tile-status')&&!document.querySelector('.annotation-rect.is-selected')`);
+ await h.driver.executeAsyncScript('const done=arguments[arguments.length-1];requestAnimationFrame(()=>requestAnimationFrame(done));');
+ assert.equal(await h.evaluate(`return document.querySelector('[role=tab][aria-selected=true]').textContent`),'列表');
+ assert.deepEqual(await h.evaluate(`return [...document.querySelectorAll('.annotation-filters select,.annotation-filters input')].map(e=>e.value)`),before);
+ assert.deepEqual(await h.evaluate(`return [...document.querySelectorAll('.file-pane h2')].map(e=>e.textContent)`),panes,'existing comparison panes do not swap');
+ if(scope==='整个通道 2')assert.ok(await h.evaluate(`return !!document.querySelector('.file-pane:last-child .channel-pane[aria-label="通道 2"]')`));
+ await h.driver.findElement(By.xpath("//button[@role='tab' and .='文件/通道']")).click();
 }
 async function measure(name, width, height, complete) {
  h.nativeRect({ width, height }); await wait(250);
