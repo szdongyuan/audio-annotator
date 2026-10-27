@@ -439,11 +439,111 @@ pub(crate) fn replace_metadata_controlled(
         drop(file);
         check(fault, PublishFault::Rename, cancel)?;
         safe_existing(target)?;
-        crate::project::store::atomic_replace(&temporary, target).map_err(io)?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let mut delay_ms = 10;
+        loop {
+            check(None, PublishFault::Rename, cancel)?;
+            match crate::project::store::atomic_replace(&temporary, target) {
+                Ok(()) => break,
+                Err(error) => {
+                    // SMB readers, indexing and antivirus can briefly deny replacement.
+                    // Keep the original file in place and retry only this atomic boundary.
+                    let transient =
+                        cfg!(windows) && matches!(error.raw_os_error(), Some(5 | 32 | 33));
+                    if !transient || std::time::Instant::now() >= deadline {
+                        let raw = error.raw_os_error();
+                        let mut error = io(error);
+                        error.details = Some(serde_json::json!({
+                            "operation": "replaceMetadata", "path": target, "osError": raw
+                        }));
+                        return Err(error);
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                    delay_ms = (delay_ms * 2).min(100);
+                    safe_existing(target)?;
+                }
+            }
+        }
         check(fault, PublishFault::AfterPublish, None)
     })();
     if owned && result.is_err() {
         let _ = fs::remove_file(&temporary);
     }
     result
+}
+
+#[cfg(all(test, windows))]
+mod metadata_retry_tests {
+    use super::*;
+    use std::os::windows::fs::OpenOptionsExt;
+    #[test]
+    fn metadata_replacement_waits_for_a_short_lived_windows_reader() {
+        let root = std::env::temp_dir().join(format!("metadata-retry-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("organization.json");
+        fs::write(&path, b"old").unwrap();
+        let held = OpenOptions::new()
+            .read(true)
+            .share_mode(3)
+            .open(&path)
+            .unwrap();
+        let reader = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(120));
+            drop(held);
+        });
+        let result = replace_metadata(&path, b"new");
+        reader.join().unwrap();
+        let contents = fs::read(&path).unwrap();
+        fs::remove_file(&path).unwrap();
+        fs::remove_dir(&root).unwrap();
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(contents, b"new");
+    }
+    #[test]
+    fn metadata_replacement_can_cancel_while_waiting_and_keeps_original() {
+        let root = std::env::temp_dir().join(format!("metadata-cancel-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("organization.json");
+        fs::write(&path, b"old").unwrap();
+        let held = OpenOptions::new()
+            .read(true)
+            .share_mode(3)
+            .open(&path)
+            .unwrap();
+        let cancel = std::sync::Arc::new(AtomicBool::new(false));
+        let signal = cancel.clone();
+        let trigger = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            signal.store(true, Ordering::Release);
+        });
+        let result = replace_metadata_controlled(&path, b"new", None, Some(&cancel));
+        trigger.join().unwrap();
+        drop(held);
+        assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled);
+        assert_eq!(fs::read(&path).unwrap(), b"old");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_file(path).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
+    #[test]
+    fn metadata_replacement_has_bounded_retries_and_reports_target() {
+        let root = std::env::temp_dir().join(format!("metadata-timeout-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("organization.json");
+        fs::write(&path, b"old").unwrap();
+        let held = OpenOptions::new()
+            .read(true)
+            .share_mode(3)
+            .open(&path)
+            .unwrap();
+        let start = std::time::Instant::now();
+        let error = replace_metadata(&path, b"new").unwrap_err();
+        drop(held);
+        assert!(start.elapsed() < std::time::Duration::from_secs(4));
+        assert_eq!(error.details.unwrap()["path"], path.to_str().unwrap());
+        assert_eq!(fs::read(&path).unwrap(), b"old");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_file(path).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
 }

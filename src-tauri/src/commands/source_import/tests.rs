@@ -908,3 +908,45 @@ fn scan_preflight_excludes_paths_that_exceed_existing_project_folder_capacity() 
     assert_eq!(preview.counts.issues, 1);
     assert!(preview.folder_summary.is_empty());
 }
+
+#[test]
+fn batch_publication_adopts_prepared_sources_once_and_rejects_forgery() {
+    use crate::commands::collaboration::catalog;
+    let f = Fixture::new();
+    let token = scan_config(&f, zip_config(&f, 65));
+    let (ch, rx) = channel();
+    let task =
+        tauri::async_runtime::block_on(batch(&f.state, token, (0..65).collect(), ch)).unwrap();
+    let events = wait_media(&rx);
+    assert!(events.iter().all(|e| e["type"] != "failed"), "{events:?}");
+    let ready: Vec<annotator_core::model::MediaDescriptor> = events
+        .iter()
+        .filter(|e| e["type"] == "ready")
+        .map(|e| serde_json::from_value(e["media"].clone()).unwrap())
+        .collect();
+    assert_eq!(ready.len(), 65);
+    let before = f.expected();
+    let mut forged = ready.clone();
+    forged[1].display_name = "forged".into();
+    assert!(tauri::async_runtime::block_on(catalog::import_batch(
+        &f.state,
+        before.clone(),
+        forged
+    ))
+    .is_err());
+    let first = tauri::async_runtime::block_on(catalog::import_batch(
+        &f.state,
+        before.clone(),
+        ready.clone(),
+    ))
+    .unwrap();
+    assert_eq!(first.document.media.len(), 65);
+    assert_eq!(first.document.revision, before.expected_revision + 1);
+    let retry =
+        tauri::async_runtime::block_on(catalog::import_batch(&f.state, before, ready.clone()))
+            .unwrap();
+    assert_eq!(retry.document, first.document);
+    for media in ready {
+        catalog::release(&f.state.6, &task, &media.id).unwrap();
+    }
+}

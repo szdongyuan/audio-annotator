@@ -1,3 +1,4 @@
+import { suspendRefresh } from '../collaboration/admission';
 import { normalizeError } from '../../bridge/client';
 import { parseSourceOrganization, parseSourceRules, sameSourceToken, type SourceCommands, type SourceConfig, type SourceCounts, type SourceEvent, type SourcePage, type SourceRules, type SourceToken } from '../../bridge/sourceImport';
 import type { AppError } from '../../bridge/types';
@@ -342,7 +343,9 @@ export class SourceImportController {
       return;
     this.running = true;
     const g = this.generation, token = this.token;
+    let resume: (() => void) | undefined;
     try {
+      resume = await suspendRefresh(this.owner.lifecycle);
       while (this.offset < this.counts.candidates && this.valid(g) && this.state === 'importing') {
         if (this.owner.queue.unresolvedFailures.length || this.pendingAcknowledgements.length) {
           this.state = 'paused';
@@ -402,6 +405,7 @@ export class SourceImportController {
       }
     }
     finally {
+      resume?.();
       this.running = false;
       this.notify();
     }

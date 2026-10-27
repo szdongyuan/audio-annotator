@@ -42,6 +42,9 @@ pub enum Change {
     ImportMedia {
         media: MediaDescriptor,
     },
+    ImportMediaBatch {
+        items: Vec<MediaDescriptor>,
+    },
     RelinkMedia {
         media: MediaDescriptor,
     },

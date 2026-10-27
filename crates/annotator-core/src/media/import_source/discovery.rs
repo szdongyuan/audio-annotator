@@ -116,7 +116,9 @@ pub fn scan(
                     limits.entries.saturating_sub(result.counts.checked),
                     cancel,
                 )?;
-                let mut archive = zip::ZipArchive::new(file).map_err(zip_error)?;
+                let mut archive =
+                    zip::ZipArchive::new(std::io::BufReader::with_capacity(262144, file))
+                        .map_err(zip_error)?;
                 if count != archive.len() {
                     return Err(invalid("重复 ZIP 条目"));
                 }
@@ -155,7 +157,13 @@ pub fn scan(
         }
         let routes = if config.rules.mode == Mode::Jingcheng {
             let mut archive = if config.kind == SourceKind::Zip {
-                Some(zip::ZipArchive::new(File::open(&path).map_err(io)?).map_err(zip_error)?)
+                Some(
+                    zip::ZipArchive::new(std::io::BufReader::with_capacity(
+                        262144,
+                        File::open(&path).map_err(io)?,
+                    ))
+                    .map_err(zip_error)?,
+                )
             } else {
                 None
             };

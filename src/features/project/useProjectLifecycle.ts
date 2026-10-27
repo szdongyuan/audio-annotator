@@ -49,7 +49,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
       let owner:ActiveProject;
       const base=runtime?.project??commands;
       const queue = new CommandQueue(store, {...base,applyChange:async(id,revision,change)=>{
-        if(change.type!=='importMedia')return base.applyChange(id,revision,change);
+        if(change.type!=='importMedia' && change.type!=='importMediaBatch')return base.applyChange(id,revision,change);
         const resume=await suspendRefresh(owner.lifecycle);
         try{return await admitted(owner,()=>base.applyChange(id,revision,change),()=>current.current===owner&&mounted.current);}finally{resume?.();}
       }});

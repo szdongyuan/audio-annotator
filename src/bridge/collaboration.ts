@@ -59,7 +59,7 @@ function capabilities(c:SharedContext, hasProject=true){
  if(c.projectFlavor==='ordinary')check(c.identityMode==='ordinary'&&c.actor===null&&c.hiddenMediaIds.length===0&&!c.catalogPending&&c.canWriteAnnotations===hasProject&&c.canImportMedia===hasProject);
  else check((c.identityMode==='viewOnly'&&c.actor===null&&!c.canWriteAnnotations&&!c.canImportMedia)||(c.identityMode==='profile'&&c.actor!==null&&c.canWriteAnnotations&&c.canImportMedia));
 }
-export function validatePreferenceMedia(preferences:PlaybackPreferences|null,doc:ProjectDocument){if(preferences)check(Object.keys(preferences.mediaMonitorGainDb).every(id=>doc.media.some(m=>m.id===id)));}
+export function validatePreferenceMedia(preferences:PlaybackPreferences|null,doc:ProjectDocument){if(preferences){const media=new Set(doc.media.map(m=>m.id));check(Object.keys(preferences.mediaMonitorGainDb).every(id=>media.has(id)));}}
 // Only this strictly validated UUID map can exceed the DTO field-count budget.
 function monitorMaps(value:unknown):ReadonlySet<object>{
  const context=value as {preferences?:{mediaMonitorGainDb?:unknown}}|null;
@@ -73,8 +73,9 @@ function layer(v:unknown,doc?:ProjectDocument){
  shape(v,{kind:v=>check(v==='audio-annotator-author-layer'),formatVersion:v=>check(v===2),projectId:uuid,authorId:uuid,revision:integer,parent:nullable(v=>shape(v,{revision:integer,hash})),payload:v=>shape(v,{categories:array(4096,v=>{parseChange({type:'addCategory',category:v});}),annotations:array(100000,v=>{parseChange({type:'addAnnotation',annotation:v});}),mediaLabels:array(10000,v=>shape(v,{mediaId:uuid,note:payloadText,channelNotes:array(6,payloadText),categoryIds:labels,channelCategoryIds:array(6,labels)}))}),hash});
  const l=v as AuthorLayer;check(l.revision>0&&(l.parent===null?l.revision===1:l.parent.revision===l.revision-1));
  const p=l.payload,categories=new Set(p.categories.map(c=>c.id));unique([...p.categories,...p.annotations].map(x=>x.id));unique(p.mediaLabels.map(m=>m.mediaId));
- for(const a of p.annotations){check(a.categoryIds.every(id=>categories.has(id)));check(Date.parse(a.createdAt)<=Date.parse(a.updatedAt));if(doc){const m=doc.media.find(m=>m.id===a.region.mediaId);check(m&&a.region.channelIndex<m.channelCount&&a.region.endSeconds<=m.frameCount/m.sampleRate&&a.region.highHz<=m.sampleRate/2);}}
- for(const m of p.mediaLabels){check(m.channelNotes.length===m.channelCategoryIds.length);for(const c of [m.categoryIds,...m.channelCategoryIds].flat())check(categories.has(c));if(doc)check(doc.media.some(d=>d.id===m.mediaId&&d.channelCount===m.channelNotes.length));}
+ const mediaById=doc?new Map(doc.media.map(m=>[m.id,m])):null;
+ for(const a of p.annotations){check(a.categoryIds.every(id=>categories.has(id)));check(Date.parse(a.createdAt)<=Date.parse(a.updatedAt));if(doc){const m=mediaById!.get(a.region.mediaId);check(m&&a.region.channelIndex<m.channelCount&&a.region.endSeconds<=m.frameCount/m.sampleRate&&a.region.highHz<=m.sampleRate/2);}}
+ for(const m of p.mediaLabels){check(m.channelNotes.length===m.channelCategoryIds.length);for(const c of [m.categoryIds,...m.channelCategoryIds].flat())check(categories.has(c));if(doc)check(mediaById!.get(m.mediaId)?.channelCount===m.channelNotes.length);}
  return bytes;
 }
 export function parseCollaborationStatus(v:unknown,doc?:ProjectDocument):CollaborationStatus{
@@ -83,7 +84,7 @@ export function parseCollaborationStatus(v:unknown,doc?:ProjectDocument):Collabo
  shape(v,{...capabilityFields,formatVersion:v=>check(v===1),runtimeNonce:uuid,projectId:nullable(uuid),shared:bool,actor:nullable(identity),preferences:nullable(parsePreferences),pending:bool,recoveryRequired:bool,busy:bool,lastSuccessMs:nullable(integer),error:nullable(error),snapshot:nullable(v=>shape(v,{projectId:uuid,authors:array(128,v=>shape(v,{identity,layer:nullable(v=>{layerBytes+=layer(v,doc);check(layerBytes<=64*1024*1024);}),error:nullable(error)}))}))});
  const s=v as CollaborationStatus;capabilities(s,s.projectId!==null);check(s.shared===(s.projectFlavor!=='ordinary'));check(!s.pending||s.shared&&s.actor!==null);check(s.shared||s.actor===null&&s.preferences===null&&s.snapshot===null);
  if(s.snapshot){check(s.snapshot.projectId===s.projectId);unique(s.snapshot.authors.map(a=>a.identity.authorId));for(const a of s.snapshot.authors)if(a.layer)check(a.layer.projectId===s.projectId&&a.layer.authorId===a.identity.authorId);}
- if(doc){validatePreferenceMedia(s.preferences,doc);check(s.projectId===doc.projectId);check(s.hiddenMediaIds.every(id=>doc.media.some(m=>m.id===id)));}
+ if(doc){validatePreferenceMedia(s.preferences,doc);check(s.projectId===doc.projectId);const media=new Set(doc.media.map(m=>m.id));check(s.hiddenMediaIds.every(id=>media.has(id)));}
  return s;
 }
 export function parseTransition(v:unknown):Transition{shape(v,{opened:parseOpened,status:parseCollaborationStatus});const t=v as Transition;const c=t.opened.collaboration;check(c&&c.runtimeNonce===t.status.runtimeNonce&&c.actor?.authorId===t.status.actor?.authorId);for(const key of Object.keys(capabilityFields) as (keyof Capabilities)[])check(JSON.stringify(c[key])===JSON.stringify(t.status[key]));if(t.opened.snapshot)parseCollaborationStatus(t.status,t.opened.snapshot.document);return t;}

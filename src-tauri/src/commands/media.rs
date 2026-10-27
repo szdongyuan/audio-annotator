@@ -290,6 +290,7 @@ async fn start_inner(
             Some((scan, indices, placements)) => (Some((scan, indices)), placements.into_iter()),
             None => (None, direct_placements.into_iter()),
         };
+        let mut staging = sources.as_ref().map(|(scan, _)| scan.staging_session());
         for (index, raw) in paths.iter().enumerate() {
             let placement = placements.next();
             if cancel.load(Ordering::Relaxed) {
@@ -319,11 +320,14 @@ async fn start_inner(
                     }
                 }
             };
-            let staged = if let Some((scan, indices)) = &sources {
-                scan.stage(indices[index], &std::env::temp_dir(), &cancel, |n| {
-                    progress("extract", n)
-                })
-                .map(Some)
+            let staged = if let Some((_, indices)) = &sources {
+                staging
+                    .as_mut()
+                    .unwrap()
+                    .stage(indices[index], &std::env::temp_dir(), &cancel, |n| {
+                        progress("extract", n)
+                    })
+                    .map(Some)
             } else {
                 Ok(None)
             };
@@ -494,7 +498,7 @@ pub async fn media_status(
             let entries = d
                 .media
                 .iter()
-                .map(|m| tasks.registry.get_unverified(m))
+                .map(|m| tasks.registry.verified_stamp(m))
                 .collect::<Vec<_>>();
             Ok((d.media, p.root().to_path_buf(), entries, tasks.generation()))
         })
@@ -515,10 +519,10 @@ pub async fn media_status(
                 let status = match SourceStamp::read(&source) {
                     Err(_) => "missing",
                     Ok(stamp) if stamp.bytes != m.byte_length => "changed",
-                    Ok(_) => match entry.and_then(|e| e.verify_source()) {
-                        Ok(()) => "ready",
-                        Err(e) if e.code == ErrorCode::IdentityMismatch => "changed",
-                        Err(_) => "unverified",
+                    Ok(stamp) => match entry {
+                        Some(verified) if verified == stamp => "ready",
+                        Some(_) => "changed",
+                        None => "unverified",
                     },
                 };
                 MediaStatus {

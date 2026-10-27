@@ -26,14 +26,13 @@ export function useMedia(active: ActiveProject | null) {
   const [relink, setRelink] = useState<MediaDescriptor | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   useEffect(() => {
-    const next = active ? new MediaImportController(active.store, active.queue, active.commands?.media ?? mediaClient, active.lifecycle) : null;
+    const next = active ? new MediaImportController(active.store, active.queue, active.commands?.media ?? mediaClient, active.lifecycle, active.collaboration?.projectFlavor === 'default') : null;
     const nextFolder = active && next ? new FolderImportController(active, next, active.commands?.folders ?? folderClient) : null;
     const nextSource = active && next ? new SourceImportController(active, next, active.commands?.sources ?? sourceClient) : null;
     setBinding(active && next && nextFolder && nextSource ? { owner: active, controller: next, folder: nextFolder, source: nextSource } : null);
     setStatuses([]); setSelectedId(active?.store.snapshot.document.viewState.activeMediaId ?? null); setRelink(null); setError(null);
     return () => { nextSource?.dispose(); nextFolder?.dispose(); next?.dispose(); };
   }, [active]);
-  const sourceKey = active?.store.snapshot.document.media.map(m => `${m.id}:${m.sha256}:${m.sourceRef}`).join('|');
   useEffect(() => {
     if (!active) return;
     let disposed = false;
@@ -46,7 +45,7 @@ export function useMedia(active: ActiveProject | null) {
     refresh(); const timer = setInterval(refresh, 1500);
     window.addEventListener('focus', refresh);
     return () => { disposed = true; clearInterval(timer); window.removeEventListener('focus', refresh); };
-  }, [active, sourceKey, controller?.busy]);
+  }, [active]);
   const choose = async (target?: MediaDescriptor) => {
     if (!active || !controller || active.store.editingDisabled || (!target && active.collaboration?.canImportMedia===false)) return;
     const reservation = {};

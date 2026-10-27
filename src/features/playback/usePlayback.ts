@@ -9,7 +9,7 @@ import { validRegion } from '../selection/state';
 import { useLocalSettings } from '../settings/localSettings';
 export function audioSignature(doc:ProjectDocument|undefined,id:string|null){const m=doc?.media.find(m=>m.id===id);return JSON.stringify(m&&[m.id,m.sha256,m.sourceRef,m.sampleRate,m.frameCount,m.channelCount,doc?.edits.filter(e=>e.region.mediaId===id),doc?.playbackMix[m.id]]);}
 export function actualSource(mode:PlaybackOptions['mode'],source:PlaybackOptions['selectionSource'],bypass:boolean){return mode==='selection'?(source==='original'||bypass?'原始选区':'处理后选区'):mode==='original'||bypass?'原音':'处理后';}
-export function playbackShortcut(e:{key:string;target:EventTarget|null;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean}){return !menuIsOpen()&&e.key===' '&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(e.target instanceof Element&&e.target.closest('input,textarea,select,button,[role="dialog"],[role="alertdialog"],[contenteditable]:not([contenteditable="false"])'));}
+export function playbackShortcut(e:{key:string;target:EventTarget|null;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean}){return !menuIsOpen()&&e.key===' '&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(e.target instanceof Element&&(e.target.closest('input,textarea,select,[role="dialog"],[role="alertdialog"],[contenteditable]:not([contenteditable="false"])') || e.target.closest('button') && !e.target.closest('button.media-select[data-media-id]')));}
 type MonitorState={monitorGainDb:number;mediaMonitorGainDb:Record<string,number|null>};
 type PlaybackApi=Omit<typeof playbackClient,'monitorGain'> & Partial<Pick<typeof playbackClient,'monitorGain'>>;
 export function usePlayback(active:ActiveProject|null,selectedMediaId:string|null,selection:Region|undefined,injectedApi:PlaybackApi=playbackClient){

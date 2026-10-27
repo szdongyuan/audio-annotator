@@ -26,6 +26,7 @@ export interface ProjectDocument {
 export interface ProjectSnapshot { document: ProjectDocument; canUndo: boolean; canRedo: boolean }
 export type Change =
   | { type: 'importMedia' | 'relinkMedia'; media: MediaDescriptor }
+  | { type: 'importMediaBatch'; items: MediaDescriptor[] }
   | { type: 'removeMedia'; mediaId: Id }
   | { type: 'setMediaCategories'; mediaId: Id; categoryIds: Id[] }
   | { type: 'setChannelCategories'; mediaId: Id; channelIndex: number; categoryIds: Id[] }

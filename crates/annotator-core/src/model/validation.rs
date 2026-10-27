@@ -1,6 +1,6 @@
 use super::*;
 use crate::error::{AppError, ErrorCode, Result};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 fn require(valid: bool, message: &str) -> Result<()> {
@@ -47,6 +47,9 @@ pub fn validate_region(region: &Region, media: &[MediaDescriptor]) -> Result<()>
         .iter()
         .find(|m| m.id == region.media_id)
         .ok_or_else(|| AppError::invalid("Region references unknown media"))?;
+    validate_region_source(region, source)
+}
+fn validate_region_source(region: &Region, source: &MediaDescriptor) -> Result<()> {
     require(
         region.channel_index < source.channel_count,
         "Channel is outside media range",
@@ -98,6 +101,8 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
         id(entity_id)?;
         require(ids.insert(entity_id.as_str()), "Duplicate entity ID")?;
     }
+    let media_by_id: HashMap<_, _> = doc.media.iter().map(|m| (m.id.as_str(), m)).collect();
+    let category_ids: HashSet<_> = doc.categories.iter().map(|c| c.id.as_str()).collect();
     for media in &doc.media {
         if !(1..=6).contains(&media.channel_count) {
             return Err(AppError::new(
@@ -137,7 +142,7 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
     }
     for media in &doc.media {
         for labels in std::iter::once(&media.category_ids).chain(&media.channel_category_ids) {
-            validate_categories(labels, &doc.categories)?;
+            validate_category_ids(labels, &category_ids)?;
         }
     }
     require(
@@ -159,12 +164,22 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
         )?;
     }
     for annotation in &doc.annotations {
-        validate_region(&annotation.region, &doc.media)?;
+        validate_region_source(
+            &annotation.region,
+            media_by_id
+                .get(annotation.region.media_id.as_str())
+                .ok_or_else(|| AppError::invalid("Region references unknown media"))?,
+        )?;
         dates(&annotation.created_at, &annotation.updated_at)?;
-        validate_categories(&annotation.category_ids, &doc.categories)?;
+        validate_category_ids(&annotation.category_ids, &category_ids)?;
     }
     for edit in &doc.edits {
-        validate_region(&edit.region, &doc.media)?;
+        validate_region_source(
+            &edit.region,
+            media_by_id
+                .get(edit.region.media_id.as_str())
+                .ok_or_else(|| AppError::invalid("Region references unknown media"))?,
+        )?;
         edit.operation.validate()?;
         if edit.processing_version != 2 {
             return Err(AppError::new(
@@ -175,16 +190,14 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
     }
     for (media_id, settings) in &doc.analysis {
         require(
-            doc.media.iter().any(|m| &m.id == media_id),
+            media_by_id.contains_key(media_id.as_str()),
             "Analysis references unknown media",
         )?;
         validate_analysis(settings)?;
     }
     for (media_id, mix) in &doc.playback_mix {
-        let source = doc
-            .media
-            .iter()
-            .find(|m| &m.id == media_id)
+        let source = media_by_id
+            .get(media_id.as_str())
             .ok_or_else(|| AppError::invalid("Mix references unknown media"))?;
         for channels in [&mix.solo_channels, &mix.muted_channels] {
             require(
@@ -208,7 +221,7 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
     .flatten()
     {
         require(
-            doc.media.iter().any(|m| &m.id == selected),
+            media_by_id.contains_key(selected.as_str()),
             "View references unknown media",
         )?;
     }
@@ -223,10 +236,8 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
         .map(MediaDescriptor::duration)
         .fold(0.0, f64::max);
     for (media_id, view) in &doc.view_state.media {
-        let source = doc
-            .media
-            .iter()
-            .find(|m| &m.id == media_id)
+        let source = media_by_id
+            .get(media_id.as_str())
             .ok_or_else(|| AppError::invalid("View references unknown media"))?;
         require(
             view.visible_channels
@@ -270,12 +281,15 @@ pub fn validate_document(doc: &ProjectDocument) -> Result<()> {
 
 /// Ordered sets: accepting a label set never sorts or deduplicates user input.
 pub fn validate_categories(labels: &[String], categories: &[Category]) -> Result<()> {
+    validate_category_ids(labels, &categories.iter().map(|c| c.id.as_str()).collect())
+}
+fn validate_category_ids(labels: &[String], categories: &HashSet<&str>) -> Result<()> {
     require(labels.len() <= 64, "At most 64 labels per target")?;
     let mut seen = HashSet::new();
     for label in labels {
         require(seen.insert(label), "Duplicate category reference")?;
         require(
-            categories.iter().any(|c| &c.id == label),
+            categories.contains(label.as_str()),
             "Unknown category reference",
         )?;
     }

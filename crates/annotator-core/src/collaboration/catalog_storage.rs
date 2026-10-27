@@ -130,20 +130,23 @@ pub(super) fn load(
         .collect::<std::collections::HashSet<_>>();
     let dir = root.join("catalog");
     atomic::safe_existing(&dir)?;
-    let mut records = Vec::new();
-    let mut byte_length = bytes.len();
+    let mut entries = Vec::new();
     for (index, entry) in fs::read_dir(&dir).map_err(atomic::io)?.enumerate() {
         limit(index < MAX_CATALOG_ENTRIES)?;
         let entry = entry.map_err(atomic::io)?;
         after_entry(&entry.path())?;
+        entries.push(entry);
+    }
+    // SMB metadata/read latency dominates large catalogs. Keep full validation, but
+    // overlap independent records with a fixed worker bound against the captured head.
+    let byte_length = std::sync::atomic::AtomicUsize::new(bytes.len());
+    let read_entry = |entry: &fs::DirEntry| -> Result<Option<(PublicMedia, String)>> {
         let name = entry.file_name();
         let name = name
             .to_str()
             .ok_or_else(|| AppError::invalid("Invalid catalog filename"))?;
         if name.starts_with('.') && name.ends_with(".tmp") {
             atomic::safe_existing(&dir)?;
-            // Publication may rename/remove a temporary after read_dir yielded its name.
-            // Existing links still fail closed; absence is normal only for ignored temporaries.
             match fs::symlink_metadata(entry.path()) {
                 Ok(metadata) => require(
                     metadata.is_file() && !atomic::is_link(&metadata),
@@ -152,44 +155,66 @@ pub(super) fn load(
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
                 Err(error) => return Err(atomic::io(error)),
             }
-            continue;
+            return Ok(None);
         }
         atomic::safe_existing(&entry.path())?;
+        require(
+            entry.file_type().map_err(atomic::io)?.is_file(),
+            "Expected regular catalog entry",
+        )?;
         if name == ".commit.lock" {
-            require(
-                entry.file_type().map_err(atomic::io)?.is_file(),
-                "Expected regular catalog lock",
-            )?;
-            continue;
+            return Ok(None);
         }
         let id = name
             .strip_suffix(".json")
             .ok_or_else(|| AppError::invalid("Unknown catalog entry"))?;
         uuid(id)?;
-        require(
-            entry.file_type().map_err(atomic::io)?.is_file(),
-            "Expected regular catalog record",
-        )?;
         if !referenced.contains(id) {
-            continue;
+            return Ok(None);
         }
-        limit(records.len() < MAX_MEDIA)?;
-        let bytes = atomic::read(
-            &entry.path(),
-            MAX_RECORD_BYTES.min(MAX_LAYER_BYTES - byte_length),
-        )?;
-        byte_length += bytes.len();
+        let bytes = atomic::read(&entry.path(), MAX_RECORD_BYTES)?;
+        let prior = byte_length.fetch_add(bytes.len(), std::sync::atomic::Ordering::Relaxed);
+        limit(prior + bytes.len() <= MAX_LAYER_BYTES)?;
         let record = CatalogRecord::parse(&bytes, &manifest)?;
         require(record.media.id == id, "Catalog filename identity mismatch")?;
         let path = root.join(&record.media.source_ref);
         atomic::safe_existing(&path)?;
+        let metadata = fs::metadata(&path).map_err(atomic::io)?;
         require(
-            path.is_file()
-                && fs::metadata(&path).map_err(atomic::io)?.len() == record.media.byte_length,
+            metadata.is_file() && metadata.len() == record.media.byte_length,
             "Missing or changed catalog media",
         )?;
-        records.push((record.media, hash(&bytes)));
-    }
+        Ok(Some((record.media, hash(&bytes))))
+    };
+    let records = std::thread::scope(|scope| -> Result<Vec<_>> {
+        let chunk_size = entries.len().div_ceil(8).max(1);
+        let handles: Vec<_> = entries
+            .chunks(chunk_size)
+            .map(|chunk| {
+                let read_entry = &read_entry;
+                scope.spawn(move || -> Result<Vec<_>> {
+                    let mut result = Vec::new();
+                    for entry in chunk {
+                        if let Some(record) = read_entry(entry)? {
+                            result.push(record);
+                        }
+                    }
+                    Ok(result)
+                })
+            })
+            .collect();
+        let mut records = Vec::new();
+        for handle in handles {
+            records.extend(
+                handle
+                    .join()
+                    .map_err(|_| AppError::invalid("Catalog reader failed"))??,
+            );
+        }
+        Ok(records)
+    })?;
+    let byte_length = byte_length.into_inner();
+    let mut records = records;
     require(
         records.len() == referenced.len(),
         "Missing committed catalog record",

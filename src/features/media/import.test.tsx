@@ -14,17 +14,18 @@ import { useMedia } from './useMedia';
 import { mediaClient,mediaDialogs } from '../../bridge/media';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 
-function setup() {
+function setup(batch = false) {
   const store = new ProjectStore({ document: parseProjectDocument(structuredClone(fixture)), canUndo: false, canRedo: false });
   const commands: ProjectCommands = { applyChange: vi.fn(async (_id, revision, change) => {
     const snapshot: ProjectSnapshot = structuredClone(store.snapshot); snapshot.document.revision = revision + 1;
     if (change.type === 'importMedia') snapshot.document.media.push(change.media);
+    if (change.type === 'importMediaBatch') snapshot.document.media.push(...change.items);
     return snapshot;
   }), getSnapshot: vi.fn(), undo: vi.fn(), redo: vi.fn() };
   const queue = new CommandQueue(store, commands);
   let emit!: (event: MediaEvent) => void;
   const api: MediaCommands = { start: vi.fn(async (_id, _paths, callback) => { emit = callback; return 'task'; }), cancel: vi.fn(async () => {}), release: vi.fn(async () => {}), status: vi.fn(async () => []) };
-  const controller = new MediaImportController(store, queue, api);
+  const controller = new MediaImportController(store, queue, api, undefined, batch);
   return { store, queue, commands, api, controller, emit: (event: MediaEvent) => emit(event) };
 }
 const candidate = { ...fixture.media[0], id: '00000000-0000-4000-8000-000000000077' };
@@ -163,4 +164,70 @@ it('binds direct and source imports to selected folder without replacing the imp
  act(()=>hook.result.current.organization!.select(source.folders[0].id));expect(hook.result.current.controller).toBe(controller);act(()=>hook.result.current.chooseSourceFolder());expect(hook.result.current.source?.config.organization.targetFolderId).toBe(source.folders[0].id);
  await act(()=>hook.result.current.source!.cancel());act(()=>hook.result.current.choose());await waitFor(()=>expect(s.api.start).toHaveBeenCalled());expect(vi.mocked(s.api.start).mock.calls[0][4]).toEqual({folderId:source.folders[0].id,layoutRevision:3});expect(hook.result.current.controller).toBe(controller);
  hook.unmount();s.controller.dispose();native.mockRestore();choose.mockRestore();
+});
+
+it('publishes 130 ready files in bounded groups and releases every accepted capability',async()=>{
+ const s=setup(true);await s.controller.start(Array.from({length:130},(_,i)=>`${i}.wav`));
+ for(let index=0;index<130;index++)s.emit({type:'ready',taskId:'task',index,media:{...candidate,id:crypto.randomUUID()}});
+ s.emit({type:'finished',taskId:'task',cancelled:false});await s.controller.settled();
+ expect(vi.mocked(s.commands.applyChange).mock.calls.map(c=>c[2].type==='importMediaBatch'?c[2].items.length:0)).toEqual([64,64,2]);
+ expect(s.api.release).toHaveBeenCalledTimes(130);expect(s.controller.items.every(i=>i.state==='success')).toBe(true);s.controller.dispose();
+});
+it('seals already accepted partial batch on cancellation without waiting for finished',async()=>{
+ const s=setup(true);await s.controller.start(['one','two','three']);
+ for(let index=0;index<2;index++)s.emit({type:'ready',taskId:'task',index,media:{...candidate,id:crypto.randomUUID()}});
+ s.controller.cancel();await s.controller.completed();
+ expect(s.controller.items.map(i=>i.state)).toEqual(['success','success','cancelled']);expect(s.commands.applyChange).toHaveBeenCalledTimes(1);s.controller.dispose();
+});
+it('retries one failed batch once for all retained members',async()=>{
+ const s=setup(true);vi.mocked(s.commands.applyChange).mockRejectedValueOnce({code:'SaveFailed',message:'busy file',retryable:true});
+ await s.controller.start(['one','two']);for(let index=0;index<2;index++)s.emit({type:'ready',taskId:'task',index,media:{...candidate,id:crypto.randomUUID()}});
+ s.emit({type:'finished',taskId:'task',cancelled:false});await s.controller.settled();
+ expect(s.controller.failures()).toHaveLength(2);expect(s.api.release).not.toHaveBeenCalled();
+ await s.controller.retry();expect(s.commands.applyChange).toHaveBeenCalledTimes(2);expect(s.api.release).toHaveBeenCalledTimes(2);expect(s.controller.failures()).toHaveLength(0);s.controller.dispose();
+});
+
+it('discarded batch release failures can only retry acknowledgements, never republish released sources',async()=>{
+ const s=setup(true);vi.mocked(s.commands.applyChange).mockRejectedValueOnce({code:'SaveFailed',message:'not committed',retryable:true});
+ await s.controller.start(['one','two']);for(let index=0;index<2;index++)s.emit({type:'ready',taskId:'task',index,media:{...candidate,id:crypto.randomUUID()}});
+ s.emit({type:'finished',taskId:'task',cancelled:false});await s.controller.settled();
+ vi.mocked(s.api.release).mockRejectedValueOnce({code:'SaveFailed',message:'release unavailable',retryable:true});await s.controller.discard();
+ expect(s.queue.unresolvedFailures).toHaveLength(0);expect(s.controller.pendingAcknowledgements).toHaveLength(1);
+ await s.controller.retry();expect(s.controller.pendingAcknowledgements).toHaveLength(0);expect(s.commands.applyChange).toHaveBeenCalledTimes(1);s.controller.dispose();
+});
+it('committed batch adoption errors retain all files until the same batch is adopted',async()=>{
+ const s=setup(true),files=[0,1].map(()=>({...candidate,id:crypto.randomUUID()}));
+ vi.mocked(s.commands.applyChange).mockRejectedValueOnce({code:'SaveFailed',message:'adoption pending',retryable:true,details:{catalogCommitted:true,catalogAdoptionRequired:true,mediaIds:files.map(m=>m.id)}});
+ await s.controller.start(['one','two']);files.forEach((media,index)=>s.emit({type:'ready',taskId:'task',index,media}));s.emit({type:'finished',taskId:'task',cancelled:false});await s.controller.settled();
+ expect(s.controller.items.map(i=>i.state)).toEqual(['accepted','accepted']);expect(s.api.release).not.toHaveBeenCalled();
+ await s.controller.discard();expect(s.commands.applyChange).toHaveBeenCalledTimes(2);expect(s.api.release).toHaveBeenCalledTimes(2);expect(s.controller.items.every(i=>i.state==='success')).toBe(true);s.controller.dispose();
+});
+
+it('acknowledges committed batch members concurrently while retaining the completion barrier',async()=>{
+ const s=setup(true);let release!:()=>void;vi.mocked(s.api.release).mockImplementationOnce(()=>new Promise<void>(r=>{release=r;}));
+ await s.controller.start(['one','two']);for(let index=0;index<2;index++)s.emit({type:'ready',taskId:'task',index,media:{...candidate,id:crypto.randomUUID()}});
+ s.emit({type:'finished',taskId:'task',cancelled:false});await waitFor(()=>expect(s.api.release).toHaveBeenCalledTimes(2));expect(s.controller.busy).toBe(true);
+ release();await s.controller.settled();expect(s.controller.busy).toBe(false);s.controller.dispose();
+});
+
+it('catalog growth does not restart an outstanding full media-status request',async()=>{
+ const s=setup();let resolve!:(v:[])=>void;vi.mocked(s.api.status).mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));
+ const owner={store:s.store,queue:s.queue,path:'D:/project',commands:{media:s.api}} as unknown as ActiveProject;
+ const hook=renderHook(()=>useMedia(owner));await waitFor(()=>expect(s.api.status).toHaveBeenCalledTimes(1));
+ const next=structuredClone(s.store.snapshot);next.document.media.push({...candidate,id:crypto.randomUUID()});next.document.revision++;
+ act(()=>{s.store.accept(next);hook.rerender();window.dispatchEvent(new Event('focus'));});expect(s.api.status).toHaveBeenCalledTimes(1);
+ await act(async()=>{resolve([]);await Promise.resolve();});act(()=>window.dispatchEvent(new Event('focus')));await waitFor(()=>expect(s.api.status).toHaveBeenCalledTimes(2));hook.unmount();s.controller.dispose();
+});
+
+it('coalesces fast preparation progress without delaying final accepted state',async()=>{
+ vi.useFakeTimers();const s=setup(true);
+ try{
+  await s.controller.start(Array.from({length:32},(_,i)=>`${i}.wav`));const listener=vi.fn();s.controller.subscribe(listener);
+  for(let index=0;index<32;index++){
+   s.emit({type:'progress',taskId:'task',index,path:`${index}.wav`,phase:'hashing',completed:10});
+   s.emit({type:'ready',taskId:'task',index,media:{...candidate,id:crypto.randomUUID()}});
+  }
+  expect(listener).not.toHaveBeenCalled();await vi.advanceTimersByTimeAsync(100);expect(listener).toHaveBeenCalledTimes(1);
+  s.emit({type:'finished',taskId:'task',cancelled:false});await s.controller.settled();expect(s.controller.items.every(i=>i.state==='success')).toBe(true);expect(s.controller.busy).toBe(false);
+ }finally{s.controller.dispose();vi.useRealTimers();}
 });

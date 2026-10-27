@@ -48,6 +48,13 @@ it('Space does not hijack text fields, selects or editable content',()=>{
  const editable=document.createElement('div');editable.contentEditable='true';editable.setAttribute('contenteditable','true');expect(playbackShortcut({key:' ',target:editable})).toBe(false);
  expect(playbackShortcut({key:' ',target:document.body})).toBe(true);
 });
+it('Space after clicking an audio row plays audio while ordinary buttons keep native activation',()=>{
+ const row=document.createElement('button');row.className='media-select';row.dataset.mediaId='audio';
+ const child=document.createElement('strong');row.append(child);
+ expect(playbackShortcut({key:' ',target:row})).toBe(true);
+ expect(playbackShortcut({key:' ',target:child})).toBe(true);
+ expect(playbackShortcut({key:' ',target:document.createElement('button')})).toBe(false);
+});
 it('channel controls preserve source channel identity and report silent mixing',()=>{
  const change=vi.fn(),media=parseProjectDocument(structuredClone(fixture)).media[0];
  render(<ChannelMixer media={media} mix={{soloChannels:[],mutedChannels:[]}} disabled={false} onChange={change}/>);

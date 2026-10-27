@@ -114,41 +114,76 @@ pub async fn import(
         .await
         .map_err(|_| runtime::unavailable())?
 }
+pub async fn import_batch(
+    state: &AppState,
+    expected: Expected,
+    descriptors: Vec<MediaDescriptor>,
+) -> Result<ProjectSnapshot> {
+    let permit = state.6.begin(uuid::Uuid::new_v4().to_string())?;
+    let state = state.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        import_batch_worker(state, expected, descriptors, permit)
+    })
+    .await
+    .map_err(|_| runtime::unavailable())?
+}
 fn import_worker(
     state: AppState,
     expected: Expected,
     descriptor: MediaDescriptor,
     permit: runtime::Permit,
 ) -> Result<ProjectSnapshot> {
+    import_batch_worker(state, expected, vec![descriptor], permit)
+}
+fn import_batch_worker(
+    state: AppState,
+    expected: Expected,
+    descriptors: Vec<MediaDescriptor>,
+    permit: runtime::Permit,
+) -> Result<ProjectSnapshot> {
+    if descriptors.is_empty()
+        || descriptors.len() > 256
+        || descriptors
+            .iter()
+            .map(|m| &m.id)
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            != descriptors.len()
+    {
+        return Err(AppError::invalid("Invalid prepared batch"));
+    }
     let (repo, actor, prepared) = {
         let current = state.0.lock().map_err(|_| runtime::unavailable())?;
         let p = current.as_ref().ok_or_else(runtime::stale)?;
         let r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
-        if r.nonce != expected.runtime_nonce
-            || p.snapshot()?.document.project_id != expected.project_id
+        let snapshot = p.snapshot()?;
+        if r.nonce != expected.runtime_nonce || snapshot.document.project_id != expected.project_id
         {
             return Err(runtime::stale());
         }
-        if !can_import(p) {
-            return Err(AppError::invalid("Media import is unavailable"));
+        if !p.is_shared() || !can_import(p) {
+            return Err(AppError::invalid("Shared media import is unavailable"));
         }
         let pending = state
             .6
             .prepared
             .lock()
             .map_err(|_| runtime::unavailable())?;
-        let item = pending.get(&descriptor.id).ok_or_else(runtime::stale)?;
-        if item.nonce != expected.runtime_nonce || item.prepared.decoded().descriptor != descriptor
-        {
-            return Err(AppError::invalid("Prepared media identity mismatch"));
+        let mut prepared = Vec::new();
+        for descriptor in &descriptors {
+            let item = pending.get(&descriptor.id).ok_or_else(runtime::stale)?;
+            if item.nonce != expected.runtime_nonce
+                || item.prepared.decoded().descriptor != *descriptor
+            {
+                return Err(AppError::invalid("Prepared media identity mismatch"));
+            }
+            prepared.push(item.prepared.clone());
         }
-        let snapshot = p.snapshot()?;
-        if snapshot.document.media.iter().any(|m| {
-            m.id == item.prepared.media().id
-                && annotator_core::media::registry::same_identity(
-                    m,
-                    &item.prepared.media().descriptor(),
-                )
+        if prepared.iter().all(|item| {
+            snapshot.document.media.iter().any(|m| {
+                m.id == item.media().id
+                    && annotator_core::media::registry::same_identity(m, &item.media().descriptor())
+            })
         }) {
             return Ok(snapshot);
         }
@@ -156,34 +191,42 @@ fn import_worker(
         (
             r.repo.clone().ok_or_else(runtime::stale)?,
             p.workspace()?.author_session().ok_or_else(runtime::stale)?,
-            item.prepared.clone(),
+            prepared,
         )
     };
     #[cfg(test)]
     state.6.run_hook();
-    let publication =
-        repo.append_media_with_catalog_interleaved(&actor, &prepared, &permit.cancel, None, || {
-            let current = state.0.lock().map_err(|_| runtime::unavailable())?;
-            let p = current.as_ref().ok_or_else(runtime::stale)?;
-            expected.check(
-                p,
-                &*state.6.current.lock().map_err(|_| runtime::unavailable())?,
-                false,
-            )
-        });
-    // A failed acknowledgement may follow durable publication. Retry the same sealed UUID;
-    // this succeeds without inspecting a vanished source or respecting a later cancel.
-    let (committed, committed_catalog) = match publication {
-        Ok(media) => media,
+    let before_commit = || {
+        let current = state.0.lock().map_err(|_| runtime::unavailable())?;
+        let p = current.as_ref().ok_or_else(runtime::stale)?;
+        expected.check(
+            p,
+            &*state.6.current.lock().map_err(|_| runtime::unavailable())?,
+            false,
+        )
+    };
+    let publication = if prepared.len() == 1 {
+        repo.append_media_with_catalog_interleaved(
+            &actor,
+            &prepared[0],
+            &permit.cancel,
+            None,
+            before_commit,
+        )
+        .map(|(_, repo)| repo)
+    } else {
+        let items: Vec<&PreparedCatalogMedia> = prepared.iter().map(|m| &m.prepared).collect();
+        repo.append_media_batch_interleaved(&actor, &items, &permit.cancel, None, before_commit)
+    };
+    let committed_catalog = match publication {
+        Ok(repo) => repo,
         Err(error) => match repo.reload_catalog() {
             Ok(current)
-                if current
-                    .manifest()
-                    .media
+                if prepared
                     .iter()
-                    .any(|m| m == prepared.media()) =>
+                    .all(|item| current.manifest().media.iter().any(|m| m == item.media())) =>
             {
-                (prepared.media().clone(), current)
+                current
             }
             _ => return Err(error),
         },
@@ -195,16 +238,19 @@ fn import_worker(
             hook();
         }
     }
-    // Once publication succeeds, cancellation cannot turn a committed item into a failure.
     let adopted = (|| {
         let next = Arc::new(committed_catalog);
-        let source = repo.root().join(&committed.source_ref);
-        let decoded = Arc::new(DecodedMedia {
-            descriptor: committed.descriptor(),
-            source_path: source.clone(),
-            stamp: SourceStamp::read(&source)?,
-            pcm: prepared.decoded().pcm.clone(),
-        });
+        let mut decoded = Vec::new();
+        for item in &prepared {
+            let committed = item.media();
+            let source = repo.root().join(&committed.source_ref);
+            decoded.push(Arc::new(DecodedMedia {
+                descriptor: committed.descriptor(),
+                source_path: source.clone(),
+                stamp: SourceStamp::read(&source)?,
+                pcm: item.decoded().pcm.clone(),
+            }));
+        }
         let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
         let p = current.as_mut().ok_or_else(runtime::stale)?;
         let mut runtime = state.6.current.lock().map_err(|_| runtime::unavailable())?;
@@ -220,21 +266,19 @@ fn import_worker(
         runtime.repo = Some(next);
         runtime.catalog_pending = !runtime.deferred.is_empty();
         runtime.error = None;
-        state
-            .1
-            .lock()
-            .map_err(|_| runtime::unavailable())?
-            .registry
-            .insert(decoded);
+        let mut tasks = state.1.lock().map_err(|_| runtime::unavailable())?;
+        for media in decoded {
+            tasks.registry.insert(media);
+        }
         state.3.changed(&before, &snapshot.document);
         Ok(snapshot)
     })();
     adopted.map_err(|mut error: AppError| {
         error.retryable = true;
         error.details = Some(serde_json::json!({
-            "catalogCommitted": true,
-            "catalogAdoptionRequired": true,
-            "mediaId": committed.id
+            "catalogCommitted": true, "catalogAdoptionRequired": true,
+            "mediaId": if prepared.len()==1 {Some(&prepared[0].media().id)} else {None},
+            "mediaIds": prepared.iter().map(|m| &m.media().id).collect::<Vec<_>>()
         }));
         if let Ok(mut runtime) = state.6.current.lock() {
             if runtime.nonce == expected.runtime_nonce {

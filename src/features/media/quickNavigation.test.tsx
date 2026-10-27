@@ -7,6 +7,26 @@ import { OrganizationController } from './organization';
 import { AppShell } from '../../app/AppShell';
 
 afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); });
+it('keeps other folder totals stable when changing the selected folder',()=>{
+ const files=[0,1,2].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`count-${i}.wav`})),a=crypto.randomUUID(),b=crypto.randomUUID();
+ const c=new OrganizationController(fixture.projectId,'test',true,{} as never);
+ c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:0,layoutRevision:0,folders:[{id:a,parentId:null,name:'A'},{id:b,parentId:null,name:'B'}],media:files.map((m,i)=>({mediaId:m.id,folderId:i===2?b:a,originalFilename:m.displayName}))};
+ render(<MediaList organization={c} media={files} annotations={[]} statuses={[]} selectedId={null} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);
+ fireEvent.click(screen.getByTitle('A'));expect(screen.getByTitle('A')).toHaveTextContent('2');expect(screen.getByTitle('B')).toHaveTextContent('1');expect(screen.getByRole('button',{name:/全部音频/})).toHaveTextContent('3');
+});
+it('moves DOM focus to the file selected by ArrowDown',async()=>{
+ const files=[0,1].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`focus-${i}.wav`}));
+ render(<MediaList media={files} annotations={[]} statuses={[]} selectedId={files[0].id} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);
+ const first=screen.getByRole('button',{name:'focus-0.wav'});first.focus();fireEvent.keyDown(first,{key:'ArrowDown'});
+ await waitFor(()=>expect(screen.getByRole('button',{name:'focus-1.wav'})).toHaveFocus());
+});
+it('allows preview navigation from a clicked row during import and multiselect without changing checks',()=>{
+ const files=[0,1].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`nav-${i}.wav`})),select=vi.fn();
+ render(<MediaList media={files} annotations={[]} statuses={[]} selectedId={files[0].id} disabled navigationDisabled={false} onSelect={select} onImport={vi.fn()} onRelink={vi.fn()}/>);
+ fireEvent.click(screen.getByLabelText('多选音频'));
+ const row=screen.getByRole('button',{name:'nav-0.wav'});row.focus();fireEvent.keyDown(row,{key:'ArrowDown'});
+ expect(select).toHaveBeenLastCalledWith(files[1].id);expect(screen.getByText('已选 0')).toBeVisible();
+});
 it('navigates collapsed directory contents, skipping hidden and other-pane audio without hijacking inputs', () => {
   const files = Array.from({ length: 4 }, (_, i) => ({ ...fixture.media[0], id: crypto.randomUUID(), displayName: `音频${i}.wav` }));
   const folder = crypto.randomUUID(), controller = new OrganizationController(fixture.projectId, 'test', true, {} as never);

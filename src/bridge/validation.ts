@@ -96,6 +96,7 @@ export function parseAppError(value: unknown): AppError {
   return value as AppError;
 }
 const changeFields: Record<Change['type'], Record<string, Check>> = {
+  importMediaBatch: { items: v => { array(media)(v); const items=v as MediaDescriptor[]; check(items.length>0 && items.length<=256); unique(items.map(m=>m.id)); } },
   importMedia: { media }, relinkMedia: { media }, removeMedia: { mediaId: uuid },
   setMediaCategories: { mediaId: uuid, categoryIds: labels },
   setChannelCategories: { mediaId: uuid, channelIndex: channel, categoryIds: labels },

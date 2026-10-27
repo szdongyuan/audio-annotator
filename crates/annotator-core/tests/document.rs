@@ -951,3 +951,32 @@ fn retired_dsp_and_edit_versions_are_explicit_unsupported_errors() {
         );
     }
 }
+
+#[test]
+fn ten_thousand_media_settings_validate_and_keep_cross_reference_checks() {
+    let base = fixture();
+    let mut doc = ProjectDocument::create("large".into()).unwrap();
+    for _ in 0..10000 {
+        let mut media = base.media[0].clone();
+        media.id = uuid::Uuid::new_v4().to_string();
+        media.category_ids.clear();
+        media.channel_category_ids.iter_mut().for_each(Vec::clear);
+        doc.analysis
+            .insert(media.id.clone(), AnalysisSettings::default());
+        doc.playback_mix
+            .insert(media.id.clone(), PlaybackMix::default());
+        doc.media.push(media);
+    }
+    let now = std::time::Instant::now();
+    doc.validate().unwrap();
+    println!("VALIDATE_10000 elapsed_ms={}", now.elapsed().as_millis());
+    let id = uuid::Uuid::new_v4().to_string();
+    doc.analysis.insert(id.clone(), AnalysisSettings::default());
+    assert!(doc.validate().is_err());
+    doc.analysis.remove(&id);
+    doc.playback_mix
+        .get_mut(&doc.media[9999].id)
+        .unwrap()
+        .muted_channels = vec![5];
+    assert!(doc.validate().is_err());
+}

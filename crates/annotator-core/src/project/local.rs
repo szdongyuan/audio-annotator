@@ -155,7 +155,9 @@ impl LocalProject {
         if self.is_shared()
             && matches!(
                 change,
-                Change::ImportMedia { .. } | Change::RemoveMedia { .. }
+                Change::ImportMedia { .. }
+                    | Change::ImportMediaBatch { .. }
+                    | Change::RemoveMedia { .. }
             )
         {
             return Err(AppError::invalid("Shared media catalog is immutable"));

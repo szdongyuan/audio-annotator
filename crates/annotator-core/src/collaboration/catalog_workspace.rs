@@ -14,8 +14,11 @@ pub(crate) fn validate_extension(
             && old.created_at == new.created_at,
         "Catalog project identity changed",
     )?;
+    let public: std::collections::HashMap<_, _> = new.media.iter().map(|m| (&m.id, m)).collect();
     require(
-        old.media.iter().all(|m| new.media.iter().any(|n| n == m)),
+        old.media
+            .iter()
+            .all(|m| public.get(&m.id).is_some_and(|n| *n == m)),
         "Previously loaded catalog media changed or disappeared",
     )?;
     require(
@@ -40,9 +43,11 @@ pub(crate) fn extend_document(
             || document.media.len() == manifest.media.len(),
         "Legacy catalog is immutable",
     )?;
+    let public_by_id: std::collections::HashMap<_, _> =
+        manifest.media.iter().map(|m| (&m.id, m)).collect();
     for local in &document.media {
         require(
-            manifest.media.iter().any(|public| {
+            public_by_id.get(&local.id).is_some_and(|public| {
                 local.id == public.id
                     && local.display_name == public.display_name
                     && crate::media::registry::same_identity(local, &public.descriptor())
@@ -51,10 +56,12 @@ pub(crate) fn extend_document(
         )?;
     }
     // UUID sorting is not insertion order. Look up every identity instead of zipping a prefix.
+    let local_by_id: std::collections::HashMap<_, _> =
+        document.media.iter().map(|m| (&m.id, m)).collect();
     let mut media = Vec::with_capacity(manifest.media.len());
     for public in &manifest.media {
-        if let Some(local) = document.media.iter().find(|m| m.id == public.id) {
-            media.push(local.clone());
+        if let Some(local) = local_by_id.get(&public.id) {
+            media.push((*local).clone());
         } else {
             media.push(public.descriptor());
             document

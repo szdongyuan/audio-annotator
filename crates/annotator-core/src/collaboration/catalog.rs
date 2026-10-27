@@ -14,6 +14,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
+mod batch;
 pub(super) use super::catalog_storage::load;
 #[cfg(test)]
 use super::catalog_storage::CATALOG_LOADS;
@@ -180,9 +181,11 @@ impl CollaborationRepository {
             current.manifest_hash == self.manifest_hash,
             "Immutable manifest changed",
         )?;
+        let by_id: std::collections::HashMap<_, _> =
+            current.manifest.media.iter().map(|m| (&m.id, m)).collect();
         for old in &self.manifest.media {
             require(
-                current.manifest.media.iter().any(|m| m == old),
+                by_id.get(&old.id).is_some_and(|m| *m == old),
                 "Previously loaded catalog media changed or disappeared",
             )?;
         }

@@ -136,6 +136,18 @@ pub(crate) async fn apply(
     expected_revision: u64,
     change: Change,
 ) -> Result<ProjectSnapshot> {
+    if let Change::ImportMediaBatch { items } = &change {
+        return super::collaboration::catalog::import_batch(
+            state,
+            super::collaboration::runtime::Expected {
+                runtime_nonce: runtime_nonce.ok_or_else(super::collaboration::runtime::stale)?,
+                project_id,
+                expected_revision,
+            },
+            items.clone(),
+        )
+        .await;
+    }
     if let Change::ImportMedia { media } = &change {
         let shared = state
             .0

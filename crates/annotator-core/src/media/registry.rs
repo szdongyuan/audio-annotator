@@ -4,7 +4,10 @@ use crate::{
     model::MediaDescriptor,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 pub fn same_identity(a: &MediaDescriptor, b: &MediaDescriptor) -> bool {
     a.sha256 == b.sha256
@@ -131,10 +134,30 @@ impl MediaTasks {
 #[derive(Default)]
 pub struct MediaRegistry {
     entries: HashMap<String, Arc<DecodedMedia>>,
+    order: VecDeque<String>,
+    verified: HashMap<String, (MediaDescriptor, super::identity::SourceStamp)>,
+    bytes: u64,
 }
 impl MediaRegistry {
     pub fn insert(&mut self, media: Arc<DecodedMedia>) {
-        self.entries.insert(media.descriptor.id.clone(), media);
+        let id = media.descriptor.id.clone();
+        self.verified
+            .insert(id.clone(), (media.descriptor.clone(), media.stamp.clone()));
+        if let Some(previous) = self.entries.remove(&id) {
+            self.bytes -= pcm_bytes(&previous);
+        }
+        self.order.retain(|old| old != &id);
+        self.bytes += pcm_bytes(&media);
+        self.entries.insert(id.clone(), media);
+        self.order.push_back(id);
+        // Keep only a bounded decoded working set. Active analysis/playback owns
+        // its own Arc, so eviction cannot remove PCM still being consumed.
+        while self.entries.len() > 64 || self.bytes > 256 * 1024 * 1024 && self.entries.len() > 1 {
+            let oldest = self.order.pop_front().unwrap();
+            if let Some(previous) = self.entries.remove(&oldest) {
+                self.bytes -= pcm_bytes(&previous);
+            }
+        }
     }
     pub fn get_checked(&self, descriptor: &MediaDescriptor) -> Result<Arc<DecodedMedia>> {
         let entry = self.get_unverified(descriptor)?;
@@ -157,7 +180,74 @@ impl MediaRegistry {
         }
         Ok(entry.clone())
     }
+    pub fn verified_stamp(
+        &self,
+        descriptor: &MediaDescriptor,
+    ) -> Option<super::identity::SourceStamp> {
+        self.verified
+            .get(&descriptor.id)
+            .filter(|(old, _)| {
+                same_identity(old, descriptor) && old.source_ref == descriptor.source_ref
+            })
+            .map(|(_, stamp)| stamp.clone())
+    }
     pub fn clear(&mut self) {
         self.entries.clear();
+        self.order.clear();
+        self.verified.clear();
+        self.bytes = 0;
+    }
+}
+fn pcm_bytes(media: &DecodedMedia) -> u64 {
+    media
+        .pcm
+        .frame_count()
+        .saturating_mul(media.pcm.channel_count() as u64)
+        .saturating_mul(4)
+}
+
+#[cfg(test)]
+mod bounded_tests {
+    use super::*;
+    #[test]
+    fn eviction_keeps_verified_status_and_active_pcm_then_rehydrates_on_demand() {
+        let root = std::env::temp_dir().join(format!("bounded-pcm-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let cancel = AtomicBool::new(false);
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/audio/mono16.wav");
+        let pinned =
+            Arc::new(super::super::decode::decode(&source, &root, &cancel, |_, _| {}).unwrap());
+        let descriptor = pinned.descriptor.clone();
+        let first_path = pinned.pcm.path().to_path_buf();
+        let mut registry = MediaRegistry::default();
+        registry.insert(pinned.clone());
+        for _ in 0..64 {
+            registry.insert(Arc::new(
+                super::super::decode::decode(&source, &root, &cancel, |_, _| {}).unwrap(),
+            ));
+        }
+        assert_eq!(registry.entries.len(), 64);
+        assert!(registry.get_unverified(&descriptor).is_err());
+        assert!(registry.verified_stamp(&descriptor).is_some());
+        assert!(first_path.exists());
+        drop(pinned);
+        assert!(!first_path.exists());
+        let rehydrated = Arc::new(
+            super::super::decode::rehydrate(
+                &descriptor,
+                std::path::Path::new("."),
+                &root,
+                &cancel,
+                |_, _| {},
+            )
+            .unwrap(),
+        );
+        registry.insert(rehydrated);
+        assert!(registry.get_checked(&descriptor).is_ok());
+        registry.clear();
+        assert!(registry.verified_stamp(&descriptor).is_none());
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        std::fs::remove_dir(root).unwrap();
     }
 }

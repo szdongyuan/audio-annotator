@@ -1,3 +1,5 @@
+import type { ActiveProject } from '../project/useProjectLifecycle';
+import { admitted, suspendRefresh } from '../collaboration/admission';
 import { normalizeError } from '../../bridge/client';
 import type { AppError } from '../../bridge/types';
 import type { Organization, OrganizationCommands, OrganizationOperation, OrganizationSnapshot } from '../../bridge/organization';
@@ -17,7 +19,7 @@ export class OrganizationController {
     private reading: Promise<void> | null = null;
     private version = 0;
     private listeners = new Set<() => void>();
-    constructor(readonly projectId: string, readonly runtimeNonce: string, readonly writable: boolean, private api: OrganizationCommands) { }
+    constructor(readonly projectId: string, readonly runtimeNonce: string, readonly writable: boolean, private api: OrganizationCommands, private owner?: ActiveProject) { }
     subscribe = (f: () => void) => { this.listeners.add(f); return () => { this.listeners.delete(f); }; };
     getVersion = () => this.version;
     private notify() { this.version++; this.listeners.forEach(f => f()); }
@@ -46,9 +48,21 @@ export class OrganizationController {
         return reading;
     }
     beginEdit(operation: OrganizationOperation): OrganizationDraft { this.mutationError = null; this.error = null; return { expectedRevision: this.snapshot?.revision ?? 0, operation }; }
+    private async apply(draft: OrganizationDraft): Promise<OrganizationSnapshot> {
+        const expectedRevision=draft.expectedRevision, operation=structuredClone(draft.operation);
+        const action=()=>this.api.apply(this.projectId,expectedRevision,operation), owner=this.owner;
+        if(!owner)return action();
+        return await owner.lifecycle.enqueueEdit(async()=>{
+            const resume=await suspendRefresh(owner.lifecycle);
+            try{return await admitted(owner,action,()=>!this.disposed&&!owner.lifecycle.admissionClosed
+                && owner.collaboration?.runtimeNonce===this.runtimeNonce
+                && owner.store.snapshot.document.projectId===this.projectId);}
+            finally{resume?.();}
+        }) as OrganizationSnapshot;
+    }
     async submit(draft: OrganizationDraft) { if (this.disposed || !this.writable || !this.snapshot || this.pending)
         return false; this.pending = true; this.mutationError = null; this.error = null; this.notify(); try {
-        const value = await this.api.apply(this.projectId, draft.expectedRevision, structuredClone(draft.operation));
+        const value = await this.apply(draft);
         if (this.disposed)
             return false;
         this.generation++;
