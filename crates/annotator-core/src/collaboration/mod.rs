@@ -7,6 +7,7 @@ pub(crate) mod catalog_workspace;
 mod model;
 pub mod organization;
 pub mod profiles;
+pub mod recycle;
 mod repository;
 mod sync;
 mod validation;

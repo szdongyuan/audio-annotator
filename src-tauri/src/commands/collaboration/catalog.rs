@@ -355,3 +355,26 @@ pub async fn collaboration_hide_media(
         })
         .await
 }
+
+#[tauri::command]
+pub async fn collaboration_hide_media_batch(
+    state: tauri::State<'_, AppState>,
+    expected: Expected,
+    media_ids: Vec<String>,
+    hidden: bool,
+) -> Result<runtime::Status> {
+    let service = state.6.clone();
+    state
+        .run(move |s| {
+            let p = s.as_mut().ok_or_else(runtime::stale)?;
+            expected.check(
+                p,
+                &*service.current.lock().map_err(|_| runtime::unavailable())?,
+                false,
+            )?;
+            p.workspace_mut()?
+                .set_media_hidden_batch(media_ids, hidden)?;
+            runtime::status(s.as_ref(), &service)
+        })
+        .await
+}

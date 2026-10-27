@@ -53,7 +53,7 @@ const error:Check=parseCollaborationError;
 export function parseCopyProgress(v:unknown):CopyProgress{shape(v,{operationId:uuid,phase:nonempty(256),completed:integer});return v as CopyProgress;}
 const monitorDb:Check=v=>check(typeof v==='number'&&Number.isFinite(v)&&v>=-60&&v<=24);
 export function parsePreferences(v:unknown):PlaybackPreferences{shape(v,{monitorGainDb:monitorDb,mediaMonitorGainDb:v=>{check(v!==null&&typeof v==='object'&&!Array.isArray(v));const entries=Object.entries(v as Record<string,unknown>);check(entries.length<=10000);for(const [id,db] of entries){uuid(id);nullable(monitorDb)(db);}},volume:v=>check(typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=1),deviceId:nullable(text(4096)),loopEnabled:bool,source:v=>check(v==='original'||v==='processed')});return v as PlaybackPreferences;}
-const capabilityFields = {projectFlavor:(v:unknown)=>check(['ordinary','default'].includes(v as string)),identityMode:(v:unknown)=>check(['ordinary','profile','viewOnly'].includes(v as string)),canWriteAnnotations:bool,canImportMedia:bool,hiddenMediaIds:array(4096,uuid),catalogPending:bool};
+const capabilityFields = {projectFlavor:(v:unknown)=>check(['ordinary','default'].includes(v as string)),identityMode:(v:unknown)=>check(['ordinary','profile','viewOnly'].includes(v as string)),canWriteAnnotations:bool,canImportMedia:bool,hiddenMediaIds:array(10000,uuid),catalogPending:bool};
 function capabilities(c:SharedContext, hasProject=true){
  check(new Set(c.hiddenMediaIds).size===c.hiddenMediaIds.length);
  if(c.projectFlavor==='ordinary')check(c.identityMode==='ordinary'&&c.actor===null&&c.hiddenMediaIds.length===0&&!c.catalogPending&&c.canWriteAnnotations===hasProject&&c.canImportMedia===hasProject);
@@ -70,7 +70,7 @@ export function parseSharedContext(v:unknown):SharedContext{boundedJson(v,1024*1
 const unique=(ids:string[])=>check(new Set(ids).size===ids.length);
 function layer(v:unknown,doc?:ProjectDocument){
  const bytes=boundedJson(v,16*1024*1024);
- shape(v,{kind:v=>check(v==='audio-annotator-author-layer'),formatVersion:v=>check(v===2),projectId:uuid,authorId:uuid,revision:integer,parent:nullable(v=>shape(v,{revision:integer,hash})),payload:v=>shape(v,{categories:array(4096,v=>{parseChange({type:'addCategory',category:v});}),annotations:array(100000,v=>{parseChange({type:'addAnnotation',annotation:v});}),mediaLabels:array(4096,v=>shape(v,{mediaId:uuid,note:payloadText,channelNotes:array(6,payloadText),categoryIds:labels,channelCategoryIds:array(6,labels)}))}),hash});
+ shape(v,{kind:v=>check(v==='audio-annotator-author-layer'),formatVersion:v=>check(v===2),projectId:uuid,authorId:uuid,revision:integer,parent:nullable(v=>shape(v,{revision:integer,hash})),payload:v=>shape(v,{categories:array(4096,v=>{parseChange({type:'addCategory',category:v});}),annotations:array(100000,v=>{parseChange({type:'addAnnotation',annotation:v});}),mediaLabels:array(10000,v=>shape(v,{mediaId:uuid,note:payloadText,channelNotes:array(6,payloadText),categoryIds:labels,channelCategoryIds:array(6,labels)}))}),hash});
  const l=v as AuthorLayer;check(l.revision>0&&(l.parent===null?l.revision===1:l.parent.revision===l.revision-1));
  const p=l.payload,categories=new Set(p.categories.map(c=>c.id));unique([...p.categories,...p.annotations].map(x=>x.id));unique(p.mediaLabels.map(m=>m.mediaId));
  for(const a of p.annotations){check(a.categoryIds.every(id=>categories.has(id)));check(Date.parse(a.createdAt)<=Date.parse(a.updatedAt));if(doc){const m=doc.media.find(m=>m.id===a.region.mediaId);check(m&&a.region.channelIndex<m.channelCount&&a.region.endSeconds<=m.frameCount/m.sampleRate&&a.region.highHz<=m.sampleRate/2);}}
@@ -92,6 +92,7 @@ async function call<T>(name:string,args:Record<string,unknown>,parse:(v:unknown)
 export const collaborationClient={
  adoptCatalog:(e:Expected,operationId:string)=>{expected(e);uuid(operationId);return call('collaboration_adopt_catalog',{expected:e,operationId},parseTransition);},
  hideMedia:(e:Expected,mediaId:string,hidden:boolean)=>{expected(e);uuid(mediaId);bool(hidden);return call('collaboration_hide_media',{expected:e,mediaId,hidden},parseCollaborationStatus);},
+ hideMediaBatch:(e:Expected,mediaIds:string[],hidden:boolean)=>{expected(e);check(mediaIds.length > 0 && mediaIds.length <= 10000 && new Set(mediaIds).size === mediaIds.length);mediaIds.forEach(uuid);bool(hidden);return call('collaboration_hide_media_batch',{expected:e,mediaIds,hidden},parseCollaborationStatus);},
  status:()=>call('collaboration_status',{},parseCollaborationStatus),
  refresh:(e:Expected)=>{expected(e);return call('collaboration_refresh',{expected:e},parseCollaborationStatus);},
  sync:(e:Expected)=>{expected(e);return call('collaboration_sync',{expected:e},parseCollaborationStatus);},

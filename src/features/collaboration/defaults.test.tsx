@@ -49,9 +49,9 @@ it('hidden media is excluded from both pane choices and fallback without filteri
  await act(async()=>{await hook.result.current.revealMedia(id);hook.result.current.selectPane('primary',id);});expect(reveal).toHaveBeenCalledWith(id);expect(hook.result.current.state.activeMediaId).toBe(id);hook.unmount();active.lifecycle.dispose();
 });
 
-it('supports all 4096 hidden IDs while bounding and correlating context capabilities',()=>{
- const o=owner(),context={...o.collaboration,...defaults,actor,hiddenMediaIds:Array.from({length:4096},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`)};
- expect(parseSharedContext(context).hiddenMediaIds).toHaveLength(4096);expect(()=>parseSharedContext({...context,hiddenMediaIds:[...context.hiddenMediaIds,actor.authorId]})).toThrow();
+it('supports all 10000 hidden IDs while bounding and correlating context capabilities',()=>{
+ const o=owner(),context={...o.collaboration,...defaults,actor,hiddenMediaIds:Array.from({length:10000},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`)};
+ expect(parseSharedContext(context).hiddenMediaIds).toHaveLength(10000);expect(()=>parseSharedContext({...context,hiddenMediaIds:[...context.hiddenMediaIds,actor.authorId]})).toThrow();
  for(const patch of [{identityMode:'viewOnly'},{actor:null},{canImportMedia:false}])expect(()=>parseSharedContext({...context,...patch})).toThrow();
  expect(()=>parseCollaborationStatus({...status(o),...context},o.store.snapshot.document)).toThrow();o.lifecycle.dispose();
 });

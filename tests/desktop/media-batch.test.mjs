@@ -1,0 +1,51 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {start,Key,By,wait} from './harness.mjs';
+import {newProject,importDirect,snapshot,status,playback,saved,wav,addCategory,escape,expectDocument,hash,folder,moveMedia,organization} from './workspace-helpers.mjs';
+import {read,createIdentity} from './identity-helpers.mjs';
+const root=path.resolve('.test-output/update-0.7.3');await fs.mkdir(root,{recursive:true});
+const output=await fs.mkdtemp(path.join(root,'desktop-')),project=path.join(output,'project');await fs.mkdir(project);
+const exe=process.env.ANNOTATOR_WORKSPACE_EXE??'C:/Users/DY/AppData/Local/Temp/annotator-071-production-20261027/release/annotator-desktop.exe';
+const report={output,checks:[],method:'Real Windows Tauri clients with separate local identities and real pointer/keyboard actions; read-only native assertions. Corrupt shared metadata injection uses only the test-owned project.'};
+const check=name=>{report.checks.push(name);console.log('PASS',name);};
+const sources=[];for(const [i,name] of ['alpha.wav','beta.wav','gamma.wav'].entries()){const file=path.join(output,name);await fs.writeFile(file,wav({seconds:2,channels:1,rate:[8000,11025,16000][i]}));sources.push(file);}
+let a,b;const options={localDataEnv:path.join(output,'local-a'),webviewDirectory:path.join(output,'webview-a')};
+const view=async(h,value)=>{const e=await h.element('[aria-label="音频列表视图"]');await e.findElement(By.css(`option[value="${value}"]`)).click();};
+const recycle=async h=>{const s=await status(h);return read(h,'recycle_get',{binding:{projectId:s.projectId,runtimeNonce:s.runtimeNonce}});};
+const count=async(h,n)=>h.until(`document.querySelectorAll('.media-select').length===${n}`);
+const confirm=async(h,label)=>{await h.click(`[role="dialog"] .dialog-actions .button-accent`);await h.until('!document.querySelector("[role=dialog]")',label);};
+const annotate=async(h,name)=>{await h.selectMedia(name);await h.drag('.channel-pane:first-child .annotation-overlay',[.1,.2],[.3,.5]);await h.label('标注');await h.label('异响');await escape(h);await saved(h);};
+try{
+  a=await start({'新建项目 · 选择空文件夹':[project],'':[sources]},output,exe,options);
+  await createIdentity(a,'Alice');await newProject(a);await importDirect(a,3);await addCategory(a,'异响');await annotate(a,'alpha.wav');
+  const folderId=(await folder(a,'批次A')).id;await moveMedia(a,'alpha.wav','批次A');await a.input('搜索音频','');await a.click('.media-folder-row .media-folder-select');
+  if((await a.driver.findElements(By.css('[aria-label="展开文件夹 · 批次A"]'))).length)await a.label('展开文件夹 · 批次A');await saved(a);const beforeA=await snapshot(a),layout=await organization(a),audioHashes=Object.fromEntries(await Promise.all(beforeA.media.map(async m=>[m.id,hash(await fs.readFile(path.join(project,m.sourceRef)))])));
+  const outB=path.join(output,'bob');await fs.mkdir(outB);b=await start({'打开项目':[path.join(project,'collaboration.json')]},outB,exe,{ports:{driver:4455,native:4456,debug:9245}});
+  await createIdentity(b,'Bob');await b.menu('打开项目');await b.until('document.querySelector(".file-pane")');await expectDocument(b,d=>d.media.length===3,'Bob adopts catalog');await b.label('展开文件夹 · 批次A');await count(b,3);await annotate(b,'alpha.wav');const beforeB=await snapshot(b);
+  await a.input('搜索音频','');await a.label('多选音频');await a.label('选择文件夹 · 批次A');await a.until("document.querySelector('.media-batch-actions')?.textContent.includes('已选 1')");
+  await a.input('搜索音频','beta');await a.until("document.querySelector('.media-batch-actions')?.textContent.includes('已选 0')");await a.label('全选筛选结果');await a.clickText('隐藏');await a.until("document.querySelector('[role=status]')?.textContent.includes('隐藏')||document.querySelector('.media-batch-notice')?.textContent.includes('隐藏')");assert.equal((await status(a)).hiddenMediaIds.length,1);assert.equal((await status(b)).hiddenMediaIds.length,0);
+  await a.input('搜索音频','');await view(a,'hidden');await count(a,1);await a.label('全选筛选结果');await a.clickText('取消隐藏');await view(a,'normal');await count(a,3);await a.clickText('完成');
+  check('folder selection, search clearing, batch hide/restore are personal and leave Bob unchanged');
+  await a.selectMedia('alpha.wav');await escape(a);await (await a.element('[aria-label="播放音量"]')).sendKeys(Key.HOME);await a.clickText('双文件对比');await a.select('对比面板音频','beta.wav');await a.label('循环播放');await a.label('播放 · 空格');await a.driver.wait(async()=>(await playback(a)).state==='playing',15000);
+  await a.label('多选音频');await a.label('选择音频 · alpha.wav');await a.driver.actions().sendKeys(Key.DELETE).perform();assert.ok(await a.element('[role="dialog"][aria-label="移入共享回收站"]'));await confirm(a,'delete committed');
+  await a.driver.wait(async()=>!['playing','buffering'].includes((await playback(a)).state),15000);assert.equal((await snapshot(a)).annotations.length,beforeA.annotations.length);assert.equal((await snapshot(a)).edits.length,beforeA.edits.length);
+  await a.until("document.querySelector('[aria-label=对比面板音频]')?.selectedOptions[0]?.textContent==='beta.wav'");
+  await count(b,2);assert.ok(await a.evaluate("const bar=document.querySelector('.media-batch-actions').getBoundingClientRect(),notice=document.querySelector('.media-batch-notice')?.getBoundingClientRect();return bar.height>=24&&bar.bottom<=innerHeight&&(!notice||notice.top>=bar.bottom-1);"));await a.screenshot('shared-trash-compare');
+  await saved(a);const state=await status(a),preview=await read(a,'export_path_preview',{expected:{projectId:state.projectId,expectedRevision:(await snapshot(a)).revision,runtimeNonce:state.runtimeNonce},bundle:true,preserveFolders:true});assert.equal(Object.keys(preview.mediaPaths).length,2);
+  check('Delete in file list recycles shared audio without deleting labels or masking; unaffected comparison remains; export excludes trash');
+  await view(b,'trash');await count(b,1);await b.label('多选音频');await b.label('全选筛选结果');await b.clickText('恢复');await confirm(b,'Bob restores');
+  await a.input('搜索音频','alpha');await count(a,1);await a.input('搜索音频','');assert.deepEqual((await organization(a)).media,layout.media);assert.deepEqual((await snapshot(a)).annotations,beforeA.annotations);assert.deepEqual((await snapshot(b)).annotations,beforeB.annotations);
+  for(const m of (await snapshot(a)).media)assert.equal(hash(await fs.readFile(path.join(project,m.sourceRef))),audioHashes[m.id]);
+  check('another author restores to original folder with both author annotations and audio hashes preserved');
+  await a.label('选择音频 · beta.wav');await a.clickText('移入回收站');
+  const recyclePath=path.join(project,'recycle.json'),good=await fs.readFile(recyclePath);await fs.writeFile(recyclePath,'broken test metadata');
+  await a.click('[role="dialog"] .dialog-actions .button-accent');await a.until("document.querySelector('[role=dialog] [role=alert]')?.textContent.includes('Invalid recycle')");assert.equal(await fs.readFile(recyclePath,'utf8'),'broken test metadata');await fs.writeFile(recyclePath,good);
+  await a.clickText('核对并重试');await a.until('!document.querySelector("[role=dialog]")');assert.equal((await recycle(a)).recycle.trashed.length,1);
+  check('metadata I/O failure retains selection and explicit retry, never resets corrupted shared state');
+  await a.screenshot('batch-recycle-result');await saved(a);await a.quit();a=null;await b.quit();b=null;
+  const copy=path.join(output,'copy');await fs.mkdir(copy);a=await start({'打开项目':[path.join(project,'collaboration.json')],'另存我的项目副本 · 选择空文件夹':[copy]},output,exe,options);await a.menu('打开项目');await a.until('document.querySelector(".file-pane")');await expectDocument(a,d=>d.media.length===3,'reopen full catalog');await a.input('搜索音频','beta');await count(a,0);await view(a,'trash');await count(a,1);assert.deepEqual((await snapshot(a)).annotations,beforeA.annotations);
+  check('restart preserves shared recycle state and all original labels');
+  const originalId=(await status(a)).projectId;await a.menu('另存我的项目副本…','协作');await a.until("document.querySelector('.project-identity')?.title.endsWith('copy')");assert.notEqual((await status(a)).projectId,originalId);assert.equal((await recycle(a)).recycle.trashed.length,1);assert.deepEqual((await snapshot(a)).annotations,beforeA.annotations);check('Save As carries recoverable trash and own labels into an independent project');
+}catch(error){report.error=error.stack;console.error(error);await a?.screenshot('failure').catch(()=>{});process.exitCode=1;}
+finally{await a?.quit().catch(()=>{});await b?.quit().catch(()=>{});await fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));}

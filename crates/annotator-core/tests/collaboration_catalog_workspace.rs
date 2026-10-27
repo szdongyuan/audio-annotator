@@ -770,3 +770,30 @@ fn folder_only_commits_preserve_private_draft_history_and_catalog_revision() {
     p.undo(&d.project_id, d.revision).unwrap();
     assert_eq!(media_note(&p, &media_id), "saved");
 }
+
+#[test]
+fn batch_visibility_is_atomic_and_retains_existing_preferences() {
+    let mut f = Fixture::new();
+    let first = f.repo.manifest().media[0].id.clone();
+    let second = f.append();
+    f.repo = f.latest();
+    let mut p = f.open();
+    let before = p.snapshot().unwrap().document;
+    p.workspace_mut()
+        .unwrap()
+        .set_media_hidden_batch(vec![first.clone(), second.clone()], true)
+        .unwrap();
+    assert_eq!(p.workspace().unwrap().hidden_media_ids().len(), 2);
+    assert!(p
+        .workspace_mut()
+        .unwrap()
+        .set_media_hidden_batch(vec![first.clone(), uuid::Uuid::new_v4().to_string()], false)
+        .is_err());
+    assert_eq!(p.workspace().unwrap().hidden_media_ids().len(), 2);
+    p.workspace_mut()
+        .unwrap()
+        .set_media_hidden_batch(vec![first, second], false)
+        .unwrap();
+    assert!(p.workspace().unwrap().hidden_media_ids().is_empty());
+    assert_eq!(p.snapshot().unwrap().document, before);
+}

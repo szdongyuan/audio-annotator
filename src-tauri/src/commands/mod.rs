@@ -9,3 +9,5 @@ pub mod project;
 pub mod source_import;
 
 pub mod profiles;
+
+pub mod recycle;

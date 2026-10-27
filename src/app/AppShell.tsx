@@ -19,6 +19,7 @@ import { ProjectActions } from '../features/project/ProjectActions';
 import { SaveIndicator } from '../features/project/SaveIndicator';
 import type { ProjectLifecycleUI } from '../features/project/useProjectLifecycle';
 import type { MediaUI } from '../features/media/useMedia';
+import { useRecycle } from '../features/media/useRecycle';
 import { MediaList } from '../features/media/MediaList';
 import { MediaPanelResize, useMediaPanelWidth } from '../features/media/MediaPanelResize';
 import { ImportAcknowledgements, ImportProgress } from '../features/media/ImportProgress';
@@ -66,7 +67,10 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const workspaceHost = useRef<HTMLDivElement>(null);
   const hiddenMediaIds=collaboration?.controller?.status?.hiddenMediaIds??project?.active?.collaboration?.hiddenMediaIds??[];
-  const workspace = useWorkspace(project?.active ?? null,hiddenMediaIds,collaboration?async id=>{await collaboration.hideMedia(id,false);}:undefined);
+  const recycle = useRecycle(project?.active ?? null);
+  const trashedMediaIds = recycle?.snapshot?.trashed.map(m=>m.mediaId) ?? [];
+  const excludedMediaIds = [...new Set([...hiddenMediaIds,...trashedMediaIds])];
+  const workspace = useWorkspace(project?.active ?? null,excludedMediaIds,collaboration?async id=>{if(trashedMediaIds.includes(id))throw new Error('请先从回收站恢复音频');await collaboration.hideMedia(id,false);}:undefined);
   const mediaPanel = useMediaPanelWidth(workspaceHost, propertiesOpen, !!workspace.state.compareMediaId && workspace.state.compareLayout === 'horizontal');
   const selected = project?.active?.store.snapshot.document.media.find(m => m.id === workspace.state.activeMediaId);
   const [settingsId, setSettingsId] = useState<string | null>(null);
@@ -80,6 +84,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   const selectedAnnotation = doc?.annotations.find(a => a.id === annotations.selectedId);
   const masks = useMasks(project?.active ?? null, selection);
   const playback = usePlayback(project?.active ?? null, selected?.id ?? null, selection.selection?.region);
+  useEffect(()=>{if(playback.sourceId && excludedMediaIds.includes(playback.sourceId)){playback.stop();playback.selectSource(workspace.state.activeMediaId ?? workspace.state.compareMediaId ?? null);}},[excludedMediaIds.join('|'),playback.sourceId,workspace.state.activeMediaId,workspace.state.compareMediaId]);
   const remote = useRemoteInspection(collaboration, workspace, playback);
   const [noteFocusId, setNoteFocusId] = useState<string | null>(null);
   useEffect(() => { setNoteFocusId(null); setInspectorTab('region'); }, [project?.active]);
@@ -121,7 +126,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
 
     <div className="workspace" ref={workspaceHost}>
       <aside id="media-panel" className="media-panel panel" aria-label="音频列表" style={{ maxWidth: mediaPanel.maximum, ...(mediaPanel.width === null ? {} : { width: mediaPanel.width }), ...(!mediaOpen ? { display: 'none' } : {}) }}>
-        <MediaList organization={mediaUI?.organization} hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} navigationExcludedId={workspace.state.compareMediaId} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => { if (workspace.selectPane('primary', id)) playback.selectSource(id); }} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
+        <MediaList recycle={recycle} authors={collaboration?.controller?.status?.snapshot?.authors ?? []} onHideBatch={collaboration ? (ids,hidden)=>collaboration.hideMediaBatch(ids,hidden) : undefined} organization={mediaUI?.organization} hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} navigationExcludedId={workspace.state.compareMediaId} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => { if (workspace.selectPane('primary', id)) playback.selectSource(id); }} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
       </aside>
       {mediaOpen && <MediaPanelResize width={mediaPanel.width} maximum={mediaPanel.maximum} onPreview={mediaPanel.preview} onCommit={mediaPanel.commit} />}
 

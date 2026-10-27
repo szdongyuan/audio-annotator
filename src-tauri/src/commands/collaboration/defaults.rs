@@ -64,6 +64,19 @@ pub(super) fn empty(
         Some(cancel),
     )?;
     owned.record_file(target.join("organization.json"))?;
+    if staging
+        .join("recycle.json")
+        .try_exists()
+        .map_err(|_| runtime::unavailable())?
+    {
+        atomic::publish_new(
+            &target.join("recycle.json"),
+            &fs::read(staging.join("recycle.json")).map_err(|_| runtime::unavailable())?,
+            None,
+            Some(cancel),
+        )?;
+        owned.record_file(target.join("recycle.json"))?;
+    }
     atomic::publish_new(
         &target.join("collaboration.json"),
         &bytes,
@@ -150,6 +163,15 @@ fn copy_inner(
     mut progress: impl FnMut(&str, u64),
 ) -> Result<PreparedCopy> {
     let organization = annotator_core::exchange::capture_organization(document, organization)?;
+    let source_recycle = if source
+        .join("collaboration.json")
+        .try_exists()
+        .map_err(|_| runtime::unavailable())?
+    {
+        Some(CollaborationRepository::open(source)?.read_recycle()?)
+    } else {
+        None
+    };
     atomic::safe_existing(target)?;
     let target = target.canonicalize().map_err(|_| runtime::unavailable())?;
     let source = source.canonicalize().map_err(|_| runtime::unavailable())?;
@@ -229,6 +251,27 @@ fn copy_inner(
         }
         let repo = repo.reload_catalog()?;
         repo.publish(&actor, None, &LayerPayload::from_document(document)?)?;
+        if let Some(head) = &source_recycle {
+            let media_ids: Vec<_> = head
+                .trashed
+                .iter()
+                .filter(|m| document.media.iter().any(|d| d.id == m.media_id))
+                .map(|m| m.media_id.clone())
+                .collect();
+            if !media_ids.is_empty() {
+                repo.apply_recycle_controlled(
+                    &actor,
+                    0,
+                    annotator_core::collaboration::recycle::RecycleOperation {
+                        operation_id: uuid::Uuid::new_v4().to_string(),
+                        media_ids,
+                        trash: true,
+                    },
+                    cancel,
+                    || Ok(()),
+                )?;
+            }
+        }
         Ok(())
     })();
     staged.inventory(&staging)?;
@@ -267,6 +310,19 @@ fn copy_inner(
         Some(cancel),
     )?;
     owned.record_file(target.join("organization.json"))?;
+    if staging
+        .join("recycle.json")
+        .try_exists()
+        .map_err(|_| runtime::unavailable())?
+    {
+        atomic::publish_new(
+            &target.join("recycle.json"),
+            &fs::read(staging.join("recycle.json")).map_err(|_| runtime::unavailable())?,
+            None,
+            Some(cancel),
+        )?;
+        owned.record_file(target.join("recycle.json"))?;
+    }
     atomic::publish_new(
         &target.join("collaboration.json"),
         &bytes,

@@ -8,7 +8,7 @@ const blank = (): ViewState => ({ media: {}, activeMediaId: null, compareMediaId
 const noop = () => () => {};
 function reconcile(value: ViewState, media: MediaDescriptor[],hidden:readonly string[]=[]): ViewState {
   const ids = new Set(media.map(m => m.id)),visible=media.filter(m=>!hidden.includes(m.id)),visibleIds=new Set(visible.map(m=>m.id));
-  const activeMediaId = value.activeMediaId && visibleIds.has(value.activeMediaId) ? value.activeMediaId : visible[0]?.id ?? null;
+  const activeMediaId = value.activeMediaId && visibleIds.has(value.activeMediaId) ? value.activeMediaId : visible.find(m=>m.id !== value.compareMediaId)?.id ?? visible[0]?.id ?? null;
   const compareMediaId = value.compareMediaId && visibleIds.has(value.compareMediaId) && value.compareMediaId !== activeMediaId ? value.compareMediaId : null;
   return { ...value, media: Object.fromEntries(Object.entries(value.media).filter(([id]) => ids.has(id))), activeMediaId, compareMediaId, linkedTime: !!compareMediaId && value.linkedTime };
 }

@@ -288,3 +288,24 @@
 .label-checkboxes { min-width: 0; }
 .label-checkboxes label { overflow-wrap: anywhere; }
 .quick-monitor-gain[aria-invalid="true"] { border-color: #df8b68; }
+
+/* Batch tools occupy space only while selecting; the file rows remain 28px. */
+.media-list-content { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; overflow:hidden; }
+.media-list-content .panel-heading { gap:2px; padding-inline:8px; flex-shrink:0; }
+.media-list-content .panel-heading h2 { flex:1; min-width:0; gap:5px; }
+.media-list-content .panel-heading .icon-button { width:24px; flex-shrink:0; }
+.media-list-view { display:flex; align-items:center; gap:6px; padding:0 10px 6px; }
+.media-list-view select { min-width:0; flex:1; font-size:11px; height:25px; }
+.media-advanced-filters { padding:0 10px 6px; display:grid; gap:5px; font-size:11px; }
+.media-advanced-filters label { display:flex; align-items:center; gap:6px; }
+.media-advanced-filters select { min-width:0; flex:1; }
+.media-list-content .media-card { display:flex; align-items:center; }
+.media-list-content .media-select { min-width:0; flex:1; }
+.media-list-content input[type=checkbox] { width:13px; height:13px; margin:0 4px; flex-shrink:0; accent-color:var(--accent); }
+.media-card.is-batch-selected { background:#4b392b; }
+.media-batch-actions { display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:6px; border-top:1px solid var(--border); font-size:11px; flex-shrink:0; }
+.media-batch-actions button,.media-copy-message button { padding:3px 5px; font-size:11px; }
+.media-batch-actions span { margin-right:auto; }
+
+.media-batch-notice { position:static; flex-shrink:0; padding:5px 8px; font-size:11px; background:var(--accent-wash); overflow-wrap:anywhere; }
+.media-batch-notice button { margin-left:6px; padding:2px 4px; font-size:11px; }

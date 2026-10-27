@@ -140,6 +140,7 @@ struct ExportCapture {
     repo: Option<Arc<annotator_core::collaboration::CollaborationRepository>>,
     organization_revision: Option<u64>,
     plan: exchange::ExportPathPlan,
+    recycle_revision: Option<u64>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -239,6 +240,11 @@ pub(crate) async fn preview(
         } else {
             exchange::root_organization(&document)?
         };
+        let recycle = repo.as_ref().map(|r| r.read_recycle()).transpose()?;
+        let recycle_revision = recycle.as_ref().map(|r| r.revision);
+        if let Some(recycle) = recycle {
+            recycle.filter_export(&mut document);
+        }
         let organization_revision = repo.as_ref().map(|_| organization.revision);
         let plan =
             exchange::ExportPathPlan::build(&document, &organization, bundle, preserve_folders)?;
@@ -264,6 +270,7 @@ pub(crate) async fn preview(
             repo,
             organization_revision,
             plan,
+            recycle_revision,
         });
         let mut tasks = state
             .4
@@ -312,7 +319,9 @@ fn accepted(
     };
     check_capture(state, expected, &capture.runtime_nonce)?;
     if let Some(repo) = &capture.repo {
-        if Some(repo.read_organization()?.revision) != capture.organization_revision {
+        if Some(repo.read_organization()?.revision) != capture.organization_revision
+            || Some(repo.read_recycle()?.revision) != capture.recycle_revision
+        {
             return Err(AppError::new(
                 ErrorCode::RevisionConflict,
                 "导出目录已改变，请刷新预览",

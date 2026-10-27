@@ -483,20 +483,23 @@ impl PrivateWorkspace {
     }
     /// Private visibility never changes labels, history, catalog membership or exports.
     pub fn set_media_hidden(&mut self, media_id: &str, hidden: bool) -> Result<()> {
+        self.set_media_hidden_batch(vec![media_id.to_owned()], hidden)
+    }
+    pub fn set_media_hidden_batch(&mut self, media_ids: Vec<String>, hidden: bool) -> Result<()> {
         self.require_ready()?;
+        limit(!media_ids.is_empty() && media_ids.len() <= super::validation::MAX_MEDIA)?;
+        let requested: std::collections::HashSet<_> = media_ids.iter().collect();
         require(
-            self.repo.manifest().format_version
-                == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
-            "Unsupported collaboration format",
-        )?;
-        require(
-            self.repo.manifest().media.iter().any(|m| m.id == media_id),
-            "Unknown hidden media",
+            requested.len() == media_ids.len()
+                && media_ids
+                    .iter()
+                    .all(|id| self.repo.manifest().media.iter().any(|m| &m.id == id)),
+            "Unknown or duplicate hidden media",
         )?;
         let mut ids = self.envelope.hidden_media_ids.clone();
-        ids.retain(|id| id != media_id);
+        ids.retain(|id| !requested.contains(id));
         if hidden {
-            ids.push(media_id.to_owned());
+            ids.extend(media_ids);
         }
         self.set_hidden_media_ids(ids)
     }
