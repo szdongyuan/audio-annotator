@@ -10,6 +10,8 @@ import { AppMenu } from './AppMenu';
 import { workspaceMenus } from './WorkspaceActions';
 import { HelpDialog, type HelpTopic } from './HelpDialog';
 import { RegionGainDialog } from '../features/playback/RegionGainDialog';
+import { GlobalSettings } from '../features/settings/GlobalSettings';
+import { useLocalSettings } from '../features/settings/localSettings';
 import { TransportBar, TransportDevices } from '../features/playback/TransportBar';
 import { ChannelMixer } from '../features/playback/ChannelMixer';
 import { EditList } from '../features/playback/EditList';
@@ -58,6 +60,8 @@ function IconButton({ icon: Icon, label, className = '', ...props }: IconButtonP
 }
 
 export function AppShell({ project, mediaUI, exchange, collaboration, identity }: { identity?:IdentityController; collaboration?: CollaborationUI; project?: ProjectLifecycleUI; mediaUI?: MediaUI; exchange?: ExchangeUI }) {
+  const localSettings = useLocalSettings();
+  const [globalSettingsOpen,setGlobalSettingsOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const workspaceHost = useRef<HTMLDivElement>(null);
@@ -86,7 +90,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   const [helpTopic, setHelpTopic] = useState<HelpTopic | null>(null);
   const focusNote = (id: string) => { setPropertiesOpen(true); setInspectorTab('region'); setNoteFocusId(id); };
   const menus = workspaceMenus({ identity, collaboration, project, mediaUI, exchange, annotations, selection, workspace, playback, mediaOpen, propertiesOpen,
-    toggleMedia: () => setMediaOpen(v => !v), toggleProperties: () => setPropertiesOpen(v => !v), settings: setSettingsId,
+    toggleMedia: () => setMediaOpen(v => !v), toggleProperties: () => setPropertiesOpen(v => !v), settings: setSettingsId, globalSettings:localSettings?()=>{setSettingsId(null);setGlobalSettingsOpen(true);}:undefined,
     inspector: tab => { setPropertiesOpen(true); setInspectorTab(tab); }, help: setHelpTopic, focusNote });
 
   return <RemoteContext.Provider value={remote}><SelectionContext.Provider value={selection}><AnnotationContext.Provider value={annotations}><MaskContext.Provider value={masks}><PlaybackContext.Provider value={playback}><div className="app-shell">
@@ -108,7 +112,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
       <AnnotationTools ui={annotations} />
       {project && <ProjectActions project={project} onImport={mediaUI?.choose} importDisabled={mediaUI?.disabled || project.active?.collaboration?.canImportMedia===false} exchange={exchange} />}
       <div className="toolbar-group toolbar-end">
-        <button data-analysis-trigger={selected?.id} className="button button-quiet analysis-settings" disabled={!selected || project?.active?.store.editingDisabled} onClick={() => setSettingsId(settingsId === selected?.id ? null : selected?.id ?? null)}><SlidersHorizontal size={16} /><span>分析设置</span></button>
+        <button data-global-settings-trigger className="button button-quiet analysis-settings" aria-label="全局播放与显示设置" title="全局播放、显示与分析设置（本机）" disabled={!localSettings || project?.active?.store.editingDisabled} onClick={() => { setSettingsId(null); setGlobalSettingsOpen(!globalSettingsOpen); }}><SlidersHorizontal size={16} /><span>全局设置</span></button>
         <span className="toolbar-divider" />
         <IconButton icon={propertiesOpen ? PanelRightClose : PanelRightOpen} label={propertiesOpen ? '收起属性面板' : '展开属性面板'}
           aria-expanded={propertiesOpen} aria-controls="properties-panel" onClick={() => setPropertiesOpen(!propertiesOpen)} />
@@ -123,6 +127,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
 
       <main className="analysis-workspace" aria-label="音频分析工作区">
         <div className="workspace-feedback" aria-label="工作区操作反馈">
+          {localSettings?.error && <p role="alert">{localSettings.error}<button className="text-button" onClick={()=>setGlobalSettingsOpen(true)}>打开全局设置</button></p>}
           {collaboration?.error&&!collaboration.dialog&&<p role="alert">{collaboration.error.message}</p>}
           {mediaUI?.error && <p className="media-error" role="alert">{mediaUI.error.message}</p>}
           {mediaUI?.controller && <ImportAcknowledgements controller={mediaUI.controller} />}
@@ -170,6 +175,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
     </div>
 
     <RegionGainDialog ui={selection} />
+    {globalSettingsOpen && localSettings && <GlobalSettings store={localSettings} initialDisplay={selected?workspace.view(selected.id):undefined} initialAnalysis={selected?workspace.analysis(selected.id):undefined} initialPlayback={{monitorGainDb:playback.monitor.monitorGainDb,volume:playback.options.volume,looping:playback.options.looping,source:playback.workspaceSource}} onClose={()=>setGlobalSettingsOpen(false)} />}
     {mediaUI?.folder?.state === 'choosing' && <FolderImportDialog controller={mediaUI.folder} />}
     {mediaUI?.source?.open && <SourceImportDialog controller={mediaUI.source} organization={mediaUI.organization} />}
     {helpTopic && <HelpDialog topic={helpTopic} onClose={() => setHelpTopic(null)} />}

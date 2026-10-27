@@ -19,5 +19,5 @@ export function ClassificationControl({ ui, target, children }: { ui: Annotation
   return <><div className="classification-title" data-pane-control onContextMenu={e => { e.preventDefault(); e.stopPropagation(); if (!annotationDisabled(owner)) { focus(); setAnchor({ x: e.clientX, y: e.clientY }); } }}>{children}<button ref={ref} className="classification-control" aria-label={label} title={`${label}：${labelText(doc.categories, value)}`} aria-haspopup="menu" disabled={annotationDisabled(owner)}
     onClick={() => { focus(); const box = ref.current!.getBoundingClientRect(); setAnchor({ x: box.left, y: box.bottom }); }}>
     <i style={{ background: labelColor(doc.categories, value) }} />{labelText(doc.categories, value)}<span aria-hidden="true">⌄</span>
-  </button></div>{anchor && <Menu anchor={anchor} returnFocus={ref.current} onClose={() => setAnchor(null)} items={[classificationMenu(doc, target, ui.classify, target.channelIndex === null ? '文件类别' : '通道类别', annotationDisabled(owner))]} />}</>;
+  </button></div>{anchor && <Menu anchor={anchor} returnFocus={ref.current} onClose={() => setAnchor(null)} items={[classificationMenu(doc, target, ui.classify, target.channelIndex === null ? '文件类别' : '通道类别', annotationDisabled(owner), ui.categories ?? doc.categories)]} />}</>;
 }

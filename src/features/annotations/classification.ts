@@ -1,6 +1,6 @@
 import { toggleLabel } from './labels';
 import { annotationDisabled } from '../collaboration/capabilities';
-import type { Annotation, ProjectDocument } from '../../bridge/types';
+import type { Annotation, Category, ProjectDocument } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import { normalizeError } from '../../bridge/client';
 import type { MenuItem } from '../../components/menu/menuModel';
@@ -20,11 +20,13 @@ export function reconcileContext(doc: ProjectDocument, context: ClassificationTa
   const channelIndex = context?.mediaId === pane.mediaId && (context.channelIndex === null || channels.includes(context.channelIndex)) ? context.channelIndex : channels[0] ?? null;
   return { mediaId: pane.mediaId, channelIndex };
 }
-export function classifyTarget(owner: ActiveProject, target: ClassificationTarget, categoryId: string | null, current: () => boolean) {
+export function classifyTarget(owner: ActiveProject, target: ClassificationTarget, categoryId: string | null, current: () => boolean, ensureCategory?: (id:string)=>Promise<string|undefined>) {
   if (!current() || annotationDisabled(owner)) return Promise.resolve();
   const captured = { ...target };
   return owner.lifecycle.enqueueEdit(async () => {
     await owner.lifecycle.submitDrafts();
+    if (!current() || !resolveClassification(owner.store.snapshot.document,captured)) return;
+    if (categoryId !== null && ensureCategory) { const resolved = await ensureCategory(categoryId); if (!resolved) return; categoryId = resolved; }
     const doc = owner.store.snapshot.document;
     if (!current() || !resolveClassification(doc, captured) || categoryId !== null && !doc.categories.some(c => c.id === categoryId)) return;
     const media = resolveClassification(doc, captured)!;
@@ -36,10 +38,10 @@ export function classifyTarget(owner: ActiveProject, target: ClassificationTarge
     await owner.queue.enqueue(change, { owner: 'annotations' });
   }).catch(cause => owner.store.setError(normalizeError(cause)));
 }
-export function classificationMenu(doc: ProjectDocument, target: ClassificationTarget | null, classify: (target: ClassificationTarget, category: string | null) => void, label: string, disabled = false): MenuItem {
+export function classificationMenu(doc: ProjectDocument, target: ClassificationTarget | null, classify: (target: ClassificationTarget, category: string | null) => void, label: string, disabled = false, categories: Category[] = doc.categories): MenuItem {
   const media = target && resolveClassification(doc, target);
   const value = media && target ? target.channelIndex === null ? media.categoryIds : media.channelCategoryIds[target.channelIndex] : [];
-  return { id: label, label, disabled: disabled || !media, children: [{ id: 'none', name: '清空标签' }, ...doc.categories].map(c => ({ id: c.id, label: c.name, keepOpen: true, checked: c.id === 'none' ? value.length === 0 : value.includes(c.id), action: () => { if (target) classify(target, c.id === 'none' ? null : c.id); } })) };
+  return { id: label, label, disabled: disabled || !media, children: [{ id: 'none', name: '清空标签' }, ...categories].map(c => ({ id: c.id, label: c.name, keepOpen: true, checked: c.id === 'none' ? value.length === 0 : value.includes(c.id), action: () => { if (target) classify(target, c.id === 'none' ? null : c.id); } })) };
 }
 type ResultBase = { mediaId: string; categoryIds: string[]; note: string };
 export type ClassificationResult = ResultBase & ({ scope: 'file' } | { scope: 'channel'; channelIndex: number } | { scope: 'region'; annotation: Annotation });

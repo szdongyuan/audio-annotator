@@ -9,10 +9,10 @@
 .region-handle { position: absolute; width: 7px; height: 7px; background: #fff2d6; border: 1px solid #49341f; transform: translate(-50%, -50%); }
 .handle-nw { left: 0; top: 0; cursor: nwse-resize; }.handle-n { left: 50%; top: 0; cursor: ns-resize; }.handle-ne { left: 100%; top: 0; cursor: nesw-resize; }.handle-e { left: 100%; top: 50%; cursor: ew-resize; }.handle-se { left: 100%; top: 100%; cursor: nwse-resize; }.handle-s { left: 50%; top: 100%; cursor: ns-resize; }.handle-sw { left: 0; top: 100%; cursor: nesw-resize; }.handle-w { left: 0; top: 50%; cursor: ew-resize; }
 .annotation-failure { padding: 8px 14px; font-size: 11px; line-height: 1.5; color: #efb8a2; background: #392a29; }.annotation-failure > div { display: flex; gap: 8px; margin-top: 6px; }.annotation-failure .button { padding: 4px 8px; font-size: 10px; }
-.inspector-tabs { display: flex; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--border-soft); }
+.inspector-tabs { display: flex; flex-shrink: 0; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--border-soft); }
 .inspector-tabs button { flex: 1; border: 0; background: transparent; color: #928c99; border-radius: 4px; padding: 7px 0; font-size: 11px; cursor: pointer; }
 .inspector-tabs button[aria-selected=true] { color: #f2cc9b; background: #3a3028; }
-.inspector-content { padding: 15px 14px; min-height: 0; }
+.inspector-content { flex: 1; padding: 15px 14px; min-height: 0; min-width: 0; overflow: auto; overflow-wrap: anywhere; }
 .object-caption { color: #a89ba9; font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; margin: 0 0 15px; }
 .bounds-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 8px; margin-bottom: 16px; }
 .bounds-grid label, .note-field, .category-form label { display: flex; flex-direction: column; gap: 7px; font-size: 10px; color: #aca1ae; }

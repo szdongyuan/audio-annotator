@@ -6,12 +6,14 @@ import type { ActiveProject } from '../project/useProjectLifecycle';
 import { menuIsOpen } from '../../components/menu/menuModel';
 import { resolveIntent, type PlaybackIntent, type WorkspaceSoundVersion } from './playbackIntent';
 import { validRegion } from '../selection/state';
+import { useLocalSettings } from '../settings/localSettings';
 export function audioSignature(doc:ProjectDocument|undefined,id:string|null){const m=doc?.media.find(m=>m.id===id);return JSON.stringify(m&&[m.id,m.sha256,m.sourceRef,m.sampleRate,m.frameCount,m.channelCount,doc?.edits.filter(e=>e.region.mediaId===id),doc?.playbackMix[m.id]]);}
 export function actualSource(mode:PlaybackOptions['mode'],source:PlaybackOptions['selectionSource'],bypass:boolean){return mode==='selection'?(source==='original'||bypass?'原始选区':'处理后选区'):mode==='original'||bypass?'原音':'处理后';}
 export function playbackShortcut(e:{key:string;target:EventTarget|null;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean}){return !menuIsOpen()&&e.key===' '&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(e.target instanceof Element&&e.target.closest('input,textarea,select,button,[role="dialog"],[role="alertdialog"],[contenteditable]:not([contenteditable="false"])'));}
 type MonitorState={monitorGainDb:number;mediaMonitorGainDb:Record<string,number|null>};
 type PlaybackApi=Omit<typeof playbackClient,'monitorGain'> & Partial<Pick<typeof playbackClient,'monitorGain'>>;
 export function usePlayback(active:ActiveProject|null,selectedMediaId:string|null,selection:Region|undefined,injectedApi:PlaybackApi=playbackClient){
+ const local=useLocalSettings(),localRef=useRef(local);localRef.current=local;
  const api=active?.commands?.playback??injectedApi;
  const [sourceId,setSourceId]=useState(selectedMediaId),[options,setOptions]=useState<PlaybackOptions>({mode:'processed',selectionSource:'processed',bypass:false,looping:false,volume:.75,deviceId:null});
  const [status,setStatus]=useState<PlaybackStatus>(emptyPlayback),[devices,setDevices]=useState<OutputDevice[]>([]),[error,setError]=useState<AppError|null>(null);
@@ -19,7 +21,7 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  const [monitor,setMonitor]=useState<MonitorState>({monitorGainDb:0,mediaMonitorGainDb:{}});
  const [monitorError,setMonitorError]=useState<AppError|null>(null);
  const monitorRef=useRef(monitor),statusRef=useRef(status);
- const effectiveMonitor=(id:string|null)=>id?(monitorRef.current.mediaMonitorGainDb[id]??monitorRef.current.monitorGainDb):monitorRef.current.monitorGainDb;
+ const effectiveMonitor=(id:string|null)=>{const settings=localRef.current,global=settings?.value.playback.monitorGainDb,projectId=active?.store.snapshot.document.projectId;if(global!==undefined)return id&&projectId?settings!.override(projectId,id).monitorGainDb??global:global;return id?(monitorRef.current.mediaMonitorGainDb[id]??monitorRef.current.monitorGainDb):monitorRef.current.monitorGainDb;};
  const [workspaceSource,setWorkspaceSource]=useState<WorkspaceSoundVersion>('processed');
  const [cues,setCues]=useState<Record<string,number>>({});
  const intent=useRef<PlaybackIntent>({kind:'automatic'}),resumable=useRef(false);
@@ -116,14 +118,24 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  };
  const setGlobalMonitorGain=(db:number)=>{
    if(current.current.active!==active||!active||active.store.editingDisabled||!validMonitorGain(db))return;
+   if(local&&!local.applyGlobal({playback:{monitorGainDb:db}})){setMonitorError({code:'SaveFailed',message:local.error!,retryable:true});return;}
    const next={...monitorRef.current,monitorGainDb:db};monitorRef.current=next;setMonitor(next);persistOptions();applyMonitor();
  };
  const setMediaMonitorGain=(id:string,db:number|null)=>{
    if(current.current.active!==active||!active||active.store.editingDisabled||db!==null&&!validMonitorGain(db)||!active.store.snapshot.document.media.some(m=>m.id===id))return;
+   if(local?.value.playback.monitorGainDb!==undefined){const projectId=active.store.snapshot.document.projectId;const ok=db===null?local.follow(projectId,id,['monitorGainDb']):local.patchMedia(projectId,id,{monitorGainDb:db});if(!ok){setMonitorError({code:'SaveFailed',message:local.error!,retryable:true});return;}}
    const next={...monitorRef.current,mediaMonitorGainDb:{...monitorRef.current.mediaMonitorGainDb,[id]:db}};monitorRef.current=next;setMonitor(next);persistOptions();if(id===current.current.sourceId)applyMonitor();
  };
- const update=(patch:Partial<PlaybackOptions>)=>{if(current.current.active!==active||current.current.active?.store.editingDisabled)return;const next={...current.current.options,...patch};current.current.options=next;setOptions(next);persistOptions();};
- const updateWorkspaceSource=(source:WorkspaceSoundVersion)=>{if(current.current.active!==active||current.current.active?.store.editingDisabled||source===current.current.workspaceSource)return;control('stop');current.current.workspaceSource=source;setWorkspaceSource(source);persistOptions();};
+ const update=(patch:Partial<PlaybackOptions>)=>{if(current.current.active!==active||current.current.active?.store.editingDisabled)return;const global={...('volume'in patch?{volume:patch.volume}:{}),...('looping'in patch?{looping:patch.looping}:{})};if(local&&Object.keys(global).length&&!local.applyGlobal({playback:global}))return;const next={...current.current.options,...patch};current.current.options=next;setOptions(next);persistOptions();};
+ const updateWorkspaceSource=(source:WorkspaceSoundVersion)=>{if(current.current.active!==active||current.current.active?.store.editingDisabled||source===current.current.workspaceSource)return;if(local&&!local.applyGlobal({playback:{source}}))return;control('stop');current.current.workspaceSource=source;setWorkspaceSource(source);persistOptions();};
+ const globalPlaybackKey=JSON.stringify(local?.value.playback),globalMonitorValue=effectiveMonitor(sourceId);
+ useEffect(()=>{
+   const global=localRef.current?.value.playback;if(!global||!active||current.current.active!==active||active.store.editingDisabled)return;
+   const patch={...(global.volume!==undefined?{volume:global.volume}:{}),...(global.looping!==undefined?{looping:global.looping}:{})};
+   if(Object.entries(patch).some(([key,value])=>current.current.options[key as keyof PlaybackOptions]!==value)){const next={...current.current.options,...patch};current.current.options=next;setOptions(next);}
+   if(global.source!==undefined&&global.source!==current.current.workspaceSource){control('stop');current.current.workspaceSource=global.source;setWorkspaceSource(global.source);}
+   applyMonitor();
+ },[active,globalPlaybackKey,globalMonitorValue]);
  useEffect(()=>{const before=monitorRef.current.mediaMonitorGainDb;const next=Object.fromEntries(Object.entries(before).filter(([id])=>doc?.media.some(m=>m.id===id)));if(Object.keys(next).length!==Object.keys(before).length){monitorRef.current={...monitorRef.current,mediaMonitorGainDb:next};setMonitor(monitorRef.current);persistOptions();}},[doc?.media]);
  useEffect(()=>{setCues(previous=>{const next=Object.fromEntries(Object.entries(previous).filter(([id])=>doc?.media.some(m=>m.id===id)));return Object.keys(next).length===Object.keys(previous).length?previous:next;});},[doc?.media]);
  const updateMix=(mix:PlaybackMix)=>{
@@ -138,7 +150,8 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
      await owner.queue.enqueue({type:'updatePlaybackMix',mediaId:id,mix:next},{owner:'playback'});
    }).catch(e=>owner.store.setError(normalizeError(e)));
  };
- return{playing,active,monitor,monitorError,effectiveMonitorGainDb:effectiveMonitor(sourceId),setGlobalMonitorGain,setMediaMonitorGain,retryMonitor:applyMonitor,media,sourceId,selectSource,playSelection,playFile,playFrom,setCue,cues,validCue,workspaceSource,updateWorkspaceSource,options,update,status,devices,error,refreshDevices,toggle,stop:()=>control('stop'),seek:(seconds:number)=>configure(seconds),retry:()=>{if(current.current.active!==active)return;setDesired(true);configure();},mix:media?doc?.playbackMix[media.id]??{soloChannels:[],mutedChannels:[]}: {soloChannels:[],mutedChannels:[]},updateMix,selection:resolved().region};
+ const visibleMonitor=local?.value.playback.monitorGainDb!==undefined?{monitorGainDb:local.value.playback.monitorGainDb,mediaMonitorGainDb:Object.fromEntries((doc?.media??[]).map(m=>[m.id,local.override(doc!.projectId,m.id).monitorGainDb??null]))}:monitor;
+ return{playing,active,monitor:visibleMonitor,monitorError,effectiveMonitorGainDb:effectiveMonitor(sourceId),setGlobalMonitorGain,setMediaMonitorGain,retryMonitor:applyMonitor,media,sourceId,selectSource,playSelection,playFile,playFrom,setCue,cues,validCue,workspaceSource,updateWorkspaceSource,options,update,status,devices,error,refreshDevices,toggle,stop:()=>control('stop'),seek:(seconds:number)=>configure(seconds),retry:()=>{if(current.current.active!==active)return;setDesired(true);configure();},mix:media?doc?.playbackMix[media.id]??{soloChannels:[],mutedChannels:[]}: {soloChannels:[],mutedChannels:[]},updateMix,selection:resolved().region};
 }
 export type PlaybackUI=ReturnType<typeof usePlayback>;
 export const PlaybackContext=createContext<PlaybackUI|null>(null);

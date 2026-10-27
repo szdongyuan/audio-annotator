@@ -193,6 +193,18 @@ it('Delete masks the selection; text Escape/Delete do not act and later Escape c
   expect(s.doc.annotations).toHaveLength(1); fireEvent.keyDown(window, { key: 'Escape' }); fireEvent.keyDown(window, { key: 'Delete' });
   await s.active.lifecycle.save(); expect(s.applyChange).toHaveBeenCalledOnce(); expect(s.ui().selection).toBeNull(); s.finish();
 });
+it('Delete on a saved annotation removes only that annotation; a new temporary region still masks', async () => {
+  const s=mounted(),p=objectPoint(s),id=s.doc.annotations[0].id,edits=structuredClone(s.doc.edits);
+  s.pointer('pointerDown',p.x,p.y);s.pointer('pointerUp',p.x,p.y);
+  expect(s.ui().selection?.object).toEqual({kind:'annotation',id});
+  fireEvent.keyDown(window,{key:'Delete',repeat:true});expect(s.applyChange).not.toHaveBeenCalled();
+  fireEvent.keyDown(window,{key:'Delete'});
+  await waitFor(()=>expect(s.active.store.snapshot.document.annotations).toHaveLength(0));
+  expect(s.active.store.snapshot.document.edits).toEqual(edits);expect(s.ui().selection).toBeNull();
+  s.pointer('pointerDown',300,200);s.pointer('pointerUp',500,300);fireEvent.keyDown(window,{key:'Delete'});
+  await waitFor(()=>expect(s.active.store.snapshot.document.edits).toHaveLength(edits.length+1));
+  expect(s.active.store.snapshot.document.annotations).toHaveLength(0);s.finish();
+});
 it('one Escape listener remains correct even with synchronous React commits between native listeners', () => {
   const s = setup(), add = window.addEventListener.bind(window), remove = window.removeEventListener.bind(window), wrappers = new Map<EventListenerOrEventListenerObject, EventListener>();
   const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation((type, listener, options) => { if (type === 'keydown' && typeof listener === 'function') { const wrapper: EventListener = e => flushSync(() => listener.call(window, e)); wrappers.set(listener, wrapper); add(type, wrapper, options); } else add(type, listener, options); });

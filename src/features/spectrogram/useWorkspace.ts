@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { AnalysisSettings, MediaView, ViewState, Region, MediaDescriptor } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import { clampSplit } from './CompareSplitter';
-import { changeView, defaultView, toggleLinked } from './workspace';
+import { analysisKey, changeView, defaultView, defaultSettings, toggleLinked } from './workspace';
+import { displayPatch, useLocalSettings } from '../settings/localSettings';
 const blank = (): ViewState => ({ media: {}, activeMediaId: null, compareMediaId: null, linkedTime: false, compareLayout: 'horizontal', compareSplit: .5 });
 const noop = () => () => {};
 function reconcile(value: ViewState, media: MediaDescriptor[],hidden:readonly string[]=[]): ViewState {
@@ -14,6 +15,7 @@ function reconcile(value: ViewState, media: MediaDescriptor[],hidden:readonly st
 /** View drafts share the project's close/save flush and serialized mutation queue. */
 export type PanePosition = 'primary' | 'compare';
 export function useWorkspace(active: ActiveProject | null,hidden:readonly string[]=[],reveal?:(id:string)=>Promise<void>) {
+  const local = useLocalSettings();
   const hiddenKey=hidden.join('|'),hiddenRef=useRef(hidden),seenHidden=useRef(hiddenKey);if(seenHidden.current!==hiddenKey){seenHidden.current=hiddenKey;hiddenRef.current=hidden;}
   const snapshot = useSyncExternalStore(active?.store.subscribe ?? noop, () => active?.store.snapshot);
   const [state, setState] = useState<ViewState>(() => active?.store.snapshot.document.viewState ?? blank());
@@ -82,9 +84,29 @@ export function useWorkspace(active: ActiveProject | null,hidden:readonly string
     update(next); return true;
   };
   const media = active?.store.snapshot.document.media ?? [];
-  const view = (id: string) => state.media[id] ?? defaultView(media.find(m => m.id === id)!);
+  const projectId = active?.store.snapshot.document.projectId ?? '';
+  const view = (id: string) => ({ ...(state.media[id] ?? defaultView(media.find(m => m.id === id)!)), ...local?.value.display, ...local?.override(projectId,id).display });
+  const analysis = (id: string) => local?.override(projectId,id).analysis ?? local?.value.analysis ?? active?.store.snapshot.document.analysis[id] ?? defaultSettings;
+  const renderAnalysis = (id:string) => active?.store.snapshot.document.analysis[id] ?? defaultSettings;
+  const submittedAnalysis = useMemo(()=>new Map<string,string>(),[active]);
+  const visibleAnalysis = [state.activeMediaId,state.compareMediaId].filter((id):id is string=>!!id&&media.some(m=>m.id===id));
+  const analysisIntent = JSON.stringify(visibleAnalysis.map(id=>[id,analysisKey(analysis(id))]));
+  useEffect(()=>{
+    if(!active || binding.current!==active || active.store.editingDisabled || !local?.value.analysis || active.queue.unresolvedFailures.length) return;
+    // Materialize personal defaults only for visible files. The renderer keeps
+    // the accepted native settings until ACK, so stale-config tiles are never requested.
+    for(const id of visibleAnalysis){
+      const desired=analysis(id),key=analysisKey(desired);
+      if(analysisKey(renderAnalysis(id))===key){submittedAnalysis.delete(id);continue;}
+      if(submittedAnalysis.get(id)===key)continue;
+      submittedAnalysis.set(id,key);
+      void active.queue.enqueue({type:'updateAnalysis',mediaId:id,settings:desired},{owner:`media:${id}`}).catch(()=>{});
+    }
+  },[active,analysisIntent,snapshot,active?.store.editingDisabled,local,submittedAnalysis]);
   return {
-    state, view, selectPane, duplicatePane,visibleMedia:media.filter(m=>!hiddenRef.current.includes(m.id)),
+    state, view, analysis, renderAnalysis, selectPane, duplicatePane,visibleMedia:media.filter(m=>!hiddenRef.current.includes(m.id)),
+    hasGlobalSettings: !!local && (!!local.value.analysis || Object.keys(local.value.display).length > 0),
+    followGlobal: (id: string) => { if (active && binding.current === active && !active.store.editingDisabled) local?.follow(projectId,id,['display','analysis']); },
     revealMedia:async(id:string)=>{if(!active||binding.current!==active)return false;if(hiddenRef.current.includes(id)){if(!reveal)return false;try{await reveal(id);}catch{return false;}if(binding.current!==active)return false;hiddenRef.current=hiddenRef.current.filter(hidden=>hidden!==id);}return true;},
     layout: (compareLayout: ViewState['compareLayout']) => update({ ...current.current, compareLayout }),
     split: (compareSplit: number) => update({ ...current.current, compareSplit: clampSplit(compareSplit) }),
@@ -95,11 +117,17 @@ export function useWorkspace(active: ActiveProject | null,hidden:readonly string
       const next = changeView(current.current, media, target.id, { visibleChannels: [region.channelIndex], startSeconds: Math.max(0, region.startSeconds - margin), endSeconds: Math.min(durationOf(target), region.endSeconds + margin), lowHz: Math.max(0, region.lowHz - frequencyMargin), highHz: Math.min(target.sampleRate / 2, region.highHz + frequencyMargin) });
       update(next);
     },
-    patch: (id: string, patch: Partial<MediaView>) => update(changeView(current.current, media, id, patch)),
+    patch: (id: string, patch: Partial<MediaView>) => {
+      if (!active || binding.current !== active || active.store.editingDisabled || !media.some(m=>m.id===id)) return;
+      const display = displayPatch(patch);
+      if (local && Object.keys(display).some(key=>key in local.value.display) && !local.patchMedia(projectId,id,{display})) return;
+      update(changeView(current.current, media, id, patch));
+    },
     compare: (id: string | null) => selectPane('compare', id),
     link: (linked: boolean) => update(toggleLinked(current.current, media, linked)),
     settings: (mediaId: string, settings: AnalysisSettings) => {
-      if (!active || active.store.editingDisabled) return;
+      if (!active || binding.current !== active || active.store.editingDisabled) return;
+      if (local?.value.analysis) { local.patchMedia(projectId,mediaId,{analysis:settings}); return; }
       void active.queue.enqueue({ type: 'updateAnalysis', mediaId, settings }).catch(() => {});
     },
   };

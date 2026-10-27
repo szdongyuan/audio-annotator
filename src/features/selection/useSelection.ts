@@ -5,14 +5,16 @@ import { shortcutAction } from '../project/shortcuts';
 import { resolveRegion, selectionActions } from './actions';
 import type { Region } from '../../bridge/types';
 import { SelectionState, type Selection } from './state';
+import { useCategoryChoices } from '../collaboration/categoryChoices';
 export type RegionMenuTarget = { seconds?: number; x: number; y: number; target: Selection | null; overlaps: Selection[]; mediaId: string; channelIndex: number };
 export function useSelection(active: ActiveProject | null, primaryId: string | null, panes?: VisiblePane[]) {
+  const vocabulary = useCategoryChoices(active), vocabularyRef = useRef(vocabulary); vocabularyRef.current = vocabulary;
   const state = useMemo(() => new SelectionState(), [active]);
   const selection = useSyncExternalStore(state.subscribe, state.getActiveSelection);
   const candidate = useSyncExternalStore(state.subscribe, state.getCandidate);
   const context = useSyncExternalStore(state.subscribe, state.getContext);
   const gesturing = useSyncExternalStore(state.subscribe, state.getGesture);
-  const actions = useMemo(() => active ? selectionActions(active, state) : null, [active, state]);
+  const actions = useMemo(() => active ? selectionActions(active, state, id=>vocabularyRef.current.resolve(id)) : null, [active, state]);
   const [menuState, setMenu] = useState<{ owner: ActiveProject | null; value: RegionMenuTarget; intent: number } | null>(null), [cancelVersion, setCancelVersion] = useState(0);
   const [gainState, setGain] = useState<{ owner: ActiveProject; target: Selection; trigger: HTMLElement | null } | null>(null);
   const gain = gainState?.owner === active && !active?.store.editingDisabled && state.matches(gainState.target) ? gainState : null;
@@ -55,11 +57,12 @@ export function useSelection(active: ActiveProject | null, primaryId: string | n
       if (!active || e.defaultPrevented || active.store.editingDisabled) return;
       const action = shortcutAction(e);
       if (action === 'cancel') { e.preventDefault(); cancel(); }
-      if (action === 'delete' && state.getActiveSelection()) { e.preventDefault(); void actions!.mask(state.getActiveSelection()!); }
+      const target = state.getActiveSelection();
+      if (action === 'delete' && target && !e.repeat) { e.preventDefault(); void (target.object?.kind === 'annotation' ? actions!.remove(target) : actions!.mask(target)); }
     };
     window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler);
   }, [active, state, actions]);
-  return { active, state, selection, candidate, context, gesturing, actions, cancelVersion, cancel, menu, gain,
+  return { active, state, selection, candidate, context, gesturing, actions, categories:vocabulary.choices, cancelVersion, cancel, menu, gain,
     openGain: (target: Selection, trigger: HTMLElement | null = null) => {
       if (!active || binding.current !== active || active.store.editingDisabled || !resolveRegion(active, target)) return;
       const followed = state.follow(target); if (!state.matches(followed)) state.select(followed);

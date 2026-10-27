@@ -26,7 +26,8 @@ export function instanceOptions(options = {}) {
   const ports = { driver: 4445, native: 4446, debug: 9235, ...options.ports }, values = Object.values(ports);
   if(values.length!==3||new Set(values).size!==3||values.some(p=>!Number.isInteger(p)||p<1024||p>65535))throw Error('Invalid test ports: require three unique integer ports from 1024 to 65535');
   if(options.localDataEnv!==undefined&&(!path.isAbsolute(options.localDataEnv)||!options.localDataEnv.trim()))throw Error('localDataEnv must be an absolute owned directory');
-  return { ports, localDataEnv: options.localDataEnv };
+  if(options.webviewDirectory!==undefined&&(!path.isAbsolute(options.webviewDirectory)||!options.webviewDirectory.trim()))throw Error('webviewDirectory must be an absolute owned directory');
+  return { ports, localDataEnv: options.localDataEnv, webviewDirectory:options.webviewDirectory };
 }
 export async function assertTestPortsAvailable(ports) {
   for(const port of ports)if(await portOccupied(port))throw Error(`Test port already occupied: ${port}; refusing to attach to an existing process`);
@@ -62,11 +63,11 @@ $taskRect=New-Object OwnedWindow+RECT
   if(result.status!==0)throw Error(result.stderr);return JSON.parse(result.stdout);
 }
 export async function start(paths, output, executable = path.resolve('target/debug/annotator-desktop.exe'), options = {}) {
-  const {ports,localDataEnv}=instanceOptions(options),ownedPorts=Object.values(ports),port=ports.driver;
+  const {ports,localDataEnv,webviewDirectory}=instanceOptions(options),ownedPorts=Object.values(ports),port=ports.driver;
   await assertTestPortsAvailable(ownedPorts);
   const tools = JSON.parse(await fs.readFile('.tools/webdriver.json', 'utf8'));
   const requestedLocal=localDataEnv??path.join(output,'local-data');await fs.mkdir(requestedLocal,{recursive:true});const ownedLocal=await fs.realpath(requestedLocal);
-  const native = spawn(executable, [], { windowsHide: true, env: { ...process.env, ANNOTATOR_E2E_LOCAL_DATA:ownedLocal, ANNOTATOR_E2E_DEBUG_PORT: String(ports.debug), ANNOTATOR_E2E_PATHS: JSON.stringify(paths), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${ports.debug}`, WEBVIEW2_USER_DATA_FOLDER: path.join(output, `webview-${Date.now()}`) } });
+  const native = spawn(executable, [], { windowsHide: true, env: { ...process.env, ANNOTATOR_E2E_LOCAL_DATA:ownedLocal, ANNOTATOR_E2E_DEBUG_PORT: String(ports.debug), ANNOTATOR_E2E_PATHS: JSON.stringify(paths), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${ports.debug}`, WEBVIEW2_USER_DATA_FOLDER: webviewDirectory ?? path.join(output, `webview-${Date.now()}`) } });
   const proc = spawn(tools.tauriDriver, ['--port', String(port), '--native-port', String(ports.native), '--native-driver', tools.edgeDriver], { windowsHide: true });
   let log = ''; proc.stdout.on('data', b => { log += b; }); proc.stderr.on('data', b => { log += b; });
   native.stdout.on('data', b => { log += b; }); native.stderr.on('data', b => { log += b; });

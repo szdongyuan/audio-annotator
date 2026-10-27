@@ -13,6 +13,7 @@ export function CategoryManager({ ui }: { ui: AnnotationUI }) {
   const duplicate = doc.categories.some(c => c.id !== editing?.id && c.name.trim() === name.trim());
   const count = categoryReferences(doc, pendingDelete?.id ?? '');
   return <div className="category-manager"><div className="category-rows">{doc.categories.map(c => <div key={c.id} className="category-row"><i style={{ background: c.color }} /><span>{c.name}</span><button aria-label={`编辑类别 ${c.name}`} disabled={disabled} onClick={() => { setEditing(c); setName(c.name); setColor(c.color); }}>编辑</button><button aria-label={`删除类别 ${c.name}`} disabled={disabled} onClick={() => setPendingDelete(c)}>删除</button></div>)}</div>
+    {!!ui.categories?.some(c=>c.authorName) && <section className="shared-categories" aria-label="共享类别"><h3>共享类别</h3>{ui.categories.filter(c=>c.authorName).map(c=><div className="shared-category-row" key={c.id} title={`来自 ${c.authorName}`}><i style={{background:c.color}}/><span>{c.name}</span><button className="text-button" disabled={disabled} aria-label={`采用共享类别 ${c.name}`} onClick={()=>void ui.adoptCategory(c.id)}>采用</button></div>)}</section>}
     <form className="category-form" aria-busy={pending} onSubmit={e => {
       e.preventDefault(); if (submission.current || disabled || !name.trim() || duplicate) return;
       const token = {}, capturedOwner = ui.active; submission.current = token; setPending(true); setError(null);

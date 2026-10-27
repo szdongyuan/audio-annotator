@@ -16,8 +16,8 @@ import { duration } from '../features/spectrogram/workspace';
 import { zoomViewport } from '../features/spectrogram/viewport';
 import { resolveRegion } from '../features/selection/actions';
 import type { HelpTopic } from './HelpDialog';
-export function workspaceMenus({identity,collaboration,project,mediaUI,exchange,annotations,selection,workspace,playback,mediaOpen,propertiesOpen,toggleMedia,toggleProperties,settings,inspector,help,focusNote}: {
- identity?:IdentityController;collaboration?:CollaborationUI;project?:ProjectLifecycleUI;mediaUI?:MediaUI;exchange?:ExchangeUI;annotations:AnnotationUI;selection:SelectionUI;workspace:WorkspaceUI;playback:PlaybackUI;mediaOpen:boolean;propertiesOpen:boolean;toggleMedia:()=>void;toggleProperties:()=>void;settings:(id:string)=>void;inspector:(tab:string)=>void;help:(topic:HelpTopic)=>void;focusNote:(id:string)=>void;
+export function workspaceMenus({identity,collaboration,project,mediaUI,exchange,annotations,selection,workspace,playback,mediaOpen,propertiesOpen,toggleMedia,toggleProperties,settings,globalSettings,inspector,help,focusNote}: {
+ identity?:IdentityController;collaboration?:CollaborationUI;project?:ProjectLifecycleUI;mediaUI?:MediaUI;exchange?:ExchangeUI;annotations:AnnotationUI;selection:SelectionUI;workspace:WorkspaceUI;playback:PlaybackUI;mediaOpen:boolean;propertiesOpen:boolean;toggleMedia:()=>void;toggleProperties:()=>void;settings:(id:string)=>void;globalSettings?:()=>void;inspector:(tab:string)=>void;help:(topic:HelpTopic)=>void;focusNote:(id:string)=>void;
 }):WorkspaceMenu[]{
  const owner=project?.active,doc=owner?.store.snapshot.document,disabled=!owner||owner.store.editingDisabled;
  const target=selection.selection,region=owner&&target?resolveRegion(owner,target):null;
@@ -46,11 +46,12 @@ export function workspaceMenus({identity,collaboration,project,mediaUI,exchange,
    {id:'out',label:'缩小视图',disabled:disabled||!media,action:()=>{if(view&&media){const time=zoomViewport(view,timeLimit,media.sampleRate/2,'time',.5,2);const frequency=zoomViewport(view,timeLimit,media.sampleRate/2,'frequency',.5,2);patch({startSeconds:time.startSeconds,endSeconds:time.endSeconds,lowHz:frequency.lowHz,highHz:frequency.highHz});}}},
    {id:'reset',label:'重置当前视图',disabled:disabled||!media,action:reset},
    {id:'kind',label:'频谱类型',disabled:disabled||!media,children:([{id:'stft',label:'STFT 频谱'},{id:'mel',label:'梅尔频谱'}] as const).map(k=>({...k,checked:view?.spectrumKind===k.id,action:()=>patch({spectrumKind:k.id})}))},
+   {id:'global-settings',label:'全局播放与显示设置…',disabled:!globalSettings,action:()=>globalSettings?.()},
    {id:'settings',label:'分析 / 显示设置…',disabled:disabled||!media,action:()=>{if(media)settings(media.id);}}]},
   {id:'annotation',label:'标注',items:[
-   {id:'category',label:'标注类型',disabled:regionDisabled||annotationDisabled(owner),children:[{id:'none',label:'清空标签',keepOpen:true,checked:false,action:()=>{if(target)void selection.actions?.classify(target,null);}},...(doc?.categories??[]).map(c=>({id:c.id,label:c.name,keepOpen:true,checked:doc?.annotations.find(a=>a.id===target?.object?.id)?.categoryIds.includes(c.id)??false,action:()=>{if(target)void selection.actions?.classify(target,c.id);}}))]},
+   {id:'category',label:'标注类型',disabled:regionDisabled||annotationDisabled(owner),children:[{id:'none',label:'清空标签',keepOpen:true,checked:false,action:()=>{if(target)void selection.actions?.classify(target,null);}},...(annotations.categories??doc?.categories??[]).map(c=>({id:c.id,label:c.name,keepOpen:true,checked:doc?.annotations.find(a=>a.id===target?.object?.id)?.categoryIds.includes(c.id)??false,action:()=>{if(target)void selection.actions?.classify(target,c.id);}}))]},
    {id:'note',label:'备注',disabled:regionDisabled||annotationDisabled(owner),action:()=>{if(target)void selection.actions?.note(target,focusNote);}},
-   ...(doc ? [classificationMenu(doc, media ? { mediaId: media.id, channelIndex: null } : null, annotations.classify, '当前文件分类', annotationDisabled(owner)), classificationMenu(doc, media && view && (selection.context?.channelIndex ?? view.visibleChannels[0]) !== undefined ? { mediaId: media.id, channelIndex: selection.context?.channelIndex ?? view.visibleChannels[0] } : null, annotations.classify, '当前通道分类', annotationDisabled(owner))] : []),
+   ...(doc ? [classificationMenu(doc, media ? { mediaId: media.id, channelIndex: null } : null, annotations.classify, '当前文件分类', annotationDisabled(owner), annotations.categories ?? doc.categories), classificationMenu(doc, media && view && (selection.context?.channelIndex ?? view.visibleChannels[0]) !== undefined ? { mediaId: media.id, channelIndex: selection.context?.channelIndex ?? view.visibleChannels[0] } : null, annotations.classify, '当前通道分类', annotationDisabled(owner), annotations.categories ?? doc.categories)] : []),
    {id:'categories',label:'类别管理',disabled,action:()=>inspector('categories')}, {id:'list',label:'标注列表',disabled,action:()=>inspector('list')}]},
   {id:'audio',label:'音频',items:[
    {id:'toggle',label:playback.playing?'暂停':'播放',disabled:disabled||!playback.media,action:guard(playback.toggle)},

@@ -9,7 +9,7 @@ export function resolveRegion(owner: ActiveProject, target: Selection): Region |
   return resolveSelection(owner.store.snapshot.document, target)?.region ?? null;
 }
 /** All durable actions enroll synchronously in the owner's save/close barrier. */
-export function selectionActions(owner: ActiveProject, state: SelectionState) {
+export function selectionActions(owner: ActiveProject, state: SelectionState, ensureCategory?: (id: string) => Promise<string | undefined>) {
   const createdAnnotations = new WeakMap<Selection, string>();
   const run = (action: () => Promise<unknown>) => {
     if (owner.store.editingDisabled) return Promise.resolve();
@@ -19,6 +19,7 @@ export function selectionActions(owner: ActiveProject, state: SelectionState) {
   const annotate = (target: Selection, categoryId: string | null | undefined, focus?: (id: string) => void) => run(async () => {
     const region = resolve(target); if (!region) return;
     if(annotationDisabled(owner))return;
+    if (categoryId && !owner.store.snapshot.document.categories.some(c=>c.id===categoryId)) { categoryId = await ensureCategory?.(categoryId); if (!categoryId) return; }
     const doc = owner.store.snapshot.document;
     if (categoryId && !doc.categories.some(c => c.id === categoryId)) return;
     const id = target.object?.kind === 'annotation' ? target.object.id : createdAnnotations.get(target);

@@ -8,7 +8,9 @@ import type { ActiveProject } from '../project/useProjectLifecycle';
 import { shortcutAction } from '../project/shortcuts';
 import { AnnotationDrafts } from './drafts';
 import type { SelectionUI } from '../selection/useSelection';
+import { useCategoryChoices } from '../collaboration/categoryChoices';
 export function useAnnotations(active: ActiveProject | null, selection?: SelectionUI) {
+  const vocabulary = useCategoryChoices(active);
   const binding = useRef(active); binding.current = active;
   useEffect(() => { binding.current = active; return () => { binding.current = null; }; }, [active]);
   const [fallbackId, setFallbackId] = useState<string | null>(null);
@@ -39,6 +41,7 @@ export function useAnnotations(active: ActiveProject | null, selection?: Selecti
     if (annotation) await active!.queue.enqueue({ type: 'updateAnnotation', annotation: { ...annotation, ...patch, updatedAt: new Date().toISOString() } }, { owner: 'annotations' });
   });
   const classifyAnnotation = (id: string, categoryId: string | null) => run(async () => {
+    if (categoryId !== null) { const resolved = await vocabulary.resolve(categoryId); if (!resolved) return; categoryId = resolved; }
     const doc = active!.store.snapshot.document, annotation = doc.annotations.find(a => a.id === id);
     if (annotation && (categoryId === null || doc.categories.some(c => c.id === categoryId))) await active!.queue.enqueue({ type: 'updateAnnotation', annotation: { ...annotation, categoryIds: toggleLabel(annotation.categoryIds, categoryId), updatedAt: new Date().toISOString() } }, { owner: 'annotations' });
   });
@@ -52,8 +55,9 @@ export function useAnnotations(active: ActiveProject | null, selection?: Selecti
     };
     window.addEventListener('keydown', listener); return () => window.removeEventListener('keydown', listener);
   }, [active]);
-  const classify = (target: ClassificationTarget, categoryId: string | null) => active ? classifyTarget(active, target, categoryId, () => binding.current === active) : Promise.resolve();
-  return { active, drafts, selectedId, select, command, submitCommand, mutate, classifyAnnotation, history, remove, classify };
+  const classify = (target: ClassificationTarget, categoryId: string | null) => active ? classifyTarget(active, target, categoryId, () => binding.current === active, vocabulary.resolve) : Promise.resolve();
+  const adoptCategory = (id:string) => perform(()=>vocabulary.resolve(id));
+  return { active, drafts, selectedId, select, command, submitCommand, mutate, classifyAnnotation, history, remove, classify, categories:vocabulary.choices, adoptCategory };
 }
 export type AnnotationUI = ReturnType<typeof useAnnotations>;
 export const AnnotationContext = createContext<AnnotationUI | null>(null);
