@@ -9,7 +9,7 @@ export function SourceImportProgress({controller:c}:{controller:SourceImportCont
  const recover=(end=false)=>{setWorking(true);void(end?c.end():c.retry()).finally(()=>setWorking(false));};
  return <section className="import-progress source-import-progress" aria-label="来源导入进度"><div><strong>{labels[c.state]}</strong><span>{done} / {c.counts.candidates}</span>{c.busy&&<button className="button button-quiet" onClick={()=>void c.cancel()}>取消导入</button>}<button className="button button-quiet" onClick={()=>setExpanded(!expanded)}>{expanded?'收起详情':'查看详情'}</button>{!c.busy&&!failures&&!c.pendingAcknowledgements.length&&<button className="button button-quiet" onClick={()=>c.dismiss()}>关闭结果</button>}</div><div>成功 {c.successCount} · 失败 {c.items.filter(i=>i.state==='failed').length} · 跳过 {c.counts.skipped} · 扫描问题 {c.counts.issues}</div>{c.state==='importing'&&<progress aria-label="来源导入完成文件数" max={Math.max(1,c.counts.candidates)} value={done}/>}
  {(failures>0||c.state==='paused'||c.pendingAcknowledgements.length>0)&&<div><button className="button" disabled={working} onClick={()=>recover()}>重试并继续导入</button><button className="button" disabled={working} onClick={()=>recover(true)}>结束并放弃失败项</button></div>}
- {c.state==='paused'&&!failures&&!c.pendingAcknowledgements.length&&<p>请先处理其他编辑失败，然后继续。</p>}
+ {c.state==='paused'&&!failures&&!c.pendingAcknowledgements.length&&<p>{c.blockingEditError && <span>其他编辑未成功：{c.blockingEditError}。 </span>}请先处理其他编辑失败，然后继续。</p>}
  {c.releasePending&&<button className="button" disabled={working} onClick={()=>void c.retryRelease()}>重试释放预览</button>}
  {c.state==='failed'&&!failures&&!c.pendingAcknowledgements.length&&<button className="button" onClick={()=>c.show()}>重新配置并扫描</button>}
  {c.error&&<p role="alert">{c.error.message}</p>}

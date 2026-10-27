@@ -8,6 +8,7 @@ import { CommandQueue } from '../../app/commands';
 import { ProjectLifecycle } from '../project/lifecycle';
 import { SelectionContext, useSelection, type SelectionUI } from '../selection/useSelection';
 import { RegionGainDialog } from './RegionGainDialog';
+import { RegionGainInput } from './RegionGainInput';
 import { MonitorGainControl } from './MonitorGainControl';
 import { usePlayback, type PlaybackUI } from './usePlayback';
 import { emptyPlayback, type PlaybackRequest } from '../../bridge/playback';
@@ -63,7 +64,7 @@ it('transport adapts to its measured container and keeps sound source and volume
  const s=rig();let measure!:ResizeObserverCallback;vi.stubGlobal('ResizeObserver',class {constructor(callback:ResizeObserverCallback){measure=callback;}observe(){}disconnect(){}});
  const api={available:()=>false,devices:async()=>[],listen:async()=>()=>{},control:async()=>emptyPlayback,configure:async()=>emptyPlayback};
  function App(){const ui=usePlayback(s.owner,s.media.id,undefined,api);return <TransportBar ui={ui} hasSelection onGain={vi.fn()}/>;}const view=render(<App/>);
- expect(measure).toBeTypeOf('function');act(()=>measure([{contentRect:{width:420}} as ResizeObserverEntry],{} as ResizeObserver));expect(screen.getByLabelText('播放控制')).toHaveAttribute('data-density','minimal');expect(screen.queryByRole('button',{name:'应用区域增益'})).toBeNull();expect(screen.queryByLabelText('声音版本')).toBeNull();
+ expect(measure).toBeTypeOf('function');act(()=>measure([{contentRect:{width:420}} as ResizeObserverEntry],{} as ResizeObserver));expect(screen.getByLabelText('播放控制')).toHaveAttribute('data-density','minimal');expect(screen.getByLabelText('快捷区域增益（dB）')).toBeInTheDocument();expect(screen.getByRole('button',{name:'应用区域增益'})).toBeDisabled();expect(screen.queryByLabelText('声音版本')).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'更多播放操作'}));fireEvent.click(screen.getByRole('menuitem',{name:'声音版本'}));expect(screen.getByRole('menuitem',{name:'原音'})).toBeInTheDocument();fireEvent.keyDown(screen.getAllByRole('menu').at(-1)!,{key:'Escape'});fireEvent.keyDown(screen.getByRole('menu'),{key:'Escape'});
  fireEvent.click(screen.getByRole('button',{name:'监听增益'}));expect(screen.getByLabelText('输出音量')).toBeInTheDocument();fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});
  act(()=>measure([{contentRect:{width:1100}} as ResizeObserverEntry],{} as ResizeObserver));expect(screen.getByLabelText('播放控制')).toHaveAttribute('data-density','full');expect(screen.getByRole('button',{name:'应用区域增益'})).toBeInTheDocument();expect(screen.getByLabelText('声音版本')).toBeInTheDocument();view.unmount();s.finish();
@@ -80,4 +81,18 @@ it('StrictMode gain rejection leaves a usable retry that accepts exactly one gai
 it.each(['Escape','outside'])('StrictMode gain rejection remains dismissible by %s with input and selection retained until dismissal',async dismiss=>{
  const s=gainRig(true);try{const before=s.owner.store.snapshot,trigger=screen.getByRole('button',{name:'区域增益'});s.apply.mockRejectedValueOnce({code:'InvalidInput',message:'StrictMode dismiss failure',retryable:true});trigger.focus();fireEvent.click(trigger);fireEvent.change(screen.getByLabelText('区域增益（dB）'),{target:{value:'6'}});fireEvent.click(screen.getByRole('button',{name:'应用增益'}));await waitFor(()=>expect(screen.getByRole('button',{name:'重试应用'})).toBeEnabled());
  expect(screen.getByLabelText('区域增益（dB）')).toHaveValue(6);expect(screen.getByRole('button',{name:'取消'})).toBeEnabled();if(dismiss==='Escape')fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});else fireEvent.pointerDown(document.querySelector('.dialog-backdrop')!);expect(screen.queryByRole('dialog')).toBeNull();expect(trigger).toHaveFocus();expect(s.ui().selection).toBe(s.target);expect(s.owner.store.snapshot).toBe(before);expect(s.owner.queue.unresolvedFailures).toHaveLength(1);}finally{s.finish();}
+});
+it('applies inline gain only on explicit submit, without a dialog, and keeps zero out of history',async()=>{
+ const s=rig();let ui!:SelectionUI;
+ function App(){useSyncExternalStore(s.owner.store.subscribe,()=>s.owner.store.snapshot);ui=useSelection(s.owner,s.media.id);return <SelectionContext.Provider value={ui}><RegionGainInput enabled={!!ui.selection}/></SelectionContext.Provider>;}
+ const view=render(<StrictMode><App/></StrictMode>),target={region:s.owner.store.snapshot.document.annotations[0].region,object:null};act(()=>ui.state.select(target));
+ fireEvent.change(screen.getByLabelText('快捷区域增益（dB）'),{target:{value:'-6'}});expect(s.apply).not.toHaveBeenCalled();expect(screen.queryByRole('dialog')).toBeNull();fireEvent.submit(screen.getByRole('form',{name:'快捷区域增益'}));
+ await waitFor(()=>expect(s.owner.store.snapshot.document.edits.some(e=>e.operation.type==='gain'&&e.operation.gainDb===-6)).toBe(true));expect(s.apply).toHaveBeenCalledTimes(1);expect(ui.selection).toBeNull();
+ act(()=>ui.state.select(target));fireEvent.change(screen.getByLabelText('快捷区域增益（dB）'),{target:{value:'0'}});fireEvent.submit(screen.getByRole('form',{name:'快捷区域增益'}));await act(async()=>{});expect(s.apply).toHaveBeenCalledTimes(1);expect(ui.selection).toBe(target);view.unmount();s.finish();
+});
+it('retries the exact inline gain failure once without duplicating its edit',async()=>{
+ const s=rig();let ui!:SelectionUI;function App(){useSyncExternalStore(s.owner.store.subscribe,()=>s.owner.store.snapshot);ui=useSelection(s.owner,s.media.id);return <SelectionContext.Provider value={ui}><RegionGainInput enabled={!!ui.selection}/></SelectionContext.Provider>;}
+ const view=render(<App/>),target={region:s.owner.store.snapshot.document.annotations[0].region,object:null};act(()=>ui.state.select(target));s.apply.mockRejectedValueOnce({code:'SaveFailed',message:'gain write failed',retryable:true});
+ fireEvent.change(screen.getByLabelText('快捷区域增益（dB）'),{target:{value:'3'}});fireEvent.submit(screen.getByRole('form',{name:'快捷区域增益'}));await waitFor(()=>expect(screen.getByRole('button',{name:'重试区域增益'})).toBeEnabled());expect(ui.selection).toBe(target);
+ fireEvent.submit(screen.getByRole('form',{name:'快捷区域增益'}));await waitFor(()=>expect(s.owner.queue.unresolvedFailures).toHaveLength(0));expect(s.apply).toHaveBeenCalledTimes(2);expect(s.owner.store.snapshot.document.edits.filter(e=>e.operation.type==='gain')).toHaveLength(1);expect(ui.selection).toBeNull();view.unmount();s.finish();
 });

@@ -2,6 +2,7 @@ import { Play, Pause, Square, Repeat2, Volume2 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Menu } from '../../components/menu/Menu';
 import { MonitorGainControl } from './MonitorGainControl';
+import { RegionGainInput } from './RegionGainInput';
 import type { PlaybackUI } from './usePlayback';
 import { PlaybackModeControl } from './PlaybackMode';
 
@@ -31,7 +32,7 @@ export function TransportBar({ ui, onGain, onResetView, onResetMasks, hasMasks =
   const validMenu = menu && menu.owner === ui.active && menu.sourceId === ui.sourceId && !ui.active?.store.editingDisabled ? menu : null;
   const disabled = !ui.media || !ui.active || ui.active.store.editingDisabled;
   const status = ui.status, duration = ui.media ? ui.media.frameCount / ui.media.sampleRate : 0;
-  return <footer ref={host} className="playback-bar transport-live" aria-label="播放控制" title={`播放源：${ui.media?.displayName ?? '未选择'}`} data-density={width <= 460 ? 'minimal' : width <= 680 ? 'compact' : 'full'}>
+  return <footer ref={host} className="playback-bar transport-live" aria-label="播放控制" title={`播放源：${ui.media?.displayName ?? '未选择'}`} data-density={width <= 460 ? 'minimal' : width <= 760 ? 'compact' : 'full'}>
     <div className="transport-main">
       <div className="transport-controls">
         <button className="icon-button" aria-label="停止" disabled={disabled} onClick={ui.stop}><Square size={17} /></button>
@@ -44,13 +45,13 @@ export function TransportBar({ ui, onGain, onResetView, onResetMasks, hasMasks =
         <span>{({ stopped: '已停止', buffering: '准备音频…', playing: '播放中', paused: '已暂停', ended: '播放结束', error: '输出失败' } as const)[status.state]}</span>
       </div>}
       {width > 900 && <span className="transport-source" title={ui.media?.displayName}>{ui.media?.displayName}</span>}
-      {width > 460 && <>
+      {width > 760 && <>
         <PlaybackModeControl source={ui.workspaceSource} disabled={disabled} onChange={ui.updateWorkspaceSource} />
         <Volume2 className="transport-volume-icon" size={16} />
         <input className="volume-slider" type="range" min="0" max="1" step=".01" aria-label="播放音量" value={ui.options.volume} disabled={disabled} onChange={e => ui.update({ volume: Number(e.target.value) })} />
       </>}
       <MonitorGainControl ui={ui} />
-      {width > 900 && <button className="button button-quiet transport-gain" aria-label="应用区域增益" disabled={disabled || !hasSelection} onClick={e => onGain?.(e.currentTarget)}>区域增益</button>}
+      <RegionGainInput enabled={!disabled && hasSelection} />
       <button className="button button-quiet" aria-label="更多播放操作" aria-haspopup="menu" aria-expanded={!!validMenu} disabled={disabled} onClick={e => {
         const bounds = e.currentTarget.getBoundingClientRect();
         setMenu({ x: bounds.left, y: bounds.top, trigger: e.currentTarget, owner: ui.active, sourceId: ui.sourceId });

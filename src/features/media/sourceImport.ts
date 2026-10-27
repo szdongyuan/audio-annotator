@@ -85,6 +85,12 @@ export class SourceImportController {
   get pendingAcknowledgements() {
     return this.imports.pendingAcknowledgements;
   }
+  get blockingEditError() {
+    const own = new Set(this.failures.map(f => f.failureId));
+    const error = this.owner.queue.unresolvedFailures.find(f => !own.has(f.id))?.error;
+    if (!error) return null;
+    return error.message === 'Empty or duplicate category name' ? '类别名称为空或重复，请修改或放弃下方失败的类别编辑' : error.message;
+  }
   get successCount() {
     this.imports.failures(this.items);
     return this.items.filter(i => ['success', 'accepted'].includes(i.state)).length;

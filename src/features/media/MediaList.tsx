@@ -7,6 +7,7 @@ import { Menu } from '../../components/menu/Menu';
 import type { MenuItem } from '../../components/menu/menuModel';
 import { organizationIndex, type OrganizationController, type OrganizationDraft } from './organization';
 import { MediaDialog } from './MediaDialog';
+import { mediaNavigationDirection } from './navigation';
 export const statusLabel = { ready: '已校验', missing: '源文件缺失', changed: '源文件已改变', unverified: '等待校验' };
 function StructuredName({ name }: {
     name: string;
@@ -36,12 +37,13 @@ function FolderEdit({ controller: c, draft, trigger, resolveReturnFocus, onClose
     return <MediaDialog title={title} returnFocus={trigger} resolveReturnFocus={resolveReturnFocus} busy={c.pending} onClose={onClose}><header><h2>{title}</h2></header><div className="source-import-body">{naming && <label>文件夹名称<input aria-label="文件夹名称" maxLength={128} value={operation.name} onChange={e => setOperation({ ...operation, name: e.target.value })}/></label>}{!naming && !removing && <label>目标文件夹<select aria-label="移动目标文件夹" value={target ?? ''} onChange={e => setOperation(operation.type === 'moveFolder' ? { ...operation, parentId: e.target.value || null } : operation.type === 'moveMedia' ? { ...operation, folderId: e.target.value || null } : operation)}><option value="">全部音频</option>{[...index.paths].filter(([id]) => !excluded.has(id)).map(([id, path]) => <option key={id} value={id}>{path}</option>)}</select></label>}{removing && <p>仅可删除没有音频（包括隐藏音频）和子文件夹的目录。</p>}{c.error && <p role="alert">{c.error.message}{c.error.code === 'RevisionConflict' ? ' · 已刷新目录，保留输入，请核对后重试。' : ''}</p>}</div><footer className="dialog-actions"><button className="button" disabled={c.pending} onClick={onClose}>取消</button><button className="button button-accent" disabled={c.pending || (naming && !operation.name.trim())} onClick={() => { draft.operation = operation; void c.submit(draft).then(ok => { if (ok)
         onClose(); }); }}>{c.error?.code === 'RevisionConflict' ? '核对并重试' : '确认'}</button></footer></MediaDialog>;
 }
-export function MediaList({ organization: c, hiddenMediaIds = [], onHide, onRestore, categories = [], catalogLocked = false, media, annotations, statuses, selectedId, disabled, onSelect, onImport, onRelink }: {
+export function MediaList({ organization: c, hiddenMediaIds = [], onHide, onRestore, categories = [], catalogLocked = false, navigationExcludedId = null, media, annotations, statuses, selectedId, disabled, onSelect, onImport, onRelink }: {
     organization?: OrganizationController | null;
     hiddenMediaIds?: readonly string[];
     onHide?: (id: string) => void;
     onRestore?: (id: string) => void;
     catalogLocked?: boolean;
+    navigationExcludedId?: string | null;
     categories?: Category[];
     media: MediaDescriptor[];
     annotations: Annotation[];
@@ -60,6 +62,9 @@ export function MediaList({ organization: c, hiddenMediaIds = [], onHide, onRest
     const latestMedia = useRef({ media, hiddenMediaIds });
     latestMedia.current = { media, hiddenMediaIds };
     const [search, setSearch] = useState(''), [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [copyMessage, setCopyMessage] = useState<{ text: string; failed: boolean } | null>(null);
+    useEffect(() => { if (!copyMessage) return; const timer = setTimeout(() => setCopyMessage(null), 4000); return () => clearTimeout(timer); }, [copyMessage]);
+    useEffect(() => setCopyMessage(null), [c]);
     const [menuState, setMenu] = useState<{
         owner: OrganizationController | null;
         x: number;
@@ -125,6 +130,24 @@ export function MediaList({ organization: c, hiddenMediaIds = [], onHide, onRest
                     ancestor = index.folders.get(ancestor)?.parentId ?? null;
                 }
             }
+    const navigation: string[] = [];
+    const visitNavigation = (folder: string | null) => { for (const child of index.children.get(folder) ?? []) visitNavigation(child); for (const m of mediaByFolder.get(folder) ?? []) if (m.id !== navigationExcludedId) navigation.push(m.id); };
+    visitNavigation(null);
+    const navigationState = useRef({ navigation, selectedId, disabled, onSelect, index });
+    navigationState.current = { navigation, selectedId, disabled, onSelect, index };
+    useEffect(() => {
+        const move = (event: KeyboardEvent) => {
+            const current = navigationState.current, direction = mediaNavigationDirection(event);
+            if (event.defaultPrevented || direction === null || current.disabled || !current.navigation.length) return;
+            const before = current.navigation.indexOf(current.selectedId ?? '');
+            const next = before < 0 ? direction === 1 ? 0 : current.navigation.length - 1 : Math.max(0, Math.min(current.navigation.length - 1, before + direction));
+            const id = current.navigation[next]; event.preventDefault(); if (before === next) return;
+            setExpanded(old => { const result = new Set(old); let folder = current.index.mediaFolder.get(id); while (folder) { result.add(folder); folder = current.index.folders.get(folder)?.parentId; } return result; });
+            current.onSelect(id);
+            requestAnimationFrame(() => { const button = Array.from(document.querySelectorAll<HTMLButtonElement>('.media-select')).find(row => row.dataset.mediaId === id); button?.scrollIntoView?.({ block: 'nearest' }); });
+        };
+        window.addEventListener('keydown', move); return () => window.removeEventListener('keydown', move);
+    }, []);
     const openMenu = (event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>, context: {
         folderId?: string | null;
         media?: MediaDescriptor;
@@ -152,6 +175,7 @@ export function MediaList({ organization: c, hiddenMediaIds = [], onHide, onRest
         setEdit({ owner: c, draft: c.beginEdit(operation), trigger: trigger?.isConnected ? trigger : rootMenu.current });
     };
     const items: MenuItem[] = menu?.media ? [
+        { id: 'copy-name', label: '复制文件名', disabled: !menuTargetExists, action: () => { const target = currentMedia(); if (!target) return; const filename = c?.snapshot?.media.find(m => m.mediaId === target.id)?.originalFilename ?? target.displayName.split(/[\\/]/).at(-1) ?? target.displayName; void Promise.resolve().then(() => navigator.clipboard.writeText(filename)).then(() => { if (latestMedia.current.media.some(m => m.id === target.id)) setCopyMessage({ text: `已复制：${filename}`, failed: false }); }).catch(() => { if (latestMedia.current.media.some(m => m.id === target.id)) setCopyMessage({ text: `复制失败，请手动复制：${filename}`, failed: true }); }); } },
         { id: 'move-media', label: '移动到文件夹…', disabled: !canEdit || !menuTargetExists, action: trigger => { const target = currentMedia(); if (target) begin({ type: 'moveMedia', mediaId: target.id, folderId: c?.snapshot?.media.find(m => m.mediaId === target.id)?.folderId ?? null }, trigger); } },
         ...(onHide ? [{ id: 'hide', label: '从我的列表隐藏', disabled: disabled || !menuTargetExists, action: () => { const target = currentMedia(); if (target) onHide(target.id); } }] : []),
         { id: 'relink', label: '重新关联…', disabled: disabled || !menuTargetExists, action: () => { const target = currentMedia(); if (target) onRelink(target); } }
@@ -161,7 +185,7 @@ export function MediaList({ organization: c, hiddenMediaIds = [], onHide, onRest
         { id: 'move', label: '移动文件夹…', disabled: !canEdit || !menuFolder, action: trigger => { const target = currentFolder(); if (target) begin({ type: 'moveFolder', id: target.id, parentId: target.parentId }, trigger); } },
         { id: 'remove', label: '删除空文件夹…', disabled: !canEdit || !menuFolder || (index.counts.get(menu?.folderId ?? null) ?? 0) > 0 || (index.children.get(menu?.folderId ?? null)?.length ?? 0) > 0, action: trigger => { const target = currentFolder(); if (target) begin({ type: 'removeFolder', id: target.id }, trigger); } }
     ];
-    const card = (m: MediaDescriptor) => { const status = statusMap.get(m.id) ?? 'unverified'; const title = `${m.displayName}\n${m.channelCount} 通道 · ${(m.frameCount / m.sampleRate).toFixed(3)} 秒 · ${m.sampleRate / 1000} kHz\n${m.categoryIds.map(id => categoryMap.get(id)).filter(Boolean).join(' · ') || '未分类'} · ${annotationCounts.get(m.id) ?? 0} 个标注\n${statusLabel[status]}\n${JSON.stringify(m.sourceRef)}`; return <div key={m.id} className={`media-card ${selectedId === m.id ? 'is-selected' : ''}`} onContextMenu={e => openMenu(e, { media: m })}><button className="media-select" onKeyDown={e => { if (e.key === 'ContextMenu' || e.key === 'F10' && e.shiftKey) openMenu(e, { media: m }); }} onClick={() => onSelect(m.id)} aria-pressed={selectedId === m.id} title={title} aria-label={m.displayName}><FileAudio2 size={14}/><strong className={m.displayName.includes('/') ? 'media-display-name' : undefined}><StructuredName name={m.displayName}/></strong><span className={`media-row-status ${status}`} aria-label={statusLabel[status]} title={statusLabel[status]}>{status === 'ready' ? '✓' : status === 'unverified' ? '·' : '!'}</span></button></div>; };
+    const card = (m: MediaDescriptor) => { const status = statusMap.get(m.id) ?? 'unverified'; const title = `${m.displayName}\n${m.channelCount} 通道 · ${(m.frameCount / m.sampleRate).toFixed(3)} 秒 · ${m.sampleRate / 1000} kHz\n${m.categoryIds.map(id => categoryMap.get(id)).filter(Boolean).join(' · ') || '未分类'} · ${annotationCounts.get(m.id) ?? 0} 个标注\n${statusLabel[status]}\n${JSON.stringify(m.sourceRef)}`; return <div key={m.id} className={`media-card ${selectedId === m.id ? 'is-selected' : ''}`} onContextMenu={e => openMenu(e, { media: m })}><button className="media-select" data-media-id={m.id} onKeyDown={e => { if (e.key === 'ContextMenu' || e.key === 'F10' && e.shiftKey) openMenu(e, { media: m }); }} onClick={() => onSelect(m.id)} aria-pressed={selectedId === m.id} title={title} aria-label={m.displayName}><FileAudio2 size={14}/><strong className={m.displayName.includes('/') ? 'media-display-name' : undefined}><StructuredName name={m.displayName}/></strong><span className={`media-row-status ${status}`} aria-label={statusLabel[status]} title={statusLabel[status]}>{status === 'ready' ? '✓' : status === 'unverified' ? '·' : '!'}</span></button></div>; };
     const renderFolder = (id: string, depth: number): React.ReactNode => { if (query && !matched.has(id))
         return null; const folder = index.folders.get(id)!, open = query ? matched.has(id) : expanded.has(id); return <div className="media-folder" key={id}><div className={`media-folder-row ${selectedFolder === id ? 'is-selected' : ''}`} style={{ paddingLeft: depth * 10 }}><button className="icon-button media-folder-disclosure" aria-label={`${open ? '折叠' : '展开'}文件夹 · ${folder.name}`} aria-expanded={open} onClick={() => setExpanded(old => { const next = new Set(old); if (next.has(id))
         next.delete(id);
@@ -173,5 +197,6 @@ export function MediaList({ organization: c, hiddenMediaIds = [], onHide, onRest
     return <><div className="panel-heading"><h2><ListMusic size={16}/>音频文件<span className="count">{media.filter(m => !hidden.has(m.id)).length}</span></h2><button className="icon-button" aria-label="添加音频" onClick={onImport} disabled={disabled || catalogLocked}><Plus size={17}/></button></div><div className="media-filters"><label className="search-field"><Search size={15} aria-hidden="true"/><input ref={searchInput} aria-label="搜索音频" placeholder="搜索音频或目录…" value={search} onChange={e => setSearch(e.target.value)}/></label></div>{hiddenMediaIds.length > 0 && <details className="media-filters"><summary>显示隐藏音频（{hiddenMediaIds.length}）</summary>{media.filter(m => hidden.has(m.id)).map(m => <button className="button button-quiet" disabled={disabled} key={m.id} onClick={() => onRestore?.(m.id)} title={m.displayName}>恢复 · {m.displayName}</button>)}</details>}
  {c?.error && !edit && <div className="media-filters" role="alert">{c.error.message}<button className="button button-quiet" onClick={() => void c.refresh()}>刷新目录</button></div>}
  <div className="media-items">{c && <div className="media-folder-row"><button className="media-folder-select" aria-pressed={!selectedFolder} onClick={() => c.select(null)} onContextMenu={e => openMenu(e, { folderId: null })}>全部音频<span className="count">{index.counts.get(null) ?? media.length}</span></button><button ref={rootMenu} className="icon-button" aria-label="根目录操作" onClick={e => openMenu(e, { folderId: null })}><MoreHorizontal size={14}/></button></div>}{(index.children.get(null) ?? []).map(id => renderFolder(id, 0))}{(mediaByFolder.get(null) ?? []).map(card)}{!media.length && !index.folders.size && <div className="sidebar-empty"><FileAudio2 size={30}/><p>还没有音频文件</p></div>}{query && !mediaByFolder.size && !matched.size && <div className="sidebar-empty">没有匹配的音频</div>}</div>
+ {copyMessage && <span className="media-copy-message" role={copyMessage.failed ? "alert" : "status"}>{copyMessage.text}</span>}
  {menu && <Menu anchor={menu} returnFocus={menuTargetExists ? menu.trigger : rootMenu.current} onClose={() => setMenu(null)} items={items}/>}{edit && c && edit.owner === c && <FolderEdit controller={c} draft={edit.draft} trigger={edit.trigger} resolveReturnFocus={previous => currentOrganization.current === c && previous?.isConnected ? previous : currentOrganization.current && rootMenu.current?.isConnected ? rootMenu.current : searchInput.current} onClose={() => setEdit(current => current === edit ? null : current)}/>}</>;
 }

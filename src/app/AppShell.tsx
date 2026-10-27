@@ -3,7 +3,7 @@ import { CollaborationStatus } from '../features/collaboration/CollaborationStat
 import { RemoteContext, useRemoteInspection } from '../features/collaboration/remote';
 import { RemoteInspector, RemoteList } from '../features/collaboration/RemoteInspector';
 import type { CollaborationUI } from '../features/collaboration/useCollaboration';
-import { useEffect, useState, type ButtonHTMLAttributes } from 'react';
+import { useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react';
 import { PlaybackContext, usePlayback } from '../features/playback/usePlayback';
 import { MaskContext, useMasks } from '../features/playback/useMasks';
 import { AppMenu } from './AppMenu';
@@ -18,6 +18,7 @@ import { SaveIndicator } from '../features/project/SaveIndicator';
 import type { ProjectLifecycleUI } from '../features/project/useProjectLifecycle';
 import type { MediaUI } from '../features/media/useMedia';
 import { MediaList } from '../features/media/MediaList';
+import { MediaPanelResize, useMediaPanelWidth } from '../features/media/MediaPanelResize';
 import { ImportAcknowledgements, ImportProgress } from '../features/media/ImportProgress';
 import { FolderImportDialog } from '../features/media/FolderImportDialog';
 import { FolderImportProgress } from '../features/media/FolderImportProgress';
@@ -59,8 +60,10 @@ function IconButton({ icon: Icon, label, className = '', ...props }: IconButtonP
 export function AppShell({ project, mediaUI, exchange, collaboration, identity }: { identity?:IdentityController; collaboration?: CollaborationUI; project?: ProjectLifecycleUI; mediaUI?: MediaUI; exchange?: ExchangeUI }) {
   const [mediaOpen, setMediaOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
+  const workspaceHost = useRef<HTMLDivElement>(null);
   const hiddenMediaIds=collaboration?.controller?.status?.hiddenMediaIds??project?.active?.collaboration?.hiddenMediaIds??[];
   const workspace = useWorkspace(project?.active ?? null,hiddenMediaIds,collaboration?async id=>{await collaboration.hideMedia(id,false);}:undefined);
+  const mediaPanel = useMediaPanelWidth(workspaceHost, propertiesOpen, !!workspace.state.compareMediaId && workspace.state.compareLayout === 'horizontal');
   const selected = project?.active?.store.snapshot.document.media.find(m => m.id === workspace.state.activeMediaId);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const panes = [selected?.id, workspace.state.compareMediaId].filter((id): id is string => !!id && !!project?.active?.store.snapshot.document.media.some(m => m.id === id)).map(mediaId => ({ mediaId, channels: workspace.view(mediaId).visibleChannels }));
@@ -112,10 +115,11 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
       </div>
     </div>
 
-    <div className="workspace">
-      {mediaOpen && <aside id="media-panel" className="media-panel panel" aria-label="音频列表">
-        <MediaList organization={mediaUI?.organization} hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => workspace.selectPane('primary', id)} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
-      </aside>}
+    <div className="workspace" ref={workspaceHost}>
+      <aside id="media-panel" className="media-panel panel" aria-label="音频列表" style={{ maxWidth: mediaPanel.maximum, ...(mediaPanel.width === null ? {} : { width: mediaPanel.width }), ...(!mediaOpen ? { display: 'none' } : {}) }}>
+        <MediaList organization={mediaUI?.organization} hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} navigationExcludedId={workspace.state.compareMediaId} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => { if (workspace.selectPane('primary', id)) playback.selectSource(id); }} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
+      </aside>
+      {mediaOpen && <MediaPanelResize width={mediaPanel.width} maximum={mediaPanel.maximum} onPreview={mediaPanel.preview} onCommit={mediaPanel.commit} />}
 
       <main className="analysis-workspace" aria-label="音频分析工作区">
         <div className="workspace-feedback" aria-label="工作区操作反馈">

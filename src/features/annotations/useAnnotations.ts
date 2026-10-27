@@ -16,12 +16,24 @@ export function useAnnotations(active: ActiveProject | null, selection?: Selecti
   const select = (id: string | null) => selection ? selection.selectObject('annotation', id) : setFallbackId(id);
   const drafts = useMemo(() => active ? new AnnotationDrafts(active) : null, [active]);
   useEffect(() => { setFallbackId(null); return () => drafts?.dispose(); }, [drafts]);
-  const run = (action: () => Promise<unknown>,publicWrite=true) => {
-    if (!active || active.store.editingDisabled || publicWrite&&annotationDisabled(active)) return;
+  const perform = (action: () => Promise<unknown>,publicWrite=true) => {
+    if (!active || binding.current !== active || active.store.editingDisabled || publicWrite&&annotationDisabled(active)) return Promise.resolve(false);
     const owner = active;
-    void owner.lifecycle.enqueueEdit(async () => { owner.store.assertEditable(); await owner.lifecycle.submitDrafts(); return action(); }).catch(cause => { owner.store.setError(normalizeError(cause)); });
+    return owner.lifecycle.enqueueEdit(async () => { owner.store.assertEditable(); await owner.lifecycle.submitDrafts(); return action(); }).catch(cause => { owner.store.setError(normalizeError(cause)); return false; });
   };
-  const command = (change: Change) => run(() => active!.queue.enqueue(change, { owner: 'annotations' }));
+  const run = (action: () => Promise<unknown>, publicWrite = true) => { void perform(action, publicWrite); };
+  const submitCommand = (change: Change) => perform(() => {
+    // Validate against the accepted state after preceding queued work. A stale
+    // form must not turn a duplicate category into a failed import barrier.
+    if (change.type === 'addCategory' || change.type === 'updateCategory') {
+      const name = change.category.name.trim();
+      if (!name || active!.store.snapshot.document.categories.some(c => c.id !== change.category.id && c.name.trim() === name)) {
+        throw { code: 'InvalidInput', message: '类别名称为空或已存在，请修改名称。', retryable: false };
+      }
+    }
+    return active!.queue.enqueue(change, { owner: 'annotations' });
+  });
+  const command = (change: Change) => { void submitCommand(change); };
   const mutate = (id: string, patch: Partial<Pick<Annotation, 'region' | 'categoryIds'>>) => run(async () => {
     const annotation = active!.store.snapshot.document.annotations.find(a => a.id === id);
     if (annotation) await active!.queue.enqueue({ type: 'updateAnnotation', annotation: { ...annotation, ...patch, updatedAt: new Date().toISOString() } }, { owner: 'annotations' });
@@ -41,7 +53,7 @@ export function useAnnotations(active: ActiveProject | null, selection?: Selecti
     window.addEventListener('keydown', listener); return () => window.removeEventListener('keydown', listener);
   }, [active]);
   const classify = (target: ClassificationTarget, categoryId: string | null) => active ? classifyTarget(active, target, categoryId, () => binding.current === active) : Promise.resolve();
-  return { active, drafts, selectedId, select, command, mutate, classifyAnnotation, history, remove, classify };
+  return { active, drafts, selectedId, select, command, submitCommand, mutate, classifyAnnotation, history, remove, classify };
 }
 export type AnnotationUI = ReturnType<typeof useAnnotations>;
 export const AnnotationContext = createContext<AnnotationUI | null>(null);

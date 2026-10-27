@@ -154,5 +154,5 @@ it('media rows expose metadata in a title and all row actions only in their cont
  fireEvent.contextMenu(row);fireEvent.click(screen.getByRole('menuitem',{name:'重新关联…'}));expect(relink).toHaveBeenCalledWith(m);ui.unmount();
 });
 it('compact media context actions are reachable with the keyboard context key',()=>{
- const m=fixture.media[0];render(<MediaList media={[m]} annotations={[]} statuses={[]} selectedId={m.id} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onHide={vi.fn()} onRelink={vi.fn()}/>);const row=screen.getByRole('button',{name:m.displayName});row.focus();fireEvent.keyDown(row,{key:'F10',shiftKey:true});expect(screen.getByRole('menuitem',{name:'从我的列表隐藏'})).toHaveFocus();
+ const m=fixture.media[0];render(<MediaList media={[m]} annotations={[]} statuses={[]} selectedId={m.id} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onHide={vi.fn()} onRelink={vi.fn()}/>);const row=screen.getByRole('button',{name:m.displayName});row.focus();fireEvent.keyDown(row,{key:'F10',shiftKey:true});expect(screen.getByRole('menuitem',{name:'复制文件名'})).toHaveFocus();fireEvent.keyDown(screen.getByRole('menu'),{key:'ArrowDown'});expect(screen.getByRole('menuitem',{name:'从我的列表隐藏'})).toHaveFocus();
 });
