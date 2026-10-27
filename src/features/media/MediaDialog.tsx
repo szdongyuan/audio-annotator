@@ -24,8 +24,9 @@ export function MediaDialog({ title, returnFocus, resolveReturnFocus, onClose, b
         };
     }, []);
     useEffect(() => { ref.current?.focus(); }, []);
-    return createPortal(<div className="dialog-backdrop" onPointerDown={e => { if (e.target === e.currentTarget && !busy)
-        onClose(); }}><section ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className="project-dialog source-import-dialog" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape' && !busy)
+    return createPortal(<div className="dialog-backdrop" onPointerDown={e => { if (e.target === e.currentTarget && !busy) {
+        e.preventDefault();
+        onClose(); } }}><section ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className="project-dialog source-import-dialog" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape' && !busy)
         onClose(); if (e.key === 'Tab') {
         const items = [...(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary') ?? [])].filter(e => !e.closest('details:not([open])') || e.tagName === 'SUMMARY');
         const first = items[0], last = items.at(-1);

@@ -280,6 +280,7 @@ pub async fn perform(
                 let committed = store.select_for_process(expected.store_revision, id)?;
                 result.profiles.store_revision = committed.revision;
                 result.profiles.profiles = committed.profiles;
+                state.6.examples.invalidate();
                 *selected = Some(id.clone());
             }
             if let Some(replacement) = replacement {

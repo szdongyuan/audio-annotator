@@ -22,7 +22,7 @@ const executable = path.join(build, 'annotator-desktop.exe'), bytes = fs.readFil
 for (const marker of ['ANNOTATOR_E2E', 'ANNOTATOR_IMPORT_SOURCE_FIXTURES', 'Injected folder publication failure']) assert.ok(!bytes.includes(Buffer.from(marker)) && !bytes.includes(Buffer.from(marker, 'utf16le')), 'Test executable cannot be packaged');
 const builtVersion = execFileSync('pwsh', ['-NoProfile', '-Command', '[Diagnostics.FileVersionInfo]::GetVersionInfo($env:UPDATE_EXE).ProductVersion'], { encoding: 'utf8', windowsHide: true, env: { ...process.env, UPDATE_EXE: executable } }).trim();
 assert.equal(builtVersion, version);
-const resources = [...list('licenses').map(file => ['licenses/' + file, 'licenses/' + file]), ['docs/user-guide.md', 'user-guide.md'], ['docs/third-party.md', 'third-party.md']];
+const resources = [...list('licenses').map(file => ['licenses/' + file, 'licenses/' + file]), ['docs/user-guide.md', 'user-guide.md'], ['docs/examples.md', 'examples.md'], ['docs/third-party.md', 'third-party.md']];
 for (const [source, relative] of resources) assert.equal(hash(source), hash(path.join(build, relative)), 'Built resource mismatch: ' + relative);
 fs.mkdirSync(output, { recursive: false });
 const payload = ['annotator-desktop.exe']; fs.copyFileSync(executable, path.join(output, payload[0]));

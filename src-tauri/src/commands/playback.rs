@@ -130,6 +130,9 @@ struct Work {
 pub struct PlaybackRuntime {
     control: Arc<Mutex<Control>>,
     epoch: Arc<AtomicU64>,
+    // Source acquisition is distinct from release/stop generations: closing an
+    // old preview must not invalidate a newer pending preview opening.
+    source_revision: AtomicU64,
     send: mpsc::SyncSender<()>,
     pending: Arc<Mutex<Option<Work>>>,
 }
@@ -176,12 +179,21 @@ impl Default for PlaybackRuntime {
         Self {
             control,
             epoch,
+            source_revision: AtomicU64::new(0),
             send,
             pending,
         }
     }
 }
 impl PlaybackRuntime {
+    #[cfg(test)]
+    pub(crate) fn test_playing_source(&self, project_id: &str) {
+        let mut control = self.control.lock().unwrap();
+        self.source_revision.fetch_add(1, Ordering::AcqRel);
+        control.status.generation = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        control.status.project_id = Some(project_id.into());
+        control.status.state = TransportState::Playing;
+    }
     pub fn status(&self) -> Result<PlaybackStatus> {
         let mut c = self
             .control
@@ -190,18 +202,80 @@ impl PlaybackRuntime {
         sample_clock(&mut c);
         Ok(c.status.clone())
     }
+    pub(crate) fn source_revision(&self) -> u64 {
+        self.source_revision.load(Ordering::Acquire)
+    }
+    pub(crate) fn reset_if_source_revision(&self, expected: u64) -> Result<()> {
+        let mut control = self
+            .control
+            .lock()
+            .map_err(|_| device_error("播放服务不可用"))?;
+        if self.source_revision.load(Ordering::Acquire) != expected {
+            return Err(AppError::new(
+                ErrorCode::Cancelled,
+                "较新的播放来源已接管输出",
+            ));
+        }
+        self.reset_control(&mut control);
+        Ok(())
+    }
+    fn reset_control(&self, c: &mut Control) {
+        c.cancel.store(true, Ordering::Release);
+        if let Some(buffer) = c.buffer.take() {
+            buffer.set_playing(false);
+        }
+        let generation = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        c.transport = None;
+        c.status = PlaybackStatus {
+            generation,
+            ..Default::default()
+        };
+    }
+    /// A retired preview must never stop a newer main-document output source.
+    pub fn reset_source(&self, project_id: &str) {
+        let Ok(mut c) = self.control.lock() else {
+            return;
+        };
+        if c.status.project_id.as_deref() != Some(project_id) {
+            return;
+        }
+        self.reset_control(&mut c);
+    }
+    pub fn control_source(&self, project_id: &str, action: &str) -> Result<PlaybackStatus> {
+        let mut c = self
+            .control
+            .lock()
+            .map_err(|_| device_error("播放服务不可用"))?;
+        if c.status.project_id.as_deref() != Some(project_id) {
+            return Err(AppError::invalid("示例已停止或输出来源已切换"));
+        }
+        if !matches!(action, "pause" | "stop") {
+            return Err(AppError::invalid("无效示例播放操作"));
+        }
+        if let Some(buffer) = &c.buffer {
+            buffer.set_playing(false);
+        }
+        sample_clock(&mut c);
+        if action == "stop" {
+            c.cancel.store(true, Ordering::Release);
+            c.buffer = None;
+            c.status.generation = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+            if let Some(transport) = &mut c.transport {
+                transport.stop();
+            }
+            c.status.position_seconds = c.status.start_seconds;
+            c.status.state = TransportState::Stopped;
+        } else {
+            if let Some(transport) = &mut c.transport {
+                transport.pause();
+            }
+            c.status.state = TransportState::Paused;
+        }
+        Ok(c.status.clone())
+    }
     pub fn reset(&self) {
         if let Ok(mut c) = self.control.lock() {
-            c.cancel.store(true, Ordering::Release);
-            if let Some(b) = c.buffer.take() {
-                b.set_playing(false);
-            }
-            let generation = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
-            c.transport = None;
-            c.status = PlaybackStatus {
-                generation,
-                ..Default::default()
-            };
+            self.reset_control(&mut c);
         }
     }
     pub fn stop(&self) -> Result<PlaybackStatus> {
@@ -552,6 +626,20 @@ pub async fn playback_configure(
     app: tauri::AppHandle,
     request: PlaybackRequest,
 ) -> Result<PlaybackStatus> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        configure_owned(state, runtime_nonce, app, request)
+    })
+    .await
+    .map_err(|_| device_error("播放请求中断"))?
+}
+/// Shared publication and DSP path for document and isolated example authorities.
+pub(crate) fn configure_owned(
+    state: AppState,
+    runtime_nonce: Option<String>,
+    app: tauri::AppHandle,
+    request: PlaybackRequest,
+) -> Result<PlaybackStatus> {
     if !request.monitor_gain_db.is_finite()
         || !(-60.0..=24.0).contains(&request.monitor_gain_db)
         || !request.volume.is_finite()
@@ -562,157 +650,153 @@ pub async fn playback_configure(
     {
         return Err(AppError::invalid("无效播放参数"));
     }
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let (doc, root, media_generation) = capture_playback(&state, runtime_nonce.as_deref())?;
-        if doc.project_id != request.project_id {
-            return Err(AppError::new(ErrorCode::Cancelled, "项目已切换"));
-        }
-        let descriptor = doc
+    let (doc, root, media_generation) = capture_playback(&state, runtime_nonce.as_deref())?;
+    if doc.project_id != request.project_id {
+        return Err(AppError::new(ErrorCode::Cancelled, "项目已切换"));
+    }
+    let descriptor = doc
+        .media
+        .iter()
+        .find(|m| m.id == request.media_id)
+        .cloned()
+        .ok_or_else(|| AppError::invalid("未知播放源"))?;
+    let mode = effective_mode(&request);
+    let bounds = annotator_core::audio::DspProcessor::new(
+        SourceInfo {
+            media_id: descriptor.id.clone(),
+            sample_rate: descriptor.sample_rate,
+            frame_count: descriptor.frame_count,
+            channel_count: descriptor.channel_count as usize,
+        },
+        annotator_core::audio::DSP_VERSION,
+        mode,
+        &doc.edits,
+    )?;
+    let first = bounds.source_start_frame();
+    let end = first + bounds.frame_count();
+    let rate = descriptor.sample_rate as f64;
+    // Revalidate runtime identity after the lock-free DSP setup; serialize publication with project transitions.
+    let project_guard = state.0.lock().map_err(|_| device_error("项目服务不可用"))?;
+    check_owner(&state, project_guard.as_ref(), runtime_nonce.as_deref())?;
+    let current = project_guard
+        .as_ref()
+        .ok_or_else(|| AppError::new(ErrorCode::Cancelled, "项目已切换"))?
+        .snapshot()?
+        .document;
+    if current.project_id != doc.project_id
+        || state
+            .1
+            .lock()
+            .map_err(|_| device_error("媒体服务不可用"))?
+            .generation()
+            != media_generation
+        || current
             .media
             .iter()
-            .find(|m| m.id == request.media_id)
-            .cloned()
-            .ok_or_else(|| AppError::invalid("未知播放源"))?;
-        let mode = effective_mode(&request);
-        let bounds = annotator_core::audio::DspProcessor::new(
-            SourceInfo {
-                media_id: descriptor.id.clone(),
-                sample_rate: descriptor.sample_rate,
-                frame_count: descriptor.frame_count,
-                channel_count: descriptor.channel_count as usize,
-            },
-            annotator_core::audio::DSP_VERSION,
-            mode,
-            &doc.edits,
-        )?;
-        let first = bounds.source_start_frame();
-        let end = first + bounds.frame_count();
-        let rate = descriptor.sample_rate as f64;
-        // Revalidate runtime identity after the lock-free DSP setup; serialize publication with project transitions.
-        let project_guard = state.0.lock().map_err(|_| device_error("项目服务不可用"))?;
-        check_owner(&state, project_guard.as_ref(), runtime_nonce.as_deref())?;
-        let current = project_guard
-            .as_ref()
-            .ok_or_else(|| AppError::new(ErrorCode::Cancelled, "项目已切换"))?
-            .snapshot()?
-            .document;
-        if current.project_id != doc.project_id
-            || state
-                .1
-                .lock()
-                .map_err(|_| device_error("媒体服务不可用"))?
-                .generation()
-                != media_generation
-            || current
-                .media
-                .iter()
-                .find(|m| m.id == descriptor.id)
-                .is_none_or(|m| {
-                    !annotator_core::media::registry::same_identity(m, &descriptor)
-                        || m.source_ref != descriptor.source_ref
-                })
-            || current.edits != doc.edits
-            || current.playback_mix != doc.playback_mix
-        {
-            return Err(AppError::new(
-                ErrorCode::Cancelled,
-                "播放来源已更新，请重试",
-            ));
-        }
-        let mut c = state
-            .3
-            .control
-            .lock()
-            .map_err(|_| device_error("播放服务不可用"))?;
-        if let Some(b) = &c.buffer {
-            b.set_playing(false);
-        }
-        sample_clock(&mut c);
-        c.cancel.store(true, Ordering::Release);
-        let same = c.status.project_id.as_deref() == Some(&request.project_id)
-            && c.status.media_id.as_deref() == Some(&request.media_id);
-        let position = (request.seek_seconds.unwrap_or(if same {
-            if c.status.state == TransportState::Ended && request.play {
-                first as f64 / rate
-            } else {
-                c.status.position_seconds
-            }
-        } else {
+            .find(|m| m.id == descriptor.id)
+            .is_none_or(|m| {
+                !annotator_core::media::registry::same_identity(m, &descriptor)
+                    || m.source_ref != descriptor.source_ref
+            })
+        || current.edits != doc.edits
+        || current.playback_mix != doc.playback_mix
+    {
+        return Err(AppError::new(
+            ErrorCode::Cancelled,
+            "播放来源已更新，请重试",
+        ));
+    }
+    let mut c = state
+        .3
+        .control
+        .lock()
+        .map_err(|_| device_error("播放服务不可用"))?;
+    if let Some(b) = &c.buffer {
+        b.set_playing(false);
+    }
+    sample_clock(&mut c);
+    c.cancel.store(true, Ordering::Release);
+    let same = c.status.project_id.as_deref() == Some(&request.project_id)
+        && c.status.media_id.as_deref() == Some(&request.media_id);
+    let position = (request.seek_seconds.unwrap_or(if same {
+        if c.status.state == TransportState::Ended && request.play {
             first as f64 / rate
-        }) * rate)
-            .round() as u64;
-        let position = position.clamp(first, end);
-        let mut transport = PlaybackState::new(first, end, position);
-        if same {
-            if let Some(previous) = &c.transport {
-                transport.state = previous.state;
-                transport.start = previous.start.clamp(first, end);
-            }
+        } else {
+            c.status.position_seconds
         }
-        if request.seek_seconds.is_some() {
-            transport.seek(position);
+    } else {
+        first as f64 / rate
+    }) * rate)
+        .round() as u64;
+    let position = position.clamp(first, end);
+    let mut transport = PlaybackState::new(first, end, position);
+    if same {
+        if let Some(previous) = &c.transport {
+            transport.state = previous.state;
+            transport.start = previous.start.clamp(first, end);
         }
-        if request.play {
-            transport.play();
-        } else if !matches!(
-            transport.state,
-            TransportState::Stopped | TransportState::Ended
-        ) {
-            transport.pause();
-        }
-        // Prebuffering a stopped seek remains stopped in the state machine until Play.
-        let position = transport.position;
-        let start = transport.start;
-        c.transport = Some(transport);
-        let generation = state.3.epoch.fetch_add(1, Ordering::AcqRel) + 1;
-        let cancel = Arc::new(AtomicBool::new(false));
-        c.buffer = None;
-        c.cancel = cancel.clone();
-        c.source_rate = descriptor.sample_rate;
-        c.monitor_gain_db = request.monitor_gain_db;
-        c.status = PlaybackStatus {
-            generation,
-            project_id: Some(request.project_id.clone()),
-            media_id: Some(request.media_id.clone()),
-            state: TransportState::Buffering,
-            position_seconds: position as f64 / rate,
-            start_seconds: start.clamp(first, end) as f64 / rate,
-            first_seconds: first as f64 / rate,
-            end_seconds: end as f64 / rate,
-            ..Default::default()
-        };
-        let status = c.status.clone();
-        let work = Work {
-            state: state.clone(),
-            request: request.clone(),
-            descriptor,
-            edits: doc.edits,
-            mix: doc
-                .playback_mix
-                .get(&request.media_id)
-                .cloned()
-                .unwrap_or_default(),
-            root,
-            media_generation,
-            generation,
-            position,
-            cancel,
-            app,
-        };
-        *state
-            .3
-            .pending
-            .lock()
-            .map_err(|_| device_error("播放队列不可用"))? = Some(work);
-        match state.3.send.try_send(()) {
-            Ok(()) | Err(mpsc::TrySendError::Full(())) => (),
-            Err(_) => return Err(device_error("播放工作线程已结束")),
-        }
-        Ok(status)
-    })
-    .await
-    .map_err(|_| device_error("播放请求中断"))?
+    }
+    if request.seek_seconds.is_some() {
+        transport.seek(position);
+    }
+    if request.play {
+        transport.play();
+    } else if !matches!(
+        transport.state,
+        TransportState::Stopped | TransportState::Ended
+    ) {
+        transport.pause();
+    }
+    // Prebuffering a stopped seek remains stopped in the state machine until Play.
+    let position = transport.position;
+    let start = transport.start;
+    c.transport = Some(transport);
+    state.3.source_revision.fetch_add(1, Ordering::AcqRel);
+    let generation = state.3.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+    let cancel = Arc::new(AtomicBool::new(false));
+    c.buffer = None;
+    c.cancel = cancel.clone();
+    c.source_rate = descriptor.sample_rate;
+    c.monitor_gain_db = request.monitor_gain_db;
+    c.status = PlaybackStatus {
+        generation,
+        project_id: Some(request.project_id.clone()),
+        media_id: Some(request.media_id.clone()),
+        state: TransportState::Buffering,
+        position_seconds: position as f64 / rate,
+        start_seconds: start.clamp(first, end) as f64 / rate,
+        first_seconds: first as f64 / rate,
+        end_seconds: end as f64 / rate,
+        ..Default::default()
+    };
+    let status = c.status.clone();
+    let work = Work {
+        state: state.clone(),
+        request: request.clone(),
+        descriptor,
+        edits: doc.edits,
+        mix: doc
+            .playback_mix
+            .get(&request.media_id)
+            .cloned()
+            .unwrap_or_default(),
+        root,
+        media_generation,
+        generation,
+        position,
+        cancel,
+        app,
+    };
+    *state
+        .3
+        .pending
+        .lock()
+        .map_err(|_| device_error("播放队列不可用"))? = Some(work);
+    match state.3.send.try_send(()) {
+        Ok(()) | Err(mpsc::TrySendError::Full(())) => (),
+        Err(_) => return Err(device_error("播放工作线程已结束")),
+    }
+    Ok(status)
 }
 
 #[cfg(test)]
@@ -1054,4 +1138,32 @@ pub(crate) fn monitor_owned(
         return Err(super::collaboration::runtime::stale());
     }
     state.3.monitor(request)
+}
+
+#[cfg(test)]
+mod source_ownership_tests {
+    use super::*;
+    #[test]
+    fn retired_preview_cannot_control_or_reset_new_main_output() {
+        let runtime = PlaybackRuntime::default();
+        {
+            let mut control = runtime.control.lock().unwrap();
+            control.status.project_id = Some("preview".into());
+            control.status.state = TransportState::Playing;
+        }
+        runtime.reset_source("preview");
+        assert_eq!(runtime.status().unwrap().state, TransportState::Stopped);
+        {
+            let mut control = runtime.control.lock().unwrap();
+            control.status.project_id = Some("main".into());
+            control.status.state = TransportState::Playing;
+        }
+        let before = runtime.status().unwrap();
+        runtime.reset_source("preview");
+        assert!(runtime.control_source("preview", "stop").is_err());
+        let after = runtime.status().unwrap();
+        assert_eq!(before.generation, after.generation);
+        assert_eq!(after.project_id.as_deref(), Some("main"));
+        assert_eq!(after.state, TransportState::Playing);
+    }
 }

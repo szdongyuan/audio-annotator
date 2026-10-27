@@ -12,7 +12,9 @@ import { HelpDialog, type HelpTopic } from './HelpDialog';
 import { RegionGainDialog } from '../features/playback/RegionGainDialog';
 import { GlobalSettings } from '../features/settings/GlobalSettings';
 import { useLocalSettings } from '../features/settings/localSettings';
-import { TransportBar, TransportDevices } from '../features/playback/TransportBar';
+import { TransportBar } from '../features/playback/TransportBar';
+import { DeviceDialog } from '../features/playback/DeviceDialog';
+import { ExampleLibrary } from '../features/examples/ExampleLibrary';
 import { ChannelMixer } from '../features/playback/ChannelMixer';
 import { EditList } from '../features/playback/EditList';
 import { ProjectActions } from '../features/project/ProjectActions';
@@ -93,10 +95,12 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   useEffect(() => { if (annotations.selectedId) setInspectorTab('region'); }, [annotations.selectedId]);
   useEffect(() => { if (selection.context && !selection.selection) setInspectorTab('notes'); }, [selection.context, selection.selection]);
   const [helpTopic, setHelpTopic] = useState<HelpTopic | null>(null);
+  const [deviceDialog, setDeviceDialog] = useState<{trigger:HTMLElement|null}|null>(null);
+  useEffect(()=>setDeviceDialog(null),[project?.active]);
   const focusNote = (id: string) => { setPropertiesOpen(true); setInspectorTab('region'); setNoteFocusId(id); };
   const menus = workspaceMenus({ identity, collaboration, project, mediaUI, exchange, annotations, selection, workspace, playback, mediaOpen, propertiesOpen,
     toggleMedia: () => setMediaOpen(v => !v), toggleProperties: () => setPropertiesOpen(v => !v), settings: setSettingsId, globalSettings:localSettings?()=>{setSettingsId(null);setGlobalSettingsOpen(true);}:undefined,
-    inspector: tab => { setPropertiesOpen(true); setInspectorTab(tab); }, help: setHelpTopic, focusNote });
+    inspector: tab => { setPropertiesOpen(true); setInspectorTab(tab); }, devices:trigger=>setDeviceDialog({trigger}), help: setHelpTopic, focusNote });
 
   return <RemoteContext.Provider value={remote}><SelectionContext.Provider value={selection}><AnnotationContext.Provider value={annotations}><MaskContext.Provider value={masks}><PlaybackContext.Provider value={playback}><div className="app-shell">
     <header className="project-header">
@@ -152,6 +156,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
         </div>}
 
         <TransportBar key={project?.active?.collaboration?.runtimeNonce ?? project?.active?.path ?? ''} ui={playback} hasSelection={!!selection.selection && selection.selection.region.mediaId === playback.sourceId} hasMasks={!!doc?.edits.some(e => e.region.mediaId === playback.sourceId && e.operation.type === 'mask')}
+          onDevices={trigger=>setDeviceDialog({trigger})}
           onGain={trigger => { const target = selection.state.getActiveSelection(); if (target && target.region.mediaId === playback.sourceId) selection.openGain(target, trigger); }}
           onResetView={() => { const m = playback.media; if (m) workspace.patch(m.id, { startSeconds: 0, endSeconds: m.frameCount / m.sampleRate, lowHz: 0, highHz: m.sampleRate / 2 }); }}
           onResetMasks={() => { if (playback.sourceId) masks.command({ type: 'resetMediaMasks', mediaId: playback.sourceId }); }} />
@@ -159,7 +164,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
 
       {propertiesOpen && <aside id="properties-panel" className="properties-panel panel" aria-label="属性">
         <div className="panel-heading"><h2><Settings2 size={16} />标注与属性</h2><span className="subtle-label">{doc?.annotations.length ?? 0} 个区域</span></div>
-        <div className={`inspector-tabs${collaboration?.controller ? ' is-shared' : ''}`} role="tablist" aria-label="属性分区">{[['region', '区域'], ['list', '列表'], ['notes', '文件/通道'], ...(collaboration?.controller ? [['authors', '作者']] : []), ['categories', '类别'], ['masks', '处理'], ['mix', '混合'], ['devices', '设备']].map(([id, label]) => <button role="tab" aria-selected={inspectorTab === id} key={id} onClick={() => setInspectorTab(id)}>{label}</button>)}</div>
+        <div className={`inspector-tabs${collaboration?.controller ? ' is-shared' : ''}`} role="tablist" aria-label="属性分区">{[['region', '区域'], ['list', '列表'], ['notes', '文件/通道'], ...(collaboration?.controller ? [['authors', '作者']] : []), ['categories', '类别'], ['masks', '处理'], ['mix', '混合'], ['examples', '示例']].map(([id, label]) => <button role="tab" aria-selected={inspectorTab === id} key={id} onClick={() => setInspectorTab(id)}>{label}</button>)}</div>
         <div className="property-section inspector-content">
           {inspectorTab === 'authors' && collaboration && <RemoteList ui={collaboration} inspect={remote.inspect} />}
           {inspectorTab === 'region' && <AnnotationInspector ui={annotations} annotation={selectedAnnotation} />}
@@ -172,7 +177,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
           {inspectorTab === 'notes' && <NotesEditor ui={annotations} media={doc?.media.find(m => m.id === selection.context?.mediaId) ?? selected ?? null} channelIndex={selection.context?.channelIndex ?? null} />}
           {inspectorTab === 'masks' && <EditList ui={masks} onLocate={async edit => { if(!await workspace.revealMedia(edit.region.mediaId))return; if (edit.region.mediaId !== selected?.id && edit.region.mediaId !== workspace.state.compareMediaId) workspace.selectPane('primary', edit.region.mediaId); workspace.locate(edit.region); }} />}
           {inspectorTab === 'mix' && playback.media && <ChannelMixer media={playback.media} mix={playback.mix} disabled={project?.active?.store.editingDisabled ?? true} onChange={playback.updateMix} />}
-          {inspectorTab === 'devices' && <TransportDevices ui={playback} />}
+          <ExampleLibrary active={project?.active??null} identity={identity} selected={selected} playback={playback} visible={inspectorTab==='examples'} authors={collaboration?.controller?.status?.snapshot?.authors.map(a=>a.identity)??[]}/>
           {inspectorTab === 'categories' && <CategoryManager key={project?.active?.collaboration?.runtimeNonce ?? project?.active?.path} ui={annotations} />}
         </div>
 
@@ -180,6 +185,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
     </div>
 
     <RegionGainDialog ui={selection} />
+    {deviceDialog&&<DeviceDialog ui={playback} returnFocus={deviceDialog.trigger} onClose={()=>setDeviceDialog(null)}/>}
     {globalSettingsOpen && localSettings && <GlobalSettings store={localSettings} initialDisplay={selected?workspace.view(selected.id):undefined} initialAnalysis={selected?workspace.analysis(selected.id):undefined} initialPlayback={{monitorGainDb:playback.monitor.monitorGainDb,volume:playback.options.volume,looping:playback.options.looping,source:playback.workspaceSource}} onClose={()=>setGlobalSettingsOpen(false)} />}
     {mediaUI?.folder?.state === 'choosing' && <FolderImportDialog controller={mediaUI.folder} />}
     {mediaUI?.source?.open && <SourceImportDialog controller={mediaUI.source} organization={mediaUI.organization} />}

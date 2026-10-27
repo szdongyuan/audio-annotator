@@ -14,8 +14,9 @@ type Props = {
   onResetMasks?: () => void;
   hasMasks?: boolean;
   hasSelection?: boolean;
+  onDevices?: (trigger: HTMLElement | null) => void;
 };
-export function TransportBar({ ui, onGain, onResetView, onResetMasks, hasMasks = false, hasSelection = false }: Props) {
+export function TransportBar({ ui, onGain, onResetView, onResetMasks, onDevices, hasMasks = false, hasSelection = false }: Props) {
   const host = useRef<HTMLElement>(null), latest = useRef(ui);
   latest.current = ui;
   const [width, setWidth] = useState(0);
@@ -52,12 +53,13 @@ export function TransportBar({ ui, onGain, onResetView, onResetMasks, hasMasks =
       </>}
       <MonitorGainControl ui={ui} />
       <RegionGainInput enabled={!disabled && hasSelection} />
-      <button className="button button-quiet" aria-label="更多播放操作" aria-haspopup="menu" aria-expanded={!!validMenu} disabled={disabled} onClick={e => {
+      <button className="button button-quiet" aria-label="更多播放操作" aria-haspopup="menu" aria-expanded={!!validMenu} disabled={!ui.active || ui.active.store.editingDisabled} onClick={e => {
         const bounds = e.currentTarget.getBoundingClientRect();
         setMenu({ x: bounds.left, y: bounds.top, trigger: e.currentTarget, owner: ui.active, sourceId: ui.sourceId });
       }}>•••</button>
     </div>
     {validMenu && <Menu anchor={validMenu} returnFocus={validMenu.trigger} onClose={() => setMenu(null)} items={[
+      { id: 'devices', label: '输出设备…', action: trigger => { if (valid()) onDevices?.(trigger ?? null); } },
       { id: 'sound', label: '声音版本', disabled, children: ([{ id: 'original', label: '原音' }, { id: 'processed', label: '暂存编辑' }] as const).map(source => ({ ...source, checked: ui.workspaceSource === source.id, action: () => { if (valid()) ui.updateWorkspaceSource(source.id); } })) },
       { id: 'source', label: '播放源', disabled, children: ui.active?.store.snapshot.document.media.map(media => ({ id: media.id, label: media.displayName, checked: ui.sourceId === media.id, action: () => { if (valid()) ui.selectSource(media.id); } })) },
       { id: 'gain', label: '区域增益…', disabled: disabled || !hasSelection, action: trigger => { if (valid()) onGain?.(trigger ?? null); } },
@@ -66,14 +68,4 @@ export function TransportBar({ ui, onGain, onResetView, onResetMasks, hasMasks =
     ]} />}
     {ui.error && <div className="playback-error" role="alert">{ui.error.message}<button className="button" onClick={ui.retry}>重试播放</button></div>}
   </footer>;
-}
-export function TransportDevices({ ui }: { ui: PlaybackUI }) {
-  const status = ui.status;
-  return <div className="transport-detail">
-    <label>播放源<select aria-label="播放源" disabled={!ui.active || ui.active.store.editingDisabled} value={ui.sourceId ?? ''} onChange={e => ui.selectSource(e.target.value)}><option value="" disabled>未选择播放源</option>{ui.active?.store.snapshot.document.media.map(media => <option key={media.id} value={media.id}>{media.displayName}</option>)}</select></label>
-    <label>设备<select aria-label="输出设备" disabled={!ui.active || ui.active.store.editingDisabled} value={ui.options.deviceId ?? ''} onChange={e => ui.update({ deviceId: e.target.value || null })}><option value="">系统默认</option>{ui.devices.map(device => <option key={device.id} value={device.id}>{device.name}</option>)}</select></label>
-    <button className="text-button" disabled={!ui.active || ui.active.store.editingDisabled} onClick={ui.refreshDevices}>刷新设备</button>
-    <span className="playback-counters">{status.deviceRate ? `${status.deviceRate} Hz · ` : ''}已提交 {status.consumedFrames} 帧 · 欠载 {status.underrunFrames}</span>
-    {ui.selection && <span>通道 {ui.selection.channelIndex + 1} · {ui.selection.startSeconds.toFixed(3)}–{ui.selection.endSeconds.toFixed(3)} 秒 · {Math.round(ui.selection.lowHz)}–{Math.round(ui.selection.highHz)} Hz</span>}
-  </div>;
 }
