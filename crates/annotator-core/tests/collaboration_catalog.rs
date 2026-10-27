@@ -893,3 +893,73 @@ fn real_smb_published_stamp_survives_prepared_capability_release() {
     );
     before.verify(&target).unwrap();
 }
+
+#[test]
+fn batch_commit_retries_retained_records_and_lost_ack_without_duplicates() {
+    let t = Temp::new();
+    let (r, a) = setup(&t);
+    let first = prepared(&t, &r, "batch-one", 1);
+    let second = prepared(&t, &r, "batch-two", 2);
+    let items = [&first, &second];
+    let cancel = AtomicBool::new(false);
+    assert!(r
+        .append_media_batch_interleaved(
+            &a,
+            &items,
+            &cancel,
+            Some(atomic::PublishFault::AfterRecord),
+            || Ok(())
+        )
+        .is_err());
+    assert_eq!(r.reload_catalog().unwrap().manifest().media.len(), 0);
+    let committed = r
+        .append_media_batch_interleaved(&a, &items, &cancel, None, || Ok(()))
+        .unwrap();
+    assert_eq!(committed.manifest().media.len(), 2);
+    let head = fs::read(r.root().join("organization.json")).unwrap();
+    fs::remove_file(t.0.join("batch-one.wav")).unwrap();
+    fs::remove_file(t.0.join("batch-two.wav")).unwrap();
+    let retry = r
+        .append_media_batch_interleaved(&a, &items, &AtomicBool::new(true), None, || {
+            panic!("already committed")
+        })
+        .unwrap();
+    assert_eq!(retry.manifest().media, committed.manifest().media);
+    assert_eq!(head, fs::read(r.root().join("organization.json")).unwrap());
+}
+#[test]
+fn batch_rejects_duplicates_foreign_sources_and_owner_change_without_partial_head() {
+    let t = Temp::new();
+    let (r, a) = setup(&t);
+    let first = prepared(&t, &r, "batch-good", 1);
+    assert!(r
+        .append_media_batch_interleaved(
+            &a,
+            &[&first, &first],
+            &AtomicBool::new(false),
+            None,
+            || Ok(())
+        )
+        .is_err());
+    let second = prepared(&t, &r, "batch-other", 2);
+    assert!(r
+        .append_media_batch_interleaved(
+            &a,
+            &[&first, &second],
+            &AtomicBool::new(false),
+            None,
+            || Err(annotator_core::error::AppError::invalid("owner changed"))
+        )
+        .is_err());
+    assert!(r.reload_catalog().unwrap().manifest().media.is_empty());
+    let committed = r
+        .append_media_batch_interleaved(
+            &a,
+            &[&first, &second],
+            &AtomicBool::new(false),
+            None,
+            || Ok(()),
+        )
+        .unwrap();
+    assert_eq!(committed.manifest().media.len(), 2);
+}

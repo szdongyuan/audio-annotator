@@ -3,7 +3,7 @@
 mod archive;
 mod rules;
 mod staging;
-pub use staging::StagedAudio;
+pub use staging::{StagedAudio, StagingSession};
 mod discovery;
 mod jingcheng;
 mod organization;

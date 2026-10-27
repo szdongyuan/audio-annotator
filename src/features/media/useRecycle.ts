@@ -14,6 +14,6 @@ export function useRecycle(owner: ActiveProject | null) {
     useEffect(() => { if (!owner || !nonce) {
         setBinding(null);
         return;
-    } const next = new RecycleController(owner.store.snapshot.document.projectId, nonce, owner.collaboration?.canImportMedia === true, createRecycleClient(nonce)); setBinding({ owner, controller: next }); void next.refresh(); const refresh = () => void next.refresh(), timer = setInterval(refresh, 1500); window.addEventListener('focus', refresh); return () => { clearInterval(timer); window.removeEventListener('focus', refresh); next.dispose(); }; }, [owner, nonce]);
+    } const next = new RecycleController(owner.store.snapshot.document.projectId, nonce, owner.collaboration?.canImportMedia === true, createRecycleClient(nonce), owner); setBinding({ owner, controller: next }); void next.refresh(); const refresh = () => void next.refresh(), timer = setInterval(refresh, 1500); window.addEventListener('focus', refresh); return () => { clearInterval(timer); window.removeEventListener('focus', refresh); next.dispose(); }; }, [owner, nonce]);
     return controller;
 }

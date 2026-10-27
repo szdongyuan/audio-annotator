@@ -214,6 +214,9 @@ fn clean_view(doc: &mut ProjectDocument) {
 }
 fn apply(doc: &mut ProjectDocument, change: &Change) -> Result<()> {
     match change {
+        Change::ImportMediaBatch { .. } => {
+            return Err(AppError::invalid("Batch import requires a shared project"))
+        }
         Change::ImportMedia { media } => {
             doc.media.push(media.clone());
             doc.analysis

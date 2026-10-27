@@ -1,3 +1,4 @@
+import { registerSuspension } from '../collaboration/admission';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import fixture from '../../../tests/fixtures/document-v3.json';
@@ -100,4 +101,17 @@ it('imports 920 candidates through four bounded batches with no loss or duplicat
  const s=setup(920),before=s.store.snapshot.document.media.length;await s.preview();void s.c.importAll();
  for(let batch=1;batch<=4;batch++){await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(batch));expect(vi.mocked(s.api.batch).mock.calls[batch-1][1]).toHaveLength(batch===4?152:256);s.finish(batch);}
  await waitFor(()=>expect(s.c.state).toBe('finished'));expect(s.c.successCount).toBe(920);expect(s.store.snapshot.document.media.length).toBe(before+920);expect(new Set(s.store.snapshot.document.media.map(m=>m.id)).size).toBe(before+920);expect(s.queue.unresolvedFailures).toHaveLength(0);
+});
+
+it('keeps automatic refresh suspended across source batches and resumes when import finishes',async()=>{
+ const s=setup();await s.preview();let release!:()=>void;const flight=new Promise<void>(r=>{release=r;}),resume=vi.fn();
+ cleanup.push(registerSuspension(s.owner.lifecycle,async()=>{await flight;return resume;}));
+ const work=s.c.importAll();await Promise.resolve();expect(s.api.batch).not.toHaveBeenCalled();release();
+ await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(1));s.finish(1);await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(2));expect(resume).not.toHaveBeenCalled();
+ s.finish(2);await work;expect(s.c.state).toBe('finished');expect(resume).toHaveBeenCalledTimes(1);
+});
+it('cancelling while refresh is draining resumes it without starting native import',async()=>{
+ const s=setup(1);await s.preview();let release!:()=>void;const flight=new Promise<void>(r=>{release=r;}),resume=vi.fn();
+ cleanup.push(registerSuspension(s.owner.lifecycle,async()=>{await flight;return resume;}));
+ const work=s.c.importAll();await s.c.cancel();release();await work;expect(s.api.batch).not.toHaveBeenCalled();expect(resume).toHaveBeenCalledTimes(1);
 });

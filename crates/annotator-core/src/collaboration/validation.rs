@@ -5,7 +5,7 @@ use crate::{
 };
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 pub const MAX_AUTHORS: usize = 128;
 pub const MAX_LAYER_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_TOTAL_LAYER_BYTES: usize = 64 * 1024 * 1024;
@@ -152,13 +152,18 @@ impl LayerPayload {
         doc.categories = self.categories.clone();
         doc.annotations = self.annotations.clone();
         let mut ids = HashSet::new();
+        let positions: HashMap<_, _> = doc
+            .media
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (m.id.clone(), i))
+            .collect();
         for labels in &self.media_labels {
             require(ids.insert(&labels.media_id), "Duplicate media labels")?;
-            let media = doc
-                .media
-                .iter_mut()
-                .find(|m| m.id == labels.media_id)
+            let index = positions
+                .get(&labels.media_id)
                 .ok_or_else(|| AppError::invalid("Labels reference unknown media"))?;
+            let media = &mut doc.media[*index];
             media.note = labels.note.clone();
             media.channel_notes = labels.channel_notes.clone();
             media.category_ids = labels.category_ids.clone();

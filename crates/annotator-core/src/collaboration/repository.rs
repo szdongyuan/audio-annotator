@@ -76,13 +76,7 @@ impl CollaborationRepository {
             atomic::safe_existing(&path)?;
             require(path.is_dir(), "Missing collaboration directory")?;
         }
-        for media in &manifest.media {
-            atomic::safe_existing(&root.join(&media.source_ref))?;
-            require(
-                root.join(&media.source_ref).is_file(),
-                "Missing shared media",
-            )?;
-        }
+        // load() has already validated every referenced source against this head.
         let repo = Self {
             root,
             manifest,

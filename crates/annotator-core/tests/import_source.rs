@@ -908,3 +908,27 @@ fn oversized_optional_metadata_is_excluded_only_when_the_layout_uses_it() {
     assert_eq!(result.counts.skipped, 3); // The manifest was also excluded by the audio extension rule.
     assert_eq!(result.counts.issues, 2);
 }
+
+#[test]
+fn reused_zip_session_reads_distinct_entries_and_rejects_changed_source() {
+    let t = Tree::new();
+    let source = t.zip(
+        "session.zip",
+        &[("a.wav", vec![1; 64]), ("b.wav", vec![2; 64])],
+    );
+    let mut cfg = config(SourceKind::Zip, vec![source.clone()], true);
+    cfg.rules.mode = Mode::Generic;
+    let scan = discover(&cfg);
+    let mut session = scan.staging_session();
+    let cancel = AtomicBool::new(false);
+    let first = session.stage(0, &t.0, &cancel, |_| {}).unwrap();
+    let second = session.stage(1, &t.0, &cancel, |_| {}).unwrap();
+    assert_eq!(fs::read(first.path()).unwrap(), vec![1; 64]);
+    assert_eq!(fs::read(second.path()).unwrap(), vec![2; 64]);
+    // Changing the source length must fail even when its parsed directory is cached.
+    let file = fs::OpenOptions::new().write(true).open(&source).unwrap();
+    file.set_len(3).unwrap();
+    drop(file);
+    assert!(session.stage(1, &t.0, &cancel, |_| {}).is_err());
+    drop((session, first, second));
+}

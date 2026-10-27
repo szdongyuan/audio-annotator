@@ -1,11 +1,13 @@
 import { normalizeError } from '../../bridge/client';
 import type { AppError } from '../../bridge/types';
 import type { Recycle, RecycleCommands, RecycleOperation, RecycleSnapshot } from '../../bridge/recycle';
+import type { ActiveProject } from '../project/useProjectLifecycle';
+import { admitted, suspendRefresh } from '../collaboration/admission';
 export interface RecycleDraft {
     expectedRevision: number;
     operation: RecycleOperation;
 }
-/** Metadata only. No reference to personal document, queue, playback or catalog adoption. */
+/** Shared recycle metadata; writes coordinate with the owner lifecycle without editing personal content. */
 export class RecycleController {
     snapshot: Recycle | null = null;
     error: AppError | null = null;
@@ -16,7 +18,7 @@ export class RecycleController {
     private reading: Promise<void> | null = null;
     private version = 0;
     private listeners = new Set<() => void>();
-    constructor(readonly projectId: string, readonly runtimeNonce: string, readonly writable: boolean, private api: RecycleCommands) { }
+    constructor(readonly projectId: string, readonly runtimeNonce: string, readonly writable: boolean, private api: RecycleCommands, private owner?: ActiveProject) { }
     subscribe = (f: () => void) => { this.listeners.add(f); return () => { this.listeners.delete(f); }; };
     getVersion = () => this.version;
     private notify() { this.version++; this.listeners.forEach(f => f()); }
@@ -42,9 +44,26 @@ export class RecycleController {
         return reading;
     }
     beginEdit(operation: RecycleOperation): RecycleDraft { this.mutationError = null; this.error = null; return { expectedRevision: this.snapshot?.revision ?? 0, operation }; }
+    private async apply(draft: RecycleDraft): Promise<RecycleSnapshot> {
+        // Capture before waiting: retry the same reviewed operation, never a later draft.
+        const expectedRevision = draft.expectedRevision, operation = structuredClone(draft.operation);
+        const action = () => this.api.apply(this.projectId, expectedRevision, operation);
+        const owner = this.owner;
+        if (!owner) return action();
+        return await owner.lifecycle.enqueueEdit(async () => {
+            // Pause periodic refresh before draining it, so another poll cannot starve the edit.
+            // The registered suspension excludes manual sync (which may itself await this edit).
+            const resume = await suspendRefresh(owner.lifecycle);
+            try {
+                return await admitted(owner, action, () => !this.disposed && !owner.lifecycle.admissionClosed
+                    && owner.collaboration?.runtimeNonce === this.runtimeNonce
+                    && owner.store.snapshot.document.projectId === this.projectId);
+            } finally { resume?.(); }
+        }) as RecycleSnapshot;
+    }
     async submit(draft: RecycleDraft) { if (this.disposed || !this.writable || !this.snapshot || this.pending)
         return false; this.pending = true; this.mutationError = null; this.error = null; this.notify(); try {
-        const value = await this.api.apply(this.projectId, draft.expectedRevision, structuredClone(draft.operation));
+        const value = await this.apply(draft);
         if (this.disposed)
             return false;
         this.generation++;

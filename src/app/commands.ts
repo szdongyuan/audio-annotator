@@ -18,6 +18,7 @@ interface FailedCommand { command: QueuedCommand; error: AppError }
 function changeTarget(change: Change): string {
   const target = 'mediaId' in change ? [change.mediaId, 'channelIndex' in change ? change.channelIndex : null]
     : 'id' in change ? change.id
+    : 'items' in change ? change.items.map(m=>m.id)
     : 'media' in change ? change.media.id
     : 'category' in change ? change.category.id
     : 'annotation' in change ? change.annotation.id

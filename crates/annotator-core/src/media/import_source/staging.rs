@@ -77,21 +77,46 @@ fn changed(stamp: &SourceStamp, path: &Path) -> Result<()> {
         .verify(path)
         .map_err(|_| AppError::new(ErrorCode::IdentityMismatch, "导入源已改变，请重新扫描"))
 }
+/// One batch keeps at most one ZIP directory open. Each entry still checks the
+/// captured source stamp, entry metadata, decompression limit and CRC.
+pub struct StagingSession<'a> {
+    scan: &'a ScanResult,
+    archive: Option<(usize, zip::ZipArchive<std::io::BufReader<File>>)>,
+}
 impl ScanResult {
+    pub fn staging_session(&self) -> StagingSession<'_> {
+        StagingSession {
+            scan: self,
+            archive: None,
+        }
+    }
     pub fn stage(
         &self,
+        index: usize,
+        parent: &Path,
+        cancel: &AtomicBool,
+        progress: impl FnMut(u64),
+    ) -> Result<StagedAudio> {
+        self.staging_session()
+            .stage(index, parent, cancel, progress)
+    }
+}
+impl StagingSession<'_> {
+    pub fn stage(
+        &mut self,
         index: usize,
         parent: &Path,
         cancel: &AtomicBool,
         mut progress: impl FnMut(u64),
     ) -> Result<StagedAudio> {
         check_cancel(cancel)?;
-        let candidate = self
+        let scan = self.scan;
+        let candidate = scan
             .candidates
             .get(index)
             .ok_or_else(|| AppError::invalid("候选音频索引越界"))?;
-        let entry = &self.entries[index];
-        let source = &self.sources[candidate.source_index];
+        let entry = &scan.entries[index];
+        let source = &scan.sources[candidate.source_index];
         let record = entry
             .path
             .rsplit_once('/')
@@ -126,7 +151,7 @@ impl ScanResult {
                     File::open(&path).map_err(io)?,
                     &mut output,
                     entry.size,
-                    self.limits,
+                    scan.limits,
                     cancel,
                     &mut progress,
                 )?;
@@ -137,8 +162,15 @@ impl ScanResult {
             SourceKind::Zip => {
                 let stamp = source.stamp.as_ref().unwrap();
                 changed(stamp, &source.path)?;
-                let mut archive = zip::ZipArchive::new(File::open(&source.path).map_err(io)?)
+                if self.archive.as_ref().map(|(index, _)| *index) != Some(candidate.source_index) {
+                    let archive = zip::ZipArchive::new(std::io::BufReader::with_capacity(
+                        262144,
+                        File::open(&source.path).map_err(io)?,
+                    ))
                     .map_err(zip_error)?;
+                    self.archive = Some((candidate.source_index, archive));
+                }
+                let archive = &mut self.archive.as_mut().unwrap().1;
                 let file = archive
                     .by_index(entry.zip_index.unwrap())
                     .map_err(zip_error)?;
@@ -154,7 +186,7 @@ impl ScanResult {
                     file,
                     &mut output,
                     entry.size,
-                    self.limits,
+                    scan.limits,
                     cancel,
                     &mut progress,
                 )?;

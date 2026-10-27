@@ -14,6 +14,12 @@ export function useOrganization(owner: ActiveProject | null) {
     useEffect(() => { if (!owner || !nonce) {
         setBinding(null);
         return;
-    } const next = new OrganizationController(owner.store.snapshot.document.projectId, nonce, owner.collaboration?.canImportMedia === true, createOrganizationClient(nonce)); setBinding({ owner, controller: next }); void next.refresh(); const refresh = () => void next.refresh(), timer = setInterval(refresh, 1500); window.addEventListener('focus', refresh); return () => { clearInterval(timer); window.removeEventListener('focus', refresh); next.dispose(); }; }, [owner, nonce]);
+    } const next = new OrganizationController(owner.store.snapshot.document.projectId, nonce, owner.collaboration?.canImportMedia === true, createOrganizationClient(nonce), owner); setBinding({ owner, controller: next }); void next.refresh(); const refresh = () => void next.refresh(), timer = setInterval(refresh, 1500);
+    let mediaCount = owner.store.snapshot.document.media.length;
+    const unsubscribe = owner.store.subscribe(() => {
+        const count = owner.store.snapshot.document.media.length;
+        if (count !== mediaCount) { mediaCount = count; void next.refresh(true); }
+    });
+    window.addEventListener('focus', refresh); return () => { unsubscribe(); clearInterval(timer); window.removeEventListener('focus', refresh); next.dispose(); }; }, [owner, nonce]);
     return controller;
 }
