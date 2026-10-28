@@ -60,7 +60,13 @@ try{
  const aa=await region(a,'Alice'),bb=await region(b,'Bob');assert.deepEqual(aa.region,bb.region);assert.notEqual(aa.id,bb.id);
  await a.until(`document.querySelectorAll('[data-remote-key]').length===1`);await b.until(`document.querySelectorAll('[data-remote-key]').length===1`);
  for(const [h,name,own]of [[a,'Bob',aa.id],[b,'Alice',bb.id]]){assert.ok(await h.evaluate(`return document.querySelector('.remote-annotation').textContent.includes(arguments[0])`,name));assert.equal((await snapshot(h)).document.annotations.length,1);assert.equal((await snapshot(h)).document.annotations[0].id,own);assert.equal(await h.evaluate(`return document.querySelector('.remote-annotation [data-handle]')===null&&getComputedStyle(document.querySelector('.remote-annotation')).backgroundColor==='rgba(0, 0, 0, 0)'`),true);}
- assert.ok(await a.evaluate(`return document.querySelector('.inspector-tabs').getBoundingClientRect().height<60&&document.documentElement.scrollWidth<=innerWidth`));await a.screenshot('author-overlap');check('independent Alice/Bob native clients create exactly identical physical regions via UI and see separate foreign frames');
+ // The existing shared-grid styles render two compact rows at 68 CSS px.
+ // Protect the actual layout contract rather than the obsolete 60px budget.
+ report.layout=await a.evaluate(`const rect=e=>e.getBoundingClientRect().toJSON();return {tabs:rect(document.querySelector('.inspector-tabs')),panel:rect(document.querySelector('#properties-panel')),buttons:[...document.querySelectorAll('.inspector-tabs button')].map(rect),scrollWidth:document.documentElement.scrollWidth,innerWidth,ratio:devicePixelRatio}`);
+ const tabRows=Object.groupBy(report.layout.buttons,rect=>Math.round(rect.top));
+ assert.deepEqual(Object.values(tabRows).map(row=>row.length),[4,4],JSON.stringify(report.layout));
+ assert.ok(report.layout.tabs.height>0&&report.layout.tabs.height<=72&&report.layout.scrollWidth<=report.layout.innerWidth,JSON.stringify(report.layout));
+ assert.ok(report.layout.buttons.every(rect=>rect.width>0&&rect.height>0&&rect.left>=report.layout.panel.left&&rect.right<=report.layout.panel.right&&rect.top>=report.layout.tabs.top&&rect.bottom<=report.layout.tabs.bottom),JSON.stringify(report.layout));await a.screenshot('author-overlap');check('independent Alice/Bob native clients create exactly identical physical regions via UI and see separate foreign frames');
  await notes(a,'Alice');await notes(b,'Bob');await a.clickText('作者');await a.until(`document.querySelector('.remote-list')?.textContent.includes('Bob file')&&document.querySelector('.remote-list')?.textContent.includes('Bob channel')`);
  await a.click('.remote-list-entry');await a.until(`document.querySelector('.remote-inspector')?.textContent.includes('Bob region')`);assert.equal(await a.evaluate(`return document.querySelector('.remote-inspector').querySelectorAll('input,textarea,select').length`),0);await a.screenshot('readonly-inspector');
  const stable=(await snapshot(a)).document;await a.driver.actions().sendKeys(Key.DELETE,Key.CONTROL,'z',Key.NULL).perform();assert.deepEqual((await snapshot(a)).document,stable);
@@ -82,7 +88,7 @@ try{
  const aPrivate=(await snapshot(a)).document;assert.equal(aPrivate.edits.length,1);assert.deepEqual((await snapshot(b)).document.edits,bPrivate.edits);assert.deepEqual((await snapshot(b)).document.viewState,bPrivate.viewState);assert.equal((await status(b)).preferences?.volume??.75,.75);assert.equal(await b.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`),'processed');assert.equal((await status(a)).preferences.volume,.11);check('private mask, channel visibility, volume and source changes on A leave B unchanged');
  // A deletion removes only A's foreign row from B, including an already-open detail.
  await b.clickText('作者');await b.click('.remote-list-entry');await b.until(`document.querySelector('.remote-inspector')?.textContent.includes('Alice typing')`);
- await a.menu('标注列表','标注');await a.driver.findElement(By.xpath('//button[contains(@class,"annotation-row") and .//small[contains(.,"区域")]]')).click();await a.until(`document.querySelector('.annotation-inspector')`);await a.clickText('删除标注');await sync(a);
+ await a.menu('标注列表','标注');await a.driver.findElement(By.xpath('//button[contains(@class,"annotation-row") and .//small[contains(.,"区域")]]')).click();await a.until(`document.querySelector('[role=tab][aria-selected=true]')?.textContent==='列表'&&document.querySelector('[data-annotation-id].is-selected')`);await tab(a,'区域');await a.until(`document.querySelector('.annotation-inspector')`);await a.clickText('删除标注');await sync(a);
  await b.until(`document.querySelector('.remote-inspector')?.textContent.includes('已不存在')`);assert.equal(await b.evaluate(`return document.querySelector('.remote-inspector').textContent.includes('播放此区域')`),false);assert.equal((await snapshot(b)).document.annotations[0].id,bb.id);assert.equal((await snapshot(a)).document.annotations.length,0);await b.clickText('关闭只读详情');
  await a.menu('撤销','编辑');await sync(a);await b.until(`document.querySelectorAll('[data-remote-key]').length===1`);assert.equal((await snapshot(a)).document.annotations[0].id,aa.id);check('own update/delete/undo never changes other author; open details reject a deleted foreign target');
  // Foreign pointer hit after excluding own frame routes to details, never writable selection.
@@ -112,7 +118,7 @@ try{
  const manifestPath=path.join(shared,'collaboration.json'),offlinePath=path.join(shared,'owned-offline.json');
  await fs.rename(manifestPath,offlinePath);
  try {
-  await a.menu('标注列表','标注');await a.driver.findElement(By.xpath('//button[contains(@class,"annotation-row") and .//small[contains(.,"区域")]]')).click();
+  await a.menu('标注列表','标注');await a.driver.findElement(By.xpath('//button[contains(@class,"annotation-row") and .//small[contains(.,"区域")]]')).click();await a.until(`document.querySelector('[role=tab][aria-selected=true]')?.textContent==='列表'&&document.querySelector('[data-annotation-id].is-selected')`);await tab(a,'区域');
   await a.until(`document.querySelector('.annotation-inspector')`);await a.input('区域备注','Alice durable offline note');await a.menu('保存并同步','协作');
   await a.driver.wait(async()=>{const s=await status(a);return s.pending&&!s.busy&&!!s.error;},30000);
   assert.ok(await a.evaluate(`return document.querySelector('.collaboration-status').textContent.includes('同步异常')`));
