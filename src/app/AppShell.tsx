@@ -3,7 +3,7 @@ import { CollaborationStatus } from '../features/collaboration/CollaborationStat
 import { RemoteContext, useRemoteInspection } from '../features/collaboration/remote';
 import { RemoteInspector, RemoteList } from '../features/collaboration/RemoteInspector';
 import type { CollaborationUI } from '../features/collaboration/useCollaboration';
-import { useEffect, useRef, useState, useSyncExternalStore, type ButtonHTMLAttributes } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ButtonHTMLAttributes } from 'react';
 import { PlaybackContext, usePlayback } from '../features/playback/usePlayback';
 import { MaskContext, useMasks } from '../features/playback/useMasks';
 import { AppMenu } from './AppMenu';
@@ -96,6 +96,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   const [inspectorTab, setInspectorTab] = useState('region');
   const doc = project?.active?.store.snapshot.document;
   const authorId = project?.active?.collaboration?.actor?.authorId ?? identity?.selected?.authorId ?? null;
+  const mediaNavigationScope = useMemo(() => ({}), [project?.active, authorId]);
   const listFilters = useAnnotationListFilters(doc, authorId);
   const navigationScope = { owner: project?.active ?? null, authorId, state: selection.state };
   const latestNavigation = useRef({ scope: navigationScope, workspace: projectWorkspace });
@@ -151,7 +152,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
 
     <div className="workspace" ref={workspaceHost}>
       <aside id="media-panel" className="media-panel panel" aria-label="音频列表" style={{ maxWidth: mediaPanel.maximum, ...(mediaPanel.width === null ? {} : { width: mediaPanel.width }), ...(!mediaOpen ? { display: 'none' } : {}) }}>
-        <MediaList navigationDisabled={project?.active?.store.editingDisabled ?? true} recycle={recycle} authors={collaboration?.controller?.status?.snapshot?.authors ?? []} onHideBatch={collaboration ? (ids,hidden)=>collaboration.hideMediaBatch(ids,hidden) : undefined} organization={mediaUI?.organization} hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} navigationExcludedId={workspace.state.compareMediaId} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={id => { if (workspace.selectPane('primary', id)) playback.selectSource(id); }} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
+        <MediaList navigationScope={mediaNavigationScope} navigationDisabled={project?.active?.store.editingDisabled ?? true} recycle={recycle} authors={collaboration?.controller?.status?.snapshot?.authors ?? []} onHideBatch={collaboration ? (ids,hidden)=>collaboration.hideMediaBatch(ids,hidden) : undefined} organization={mediaUI?.organization} hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} navigationExcludedId={workspace.state.compareMediaId} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={(id, intent) => { const accepted = workspace.selectPane('primary', id); if (accepted) { if (intent === 'random' && id === playback.sourceId) playback.stop(); playback.selectSource(id); } return accepted; }} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
       </aside>
       {mediaOpen && <MediaPanelResize width={mediaPanel.width} maximum={mediaPanel.maximum} onPreview={mediaPanel.preview} onCommit={mediaPanel.commit} />}
 

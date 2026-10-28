@@ -16,9 +16,20 @@ it('keeps other folder totals stable when changing the selected folder',()=>{
 });
 it('moves DOM focus to the file selected by ArrowDown',async()=>{
  const files=[0,1].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`focus-${i}.wav`}));
- render(<MediaList media={files} annotations={[]} statuses={[]} selectedId={files[0].id} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);
+ function Container(){const [selectedId,setSelectedId]=useState<string>(files[0].id);return <MediaList media={files} annotations={[]} statuses={[]} selectedId={selectedId} disabled={false} onSelect={setSelectedId} onImport={vi.fn()} onRelink={vi.fn()}/>;}
+ render(<Container/>);
  const first=screen.getByRole('button',{name:'focus-0.wav'});first.focus();fireEvent.keyDown(first,{key:'ArrowDown'});
+ expect(screen.getByRole('button',{name:'focus-1.wav'})).toHaveAttribute('aria-pressed','true');
  await waitFor(()=>expect(screen.getByRole('button',{name:'focus-1.wav'})).toHaveFocus());
+});
+it.each(['ArrowUp','ArrowDown'])('starts %s at the corresponding edge and stops without wrapping',key=>{
+ const files=[0,1].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`edge-${i}.wav`})),select=vi.fn();
+ function Container(){const [selectedId,setSelectedId]=useState<string|null>(null);return <MediaList media={files} annotations={[]} statuses={[]} selectedId={selectedId} disabled={false} onSelect={id=>{select(id);setSelectedId(id);}} onImport={vi.fn()} onRelink={vi.fn()}/>;}
+ render(<Container/>);
+ fireEvent.keyDown(document.body,{key});expect(select).toHaveBeenLastCalledWith(files[key==='ArrowUp'?1:0].id);
+ fireEvent.keyDown(document.body,{key});expect(select).toHaveBeenCalledTimes(2);
+ fireEvent.keyDown(document.body,{key});expect(select).toHaveBeenCalledTimes(2);
+ expect(screen.getByRole('button',{name:files[key==='ArrowUp'?0:1].displayName})).toHaveAttribute('aria-pressed','true');
 });
 it('allows preview navigation from a clicked row during import and multiselect without changing checks',()=>{
  const files=[0,1].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`nav-${i}.wav`})),select=vi.fn();
