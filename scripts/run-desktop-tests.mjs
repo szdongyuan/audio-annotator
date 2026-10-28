@@ -39,7 +39,7 @@ finally { await h?.quit().catch(()=>{}); await fs.writeFile(path.join(output,'re
 // Each suite owns a fresh process and retires it before the next acquires the ports.
 // Keep the six original phases above, including a full process restart and 300-view churn.
 if (!process.exitCode) {
-  for (const suite of ['selection-flow', 'rulers-flow', 'compact-layout', 'classification-flow', 'list-workflow', 'folder-scan', 'folder-flow', 'source-import', 'feedback-flow', 'format-flow', 'fidelity-flow', 'processed-flow', 'interaction-flow', 'sharing-flow', 'collaboration-native', 'collaboration-controls', 'collaboration-layers', 'default-collaboration', 'uuid-identities', 'media-folders', 'editing-workspace']) {
+  for (const suite of ['selection-flow', 'rulers-flow', 'compact-layout', 'classification-flow', 'list-workflow', 'folder-scan', 'folder-flow', 'source-import', 'feedback-flow', 'format-flow', 'fidelity-flow', 'processed-flow', 'interaction-flow', 'sharing-flow', 'collaboration-native', 'collaboration-controls', 'collaboration-layers', 'default-collaboration', 'uuid-identities', 'media-folders', 'editing-workspace', 'random-navigation']) {
     console.log(`Running ${suite}`);
     const result = spawnSync(process.execPath, [`tests/desktop/${suite}.test.mjs`], { stdio: 'inherit', windowsHide: true, env: { ...process.env, ANNOTATOR_SUITE_OUTPUT: path.join(output, suite) } });
     report.checks.push({ name: suite, passed: result.status === 0 });
