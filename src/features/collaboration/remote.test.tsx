@@ -1,4 +1,4 @@
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import fixture from '../../../tests/fixtures/document-v3.json';
 import { ProjectStore } from '../../app/store';
@@ -48,9 +48,10 @@ it('delayed actions re-resolve current author-qualified data and reject deletion
 });
 it('shows three levels per author, retained-layer errors, no-data and read-only details without mutation controls',()=>{
  const s=remoteFixture(),inspect=vi.fn();s.authors[1].error={code:'InvalidInput',message:'broken latest revision',retryable:true};
+ s.authors[1].layer!.payload.mediaLabels[0].channelCategoryIds=s.authors[1].layer!.payload.mediaLabels[0].channelCategoryIds.map(()=>[s.authors[1].layer!.payload.categories[0].id]);
  const empty={identity:{...s.authors[1].identity,authorId:'empty',displayName:'Empty'},layer:null,error:null};s.authors.push(empty);
  const unavailable:AuthorSnapshot={...empty,identity:{...empty.identity,authorId:'unavailable',displayName:'Unavailable'},error:{code:'InvalidInput',message:'unreadable',retryable:true}};s.authors.push(unavailable);
- render(<RemoteList ui={s.ui} inspect={inspect}/>);expect(screen.getByText(/保留上次已验证/)).toBeTruthy();expect(screen.getByText('尚无共享标注')).toBeTruthy();expect(screen.getByText(/图层不可用/)).toBeTruthy();expect(screen.getByText(/Bob file/)).toBeTruthy();expect(screen.getAllByText(/Bob channel/)).toHaveLength(2);
+ render(<RemoteList ui={s.ui} inspect={inspect}/>);expect(screen.getByText(/保留上次已验证/)).toBeTruthy();expect(screen.getAllByText('暂无已分类内容')).toHaveLength(2);expect(screen.getByText(/图层不可用/)).toBeTruthy();expect(screen.getByText(/Bob file/)).toBeTruthy();expect(screen.getAllByText(/Bob channel/)).toHaveLength(2);
  fireEvent.click(screen.getByRole('button',{name:/Bob category.*通道 2/}));expect(inspect.mock.calls[0][0]).toMatchObject({authorId:'bob',scope:'region'});
  const {container}=render(<RemoteInspector target={s.target} value={resolveRemote(s.ui,s.target)!} close={()=>{}} play={()=>{}} locate={()=>{}}/>);
  expect(container.querySelectorAll('input,textarea,select,[data-handle]')).toHaveLength(0);expect(container.textContent).toContain('只读');expect(screen.getByRole('button',{name:'播放此区域'})).toBeTruthy();expect(screen.queryByRole('button',{name:'删除标注'})).toBeNull();
@@ -91,4 +92,142 @@ it('renders and inspects every foreign label using the foreign category order fo
  const value=resolveRemote(s.ui,s.target)!;
  render(<RemoteInspector target={s.target} value={value} close={()=>{}} play={()=>{}} locate={()=>{}}/>);
  expect(screen.getByRole('dialog')).toHaveTextContent('第二标签 · Bob category');
+});
+
+it('filters unlabeled objects independently and preserves labeled child channels', () => {
+ const s = remoteFixture(), inspect = vi.fn();
+ const payload = s.authors[1].layer!.payload;
+ const file = payload.mediaLabels[0], label = payload.categories[0].id;
+ payload.annotations[0].categoryIds = [];
+ payload.annotations[0].note = 'unlabeled region note';
+ file.categoryIds = [];
+ file.note = 'unlabeled file note';
+ file.channelNotes = ['labeled channel note', 'unlabeled channel note'];
+ file.channelCategoryIds = [[label], []];
+ const before = structuredClone(payload), own = s.active.store.snapshot;
+ const view = render(<RemoteList ui={s.ui} inspect={inspect} />);
+ expect(screen.queryByText('unlabeled region note')).toBeNull();
+ expect(screen.queryByText('unlabeled file note')).toBeNull();
+ expect(screen.queryByText('unlabeled channel note')).toBeNull();
+ expect(view.container.textContent).not.toContain('未分类');
+ const channel = screen.getByRole('button', {name: /通道 1/});
+ expect(channel).toHaveTextContent('stereo.wav');
+ fireEvent.click(channel);
+ expect(inspect).toHaveBeenLastCalledWith({owner:s.active,authorId:'bob',scope:'channel',mediaId:file.mediaId,channelIndex:0});
+ expect(payload).toEqual(before);
+ expect(s.active.store.snapshot).toBe(own);
+ file.categoryIds = [label];
+ file.channelCategoryIds = [[], []];
+ view.rerender(<RemoteList ui={s.ui} inspect={inspect} />);
+ const fileButton = screen.getByRole('button', {name: /文件 · stereo.wav/});
+ fireEvent.click(fileButton);
+ expect(inspect).toHaveBeenLastCalledWith({owner:s.active,authorId:'bob',scope:'file',mediaId:file.mediaId});
+ expect(screen.queryByRole('button', {name:/通道/})).toBeNull();
+ file.categoryIds = [];
+ view.rerender(<RemoteList ui={s.ui} inspect={inspect} />);
+ expect(screen.getByText('暂无已分类内容')).toBeVisible();
+ expect(view.container.querySelectorAll('.remote-list-entry')).toHaveLength(0);
+ expect(view.container.querySelector('[data-remote-author="bob"]')).toHaveTextContent('Bob');
+});
+
+it('shows every label and no-note entries without treating category definitions as content', () => {
+ const s = remoteFixture(), inspect = vi.fn(), payload = s.authors[1].layer!.payload;
+ const first = payload.categories[0];
+ const second = {...first,id:'second-label',name:'第二标签'};
+ payload.categories.push(second);
+ payload.annotations[0].categoryIds = [second.id,first.id];
+ payload.annotations[0].note = '';
+ payload.mediaLabels[0].categoryIds = [];
+ const view = render(<RemoteList ui={s.ui} inspect={inspect} />);
+ const region = screen.getByRole('button', {name:/第二标签 · Bob category.*通道 2/});
+ expect(region).toHaveTextContent('无备注');
+ fireEvent.click(region);
+ expect(inspect).toHaveBeenLastCalledWith(s.target);
+ payload.annotations[0].categoryIds = [];
+ view.rerender(<RemoteList ui={s.ui} inspect={inspect} />);
+ expect(screen.getByText('暂无已分类内容')).toBeVisible();
+});
+
+it('expands authors by default and preserves independent UUID state during refresh', () => {
+ const s = remoteFixture(), inspect = vi.fn();
+ const third = structuredClone(s.authors[1]);
+ third.identity.authorId = 'third';
+ third.layer!.authorId = 'third';
+ s.authors.push(third);
+ const view = render(<RemoteList ui={s.ui} inspect={inspect} />);
+ const section = (id:string) => view.container.querySelector(`[data-remote-author="${id}"]`) as HTMLElement;
+ const toggle = (id:string) => within(section(id)).getByRole('button',{name:'Bob'});
+ expect(toggle('bob')).toHaveAttribute('aria-expanded','true');
+ expect(toggle('third')).toHaveAttribute('aria-expanded','true');
+ const controlled = document.getElementById(toggle('bob').getAttribute('aria-controls')!);
+ expect(controlled).toBeVisible();
+ expect(toggle('third').getAttribute('aria-controls')).not.toBe(controlled!.id);
+ const before = structuredClone(s.authors[1].layer!.payload), own = s.active.store.snapshot;
+ s.active.store.setDraft('own-note', 'unsaved');
+ const draft = s.active.store.drafts.get('own-note');
+ fireEvent.click(toggle('bob'));
+ expect(toggle('bob')).toHaveAttribute('aria-expanded','false');
+ expect(controlled).not.toBeVisible();
+ expect(within(section('bob')).getAllByRole('button')).toHaveLength(1);
+ expect(toggle('third')).toHaveAttribute('aria-expanded','true');
+ expect(s.authors[1].layer!.payload).toEqual(before);
+ expect(s.active.store.snapshot).toBe(own);
+ expect(s.active.store.drafts.get('own-note')).toBe(draft);
+ s.authors[1].identity.displayName = 'Renamed';
+ s.authors[1].layer!.payload.annotations[0].note = 'new shared note';
+ s.authors.reverse();
+ const added = structuredClone(third);
+ added.identity.authorId = 'added'; added.layer!.authorId = 'added';
+ s.authors.push(added);
+ view.rerender(<RemoteList ui={s.ui} inspect={inspect} />);
+ const renamed = within(section('bob')).getByRole('button',{name:'Renamed'});
+ expect(renamed).toHaveAttribute('aria-expanded','false');
+ expect(toggle('third')).toHaveAttribute('aria-expanded','true');
+ expect(toggle('added')).toHaveAttribute('aria-expanded','true');
+ fireEvent.click(renamed);
+ expect(within(section('bob')).getByText('new shared note')).toBeVisible();
+});
+
+it('resets collapse state after remount and project runtime changes', () => {
+ const s = remoteFixture(), inspect = vi.fn();
+ const view = render(<RemoteList ui={s.ui} inspect={inspect} />);
+ fireEvent.click(screen.getByRole('button',{name:'Bob'}));
+ view.rerender(<RemoteList ui={s.ui} inspect={inspect} />);
+ expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','false');
+ view.unmount();
+ const again = render(<RemoteList ui={s.ui} inspect={inspect} />);
+ expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','true');
+ fireEvent.click(screen.getByRole('button',{name:'Bob'}));
+ const next = remoteFixture();
+ next.active.collaboration!.runtimeNonce = 'next-project-runtime';
+ again.rerender(<RemoteList ui={next.ui} inspect={inspect} />);
+ expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','true');
+});
+
+it('shows the list empty state after closing a project and resets on reopening', () => {
+ const s = remoteFixture(), inspect = vi.fn();
+ const view = render(<RemoteList ui={s.ui} inspect={inspect} />);
+ fireEvent.click(screen.getByRole('button',{name:'Bob'}));
+ view.rerender(<RemoteList ui={{...s.ui,active:null,controller:null}} inspect={inspect} />);
+ expect(screen.getByText('没有可显示的其他作者')).toBeVisible();
+ view.rerender(<RemoteList ui={s.ui} inspect={inspect} />);
+ expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','true');
+});
+
+it('keeps errors visible when collapsed and preserves the filtered list empty state', () => {
+ const s = remoteFixture();
+ s.authors[1].error = {code:'InvalidInput',message:'retained layer error',retryable:true};
+ s.authors.push({identity:{...s.authors[1].identity,authorId:'empty',displayName:'Empty'},layer:null,error:{code:'InvalidInput',message:'missing layer error',retryable:true}});
+ const view = render(<RemoteList ui={s.ui} inspect={vi.fn()} />);
+ expect(screen.getByText('暂无已分类内容')).toBeVisible();
+ expect(screen.getByText(/图层不可用：missing layer error/)).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Bob'}));
+ expect(screen.getByText(/保留上次已验证图层：retained layer error/)).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Empty'}));
+ expect(screen.getByText(/图层不可用：missing layer error/)).toBeVisible();
+ expect(screen.getByText('暂无已分类内容')).not.toBeVisible();
+ s.controller.setFilter({mode:'mine'});
+ view.rerender(<RemoteList ui={s.ui} inspect={vi.fn()} />);
+ expect(screen.getByText('没有可显示的其他作者')).toBeVisible();
+ expect(view.container.querySelector('[data-remote-author]')).toBeNull();
 });

@@ -1,21 +1,79 @@
 import { labelText } from '../annotations/labels';
-import { useLayoutEffect, useRef } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
+import type { AuthorSnapshot } from '../../bridge/collaboration';
+import type { ActiveProject } from '../project/useProjectLifecycle';
 import type { CollaborationUI } from './useCollaboration';
 import { foreignAuthors, type RemoteTarget, type RemoteValue } from './remote';
 
 export function RemoteList({ ui, inspect }: { ui: CollaborationUI; inspect: (target: RemoteTarget) => void }) {
-  const authors = foreignAuthors(ui), owner = ui.active!;
+  const owner = ui.active;
+  if (!owner) return <div className="remote-list"><p className="subtle-label">没有可显示的其他作者</p></div>;
+  return <RemoteAuthorList key={owner.collaboration?.runtimeNonce ?? owner.path}
+    owner={owner} authors={foreignAuthors(ui)} inspect={inspect} />;
+}
+
+function RemoteAuthorList({ owner, authors, inspect }: {
+  owner: ActiveProject; authors: AuthorSnapshot[]; inspect: (target: RemoteTarget) => void;
+}) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const listId = useId();
+  const toggle = (id: string) => setCollapsed(previous => {
+    const next = new Set(previous);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   return <div className="remote-list">{!authors.length && <p className="subtle-label">没有可显示的其他作者</p>}{authors.map(author => {
-    const payload = author.layer?.payload, base = { owner, authorId: author.identity.authorId };
-    const category = (ids: string[]) => labelText(payload?.categories ?? [], ids);
-    return <section key={author.identity.authorId} data-remote-author={author.identity.authorId}><h3>{author.identity.displayName}</h3>
+    const id = author.identity.authorId, payload = author.layer?.payload;
+    const contentId = `${listId}-${id}`, isCollapsed = collapsed.has(id);
+    return <section key={id} data-remote-author={id}>
+      <h3><button type="button" className="remote-author-toggle"
+        aria-expanded={!isCollapsed} aria-controls={contentId} onClick={() => toggle(id)}>
+        <span aria-hidden="true">{isCollapsed ? '▸' : '▾'}</span>
+        <span className="remote-author-name">{author.identity.displayName}</span>
+      </button></h3>
       {author.error && <p role="status">{payload ? '读取异常 · 保留上次已验证图层' : '图层不可用'}：{author.error.message}</p>}
-      {!payload && !author.error && <p>尚无共享标注</p>}
-      {payload?.annotations.map(a => <button key={`region:${a.id}`} className="remote-list-entry" onClick={() => inspect({ ...base, scope: 'region', annotationId: a.id })}>{category(a.categoryIds)} · 通道 {a.region.channelIndex + 1} · {a.region.startSeconds.toFixed(3)}–{a.region.endSeconds.toFixed(3)} s<span>{a.note || '无备注'}</span></button>)}
-      {payload?.mediaLabels.map(m => <div key={`file:${m.mediaId}`}><button className="remote-list-entry" onClick={() => inspect({ ...base, scope: 'file', mediaId: m.mediaId })}>文件 · {owner.store.snapshot.document.media.find(d => d.id === m.mediaId)?.displayName} · {category(m.categoryIds)}<span>{m.note || '无备注'}</span></button>{m.channelNotes.map((note, channelIndex) => <button key={channelIndex} className="remote-list-entry" onClick={() => inspect({ ...base, scope: 'channel', mediaId: m.mediaId, channelIndex })}>通道 {channelIndex + 1} · {category(m.channelCategoryIds[channelIndex])}<span>{note || '无备注'}</span></button>)}</div>)}
+      <div id={contentId} hidden={isCollapsed}>
+        <RemoteAuthorContent author={author} owner={owner} inspect={inspect} />
+      </div>
     </section>;
   })}</div>;
 }
+
+function RemoteAuthorContent({ author, owner, inspect }: {
+  author: AuthorSnapshot; owner: ActiveProject; inspect: (target: RemoteTarget) => void;
+}) {
+  const payload = author.layer?.payload;
+  const annotations = payload?.annotations.filter(a => a.categoryIds.length > 0) ?? [];
+  const groups = (payload?.mediaLabels ?? []).map(media => ({
+    media,
+    channels: media.channelCategoryIds.flatMap((ids, index) => ids.length ? [index] : []),
+  })).filter(group => group.media.categoryIds.length > 0 || group.channels.length > 0);
+  const base = { owner, authorId: author.identity.authorId };
+  const category = (ids: string[]) => labelText(payload?.categories ?? [], ids);
+  if (!annotations.length && !groups.length) return <p className="subtle-label">暂无已分类内容</p>;
+  return <>
+    {annotations.map(a => <button key={`region:${a.id}`} className="remote-list-entry"
+      onClick={() => inspect({ ...base, scope: 'region', annotationId: a.id })}>
+      {category(a.categoryIds)} · 通道 {a.region.channelIndex + 1} · {a.region.startSeconds.toFixed(3)}–{a.region.endSeconds.toFixed(3)} s
+      <span>{a.note || '无备注'}</span>
+    </button>)}
+    {groups.map(({ media, channels }) => {
+      const name = owner.store.snapshot.document.media.find(m => m.id === media.mediaId)?.displayName;
+      return <div key={`file:${media.mediaId}`}>
+        {media.categoryIds.length > 0 && <button className="remote-list-entry"
+          onClick={() => inspect({ ...base, scope: 'file', mediaId: media.mediaId })}>
+          文件 · {name} · {category(media.categoryIds)}<span>{media.note || '无备注'}</span>
+        </button>}
+        {channels.map(channelIndex => <button key={channelIndex} className="remote-list-entry"
+          onClick={() => inspect({ ...base, scope: 'channel', mediaId: media.mediaId, channelIndex })}>
+          通道 {channelIndex + 1} · {name} · {category(media.channelCategoryIds[channelIndex])}
+          <span>{media.channelNotes[channelIndex] || '无备注'}</span>
+        </button>)}
+      </div>;
+    })}
+  </>;
+}
+
 export function RemoteInspector({ target, value, close, play, locate }: { target: RemoteTarget; value: RemoteValue | null; close: () => void; play: (t: RemoteTarget) => void; locate: (t: RemoteTarget) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { const previous = document.activeElement as HTMLElement | null; ref.current?.focus(); return () => { if (previous?.isConnected) previous.focus(); }; }, [target]);
