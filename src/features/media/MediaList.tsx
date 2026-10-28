@@ -115,7 +115,7 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
         id = index.folders.get(id)?.parentId ?? null;
     } return false; };
     const viewCounts = new Map<string | null, number>();
-    const matched = new Set<string>(), mediaByFolder = new Map<string | null, MediaDescriptor[]>();
+    const matched = new Set<string>(), mediaByFolder = new Map<string | null, MediaDescriptor[]>(), navigationByFolder = new Map<string | null, MediaDescriptor[]>();
     for (const m of media) {
         if (listView==='trash' ? !trash.has(m.id) : trash.has(m.id) || (listView==='hidden' ? !hidden.has(m.id) : hidden.has(m.id))) continue;
         let countFolder = c?.snapshot ? index.mediaFolder.get(m.id) ?? null : null;
@@ -128,9 +128,13 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
         if(classification==='unannotated' && (annotationCounts.get(m.id)||m.categoryIds.length||m.channelCategoryIds.some(c=>c.length)))continue;
         if(tag && !m.categoryIds.includes(tag) && !m.channelCategoryIds.some(c=>c.includes(tag)) && !tagged.has(m.id))continue;
         const folder = c?.snapshot ? index.mediaFolder.get(m.id) ?? null : null;
-        if (!inScope(folder))
-            continue;
         if (query && !`${m.displayName}/${folder ? index.paths.get(folder) : ''}`.toLocaleLowerCase().includes(query))
+            continue;
+        // Keyboard traversal spans the project, while rendering and batch actions retain the browsing scope.
+        const candidates = navigationByFolder.get(folder) ?? [];
+        candidates.push(m);
+        navigationByFolder.set(folder, candidates);
+        if (!inScope(folder))
             continue;
         const list = mediaByFolder.get(folder) ?? [];
         list.push(m);
@@ -155,10 +159,10 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
     const descendants=new Map<string,string[]>();for(const mediaId of filteredIds){let parent=index.mediaFolder.get(mediaId);while(parent){const list=descendants.get(parent)??[];list.push(mediaId);descendants.set(parent,list);parent=index.folders.get(parent)?.parentId;}}
     const folderIds=(id:string)=>descendants.get(id)??[];
     const navigation: string[] = [];
-    const visitNavigation = (folder: string | null) => { for (const child of index.children.get(folder) ?? []) visitNavigation(child); for (const m of mediaByFolder.get(folder) ?? []) if (m.id !== navigationExcludedId) navigation.push(m.id); };
+    const visitNavigation = (folder: string | null) => { for (const child of index.children.get(folder) ?? []) visitNavigation(child); for (const m of navigationByFolder.get(folder) ?? []) if (m.id !== navigationExcludedId) navigation.push(m.id); };
     visitNavigation(null);
-    const navigationState = useRef({ navigation, selectedId, disabled, onSelect, index });
-    navigationState.current = { navigation, selectedId, disabled:navigationDisabled||listView!=='normal', onSelect, index };
+    const navigationState = useRef({ navigation, selectedId, disabled, onSelect, index, inScope, organization: c });
+    navigationState.current = { navigation, selectedId, disabled:navigationDisabled||listView!=='normal', onSelect, index, inScope, organization: c };
     useEffect(() => {
         const move = (event: KeyboardEvent) => {
             const current = navigationState.current, direction = mediaNavigationDirection(event);
@@ -166,9 +170,10 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
             const before = current.navigation.indexOf(current.selectedId ?? '');
             const next = before < 0 ? direction === 1 ? 0 : current.navigation.length - 1 : Math.max(0, Math.min(current.navigation.length - 1, before + direction));
             const id = current.navigation[next]; event.preventDefault(); if (before === next) return;
+            if (!current.inScope(current.index.mediaFolder.get(id) ?? null)) current.organization?.select(null);
             setExpanded(old => { const result = new Set(old); let folder = current.index.mediaFolder.get(id); while (folder) { result.add(folder); folder = current.index.folders.get(folder)?.parentId; } return result; });
             current.onSelect(id);
-            requestAnimationFrame(() => { const button = Array.from(document.querySelectorAll<HTMLButtonElement>('.media-select')).find(row => row.dataset.mediaId === id); button?.focus({ preventScroll: true }); button?.scrollIntoView?.({ block: 'nearest' }); });
+            requestAnimationFrame(() => { if (navigationState.current.organization !== current.organization) return; const button = Array.from(document.querySelectorAll<HTMLButtonElement>('.media-select')).find(row => row.dataset.mediaId === id); button?.focus({ preventScroll: true }); button?.scrollIntoView?.({ block: 'nearest' }); });
         };
         window.addEventListener('keydown', move); return () => window.removeEventListener('keydown', move);
     }, []);
@@ -188,6 +193,18 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
         return target;
     };
     const canEdit = !!c?.writable && !disabled;
+    const associatedCount = menuFolder ? index.counts.get(menuFolder.id) ?? 0 : 0;
+    const hasChildren = !!menuFolder && (index.children.get(menuFolder.id)?.length ?? 0) > 0;
+    const removeReason = hasChildren ? '含子文件夹' : associatedCount > 0 ? '仍有关联音频' : '';
+    let removeTitle: string | undefined;
+    if (menuFolder && removeReason) {
+        const descendants = new Set<string>();
+        const visit = (id: string) => { descendants.add(id); for (const child of index.children.get(id) ?? []) visit(child); };
+        visit(menuFolder.id);
+        let trashedCount = 0;
+        for (const membership of c?.snapshot?.media ?? []) if (membership.folderId && descendants.has(membership.folderId) && trash.has(membership.mediaId)) trashedCount++;
+        removeTitle = `${hasChildren ? '请先处理子文件夹。' : ''}当前目录及子目录仍关联 ${associatedCount} 个音频${recycle?.snapshot ? `，其中 ${trashedCount} 个在共享回收站` : ''}。目录旁的数字仅统计当前列表视图中可见的音频；未在当前列表显示的关联音频也会阻止删除。`;
+    }
     const begin = (operation: OrganizationOperation, trigger?: HTMLElement | null) => {
         const head = c?.snapshot;
         if (!c || !head || !canEdit) return;
@@ -210,7 +227,7 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
         { id: 'create', label: '新建子文件夹…', disabled: !canEdit || !menuTargetExists, action: trigger => begin({ type: 'createFolder', id: crypto.randomUUID(), parentId: menu?.folderId ?? null, name: '' }, trigger) },
         { id: 'rename', label: '重命名文件夹…', disabled: !canEdit || !menuFolder, action: trigger => { const target = currentFolder(); if (target) begin({ type: 'renameFolder', id: target.id, name: target.name }, trigger); } },
         { id: 'move', label: '移动文件夹…', disabled: !canEdit || !menuFolder, action: trigger => { const target = currentFolder(); if (target) begin({ type: 'moveFolder', id: target.id, parentId: target.parentId }, trigger); } },
-        { id: 'remove', label: '删除空文件夹…', disabled: !canEdit || !menuFolder || (index.counts.get(menu?.folderId ?? null) ?? 0) > 0 || (index.children.get(menu?.folderId ?? null)?.length ?? 0) > 0, action: trigger => { const target = currentFolder(); if (target) begin({ type: 'removeFolder', id: target.id }, trigger); } }
+        { id: 'remove', label: `删除空文件夹…${removeReason ? `（${removeReason}）` : ''}`, title: removeTitle, disabled: !canEdit || !menuFolder || associatedCount > 0 || hasChildren, action: trigger => { const target = currentFolder(); if (target) begin({ type: 'removeFolder', id: target.id }, trigger); } }
     ];
     const card = (m: MediaDescriptor) => { const status = statusMap.get(m.id) ?? 'unverified'; const title = `${m.displayName}\n${m.channelCount} 通道 · ${(m.frameCount / m.sampleRate).toFixed(3)} 秒 · ${m.sampleRate / 1000} kHz\n${m.categoryIds.map(id => categoryMap.get(id)).filter(Boolean).join(' · ') || '未分类'} · ${annotationCounts.get(m.id) ?? 0} 个标注\n${statusLabel[status]}\n${JSON.stringify(m.sourceRef)}`; return <div key={m.id} className={`media-card ${selectedId === m.id ? 'is-selected' : ''} ${batch.selected.has(m.id)?'is-batch-selected':''}`} onContextMenu={e => openMenu(e, { media: m })}>{batch.mode&&<input type="checkbox" aria-label={`选择音频 · ${m.displayName}`} checked={batch.selected.has(m.id)} disabled={batch.busy} onClick={e=>{batch.pick(m.id,e);}} onChange={()=>{}}/>}<button className="media-select" data-media-id={m.id} onKeyDown={e => { if (e.key === 'ContextMenu' || e.key === 'F10' && e.shiftKey) openMenu(e, { media: m }); }} onClick={e=>{if(e.ctrlKey||e.metaKey||e.shiftKey)batch.pick(m.id,e);else if(listView==='normal')onSelect(m.id);else batch.toggle([m.id]);}} aria-pressed={selectedId === m.id} title={title} aria-label={m.displayName}><FileAudio2 size={14}/><strong className={m.displayName.includes('/') ? 'media-display-name' : undefined}><StructuredName name={m.displayName}/></strong><span className={`media-row-status ${status}`} aria-label={statusLabel[status]} title={statusLabel[status]}>{status === 'ready' ? '✓' : status === 'unverified' ? '·' : '!'}</span></button></div>; };
     const renderFolder = (id: string, depth: number): React.ReactNode => { if (query && !matched.has(id))
