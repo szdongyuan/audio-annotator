@@ -73,7 +73,6 @@ export function SelectionToolbar({ media, channel, view, status }: { media: Medi
     {eligible && <div ref={bar} role="toolbar" aria-label="选区操作" className="selection-toolbar" style={{ ...position, visibility: shown ? 'visible' : 'hidden' }}>
       <button disabled={disabled || !!reason} title={reason || '播放当前选区'} onClick={() => { if (target) commands(target).audition(); }}>播放</button>
       <button aria-label="试听选区版本" aria-haspopup="menu" aria-expanded={validMenu?.kind === 'audition'} disabled={disabled || !!reason} title={reason || '选择本次试听版本'} onClick={e => open('audition', e.currentTarget)}>▾</button>
-      <button aria-label="应用区域增益" disabled={disabled} onClick={e => { if (target) ui!.openGain(target, e.currentTarget); }}>增益</button>
       <button aria-label="标注" aria-haspopup="menu" aria-expanded={validMenu?.kind === 'category'} disabled={disabled||annotationDisabled(ui?.active)} onClick={e => open('category', e.currentTarget)}>标注 ▾</button>
     </div>}
     {validMenu && <Menu items={items} anchor={validMenu} returnFocus={validMenu.trigger} onClose={() => setMenu(null)} />}
