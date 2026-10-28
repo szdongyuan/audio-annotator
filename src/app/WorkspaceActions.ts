@@ -16,8 +16,8 @@ import { duration } from '../features/spectrogram/workspace';
 import { zoomViewport } from '../features/spectrogram/viewport';
 import { resolveRegion } from '../features/selection/actions';
 import type { HelpTopic } from './HelpDialog';
-export function workspaceMenus({identity,collaboration,project,mediaUI,exchange,annotations,selection,workspace,playback,mediaOpen,propertiesOpen,toggleMedia,toggleProperties,settings,globalSettings,inspector,help,focusNote}: {
- identity?:IdentityController;collaboration?:CollaborationUI;project?:ProjectLifecycleUI;mediaUI?:MediaUI;exchange?:ExchangeUI;annotations:AnnotationUI;selection:SelectionUI;workspace:WorkspaceUI;playback:PlaybackUI;mediaOpen:boolean;propertiesOpen:boolean;toggleMedia:()=>void;toggleProperties:()=>void;settings:(id:string)=>void;globalSettings?:()=>void;inspector:(tab:string)=>void;help:(topic:HelpTopic)=>void;focusNote:(id:string)=>void;
+export function workspaceMenus({identity,collaboration,project,mediaUI,exchange,annotations,selection,workspace,playback,mediaOpen,propertiesOpen,toggleMedia,toggleProperties,settings,globalSettings,inspector,devices,help,focusNote}: {
+ identity?:IdentityController;collaboration?:CollaborationUI;project?:ProjectLifecycleUI;mediaUI?:MediaUI;exchange?:ExchangeUI;annotations:AnnotationUI;selection:SelectionUI;workspace:WorkspaceUI;playback:PlaybackUI;mediaOpen:boolean;propertiesOpen:boolean;toggleMedia:()=>void;toggleProperties:()=>void;settings:(id:string)=>void;globalSettings?:()=>void;inspector:(tab:string)=>void;devices?:(trigger:HTMLElement|null)=>void;help:(topic:HelpTopic)=>void;focusNote:(id:string)=>void;
 }):WorkspaceMenu[]{
  const owner=project?.active,doc=owner?.store.snapshot.document,disabled=!owner||owner.store.editingDisabled;
  const target=selection.selection,region=owner&&target?resolveRegion(owner,target):null;
@@ -60,7 +60,7 @@ export function workspaceMenus({identity,collaboration,project,mediaUI,exchange,
    {id:'play',label:'播放选区',disabled:regionDisabled||!ready,action:()=>selection.withTarget(target,r=>playback.playSelection(r))},
    ...(['original','processed'] as const).map(source=>({id:'audition-'+source,label:source==='original'?'试听选区原音':'试听选区（应用屏蔽）',disabled:regionDisabled||!ready,action:()=>selection.withTarget(target,r=>playback.playSelection(r,source))})),
    {id:'mask',label:'屏蔽选区',disabled:regionDisabled,action:()=>{if(target)void selection.actions?.mask(target);}},
-   {id:'devices',label:'输出设备…',disabled,action:()=>inspector('devices')}, {id:'mix',label:'通道混音',disabled:disabled||!playback.media,action:()=>inspector('mix')}]},
+   {id:'devices',label:'输出设备…',disabled,action:trigger=>devices?.(trigger??null)}, {id:'mix',label:'通道混音',disabled:disabled||!playback.media,action:()=>inspector('mix')}]},
   ...(collaboration?[collaborationMenu(collaboration,identity,project?.busy)]:[]),
   {id:'help',label:'帮助',items:([{id:'shortcuts',label:'快捷键'},{id:'guide',label:'使用说明'},{id:'about',label:'版本与第三方声明'}] as const).map(t=>({...t,action:()=>help(t.id)}))},
  ];

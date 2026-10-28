@@ -97,7 +97,7 @@ fn current(
 }
 /// Capture authority and enqueue under the short project lock. All decode/FFT/cache I/O
 /// runs on the two scheduler workers after that lock has been released.
-fn enqueue_owned(
+pub(crate) fn enqueue_owned(
     state: AppState,
     runtime_nonce: Option<String>,
     request: TileRequest,

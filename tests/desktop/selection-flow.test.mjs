@@ -42,19 +42,21 @@ export async function selectionFlow(h, context) {
   await h.driver.wait(async()=>(await h.snapshot(context.id)).document.annotations[0].categoryIds.length===0,30000);
   doc = (await h.snapshot(context.id)).document;
   assert.equal(doc.annotations.length, 1); assert.equal(doc.annotations[0].note, '右键选区备注');
-  // The restored focus is the plot, so Delete is a physical keyboard event.
-  await h.driver.actions().move({origin:await h.element('.annotation-overlay')}).click().perform();
-  await h.context(`[data-annotation-id="${annotation.id}"]`); await h.driver.actions().sendKeys(Key.ESCAPE).perform();
-  await h.driver.actions().sendKeys(Key.DELETE).perform();
+  // Saved annotations use explicit masking; Delete removes the annotation.
+  await h.context(`[data-annotation-id="${annotation.id}"]`); await h.label('屏蔽选区');
   await h.driver.wait(async()=>(await h.snapshot(context.id)).document.edits.length===1,30000);
   assert.equal(await h.evaluate("return document.querySelector('.mask-rect')"),null);
   doc = (await h.snapshot(context.id)).document;
   assert.equal(doc.edits.length, 1); assert.deepEqual(doc.edits[0].region, annotation.region); assert.equal(doc.annotations.length, 1);
-  await h.click(`[data-annotation-id="${annotation.id}"]`);await h.driver.actions().sendKeys(Key.DELETE).perform();
+  await h.context(`[data-annotation-id="${annotation.id}"]`);await h.label('屏蔽选区');
   assert.equal((await h.snapshot(context.id)).document.edits.length, 1, 'identical mask deduplicates');
   await h.label('撤销 · Ctrl Z');
   await h.driver.wait(async()=>(await h.snapshot(context.id)).document.edits.length===0,30000);
   assert.equal((await h.snapshot(context.id)).document.annotations.length, 1);
+  await h.click(`[data-annotation-id="${annotation.id}"]`);await h.driver.actions().sendKeys(Key.DELETE).perform();
+  await h.driver.wait(async()=>(await h.snapshot(context.id)).document.annotations.length===0,30000);
+  assert.equal((await h.snapshot(context.id)).document.edits.length,0,'saved Delete removes annotation without masking');
+  await h.label('撤销 · Ctrl Z');await h.driver.wait(async()=>(await h.snapshot(context.id)).document.annotations.length===1,30000);
 
   // First blank gesture deactivates; the second creates the next temporary range.
   await h.drag('.annotation-overlay', [.65,.2], [.9,.6]);

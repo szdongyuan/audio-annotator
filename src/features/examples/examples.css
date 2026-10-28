@@ -1,0 +1,38 @@
+.example-library{min-width:0;font-size:12px}
+.example-scopes{display:flex;gap:4px;margin-bottom:8px}
+.example-scopes button{flex:1;min-width:0;padding:6px 2px;border:0;border-radius:4px;background:transparent;color:var(--text-secondary,#b7afbd);cursor:pointer}
+.example-scopes button[aria-selected=true]{background:#3a3028;color:#f2cc9b}
+.example-scopes button:disabled{opacity:.45;cursor:default}
+.example-tools{display:flex;align-items:center;gap:4px}
+.example-tools input{min-width:0;width:100%;padding:5px 7px}
+.example-tools .icon-button,.example-list .icon-button{flex-shrink:0;width:25px;height:26px;padding:4px}
+.example-add-current{font-size:11px;margin:6px 0}
+.example-list{list-style:none;padding:0;margin:4px 0}
+.example-list li{display:flex;align-items:center;min-width:0;gap:2px;border-bottom:1px solid var(--border-soft,#302a35);padding:3px 0}
+.example-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;background:none;border:0;color:inherit;cursor:pointer;padding:4px 2px}
+.example-creator{max-width:58px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#a198a9;font-size:10px}
+.example-empty{font-size:12px;color:#a198a9;padding:10px 0}
+.example-error{font-size:12px;color:#f1aaa2;overflow-wrap:anywhere}
+.example-import{max-height:60vh;overflow:auto}
+.example-import-row{display:grid;grid-template-columns:minmax(80px,1fr) minmax(100px,1.5fr);gap:4px 12px;padding:6px 0;border-bottom:1px solid var(--border-soft,#302a35)}
+.example-import-row>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.example-import-row small{grid-column:1/-1}
+.example-import-row input{min-width:0}
+.project-dialog:has(.example-preview){width:min(920px,94vw);max-width:94vw}
+.example-preview{min-width:0;padding:12px}
+.example-preview>header{display:flex;align-items:center;gap:12px;padding:0 0 12px}
+.example-preview h2{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.example-preview header span{font-size:11px;color:#a198a9;white-space:nowrap}
+.example-view-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.example-view-tools label{display:flex;align-items:center;gap:6px}
+.example-view-tools .button{padding:5px 7px;font-size:11px}
+.example-spectrum{height:min(48vh,440px);min-height:180px;flex:none}
+.example-spectrum .channel-graph{height:100%}
+.example-audition{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:12px;font-size:12px}
+.example-audition input{flex:1;min-width:100px}
+.example-playhead{position:absolute;top:0;bottom:0;width:1px;background:#ffecd4;pointer-events:none}
+.properties-panel .inspector-tabs,.properties-panel .inspector-tabs.is-shared{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;padding:6px 8px;overflow:visible}
+.properties-panel .inspector-tabs button,.properties-panel .inspector-tabs.is-shared button{min-width:0;white-space:nowrap;padding:6px 1px;font-size:10px}
+
+.project-dialog[aria-label="输出设备"]{width:min(420px,calc(100vw - 40px))}
+.example-preview{overflow:auto;max-height:calc(100vh - 100px)}

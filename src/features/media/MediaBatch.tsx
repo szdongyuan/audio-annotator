@@ -18,6 +18,7 @@ export function useMediaBatch(scope:string, ids:string[], disabled:boolean, onHi
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(null),6000);return()=>clearTimeout(timer);},[notice]);
   const busy=disabled||pending||!!recycle?.pending;
   const replace=(next:string[])=>{setState({scope,ids:next});};
+  const selectOne=(id:string)=>{if(busy||!allowed.has(id))return;setMode(true);replace([id]);anchor.current=id;};
   const toggle=(targets:string[])=>{if(busy)return;setMode(true);const next=new Set(selected),remove=targets.every(id=>next.has(id));for(const id of targets)remove?next.delete(id):next.add(id);replace([...next]);};
   const pick=(id:string,e:MouseEvent)=>{if(busy)return;if(e.shiftKey&&anchor.current&&ids.includes(anchor.current)){const a=ids.indexOf(anchor.current),b=ids.indexOf(id);setMode(true);replace([...new Set([...selected,...ids.slice(Math.min(a,b),Math.max(a,b)+1)])]);}else toggle([id]);anchor.current=id;};
   const hide=async(hidden:boolean,targets=[...selected])=>{
@@ -34,7 +35,7 @@ export function useMediaBatch(scope:string, ids:string[], disabled:boolean, onHi
     else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();if(!busy){setMode(false);replace([]);}}
     else if(e.key.toLowerCase()==='a'&&(e.ctrlKey||e.metaKey)){e.preventDefault();e.stopPropagation();if(!busy){setMode(true);replace(ids);}}
   };
-  return {mode,setMode,selected,toggle,pick,replace,busy,hide,requestTrash,keys,notice,error,confirm:confirm?.scope===scope?confirm:null,submit,cancel:()=>{if(!busy)setConfirm(null);},undo:async()=>{if(!notice?.undo||busy)return;setPending(true);try{await notice.undo();setNotice(null);}catch(e){setError((e as Error).message??'撤销失败');}finally{setPending(false);}}};
+  return {mode,setMode,selected,toggle,pick,replace,selectOne,busy,hide,requestTrash,keys,notice,error,confirm:confirm?.scope===scope?confirm:null,submit,cancel:()=>{if(!busy)setConfirm(null);},undo:async()=>{if(!notice?.undo||busy)return;setPending(true);try{await notice.undo();setNotice(null);}catch(e){setError((e as Error).message??'撤销失败');}finally{setPending(false);}}};
 }
 export type MediaBatch=ReturnType<typeof useMediaBatch>;
 export function BatchActions({batch:b,view,canHide,canTrash}:{batch:MediaBatch;view:string;canHide:boolean;canTrash:boolean}) {

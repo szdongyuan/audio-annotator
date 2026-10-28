@@ -17,7 +17,7 @@ export interface MediaCommands {
   start(projectId: string, paths: string[], event: (event: MediaEvent) => void, relinkId?: string, target?: {folderId:string|null;layoutRevision:number}): Promise<string>;
   cancel(taskId: string): Promise<void>;
   release(taskId: string, mediaId: string): Promise<void>;
-  status(projectId: string): Promise<MediaStatus[]>;
+  status(projectId: string, mediaIds?: string[]): Promise<MediaStatus[]>;
 }
 export function createMediaClient(runtimeNonce?: string): MediaCommands {
  const invoke = runtimeInvoke(runtimeNonce);
@@ -37,7 +37,7 @@ return {
   },
   cancel: taskId => invoke('cancel_media_import', { taskId }),
   release: (taskId, mediaId) => invoke('release_media_import', { taskId, mediaId }),
-  status: projectId => invoke('media_status', { projectId }),
+  status: (projectId, mediaIds) => invoke('media_status', { projectId, ...(mediaIds === undefined ? {} : { mediaIds }) }),
 } satisfies MediaCommands;
 
 }

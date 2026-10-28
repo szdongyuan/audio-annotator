@@ -9,6 +9,7 @@ use std::path::Path;
 enum Storage {
     Local(FileStore),
     Shared(Box<PrivateWorkspace>),
+    Transient(std::path::PathBuf),
 }
 
 /// Session and its OS write lock have exactly the same owner and lifetime.
@@ -18,6 +19,14 @@ pub struct LocalProject {
     recovery: Option<LoadReport>,
 }
 impl LocalProject {
+    /// In-memory, read-only media authority. Never creates a catalog, lock or project file.
+    pub fn transient(root: std::path::PathBuf, document: ProjectDocument) -> Result<Self> {
+        Ok(Self {
+            store: Storage::Transient(root),
+            session: Some(ProjectSession::new(document)?),
+            recovery: None,
+        })
+    }
     /// The caller loads the repository outside its app mutex, then installs it behind
     /// the expected-revision barrier. Saved content and live history remain separate.
     pub fn adopt_shared_catalog(
@@ -108,6 +117,7 @@ impl LocalProject {
         match &self.store {
             Storage::Local(s) => s.root(),
             Storage::Shared(s) => s.root(),
+            Storage::Transient(root) => root,
         }
     }
     pub fn workspace(&self) -> Result<&PrivateWorkspace> {
@@ -123,6 +133,9 @@ impl LocalProject {
         }
     }
     fn active_session(&mut self) -> Result<&mut ProjectSession> {
+        if matches!(self.store, Storage::Transient(_)) {
+            return Err(AppError::invalid("Read-only preview"));
+        }
         self.session
             .as_mut()
             .ok_or_else(|| AppError::invalid("请先选择恢复版本"))
@@ -189,7 +202,7 @@ impl LocalProject {
     pub fn export_document(&self) -> Result<ProjectDocument> {
         let document = self.snapshot()?.document;
         match &self.store {
-            Storage::Local(_) => Ok(document),
+            Storage::Local(_) | Storage::Transient(_) => Ok(document),
             Storage::Shared(s) => {
                 crate::collaboration::LayerPayload::from_document(&document)?.project(s.manifest())
             }
@@ -223,12 +236,14 @@ impl LocalProject {
         match &self.store {
             Storage::Local(s) => s.root(),
             Storage::Shared(s) => s.shared_root(),
+            Storage::Transient(root) => root,
         }
     }
     pub fn persisted_revision(&self) -> u64 {
         match &self.store {
             Storage::Local(s) => s.persisted_revision(),
             Storage::Shared(s) => s.persisted_revision(),
+            Storage::Transient(_) => 0,
         }
     }
     pub fn recovery(&self) -> Option<&LoadReport> {
@@ -243,6 +258,9 @@ impl LocalProject {
         }
     }
     pub fn session_mut(&mut self) -> Result<&mut ProjectSession> {
+        if matches!(self.store, Storage::Transient(_)) {
+            return Err(AppError::invalid("Read-only preview"));
+        }
         if self.is_shared() {
             return Err(AppError::invalid(
                 "Use guarded collaborative project operations",
@@ -302,10 +320,14 @@ impl LocalProject {
         match &mut self.store {
             Storage::Local(s) => s.save(&snapshot.document)?,
             Storage::Shared(s) => s.save(&snapshot.document)?,
+            Storage::Transient(_) => return Err(AppError::invalid("Read-only preview")),
         };
         Ok(revision)
     }
     pub fn save_as(&mut self, root: &Path, id: &str, revision: u64) -> Result<()> {
+        if matches!(self.store, Storage::Transient(_)) {
+            return Err(AppError::invalid("Read-only preview"));
+        }
         let mut document = self.check(id, revision)?.document;
         if self.is_shared() {
             // Resolve aliases before FileStore can create even its lock file.
@@ -334,6 +356,9 @@ impl LocalProject {
         Ok(())
     }
     pub fn prepare_close(&mut self, id: &str, revision: u64, discard: bool) -> Result<()> {
+        if matches!(self.store, Storage::Transient(_)) {
+            return Err(AppError::invalid("Read-only preview"));
+        }
         let snapshot = self.check(id, revision)?;
         if discard {
             // Explicit discard must remain available when storage is unwritable.

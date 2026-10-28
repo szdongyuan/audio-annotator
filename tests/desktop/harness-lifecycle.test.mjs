@@ -2,6 +2,12 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import { test } from 'node:test';
 import * as harness from './harness.mjs';
+import path from 'node:path';
+test('candidate executable environment applies to every suite while explicit paths win',()=>{
+ assert.equal(harness.testExecutable(undefined,{ANNOTATOR_WORKSPACE_EXE:'D:/owned/candidate.exe'}),'D:/owned/candidate.exe');
+ assert.equal(harness.testExecutable('D:/owned/baseline.exe',{ANNOTATOR_WORKSPACE_EXE:'D:/owned/candidate.exe'}),'D:/owned/baseline.exe');
+ assert.equal(harness.testExecutable(undefined,{}),path.resolve('target/debug/annotator-desktop.exe'));
+});
 async function listener() { const server=net.createServer(socket=>socket.end());await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));return {server,port:server.address().port}; }
 const close=server=>new Promise(resolve=>server.close(resolve));
 test('independent instances explicitly bind distinct validated ports and local roots without changing defaults',()=>{

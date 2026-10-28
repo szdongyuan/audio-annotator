@@ -13,12 +13,17 @@ import type { ExpectedProject } from '../../bridge/exchange';
 import type { SharedContext, Transition } from '../../bridge/collaboration';
 import { PreferenceDraft } from '../collaboration/controller';
 import type { ProfileResponse } from '../../bridge/profiles';
+import { matchingSessionUI, SessionStore, type ProjectSession, type SessionUI } from './session';
 
-export interface ActiveProject { store: ProjectStore; queue: CommandQueue; lifecycle: ProjectLifecycle; path: string; readonly collaboration?: SharedContext; readonly commands?: RuntimeCommands; readonly preferences?: PreferenceDraft }
+export interface ActiveProject { store: ProjectStore; queue: CommandQueue; lifecycle: ProjectLifecycle; path: string; readonly restoredUI?: SessionUI; readonly collaboration?: SharedContext; readonly commands?: RuntimeCommands; readonly preferences?: PreferenceDraft }
 const noopSubscribe = () => () => {};
 const zero = () => 0;
 
 export function useProjectLifecycle(api: LocalProjectCommands = localProjects, commands: ProjectCommands = projectClient) {
+  const [session] = useState(() => new SessionStore());
+  const [restorePrompt, setRestorePrompt] = useState(session.record);
+  const restoring = useRef<ProjectSession | null>(null);
+  const openingReadOnly = useRef(false);
   const [active, setActive] = useState<ActiveProject | null>(null);
   const current = useRef<ActiveProject | null>(null);
   const [recovery, setRecovery] = useState<OpenedProject | null>(null);
@@ -55,11 +60,17 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
       }});
       const lifecycle = new ProjectLifecycle(store, queue, runtime?.projects ?? api);
       owner = { store, queue, lifecycle, path: opened.path, ...(opened.collaboration ? { collaboration: Object.freeze(opened.collaboration), commands: runtime } : {}) };
+      const restoredUI = restoring.current && matchingSessionUI(restoring.current, opened);
+      if (restoredUI) Object.assign(owner, { restoredUI });
       if (opened.collaboration) Object.assign(owner, { preferences: new PreferenceDraft(owner) });
       current.current = owner;
+      if (!opened.recovery) {
+        session.adopt(opened, openingReadOnly.current);
+        restoring.current = null; openingReadOnly.current = false; setRestorePrompt(null);
+      }
     }
     setActive(current.current);
-  }, [api, commands]);
+  }, [api, commands, session]);
   const operation = useCallback(async (action: () => Promise<void>) => {
     if (!mounted.current || occupied.current) return;
     occupied.current = true; setBusy(true); setError(null);
@@ -83,9 +94,17 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
     continuation.current = null; setClosePending(false);
     await next();
   }, [api]);
+  const openChosenPath = async (path: string, kind: 'create' | 'open' | 'viewOnly', restore: ProjectSession | null = null) => {
+    const resume = await suspendRefresh(current.current?.lifecycle);
+    try { await finishCurrent(async () => {
+      restoring.current = restore; openingReadOnly.current = kind === 'viewOnly';
+      adopt(await retryAdmission(() => kind === 'viewOnly' ? (api.openViewOnly ?? localProjects.openViewOnly)(path) : api[kind](path), { valid: () => mounted.current }));
+    }); } finally { resume?.(); if (!pendingRecovery.current) { restoring.current = null; openingReadOnly.current = false; } }
+  };
+  const openPath = (path: string, mode: 'open' | 'viewOnly' = 'open', restore: ProjectSession | null = null) => operation(() => openChosenPath(path, mode, restore));
   const open = (kind: 'create' | 'open' | 'viewOnly') => operation(async () => {
     const path = await api.choose(kind==='viewOnly'?'open':kind);
-    if(path){const resume=await suspendRefresh(current.current?.lifecycle);try{await finishCurrent(async()=>adopt(await retryAdmission(()=>kind==='viewOnly'?(api.openViewOnly??localProjects.openViewOnly)(path):api[kind](path),{valid:()=>mounted.current})));}finally{resume?.();}}
+    if (path) await openChosenPath(path, kind);
   });
   const save = () => operation(async () => { await current.current?.lifecycle.save(); });
   const saveAs = () => operation(async () => {
@@ -107,7 +126,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
     if(copyError)throw copyError;
     if (continuation.current) await finishCurrent(continuation.current);
   });
-  const close = () => operation(() => finishCurrent(async () => {}));
+  const close = () => operation(() => finishCurrent(async () => { session.forget(); setRestorePrompt(null); }));
   /** Exchange keeps the current native session alive until the replacement is fully published. */
   const performExchange = async (action: (expected: ExpectedProject | null) => Promise<OpenedProject | null>) => {
     if (occupied.current || pendingRecovery.current) throw { code: 'InvalidInput', message: '请先完成当前项目操作', retryable: true } satisfies AppError;
@@ -135,12 +154,12 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
       if (deferredClose.current) { deferredClose.current = false; queueMicrotask(() => closeWindow.current()); }
     }
   };
-  const performCollaboration = async (owner: ActiveProject, action: () => Promise<Transition>) => {
+  const performCollaboration = async (owner: ActiveProject, action: () => Promise<Transition>, background: boolean | (() => boolean) = false) => {
     if (occupied.current || current.current !== owner || pendingRecovery.current) throw { code:'InvalidInput',message:'请先完成当前项目操作',retryable:true } satisfies AppError;
     occupied.current = true; setBusy(true);
     try {
       let operationError: unknown;
-      await owner.lifecycle.transitionAfterSave(async () => {
+      const apply = async () => {
         let result: Transition;
         try { result = await action(); } catch (cause) { operationError = cause; return; }
         if (!mounted.current || current.current !== owner) return;
@@ -149,7 +168,9 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
           if(result.opened.snapshot.document.revision!==owner.store.snapshot.document.revision||result.opened.snapshot.canUndo!==owner.store.snapshot.canUndo||result.opened.snapshot.canRedo!==owner.store.snapshot.canRedo)owner.store.accept(result.opened.snapshot);
           owner.store.markPersisted(result.opened.snapshot.document.projectId,result.opened.persistedRevision);
         } else adopt(result.opened);
-      });
+      };
+      if (background) await owner.lifecycle.transitionAfterSave(apply, () => mounted.current && current.current === owner && owner.lifecycle.allowsBackgroundTransition && (typeof background !== 'function' || background()));
+      else await owner.lifecycle.transitionAfterSave(apply);
       // An authentication/cancellation error does not undo the acknowledged local save.
       if (operationError) throw operationError;
     } finally {
@@ -181,7 +202,7 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
   };
   closeWindow.current = () => {
     if (occupied.current) { deferredClose.current = true; return; }
-    void operation(() => finishCurrent(() => api.destroyWindow()));
+    void operation(() => finishCurrent(() => { session.flush(); return api.destroyWindow(); }));
   };
   const shortcut = useRef(save); shortcut.current = save;
   useEffect(() => {
@@ -190,22 +211,27 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
       if (disposed) unsubscribe(); else unlisten = unsubscribe;
     }).catch(e => setError(normalizeError(e)));
     const keydown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void shortcut.current(); }
+      if (!event.defaultPrevented && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void shortcut.current(); }
     };
     window.addEventListener('keydown', keydown);
     return () => { disposed = true; unlisten?.(); window.removeEventListener('keydown', keydown); };
   }, [api]);
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false;const op=copyOperation.current;if(op){op.cancelled=true;void collaborationClient.cancel(op.id).catch(()=>{});} current.current?.lifecycle.dispose(); };
+    return () => { mounted.current = false;session.flush();const op=copyOperation.current;if(op){op.cancelled=true;void collaborationClient.cancel(op.id).catch(()=>{});} current.current?.lifecycle.dispose(); };
   }, []);
   return {
     active, recovery, busy, editingDisabled: active?.store.editingDisabled ?? true,
     error: error ?? active?.lifecycle.error ?? null, closePending,
     copyProgress,cancelCopy:()=>{const op=copyOperation.current;if(op){op.cancelled=true;void collaborationClient.cancel(op.id).catch(e=>setError(normalizeError(e)));}},
-    open, save, saveAs, close, performExchange, performCollaboration, performIdentity,
+    open, openPath, save, saveAs, close, performExchange, performCollaboration, performIdentity,
+    restorePrompt,
+    restoreLast: () => restorePrompt ? openPath(restorePrompt.path, restorePrompt.readOnly ? 'viewOnly' : 'open', restorePrompt) : Promise.resolve(),
+    startEmpty: () => { setRestorePrompt(null); setError(null); },
+    forgetSession: () => { session.forget(); setRestorePrompt(null); setError(null); },
+    acknowledgeSessionUI: (owner: ActiveProject, ui: SessionUI, excluded: readonly string[]) => { if (current.current === owner && !pendingRecovery.current) session.update(owner, ui, excluded); },
     recover: (source: RecoverySource | null) => operation(async () => adopt(await recoveryCommands.current.recover(source))),
-    cancelRecovery: () => operation(async () => { await recoveryCommands.current.cancelRecovery(); pendingRecovery.current = false; setRecovery(null); }),
+    cancelRecovery: () => operation(async () => { await recoveryCommands.current.cancelRecovery(); pendingRecovery.current = false; setRecovery(null); restoring.current = null; openingReadOnly.current = false; }),
     retry: () => operation(async () => {
       await current.current?.lifecycle.retryFailures();
       if (continuation.current) await finishCurrent(continuation.current);

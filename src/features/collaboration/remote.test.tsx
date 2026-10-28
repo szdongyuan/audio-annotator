@@ -1,3 +1,5 @@
+import { InspectionViewer } from '../inspection/InspectionViewer';
+import type { RemoteTarget, RemoteValue } from './remote';
 import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import fixture from '../../../tests/fixtures/document-v3.json';
@@ -8,18 +10,21 @@ import { CollaborationController } from './controller';
 import type { CollaborationUI } from './useCollaboration';
 import { foreignAuthors, resolveRemote, useRemoteInspection } from './remote';
 import { RemoteAnnotations } from './RemoteAnnotations';
-import { RemoteInspector, RemoteList } from './RemoteInspector';
+import { RemoteList } from './RemoteInspector';
 import { defaultView } from '../spectrogram/workspace';
 import { CommandQueue } from '../../app/commands';
 import { ProjectLifecycle } from '../project/lifecycle';
 import { useAnnotations } from '../annotations/useAnnotations';
 import { NoteField } from '../annotations/NotesEditor';
 import { usePlayback } from '../playback/usePlayback';
+function ReadonlyDetails({target,value,close=()=>{}}:{target:RemoteTarget;value:RemoteValue|null;close?:()=>void}) {
+ return <InspectionViewer target={target} value={value} binding={null} playback={{options:{volume:.75,deviceId:null,looping:false},monitor:{monitorGainDb:0}} as never} onJump={async()=>false} onClose={close}/>;
+}
 export function remoteFixture() {
  const store=new ProjectStore({document:structuredClone(fixture) as never,canUndo:true,canRedo:false});
  const identity=(id:string,name:string)=>({authorId:id,displayName:name,createdAt:'2026-10-23T00:00:00Z'});
  const alice=identity('alice','Alice'),bob=identity('bob','Bob');
- const active={store,collaboration:{runtimeNonce:'session',actor:alice,preferences:null}} as ActiveProject;
+ const active={store,lifecycle:{registerBackgroundGuard:()=>()=>{}},collaboration:{runtimeNonce:'session',actor:alice,preferences:null}} as unknown as ActiveProject;
  const author=(who:typeof alice):AuthorSnapshot=>({identity:who,error:null,layer:{kind:'audio-annotator-author-layer',formatVersion:2,projectId:fixture.projectId,authorId:who.authorId,revision:1,parent:null,hash:'hash',payload:{categories:[{...store.snapshot.document.categories[0],name:who.displayName+' category'}],annotations:structuredClone(store.snapshot.document.annotations),mediaLabels:store.snapshot.document.media.map(m=>({mediaId:m.id,note:who.displayName+' file',channelNotes:Array(m.channelCount).fill(who.displayName+' channel'),categoryIds:[store.snapshot.document.categories[0].id],channelCategoryIds:Array.from({length:m.channelCount},()=>[])}))}}});
  const authors=[author(alice),author(bob)],controller=new CollaborationController(active);
  controller.status={snapshot:{projectId:fixture.projectId,authors}} as never;
@@ -27,6 +32,53 @@ export function remoteFixture() {
  const target={owner:active,authorId:'bob',scope:'region' as const,annotationId:fixture.annotations[0].id};
  return{active,ui,controller,authors,target};
 }
+it('includes the current actor without a published layer and marks the live document as mine', () => {
+ const s=remoteFixture();s.controller.status!.snapshot!.authors=[];
+ render(<RemoteList ui={s.ui} inspect={vi.fn()}/>);
+ expect(screen.getByRole('button',{name:/Alice.*我/})).toBeVisible();
+ expect(screen.getByRole('button',{name:/鸟声.*区域备注/})).toBeVisible();
+ expect(foreignAuthors(s.ui)).toEqual([]);
+});
+it('subscribes own author entries and open inspection to acknowledged current annotations, notes and categories', () => {
+ const s=remoteFixture(),inspect=vi.fn(),beforeForeign=structuredClone(s.authors[1]);
+ const list=render(<RemoteList ui={s.ui} inspect={inspect}/>);
+ const target={...s.target,authorId:'alice'};
+ const hook=renderHook(()=>useRemoteInspection(s.ui,{} as never,{} as never));
+ act(()=>hook.result.current.inspect(target));
+ const next=structuredClone(s.active.store.snapshot),doc=next.document,media=doc.media[0];
+ doc.revision++;doc.categories[0].name='当前类别';doc.annotations[0].note='当前区域备注';
+ media.categoryIds=[doc.categories[0].id];media.channelCategoryIds[0]=[doc.categories[0].id];
+ media.note='当前文件备注';media.channelNotes[0]='当前通道备注';
+ doc.annotations.push({...structuredClone(doc.annotations[0]),id:'acknowledged-local-region',note:'新增区域备注'});
+ act(()=>s.active.store.accept(next));
+ const section=list.container.querySelector('[data-remote-author="alice"]');expect(section).not.toBeNull();
+ const own=within(section as HTMLElement);
+ expect(own.getAllByRole('button',{name:/当前类别/})).toHaveLength(4);
+ fireEvent.click(own.getByRole('button',{name:/新增区域备注/}));
+ expect(inspect).toHaveBeenLastCalledWith({owner:s.active,authorId:'alice',scope:'region',annotationId:'acknowledged-local-region'});
+ expect(hook.result.current.value?.note).toBe('当前区域备注');
+ expect(hook.result.current.value?.categoryText).toBe('当前类别');
+ expect(resolveRemote(s.ui,{owner:s.active,authorId:'alice',scope:'file',mediaId:media.id})?.note).toBe('当前文件备注');
+ expect(resolveRemote(s.ui,{owner:s.active,authorId:'alice',scope:'channel',mediaId:media.id,channelIndex:0})?.note).toBe('当前通道备注');
+ expect(list.container.querySelectorAll('[data-remote-author="alice"]')).toHaveLength(1);
+ expect(own.queryByText(/Alice category|Alice file/)).toBeNull();
+ expect(foreignAuthors(s.ui).map(a=>a.identity.authorId)).toEqual(['bob']);
+ expect(s.authors[1]).toEqual(beforeForeign);expect(s.active.store.snapshot).toBe(next);
+});
+it('resolves own actions from the current owner only and never falls back to stale self layers', async () => {
+ const s=remoteFixture(),target={...s.target,authorId:'alice'},playSelection=vi.fn();
+ const beforeForeign=structuredClone(s.authors[1]);
+ const hook=renderHook(({ui})=>useRemoteInspection(ui,{} as never,{playSelection} as never),{initialProps:{ui:s.ui}});
+ act(()=>hook.result.current.inspect(target));expect(hook.result.current.value?.note).toBe('区域备注');
+ const delayed=hook.result.current.locate,next=structuredClone(s.active.store.snapshot);next.document.revision++;next.document.annotations=[];
+ act(()=>s.active.store.accept(next));await act(async()=>{await delayed(target);});
+ expect(hook.result.current.value).toBeNull();expect(playSelection).not.toHaveBeenCalled();
+ expect(resolveRemote(s.ui,{...target,owner:{...s.active}})).toBeNull();
+ expect(resolveRemote({...s.ui,controller:new CollaborationController({...s.active})},target)).toBeNull();
+ hook.rerender({ui:{...s.ui,active:{...s.active}}});await act(async()=>{await delayed(target);});
+ expect(hook.result.current.selected).toBeNull();expect(playSelection).not.toHaveBeenCalled();
+ expect(s.authors[1]).toEqual(beforeForeign);
+});
 it('keeps identical author IDs/geometries separate, excludes the own published layer and filters only display',()=>{
  const s=remoteFixture(),snapshot=s.active.store.snapshot;
  expect(foreignAuthors(s.ui).map(a=>a.identity.displayName)).toEqual(['Bob']);
@@ -36,15 +88,15 @@ it('keeps identical author IDs/geometries separate, excludes the own published l
  const {container}=render(<RemoteAnnotations authors={foreignAuthors(s.ui)} media={snapshot.document.media[0]} channel={1} view={defaultView(snapshot.document.media[0])}/>);
  expect(container.querySelectorAll('[data-remote-key]')).toHaveLength(2);expect(container.querySelectorAll('[data-handle],[data-annotation-id]')).toHaveLength(0);expect(container.textContent).toContain('Bob · Bob category');expect(container.textContent).toContain('Carol');
 });
-it('delayed actions re-resolve current author-qualified data and reject deletion and retired owners',()=>{
+it('explicit jumps re-resolve current author-qualified data and reject deletion and retired owners',async()=>{
  const s=remoteFixture(),playSelection=vi.fn(),locate=vi.fn(),workspace={state:{activeMediaId:fixture.media[0].id,compareMediaId:null},locate,selectPane:vi.fn(),view:()=>({visibleChannels:[1]}),patch:vi.fn()} as never;
  const playback={playSelection} as never;
  const hook=renderHook(({ui})=>useRemoteInspection(ui,workspace,playback),{initialProps:{ui:s.ui}});
- act(()=>hook.result.current.inspect(s.target));const delayed=hook.result.current.play;
- s.authors[1].layer!.payload.annotations[0].region.lowHz=450;act(()=>delayed(s.target));expect(playSelection.mock.calls[0][0].lowHz).toBe(450);expect(playSelection.mock.calls[0]).toHaveLength(1);
- s.authors[1].layer!.payload.annotations=[];act(()=>delayed(s.target));expect(playSelection).toHaveBeenCalledTimes(1);
+ act(()=>hook.result.current.inspect(s.target));const delayed=hook.result.current.locate;
+ s.authors[1].layer!.payload.annotations[0].region.lowHz=450;await act(async()=>{await delayed(s.target);});expect(locate.mock.calls[0][0].lowHz).toBe(450);expect(locate.mock.calls[0]).toHaveLength(1);expect(playSelection).not.toHaveBeenCalled();
+ s.authors[1].layer!.payload.annotations=[];await act(async()=>{await delayed(s.target);});expect(locate).toHaveBeenCalledTimes(1);
  s.authors[1].layer!.payload.annotations=structuredClone(fixture.annotations) as never;
- hook.rerender({ui:{...s.ui,active:{...s.active}}});act(()=>delayed(s.target));expect(playSelection).toHaveBeenCalledTimes(1);expect(hook.result.current.selected).toBeNull();
+ hook.rerender({ui:{...s.ui,active:{...s.active}}});await act(async()=>{await delayed(s.target);});expect(locate).toHaveBeenCalledTimes(1);expect(hook.result.current.selected).toBeNull();
 });
 it('shows three levels per author, retained-layer errors, no-data and read-only details without mutation controls',()=>{
  const s=remoteFixture(),inspect=vi.fn();s.authors[1].error={code:'InvalidInput',message:'broken latest revision',retryable:true};
@@ -53,13 +105,13 @@ it('shows three levels per author, retained-layer errors, no-data and read-only 
  const unavailable:AuthorSnapshot={...empty,identity:{...empty.identity,authorId:'unavailable',displayName:'Unavailable'},error:{code:'InvalidInput',message:'unreadable',retryable:true}};s.authors.push(unavailable);
  render(<RemoteList ui={s.ui} inspect={inspect}/>);expect(screen.getByText(/保留上次已验证/)).toBeTruthy();expect(screen.getAllByText('暂无已分类内容')).toHaveLength(2);expect(screen.getByText(/图层不可用/)).toBeTruthy();expect(screen.getByText(/Bob file/)).toBeTruthy();expect(screen.getAllByText(/Bob channel/)).toHaveLength(2);
  fireEvent.click(screen.getByRole('button',{name:/Bob category.*通道 2/}));expect(inspect.mock.calls[0][0]).toMatchObject({authorId:'bob',scope:'region'});
- const {container}=render(<RemoteInspector target={s.target} value={resolveRemote(s.ui,s.target)!} close={()=>{}} play={()=>{}} locate={()=>{}}/>);
- expect(container.querySelectorAll('input,textarea,select,[data-handle]')).toHaveLength(0);expect(container.textContent).toContain('只读');expect(screen.getByRole('button',{name:'播放此区域'})).toBeTruthy();expect(screen.queryByRole('button',{name:'删除标注'})).toBeNull();
+ render(<ReadonlyDetails target={s.target} value={resolveRemote(s.ui,s.target)!} close={()=>{}}/>);
+ expect(document.querySelectorAll('[role=dialog] textarea,[role=dialog] [data-handle]')).toHaveLength(0);expect(screen.getByRole('dialog')).toHaveTextContent('只读');expect(screen.getByRole('button',{name:'播放区域'})).toBeTruthy();expect(screen.queryByRole('button',{name:'删除标注'})).toBeNull();
 });
 it('traps dialog Tab/ShiftTab and destructive keys, then restores prior focus on dismissal',()=>{
  const s=remoteFixture(),background=document.createElement('button');document.body.append(background);background.focus();const shortcut=vi.fn();window.addEventListener('keydown',shortcut);
- const component=render(<RemoteInspector target={s.target} value={resolveRemote(s.ui,s.target)!} close={()=>{}} play={()=>{}} locate={()=>{}}/>);
- const dialog=screen.getByRole('dialog'),first=screen.getByRole('button',{name:'播放此区域'}),last=screen.getByRole('button',{name:'关闭只读详情'});
+ const component=render(<ReadonlyDetails target={s.target} value={resolveRemote(s.ui,s.target)!} close={()=>{}}/>);
+ const dialog=screen.getByRole('dialog'),first=screen.getByRole('button',{name:'跳转到音频'}),last=screen.getByLabelText('查看监听增益');
  expect(document.activeElement).toBe(dialog);fireEvent.keyDown(dialog,{key:'Tab'});expect(document.activeElement).toBe(first);
  last.focus();fireEvent.keyDown(last,{key:'Tab'});expect(document.activeElement).toBe(first);fireEvent.keyDown(first,{key:'Tab',shiftKey:true});expect(document.activeElement).toBe(last);
  fireEvent.keyDown(last,{key:'Delete'});fireEvent.keyDown(last,{key:'z',ctrlKey:true});expect(shortcut).not.toHaveBeenCalled();component.unmount();expect(document.activeElement).toBe(background);window.removeEventListener('keydown',shortcut);background.remove();
@@ -75,7 +127,7 @@ it('remote rerender preserves mounted unsaved note, own undo snapshot and person
 });
 it('keeps focus inside read-only details when a remote deletion removes the focused action',()=>{
  const s=remoteFixture(),props={target:s.target,close:()=>{},play:()=>{},locate:()=>{}};
- const component=render(<RemoteInspector {...props} value={resolveRemote(s.ui,s.target)}/>);screen.getByRole('button',{name:'播放此区域'}).focus();component.rerender(<RemoteInspector {...props} value={null}/>);
+ const component=render(<ReadonlyDetails {...props} value={resolveRemote(s.ui,s.target)}/>);screen.getByRole('button',{name:'跳转到音频'}).focus();component.rerender(<ReadonlyDetails {...props} value={null}/>);
  expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);component.unmount();
 });
 
@@ -90,12 +142,13 @@ it('renders and inspects every foreign label using the foreign category order fo
  expect(container.querySelector('.remote-annotation')).toHaveAttribute('title','Bob · 第二标签 · Bob category');
  expect((container.querySelector('.remote-annotation') as HTMLElement).style.getPropertyValue('--region-color')).toBe(first.color);
  const value=resolveRemote(s.ui,s.target)!;
- render(<RemoteInspector target={s.target} value={value} close={()=>{}} play={()=>{}} locate={()=>{}}/>);
+ render(<ReadonlyDetails target={s.target} value={value} close={()=>{}}/>);
  expect(screen.getByRole('dialog')).toHaveTextContent('第二标签 · Bob category');
 });
 
 it('filters unlabeled objects independently and preserves labeled child channels', () => {
  const s = remoteFixture(), inspect = vi.fn();
+ s.controller.setFilter({mode:'custom',authorIds:['bob']});
  const payload = s.authors[1].layer!.payload;
  const file = payload.mediaLabels[0], label = payload.categories[0].id;
  payload.annotations[0].categoryIds = [];
@@ -168,7 +221,8 @@ it('expands authors by default and preserves independent UUID state during refre
  fireEvent.click(toggle('bob'));
  expect(toggle('bob')).toHaveAttribute('aria-expanded','false');
  expect(controlled).not.toBeVisible();
- expect(within(section('bob')).getAllByRole('button')).toHaveLength(1);
+ expect(within(section('bob')).getAllByRole('button')).toHaveLength(2);
+ expect(within(section('bob')).getByRole('button',{name:'隐藏作者 Bob'})).toBeVisible();
  expect(toggle('third')).toHaveAttribute('aria-expanded','true');
  expect(s.authors[1].layer!.payload).toEqual(before);
  expect(s.active.store.snapshot).toBe(own);
@@ -214,7 +268,7 @@ it('shows the list empty state after closing a project and resets on reopening',
  expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','true');
 });
 
-it('keeps errors visible when collapsed and preserves the filtered list empty state', () => {
+it('keeps errors visible when collapsed and filters mine to current self content', () => {
  const s = remoteFixture();
  s.authors[1].error = {code:'InvalidInput',message:'retained layer error',retryable:true};
  s.authors.push({identity:{...s.authors[1].identity,authorId:'empty',displayName:'Empty'},layer:null,error:{code:'InvalidInput',message:'missing layer error',retryable:true}});
@@ -228,6 +282,25 @@ it('keeps errors visible when collapsed and preserves the filtered list empty st
  expect(screen.getByText('暂无已分类内容')).not.toBeVisible();
  s.controller.setFilter({mode:'mine'});
  view.rerender(<RemoteList ui={s.ui} inspect={vi.fn()} />);
- expect(screen.getByText('没有可显示的其他作者')).toBeVisible();
- expect(view.container.querySelector('[data-remote-author]')).toBeNull();
+ expect(screen.getByRole('button',{name:'Alice（我）'})).toBeVisible();
+ expect(view.container.querySelector('[data-remote-author="bob"] .remote-list-entry')).toBeNull();
+ expect(screen.getByRole('button',{name:'显示作者 Bob'})).toBeVisible();
+ expect(view.container.querySelectorAll('[data-remote-author]')).toHaveLength(3);
+ s.controller.setFilter({mode:'custom',authorIds:[]});
+ view.rerender(<RemoteList ui={s.ui} inspect={vi.fn()} />);
+ expect(view.container.querySelectorAll('.remote-list-entry')).toHaveLength(0);
+ expect(view.container.querySelectorAll('[data-remote-author]')).toHaveLength(3);
+ expect(screen.getByRole('button',{name:'显示作者 Alice'})).toBeVisible();
+});
+it('revalidates foreign geometry and target existence after guarded reveal', async()=>{
+ const s=remoteFixture(),locate=vi.fn(); let finish!:(ok:boolean)=>void;
+ const revealMedia=vi.fn(()=>new Promise<boolean>(r=>finish=r));
+ const workspace={state:{activeMediaId:fixture.media[0].id,compareMediaId:null},revealMedia,locate,selectPane:vi.fn()} as never;
+ const hook=renderHook(()=>useRemoteInspection(s.ui,workspace,{} as never));
+ const first=hook.result.current.locate(s.target); s.authors[1].layer!.payload.annotations[0].region.lowHz=500; finish(true); await first;
+ expect(locate.mock.calls[0][0].lowHz).toBe(500);
+ const second=hook.result.current.locate(s.target); s.authors[1].layer!.payload.annotations=[]; finish(true); expect(await second).toBe(false); expect(locate).toHaveBeenCalledOnce();
+ s.authors[1].layer!.payload.annotations=structuredClone(fixture.annotations) as never;
+ s.authors[1].layer!.payload.annotations[0].region.endSeconds=Infinity;
+ expect(resolveRemote(s.ui,s.target)).toBeNull();
 });

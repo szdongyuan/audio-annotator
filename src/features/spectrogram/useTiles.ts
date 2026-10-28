@@ -13,6 +13,20 @@ export interface TileState { keys: string[]; completed: number; total: number; p
 const empty = (): TileState => ({ keys: [], completed: 0, total: 0, phase: '准备分析', error: null, cancelled: false, version: 0 });
 const runtimeIds = new WeakMap<ActiveProject, string>();
 function runtimeId(active: ActiveProject) { if (!runtimeIds.has(active)) runtimeIds.set(active, crypto.randomUUID()); return runtimeIds.get(active)!; }
+const sourceChecks = new WeakMap<ActiveProject, Map<string, Promise<MediaStatus[]>>>();
+function checkSource(active: ActiveProject, media: MediaDescriptor): Promise<MediaStatus[]> {
+  let pending = sourceChecks.get(active);
+  if (!pending) { pending = new Map(); sourceChecks.set(active, pending); }
+  const key = JSON.stringify([media.id, media.sha256, media.sourceRef, media.byteLength, media.sampleRate, media.frameCount, media.channelCount]);
+  const existing = pending.get(key);
+  if (existing) return existing;
+  // Concurrent channels may share a native check, but never a settled result:
+  // every later viewport/cache reuse must read the source stamp again.
+  const request = (active.commands?.media ?? mediaClient).status(active.store.snapshot.document.projectId, [media.id])
+    .finally(() => { pending.delete(key); });
+  pending.set(key, request);
+  return request;
+}
 export function useTiles(active: ActiveProject, media: MediaDescriptor, settings: AnalysisSettings, view: MediaView, channel: number, width: number, status: MediaStatus['status'], analysisSource: AnalysisSource = 'original') {
   const snapshot = useSyncExternalStore(active.store.subscribe, () => active.store.snapshot);
   const processingVersion = snapshot.document.algorithmVersions.dsp;
@@ -70,7 +84,7 @@ export function useTiles(active: ActiveProject, media: MediaDescriptor, settings
       void (async () => {
         // Validate source even on a frontend cache hit. Unverified sources must go
         // through native lazy rehydration before any retained numeric data is used.
-        const statuses = await (active.commands?.media ?? mediaClient).status(active.store.snapshot.document.projectId);
+        const statuses = await checkSource(active, media);
         if (!valid()) return;
         const current = statuses.find(s => s.mediaId === media.id)?.status;
         if (current === 'missing' || current === 'changed') { tileCache.setPins(cacheOwner, []); invalidateSource(); throw { code: current === 'missing' ? 'MissingMedia' : 'IdentityMismatch', retryable: true, message: current === 'missing' ? '音频缺失，请重新关联' : '源文件已改变，请重新校验关联' }; }

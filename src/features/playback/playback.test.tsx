@@ -13,6 +13,19 @@ import { ProjectLifecycle } from '../project/lifecycle';
 import { useMasks } from './useMasks';
 import { PreferenceDraft } from '../collaboration/controller';
 import type { ActiveProject } from '../project/useProjectLifecycle';
+it('publishes native progress without rerendering the owning workspace hook',async()=>{
+ const s=activeProject(),id=fixture.media[0].id;let emit!:(status:PlaybackStatus)=>void,renders=0,generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async(cb:typeof emit)=>{emit=cb;return()=>{};},control:async()=>({...emptyPlayback,generation:++generation}),configure:async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const,endSeconds:10})};
+ const hook=renderHook(()=>{renders++;return usePlayback(s.active,id,undefined,api);});
+ act(()=>hook.result.current.playFile());await waitFor(()=>expect(hook.result.current.status.state).toBe('playing'));
+ const before=renders;
+ for(let frame=1;frame<=3;frame++)act(()=>emit({...hook.result.current.status,positionSeconds:frame*.03,consumedFrames:frame*1440}));
+ expect(hook.result.current.status.positionSeconds).toBe(.09);
+ expect(renders).toBe(before);
+ act(()=>emit({...hook.result.current.status,state:'ended',positionSeconds:10}));
+ expect(hook.result.current.playing).toBe(false);expect(renders).toBeGreaterThan(before);
+ hook.unmount();s.active.lifecycle.dispose();
+});
 it('restores private options only when adopting a runtime and clears ephemeral cues',()=>{
  const a:ActiveProject=activeProject().active,b:ActiveProject=activeProject().active;
  Object.assign(a,{collaboration:{runtimeNonce:'a',actor:null,preferences:{monitorGainDb:6,mediaMonitorGainDb:{[fixture.media[0].id]:3},volume:.2,deviceId:'speaker-a',loopEnabled:true,source:'original'}}});
@@ -77,12 +90,12 @@ it('plays a captured temporary region on another source without waiting for Reac
  expect(hook.result.current.sourceId).toBe(other.id);expect(hook.result.current.status.state).toBe('playing');hook.unmount();s.active.lifecycle.dispose();
 });
 it('play during a paused seek prebuffer requests playback rather than pausing it',async()=>{
- const doc=parseProjectDocument(structuredClone(fixture)),active={store:{snapshot:{document:doc},editingDisabled:false}};
+ const {active}=activeProject(),doc=active.store.snapshot.document;
  let generation=0;const api={available:()=>true,devices:vi.fn(async()=>[]),listen:vi.fn(async()=>()=>{}),control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'buffering' as const}))};
  const hook=renderHook(()=>usePlayback(active as never,doc.media[0].id,undefined,api));
  act(()=>hook.result.current.seek(.5));await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
  expect(api.configure.mock.calls[0][0].play).toBe(false);
- act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0].play).toBe(true);hook.unmount();
+ act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));expect(api.configure.mock.calls[1][0].play).toBe(true);hook.unmount();active.lifecycle.dispose();
 });
 function activeProject(){
  const store=new ProjectStore({document:parseProjectDocument(structuredClone(fixture)),canUndo:true,canRedo:false});
@@ -136,9 +149,19 @@ it.each(['ended','error'] as const)('a pending configure failure after old %s re
  const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.toggle());await waitFor(()=>expect(hook.result.current.status.state).toBe('playing'));
  api.configure.mockImplementationOnce(()=>new Promise((_,r)=>{reject=r;}));act(()=>hook.result.current.update({volume:.5}));await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(2));
  act(()=>listener({...make(2,terminal),error:terminal==='error'?{code:'DeviceFailed',message:'obsolete error',retryable:true}:null}));expect(hook.result.current.playing).toBe(true);expect(hook.result.current.error).toBeNull();
- await act(async()=>reject({code:'DeviceFailed',message:'configure rejected',retryable:true}));expect(hook.result.current.playing).toBe(false);expect(hook.result.current.error?.message).toBe('configure rejected');
+ await act(async()=>reject({code:'DeviceFailed',message:'configure rejected',retryable:true}));expect(hook.result.current.playing).toBe(false);expect(hook.result.current.error?.message).toBe('configure rejected');expect(s.active.lifecycle.allowsBackgroundTransition).toBe(true);
  api.configure.mockResolvedValueOnce(make(3,'playing'));act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(3));expect(api.configure.mock.calls[2][0].play).toBe(true);
  act(()=>listener(make(3,'ended')));expect(hook.result.current.playing).toBe(false);hook.unmount();s.active.lifecycle.dispose();
+});
+it('retains the native terminal generation after configure rejection so stale progress cannot revive a stream',async()=>{
+ const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;let listener!:(s:PlaybackStatus)=>void,reject!:(e:unknown)=>void;
+ const make=(generation:number,state:PlaybackStatus['state']):PlaybackStatus=>({...emptyPlayback,generation,projectId:s.active.store.snapshot.document.projectId,mediaId:id,state});
+ const api={available:()=>true,devices:async()=>[],listen:async(fn:typeof listener)=>{listener=fn;return()=>{};},control:async()=>emptyPlayback,configure:vi.fn(()=>new Promise<PlaybackStatus>((_,r)=>{reject=r;}))};
+ const hook=renderHook(()=>usePlayback(s.active,id,undefined,api));act(()=>hook.result.current.toggle());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
+ act(()=>listener(make(3,'ended')));await act(async()=>reject({code:'DeviceFailed',message:'configure rejected',retryable:true}));
+ expect(s.active.lifecycle.allowsBackgroundTransition).toBe(true);
+ act(()=>listener(make(2,'playing')));expect(hook.result.current.status.state).toBe('error');expect(s.active.lifecycle.allowsBackgroundTransition).toBe(true);
+ hook.unmount();s.active.lifecycle.dispose();
 });
 it('a new generation terminal arriving before its configure acknowledgement is retained',async()=>{
  const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;let listener!:(s:PlaybackStatus)=>void,resolve!:(s:PlaybackStatus)=>void;

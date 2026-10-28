@@ -16,6 +16,7 @@ export class ProjectLifecycle {
   savedAt: Date | null = null;
   private saveError: AppError | null = null;
   private readonly drafts = new Map<string, () => Promise<unknown>>();
+  private readonly backgroundGuards = new Set<() => boolean>();
   private readonly pendingEdits = new Set<Promise<unknown>>();
   private editTail: Promise<unknown> = Promise.resolve();
   private readonly listeners = new Set<() => void>();
@@ -38,6 +39,12 @@ export class ProjectLifecycle {
   private get commandError() { return this.queue.unresolvedFailures[0]?.error ?? this.store.error; }
   get error(): AppError | null { return this.commandError ?? this.saveError; }
   get admissionClosed() { return this.transitioning || this.disposed; }
+  /** Ref-based guards protect transient intent that a normal owner transition may reset. */
+  get allowsBackgroundTransition() { return !this.disposed && [...this.backgroundGuards].every(allowed => allowed()); }
+  registerBackgroundGuard(allowed: () => boolean) {
+    this.backgroundGuards.add(allowed);
+    return () => { this.backgroundGuards.delete(allowed); };
+  }
   get hasPendingWork() { return this.store.isDirty || this.store.drafts.size > 0 || this.queue.unresolvedFailures.length > 0 || this.pendingEdits.size > 0; }
   /** Admit renderer actions synchronously, before they await drafts or native writes. */
   async enqueueEdit(action: () => Promise<unknown>): Promise<unknown> {
@@ -123,8 +130,11 @@ export class ProjectLifecycle {
     this.status = this.commandError ? 'failed' : this.hasPendingWork ? 'unsaved' : 'saved';
   }
   /** Submit drafts while enqueue is available, then freeze admission and drain accepted work. */
-  async transition<T>(action: () => Promise<T>, discard = false): Promise<T> {
+  transition<T>(action: () => Promise<T>, discard?: boolean): Promise<T>;
+  transition<T>(action: () => Promise<T>, discard: boolean, eligible: () => boolean): Promise<T | undefined>;
+  async transition<T>(action: () => Promise<T>, discard = false, eligible?: () => boolean): Promise<T | undefined> {
     if (this.transitioning || this.disposed) throw { code: 'InvalidInput', message: '项目正在切换或已关闭', retryable: true } satisfies AppError;
+    if (eligible && !eligible()) return;
     this.transitioning = true; this.clearTimers(); this.notify();
     let release: (() => void) | undefined;
     try {
@@ -137,6 +147,9 @@ export class ProjectLifecycle {
       // Discard is explicit, but native close still requires the current authority revision.
       if (discard && this.queue.needsRefresh) await this.queue.refresh();
       if (!discard) await this.submitDrafts();
+      // Playback can start while accepted edits/drafts are being drained. Defer
+      // before beginTransition publishes editingDisabled and resets that intent.
+      if (eligible && !eligible()) return;
       release = this.store.beginTransition();
       // Includes operations admitted just before the barrier, and serialized refreshes.
       if (discard) await this.queue.flush().catch(() => {});
@@ -172,11 +185,17 @@ export class ProjectLifecycle {
     await this.save();
   }
   /** Persist inside the transition barrier, using the same acknowledgement as normal Save. */
-  transitionAfterSave<T>(action: () => Promise<T>): Promise<T> {
-    return this.transition(async () => {
-      await this.persistSnapshot();
+  transitionAfterSave<T>(action: () => Promise<T>): Promise<T>;
+  transitionAfterSave<T>(action: () => Promise<T>, eligible: () => boolean): Promise<T | undefined>;
+  transitionAfterSave<T>(action: () => Promise<T>, eligible?: () => boolean): Promise<T | undefined> {
+    const saved = async () => {
+      // A guarded retry already persisted this revision before a native busy
+      // deferral. Saving it again schedules another NAS refresh and can starve
+      // admission forever. transition has drained all accepted edits/drafts here.
+      if (!eligible || this.store.isDirty || this.saveError) await this.persistSnapshot();
       return action();
-    });
+    };
+    return eligible ? this.transition(saved, false, eligible) : this.transition(saved);
   }
   close(discard = false): Promise<void> {
     if (this.closing) return this.closing;
@@ -189,5 +208,5 @@ export class ProjectLifecycle {
     }, discard).finally(() => { this.closing = null; });
     return this.closing;
   }
-  dispose() { this.disposed = true; this.clearTimers(); this.unsubscribe(); this.store.deactivate(); }
+  dispose() { this.disposed = true; this.backgroundGuards.clear(); this.clearTimers(); this.unsubscribe(); this.store.deactivate(); }
 }

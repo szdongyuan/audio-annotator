@@ -184,6 +184,8 @@ it.each(['file', 'channel', 'region'] as const)('recomputes %s eligibility after
       const result = [...document.querySelectorAll<HTMLButtonElement>('.annotation-row')].find(button => button.textContent?.includes(b.displayName) && button.textContent.includes('区域 · 通道'))!;
       fireEvent.click(result);
       await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: '跳转到音频' }));
+      await act(async () => {});
       fireEvent.click(screen.getByRole('tab', { name: '区域' }));
       const categories = await screen.findByRole('group', { name: '区域类别' });
       fireEvent.click(clear ? within(categories).getByRole('button', { name: '清空标签' }) : within(categories).getByRole('checkbox', { name: category.name }));
@@ -233,7 +235,7 @@ it.each(['runtime', 'identity'] as const)('clears the old notice and rejects lat
   vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { frames.push(callback); return frames.length; });
   vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
   const context = mount('file'), { active, props, a, b, ui } = context;
-  const identity = (authorId: string) => ({ selected: { authorId, displayName: authorId }, busy: false } as unknown as IdentityController);
+  const identity = (authorId: string) => ({ selected: { authorId, displayName: authorId }, busy: false, refresh: async () => {} } as unknown as IdentityController);
   let owner = active, author = 'original';
   const replaceScope = () => {
     if (change === 'runtime') owner = { ...owner }; else author = `${author}-next`;

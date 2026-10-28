@@ -1,0 +1,11 @@
+.project-dialog:has(.inspection-viewer){width:min(1120px,96vw);max-width:96vw;padding:0}
+.inspection-viewer{padding:12px;max-height:94vh;overflow:auto;display:flex;flex-direction:column;gap:7px;font-size:12px}
+.inspection-viewer>header,.inspection-tools,.inspection-metadata,.inspection-transport{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.inspection-viewer h2{flex:1;min-width:80px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px}
+.inspection-metadata{color:var(--text-secondary);min-width:0}.inspection-note{max-width:65%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inspection-tools label,.inspection-transport label,.inspection-settings label{display:flex;align-items:center;gap:4px}.inspection-viewer .button{font-size:12px;padding:5px 8px}
+.inspection-settings summary{cursor:pointer}.inspection-settings>div{display:flex;gap:7px;flex-wrap:wrap;padding:6px 0}.inspection-settings input[type=number]{width:76px}
+.inspection-spectrum{height:clamp(220px,57vh,620px);flex:none}.inspection-spectrum .channel-graph{height:100%}
+.inspection-transport{border-top:1px solid var(--border-soft);padding-top:8px}.inspection-transport input[type=number]{width:52px}.inspection-transport input[type=range]{width:85px}.inspection-transport>input[type=range]{flex:1;min-width:100px}.inspection-transport output{font-variant-numeric:tabular-nums}
+
+.inspection-playhead{position:absolute;top:0;bottom:0;width:1px;background:#ffecd4;pointer-events:none}

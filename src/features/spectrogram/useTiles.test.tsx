@@ -4,6 +4,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { webcrypto } from 'node:crypto';
 import fixture from '../../../tests/fixtures/document-v3.json';
 import { ProjectStore } from '../../app/store';
+import { CommandQueue } from '../../app/commands';
+import { ProjectLifecycle } from '../project/lifecycle';
 import { mediaClient } from '../../bridge/media';
 import { parseProjectDocument } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
@@ -68,6 +70,37 @@ function packet(r: TileRequest) {
   return bytes;
 }
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); tileCache.clear(); });
+it('checks only the selected source and shares unresolved verification across channels, never across runtimes or settled checks', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  const pending: ((value: {mediaId: string; status: 'ready' | 'changed'}[]) => void)[] = [];
+  const status = vi.spyOn(mediaClient, 'status').mockImplementation(() => new Promise(resolve => pending.push(resolve)));
+  vi.spyOn(nativeTileTransport, 'request').mockImplementation(async r => packet(r));
+  vi.spyOn(nativeTileTransport, 'cancel').mockResolvedValue();
+  vi.spyOn(nativeTileTransport, 'register').mockImplementation(async () => crypto.randomUUID());
+  vi.spyOn(nativeTileTransport, 'retire').mockResolvedValue();
+  const active = { store: new ProjectStore({ document: parseProjectDocument(fixture), canUndo: false, canRedo: false }) } as ActiveProject;
+  const hook = renderHook(({owner, view}) => [useTiles(owner, media, defaultSettings, view, 0, 800, 'ready'), useTiles(owner, media, defaultSettings, view, 1, 800, 'ready')], {initialProps: {owner: active, view: defaultView(media)}});
+  await waitFor(() => expect(status).toHaveBeenCalled());
+  await new Promise(resolve => setTimeout(resolve, 60));
+  expect(status).toHaveBeenCalledExactlyOnceWith(fixture.projectId, [media.id]);
+  hook.rerender({owner: {...active}, view: defaultView(media)});
+  await waitFor(() => expect(pending).toHaveLength(2));
+  act(() => pending[0]([{mediaId: media.id, status: 'ready'}]));
+  await new Promise(resolve => setTimeout(resolve, 30));
+  expect(hook.result.current.every(s => s.completed === 0)).toBe(true);
+  act(() => pending[1]([{mediaId: media.id, status: 'ready'}]));
+  await waitFor(() => expect(hook.result.current.every(s => s.completed === 1)).toBe(true));
+  const owner = {...active};
+  hook.rerender({owner, view: {...defaultView(media), endSeconds: 1.5}});
+  await waitFor(() => expect(pending).toHaveLength(3));
+  act(() => pending[2]([{mediaId: media.id, status: 'ready'}]));
+  await waitFor(() => expect(hook.result.current.every(s => s.completed === 1)).toBe(true));
+  hook.rerender({owner, view: defaultView(media)});
+  await waitFor(() => expect(pending).toHaveLength(4));
+  act(() => pending[3]([{mediaId: media.id, status: 'changed'}]));
+  await waitFor(() => expect(hook.result.current.every(s => s.error === '源文件已改变，请重新校验关联' && !s.keys.length)).toBe(true));
+  hook.unmount();
+});
 it('separates channel owners, ignores style/notes and retires a replaced runtime with the same project id', async () => {
   vi.stubGlobal('crypto', webcrypto);
   vi.spyOn(mediaClient, 'status').mockResolvedValue([{ mediaId: media.id, status: 'ready' }]);
@@ -194,10 +227,15 @@ it('replans when physical width crosses an LOD boundary inside the old 64-pixel 
 
 import { usePlayback } from '../playback/usePlayback';
 import { emptyPlayback, type PlaybackRequest } from '../../bridge/playback';
+function playbackOwner(document: ActiveProject['store']['snapshot']['document']): ActiveProject {
+ const store=new ProjectStore({document,canUndo:false,canRedo:false});
+ const queue=new CommandQueue(store,{applyChange:vi.fn(),getSnapshot:async()=>store.snapshot,undo:vi.fn(),redo:vi.fn()});
+ return {store,queue,lifecycle:new ProjectLifecycle(store,queue,{save:async(_id,r)=>r,close:async()=>{}}),path:''};
+}
 it.each(['original','processed'] as const)('opposite audition override leaves %s workspace and both file spectrum requests unchanged',async source=>{
  vi.stubGlobal('crypto',webcrypto);
  const other={...media,id:'other'},doc=parseProjectDocument(structuredClone(fixture));doc.media.push(other);doc.analysis[other.id]=defaultSettings;
- const active={store:new ProjectStore({document:doc,canUndo:false,canRedo:false})} as ActiveProject;
+ const active=playbackOwner(doc);
  vi.spyOn(mediaClient,'status').mockResolvedValue([{mediaId:media.id,status:'ready'},{mediaId:other.id,status:'ready'}]);
  vi.spyOn(nativeTileTransport,'cancel').mockResolvedValue();vi.spyOn(nativeTileTransport,'register').mockImplementation(async()=>crypto.randomUUID());vi.spyOn(nativeTileTransport,'retire').mockResolvedValue();
  const request=vi.spyOn(nativeTileTransport,'request').mockImplementation(async r=>packet(r));
@@ -210,18 +248,18 @@ it.each(['original','processed'] as const)('opposite audition override leaves %s
  act(()=>hook.result.current.playback.playSelection(doc.annotations[0].region,override));await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());
  expect(api.configure.mock.calls[0][0].mode).toMatchObject({selectionSource:override});expect(hook.result.current.playback.workspaceSource).toBe(source);
  expect([hook.result.current.left.keys,hook.result.current.right.keys]).toEqual(keys);expect(request).toHaveBeenCalledTimes(count);
- hook.unmount();
+ hook.unmount();active.lifecycle.dispose();
 });
 
 it('monitor-only state changes preserve processed tile jobs and cached identity',async()=>{
  vi.stubGlobal('crypto',webcrypto);vi.spyOn(mediaClient,'status').mockResolvedValue([{mediaId:media.id,status:'ready'}]);
  const request=vi.spyOn(nativeTileTransport,'request').mockImplementation(async r=>packet(r));
  vi.spyOn(nativeTileTransport,'cancel').mockResolvedValue();vi.spyOn(nativeTileTransport,'register').mockResolvedValue('monitor');vi.spyOn(nativeTileTransport,'retire').mockResolvedValue();
- const active={store:new ProjectStore({document:parseProjectDocument(structuredClone(fixture)),canUndo:false,canRedo:false})} as ActiveProject;
+ const active=playbackOwner(parseProjectDocument(structuredClone(fixture)));
  const api={available:()=>false,devices:async()=>[],listen:async()=>()=>{},control:async()=>emptyPlayback,configure:async()=>emptyPlayback};
  const hook=renderHook(()=>({tiles:useTiles(active,media,defaultSettings,defaultView(media),0,800,'ready','processed'),playback:usePlayback(active,media.id,undefined,api)}));
  await waitFor(()=>expect(hook.result.current.tiles.completed).toBe(1));const keys=hook.result.current.tiles.keys,document=active.store.snapshot.document;
  act(()=>{hook.result.current.playback.setGlobalMonitorGain(6);hook.result.current.playback.setMediaMonitorGain(media.id,3);});
  await new Promise(r=>setTimeout(r,150));expect(request).toHaveBeenCalledOnce();expect(hook.result.current.tiles.keys).toEqual(keys);expect(active.store.snapshot.document).toBe(document);
- hook.unmount();
+ hook.unmount();active.lifecycle.dispose();
 });

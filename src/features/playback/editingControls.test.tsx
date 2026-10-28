@@ -60,6 +60,22 @@ it('monitor preferences and realtime failures remain independently reachable and
  fireEvent.click(screen.getByRole('button',{name:'重试监听'}));await waitFor(()=>expect(screen.queryByRole('button',{name:'重试监听'})).toBeNull());expect(screen.getByRole('button',{name:'重试保存偏好'})).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'重试保存偏好'}));await waitFor(()=>expect(screen.queryByRole('button',{name:'重试保存偏好'})).toBeNull());expect(ui.monitor.monitorGainDb).toBe(3);expect(monitorGain).toHaveBeenCalledTimes(2);view.unmount();s.finish();
 });
 import { TransportBar } from './TransportBar';
+it('no-selection gain controls leave the transport usable and create no modal or edit', async () => {
+ const s=rig(),gain=vi.fn(),reset=vi.fn();let selection!:SelectionUI,playback!:PlaybackUI;
+ const api={available:()=>false,devices:async()=>[],listen:async()=>()=>{},control:async()=>emptyPlayback,configure:async()=>emptyPlayback};
+ function App(){selection=useSelection(s.owner,s.media.id);playback=usePlayback(s.owner,s.media.id,undefined,api);return <div className="app-root"><SelectionContext.Provider value={selection}><TransportBar ui={playback} hasSelection={!!selection.selection} onGain={gain} onResetView={reset}/><RegionGainDialog ui={selection}/></SelectionContext.Provider></div>;}
+ const view=render(<StrictMode><App/></StrictMode>);
+ try {
+  expect(selection.selection).toBeNull();const input=screen.getByLabelText('快捷区域增益（dB）'),submit=screen.getByRole('button',{name:'应用区域增益'});
+  expect(input).toBeDisabled();expect(submit).toBeDisabled();fireEvent.click(input);fireEvent.click(submit);fireEvent.submit(screen.getByRole('form',{name:'快捷区域增益'}));
+  fireEvent.click(screen.getByRole('button',{name:'更多播放操作'}));const item=screen.getByRole('menuitem',{name:'区域增益…'});expect(item).toHaveAttribute('aria-disabled','true');fireEvent.click(item);
+  expect(screen.queryByRole('dialog')).toBeNull();expect(document.querySelector<HTMLElement>('.app-root')?.inert).not.toBe(true);expect(gain).not.toHaveBeenCalled();expect(s.apply).not.toHaveBeenCalled();
+  fireEvent.keyDown(screen.getByRole('menu'),{key:'Escape'});expect(screen.queryByTestId('menu-shield')).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'循环播放'}));expect(playback.options.looping).toBe(true);
+  fireEvent.click(screen.getByRole('button',{name:'更多播放操作'}));fireEvent.click(screen.getByRole('menuitem',{name:'重置视图'}));expect(reset).toHaveBeenCalledTimes(1);expect(screen.queryByTestId('menu-shield')).toBeNull();
+  await act(async()=>{});expect(s.owner.store.snapshot.canUndo).toBe(false);
+ } finally {view.unmount();s.finish();}
+});
 it('transport adapts to its measured container and keeps sound source and volume reachable through compact controls',()=>{
  const s=rig();let measure!:ResizeObserverCallback;vi.stubGlobal('ResizeObserver',class {constructor(callback:ResizeObserverCallback){measure=callback;}observe(){}disconnect(){}});
  const api={available:()=>false,devices:async()=>[],listen:async()=>()=>{},control:async()=>emptyPlayback,configure:async()=>emptyPlayback};

@@ -1,0 +1,51 @@
+import { act, renderHook } from '@testing-library/react';
+import { useState, type ReactNode } from 'react';
+import { beforeEach, expect, it, vi } from 'vitest';
+import fixture from '../../../tests/fixtures/document-v3.json';
+import { parseProjectDocument } from '../../bridge/types';
+import type { LocalProjectCommands, OpenedProject } from '../../bridge/projects';
+import type { ProjectCommands } from '../../app/commands';
+import { emptyPlayback } from '../../bridge/playback';
+import { useWorkspace } from '../spectrogram/useWorkspace';
+import { defaultView } from '../spectrogram/workspace';
+import { usePlayback } from '../playback/usePlayback';
+import { useSelection } from '../selection/useSelection';
+import { LocalSettingsProvider, LocalSettingsStore } from '../settings/localSettings';
+import { useProjectLifecycle } from './useProjectLifecycle';
+import { useSessionUI } from './useSessionUI';
+import { defaultSessionUI, readSession, sessionKey } from './session';
+
+beforeEach(() => localStorage.clear());
+it.each([false, true])('startup restoration respects current durable/global settings and rejects mismatched identities (%s)', async mismatch => {
+  const doc = parseProjectDocument(structuredClone(fixture)), a = doc.media[0];
+  const b = { ...structuredClone(a), id: '22222222-2222-4222-8222-222222222222' }; doc.media.push(b);
+  doc.viewState = { ...doc.viewState, activeMediaId: b.id, compareMediaId: a.id, compareLayout: 'vertical', linkedTime: true, media: { [b.id]: { ...defaultView(b), startSeconds: .2, endSeconds: .7, visibleChannels: [1], frequencyMix: .3 } } };
+  const before = structuredClone(doc);
+  const transient = { inspectorTab: 'list', mediaOpen: false, propertiesOpen: true, cues: { [b.id]: .4 } };
+  localStorage.setItem(sessionKey, JSON.stringify({ version: 1, path: 'C:/project', projectId: doc.projectId, actorId: mismatch ? b.id : null, readOnly: false,
+    ui: { ...transient, activeMediaId: a.id, compareMediaId: null, compareLayout: 'horizontal', volume: 0, looping: true, source: 'processed', selection: doc.annotations[0], history: [doc], draft: 'never' } }));
+  const opened: OpenedProject = { snapshot: { document: doc, canUndo: false, canRedo: false }, path: 'C:/project', persistedRevision: doc.revision, recovery: null };
+  const api: LocalProjectCommands = { open: async () => opened, choose: vi.fn(), create: vi.fn(), recover: vi.fn(), saveAs: vi.fn(), save: vi.fn(), close: vi.fn(), cancelRecovery: vi.fn(), onCloseRequested: async () => () => {}, destroyWindow: vi.fn() };
+  const commands = { applyChange: vi.fn(), getSnapshot: vi.fn(), undo: vi.fn(), redo: vi.fn() } as ProjectCommands;
+  const audio = { available: () => false, devices: async () => [], listen: async () => () => {}, control: vi.fn(async () => emptyPlayback), configure: vi.fn(async () => emptyPlayback) };
+  const settings = new LocalSettingsStore(localStorage); settings.applyGlobal({ display: { frequencyMix: 0, spectrumKind: 'mel' }, playback: { volume: .9, looping: false, source: 'original', monitorGainDb: 6 } });
+  const globals = structuredClone(settings.value);
+  const wrapper = ({ children }: { children: ReactNode }) => <LocalSettingsProvider store={settings}>{children}</LocalSettingsProvider>;
+  const hook = renderHook(() => {
+    const project = useProjectLifecycle(api, commands), workspace = useWorkspace(project.active);
+    const [ui, setUI] = useState(defaultSessionUI);
+    const playback = usePlayback(project.active, workspace.state.activeMediaId, undefined, audio);
+    const selection = useSelection(project.active, workspace.state.activeMediaId);
+    useSessionUI(project, { ...ui, cues: playback.cues }, setUI, playback, [], true);
+    return { project, workspace, ui, playback, selection };
+  }, { wrapper });
+  await act(() => hook.result.current.project.restoreLast());
+  const { project, workspace, ui, playback, selection } = hook.result.current;
+  expect(workspace.state).toMatchObject({ activeMediaId: b.id, compareMediaId: a.id, compareLayout: 'vertical', linkedTime: true });
+  expect(workspace.view(b.id)).toMatchObject({ startSeconds: .2, endSeconds: .7, visibleChannels: [1], frequencyMix: 0, spectrumKind: 'mel' });
+  expect(playback.options).toMatchObject({ volume: .9, looping: false }); expect(playback.workspaceSource).toBe('original'); expect(playback.effectiveMonitorGainDb).toBe(6);
+  expect(ui.inspectorTab).toBe(mismatch ? 'region' : 'list'); expect(playback.cues).toEqual(mismatch ? {} : transient.cues);
+  expect(project.active!.store.snapshot.document).toEqual(before); expect(project.active!.store.drafts.size).toBe(0); expect(selection.selection).toBeNull(); expect(project.active!.store.snapshot.canUndo).toBe(false);
+  expect(settings.value).toEqual(globals); expect(audio.configure).not.toHaveBeenCalled(); expect(playback.playing).toBe(false); expect(commands.applyChange).not.toHaveBeenCalled();
+  expect(readSession()?.actorId).toBeNull(); hook.unmount();
+});

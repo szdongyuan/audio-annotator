@@ -51,13 +51,13 @@ it('controlled Save As exposes progress and cancellation keeps the source owner 
 it('explicit catalog adoption saves drafts, suspends polling and preserves the active owner while installing new media',async()=>{
  const initial=opened();Object.assign(initial.collaboration!,{projectFlavor:'default',identityMode:'profile',canImportMedia:true,actor:{authorId:nonceA,displayName:'本机作者',createdAt:'2026-10-25T00:00:00Z'}});
  const next=structuredClone(initial);next.snapshot!.document.media.push({...next.snapshot!.document.media[0],id:'33333333-3333-4333-8333-333333333333'});next.snapshot!.document.revision=1;next.persistedRevision=1;
- const remote={...transition(initial).status,catalogPending:true},order:string[]=[];let finish!:(t:Transition)=>void;
+ const remote={...transition(initial).status,catalogPending:true,busy:true},order:string[]=[];let finish!:(t:Transition)=>void;
  const refresh=vi.fn(async()=>remote),adoptCatalog=vi.fn(()=>{order.push('adopt');return new Promise<Transition>(r=>finish=r);});
- const collabApi={refresh,status:async()=>remote,adoptCatalog,cancel:vi.fn()} as unknown as CollaborationCommands;
+ const collabApi={refresh,status:async()=>({...remote,busy:false}),adoptCatalog,cancel:vi.fn(async()=>{})} as unknown as CollaborationCommands;
  const api={choose:async()=>'/project',open:async()=>initial,create:vi.fn(),save:vi.fn(),close:vi.fn(),recover:vi.fn(),saveAs:vi.fn(),cancelRecovery:vi.fn(),onCloseRequested:async()=>()=>{},destroyWindow:vi.fn()} as LocalProjectCommands;
  invoke.mockImplementation(async(name,args)=>{if(name==='save_project'){order.push('save');return args.expectedRevision;}});
  const hook=renderHook(()=>{const project=useProjectLifecycle(api);return{project,collaboration:useCollaboration(project,collabApi)};});await act(()=>hook.result.current.project.open('open'));
- const owner=hook.result.current.project.active!,before=owner.store.snapshot;await waitFor(()=>expect(hook.result.current.collaboration.controller?.status?.catalogPending).toBe(true));expect(owner.store.snapshot).toBe(before);
+ const owner=hook.result.current.project.active!,before=owner.store.snapshot;owner.lifecycle.registerBackgroundGuard(()=>false);await waitFor(()=>expect(hook.result.current.collaboration.controller?.status?.catalogPending).toBe(true));expect(owner.store.snapshot).toBe(before);
  owner.store.setDraft('catalog-note','draft');owner.lifecycle.registerDraft('catalog-note',async()=>{order.push('draft');owner.store.clearDraftIfUnchanged('catalog-note','draft');});
  act(()=>hook.result.current.collaboration.adoptCatalog());await waitFor(()=>expect(adoptCatalog).toHaveBeenCalledTimes(1));expect(order).toEqual(['draft','save','adopt']);const reads=refresh.mock.calls.length;await hook.result.current.collaboration.controller!.refresh();expect(refresh).toHaveBeenCalledTimes(reads);
  await act(async()=>finish(transition(next)));await waitFor(()=>expect(hook.result.current.collaboration.busy).toBe(false));expect(hook.result.current.project.active).toBe(owner);expect(owner.store.snapshot.document.media).toHaveLength(2);expect(owner.store.drafts.size).toBe(0);expect(hook.result.current.collaboration.controller!.status?.catalogPending).toBe(false);hook.unmount();

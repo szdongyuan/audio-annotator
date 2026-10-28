@@ -7,16 +7,21 @@ import { menuIsOpen } from '../../components/menu/menuModel';
 import { resolveIntent, type PlaybackIntent, type WorkspaceSoundVersion } from './playbackIntent';
 import { validRegion } from '../selection/state';
 import { useLocalSettings } from '../settings/localSettings';
+import { validSessionCues } from '../project/session';
+import {PlaybackStatusStore,samePlaybackControl} from './statusStore';
 export function audioSignature(doc:ProjectDocument|undefined,id:string|null){const m=doc?.media.find(m=>m.id===id);return JSON.stringify(m&&[m.id,m.sha256,m.sourceRef,m.sampleRate,m.frameCount,m.channelCount,doc?.edits.filter(e=>e.region.mediaId===id),doc?.playbackMix[m.id]]);}
 export function actualSource(mode:PlaybackOptions['mode'],source:PlaybackOptions['selectionSource'],bypass:boolean){return mode==='selection'?(source==='original'||bypass?'原始选区':'处理后选区'):mode==='original'||bypass?'原音':'处理后';}
 export function playbackShortcut(e:{key:string;target:EventTarget|null;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean}){return !menuIsOpen()&&e.key===' '&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(e.target instanceof Element&&(e.target.closest('input,textarea,select,[role="dialog"],[role="alertdialog"],[contenteditable]:not([contenteditable="false"])') || e.target.closest('button') && !e.target.closest('button.media-select[data-media-id]')));}
 type MonitorState={monitorGainDb:number;mediaMonitorGainDb:Record<string,number|null>};
 type PlaybackApi=Omit<typeof playbackClient,'monitorGain'> & Partial<Pick<typeof playbackClient,'monitorGain'>>;
+const liveStream=(status:PlaybackStatus)=>['buffering','playing','paused'].includes(status.state);
 export function usePlayback(active:ActiveProject|null,selectedMediaId:string|null,selection:Region|undefined,injectedApi:PlaybackApi=playbackClient){
  const local=useLocalSettings(),localRef=useRef(local);localRef.current=local;
  const api=active?.commands?.playback??injectedApi;
  const [sourceId,setSourceId]=useState(selectedMediaId),[options,setOptions]=useState<PlaybackOptions>({mode:'processed',selectionSource:'processed',bypass:false,looping:false,volume:.75,deviceId:null});
- const [status,setStatus]=useState<PlaybackStatus>(emptyPlayback),[devices,setDevices]=useState<OutputDevice[]>([]),[error,setError]=useState<AppError|null>(null);
+ const [status,setControlStatus]=useState<PlaybackStatus>(emptyPlayback),[devices,setDevices]=useState<OutputDevice[]>([]),[error,setError]=useState<AppError|null>(null);
+ const [statusStore]=useState(()=>new PlaybackStatusStore());
+ const setStatus=(next:PlaybackStatus|((before:PlaybackStatus)=>PlaybackStatus))=>{const before=statusStore.getSnapshot(),value=typeof next==='function'?next(before):next;statusStore.publish(value);if(!samePlaybackControl(before,value))setControlStatus(value);};
  const [playing,setPlaying]=useState(false);
  const [monitor,setMonitor]=useState<MonitorState>({monitorGainDb:0,mediaMonitorGainDb:{}});
  const [monitorError,setMonitorError]=useState<AppError|null>(null);
@@ -30,6 +35,7 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  const pendingIntent=useRef<{serial:number;event:PlaybackStatus|null}|null>(null);
  const configuredKey=useRef('');
  const desired=useRef(false),activated=useRef(false),sequence=useRef(0),tail=useRef<Promise<unknown>>(Promise.resolve()),current=useRef({active,sourceId,selection,options,workspaceSource});current.current={active,sourceId,selection,options,workspaceSource};
+ useEffect(()=>active?.lifecycle.registerBackgroundGuard(()=>!desired.current&&!activated.current&&!resumable.current&&!pendingIntent.current&&!liveStream(statusRef.current)),[active]);
  const resolved=()=>{const n=current.current;return resolveIntent(intent.current,n.sourceId,n.selection,n.workspaceSource);};
  const configurationKey=()=>{const n=current.current;return JSON.stringify([audioSignature(n.active?.store.snapshot.document,resolved().mediaId),n.options,resolved()]);};
  const clearIntent=()=>{intent.current={kind:'automatic'};resumable.current=false;activated.current=false;configuredKey.current='';};
@@ -60,7 +66,12 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  };
  const rejectIntent=(serial:number,cause:unknown)=>{
    if(serial!==sequence.current)return;
+   const event=pendingIntent.current?.event;
    pendingIntent.current=null;setDesired(false);
+   // A rejection does not prove that a previously acknowledged stream stopped.
+   // A retained native terminal event does; failed first configure is idle too.
+   if(event&&matchesSource(event)){acceptedGeneration.current=event.generation;statusRef.current=event;}
+   if(!liveStream(statusRef.current))clearIntent();
    const failure=normalizeError(cause);setError(failure);setStatus(s=>({...s,state:'error',error:failure}));
  };
  const refreshDevices=()=>{if(api.available())void api.devices().then(setDevices).catch(e=>setError(normalizeError(e)));};
@@ -75,7 +86,7 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
    const owner=now.active,capturedApi=api;
    tail.current=tail.current.catch(()=>{}).then(async()=>{if(serial!==sequence.current||current.current.active!==owner)return;const result=await capturedApi.configure({...request,monitorGainDb:effectiveMonitor(request.mediaId)});if(current.current.active===owner)acknowledge(serial,result,true);}).catch(e=>{if(current.current.active===owner)rejectIntent(serial,e);});
  };
- const control=(action:'pause'|'stop'|'reset')=>{const capturedApi=api,owner=active;if(current.current.active!==owner)return;setDesired(false);const serial=++sequence.current;pendingIntent.current={serial,event:null};if(action!=='pause')clearIntent();tail.current=tail.current.catch(()=>{}).then(async()=>{if(current.current.active!==owner)return;const result=await capturedApi.control(action);if(current.current.active===owner)acknowledge(serial,result,false);}).catch(e=>{if(current.current.active===owner)rejectIntent(serial,e);});};
+ const control=(action:'pause'|'stop'|'reset')=>{const capturedApi=api,owner=active;if(current.current.active!==owner)return;setDesired(false);const serial=++sequence.current;pendingIntent.current={serial,event:null};if(action!=='pause')clearIntent();tail.current=tail.current.catch(()=>{}).then(async()=>{if(current.current.active!==owner)return;const result=await capturedApi.control(action);if(current.current.active===owner)acknowledge(serial,result,false);}).catch(e=>{if(current.current.active===owner)rejectIntent(serial,e);});return tail.current;};
  const selectSource=(id:string|null)=>{if(current.current.active!==active||id===current.current.sourceId)return;control('reset');current.current={...current.current,sourceId:id};setSourceId(id);setStatus(emptyPlayback);};
  const startIntent=(next:PlaybackIntent)=>{if(current.current.active!==active)return;if(activated.current)control('stop');intent.current=next;setDesired(true);configure(resolved().start);};
  const playSelection=(region:Region,sourceOverride?:WorkspaceSoundVersion)=>{
@@ -86,6 +97,7 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  const validCue=(owner:ActiveProject,id:string,seconds:number)=>{const m=owner.store.snapshot.document.media.find(m=>m.id===id);return owner===current.current.active&&!owner.store.editingDisabled&&!!m&&Number.isFinite(seconds)&&seconds>=0&&seconds*m.sampleRate<m.frameCount;};
  const playFrom=(owner:ActiveProject,id:string,seconds:number)=>{if(validCue(owner,id,seconds))startIntent({kind:'explicit-cue',mediaId:id,seconds});};
  const setCue=(owner:ActiveProject,id:string,seconds:number)=>{if(owner===current.current.active&&!owner.store.editingDisabled&&owner.store.snapshot.document.media.some(m=>m.id===id)&&Number.isFinite(seconds)&&seconds>=0){setCues(c=>({...c,[id]:seconds}));resumable.current=false;if(desired.current&&current.current.selection)cueDeactivation.current=true;if(!desired.current)intent.current={kind:'automatic'};}};
+ const restoreCues=(owner:ActiveProject,value:Record<string,number>)=>{if(owner===current.current.active)setCues(validSessionCues(value,owner.store.snapshot.document,owner.collaboration?.hiddenMediaIds));};
  useEffect(()=>{clearIntent();const prefs=active?.collaboration?.preferences;
  const restoredMonitor={monitorGainDb:prefs?.monitorGainDb??0,mediaMonitorGainDb:{...prefs?.mediaMonitorGainDb}};monitorRef.current=restoredMonitor;setMonitor(restoredMonitor);setMonitorError(null);statusRef.current=emptyPlayback;const source=prefs?.source??'processed';const restored={mode:'processed' as const,selectionSource:'processed' as const,bypass:false,volume:prefs?.volume??.75,deviceId:prefs?.deviceId??null,looping:prefs?.loopEnabled??false};setOptions(restored);current.current.options=restored;setWorkspaceSource(source);current.current.workspaceSource=source;setCues({});setSourceId(selectedMediaId);current.current.sourceId=selectedMediaId;setDesired(false);setStatus(emptyPlayback);setError(null);if(api.available())control('reset');else{++sequence.current;pendingIntent.current=null;}},[active,api]);
  useEffect(()=>{if(selectedMediaId&&(!current.current.sourceId||!active?.store.snapshot.document.media.some(m=>m.id===current.current.sourceId)))selectSource(selectedMediaId);},[selectedMediaId,active?.store.snapshot.document.media]);
@@ -151,7 +163,7 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
    }).catch(e=>owner.store.setError(normalizeError(e)));
  };
  const visibleMonitor=local?.value.playback.monitorGainDb!==undefined?{monitorGainDb:local.value.playback.monitorGainDb,mediaMonitorGainDb:Object.fromEntries((doc?.media??[]).map(m=>[m.id,local.override(doc!.projectId,m.id).monitorGainDb??null]))}:monitor;
- return{playing,active,monitor:visibleMonitor,monitorError,effectiveMonitorGainDb:effectiveMonitor(sourceId),setGlobalMonitorGain,setMediaMonitorGain,retryMonitor:applyMonitor,media,sourceId,selectSource,playSelection,playFile,playFrom,setCue,cues,validCue,workspaceSource,updateWorkspaceSource,options,update,status,devices,error,refreshDevices,toggle,stop:()=>control('stop'),seek:(seconds:number)=>configure(seconds),retry:()=>{if(current.current.active!==active)return;setDesired(true);configure();},mix:media?doc?.playbackMix[media.id]??{soloChannels:[],mutedChannels:[]}: {soloChannels:[],mutedChannels:[]},updateMix,selection:resolved().region};
+ return{playing,active,monitor:visibleMonitor,monitorError,effectiveMonitorGainDb:effectiveMonitor(sourceId),setGlobalMonitorGain,setMediaMonitorGain,retryMonitor:applyMonitor,media,sourceId,selectSource,playSelection,playFile,playFrom,setCue,restoreCues,cues,validCue,workspaceSource,updateWorkspaceSource,options,update,get status(){return statusStore.getSnapshot();},statusStore,devices,error,refreshDevices,toggle,stop:()=>{void control('stop');},stopAndWait:()=>control('stop'),seek:(seconds:number)=>configure(seconds),retry:()=>{if(current.current.active!==active)return;setDesired(true);configure();},mix:media?doc?.playbackMix[media.id]??{soloChannels:[],mutedChannels:[]}: {soloChannels:[],mutedChannels:[]},updateMix,selection:resolved().region};
 }
 export type PlaybackUI=ReturnType<typeof usePlayback>;
 export const PlaybackContext=createContext<PlaybackUI|null>(null);

@@ -58,7 +58,18 @@ impl CollaborationRepository {
             e.details = Some(serde_json::json!({"currentRevision":current.organization.revision}));
             return Err(e);
         }
-        let next = current.organization.apply(operation)?;
+        let next = if matches!(&operation, OrganizationOperation::RemoveFolder { .. }) {
+            current.organization.apply_with_recycled(operation, || {
+                Ok(current
+                    .read_recycle()?
+                    .trashed
+                    .into_iter()
+                    .map(|m| m.media_id)
+                    .collect())
+            })?
+        } else {
+            current.organization.apply(operation)?
+        };
         let bytes = encode(&next)?;
         let _guard = before_commit()?;
         atomic::replace_metadata_controlled(

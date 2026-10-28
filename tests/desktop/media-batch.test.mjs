@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {start,Key,By,wait} from './harness.mjs';
 import {newProject,importDirect,snapshot,status,playback,saved,wav,addCategory,escape,expectDocument,hash,folder,moveMedia,organization} from './workspace-helpers.mjs';
 import {read,createIdentity} from './identity-helpers.mjs';
-const root=path.resolve('.test-output/update-0.7.3');await fs.mkdir(root,{recursive:true});
+const root=path.resolve(process.env.ANNOTATOR_SUITE_OUTPUT??'.test-output/update-0.7.3');await fs.mkdir(root,{recursive:true});
 const output=await fs.mkdtemp(path.join(root,'desktop-')),project=path.join(output,'project');await fs.mkdir(project);
 const exe=process.env.ANNOTATOR_WORKSPACE_EXE??'C:/Users/DY/AppData/Local/Temp/annotator-071-production-20261027/release/annotator-desktop.exe';
 const report={output,checks:[],method:'Real Windows Tauri clients with separate local identities and real pointer/keyboard actions; read-only native assertions. Corrupt shared metadata injection uses only the test-owned project.'};
@@ -44,7 +44,7 @@ try{
   await a.clickText('核对并重试');await a.until('!document.querySelector("[role=dialog]")');assert.equal((await recycle(a)).recycle.trashed.length,1);
   check('metadata I/O failure retains selection and explicit retry, never resets corrupted shared state');
   await a.screenshot('batch-recycle-result');await saved(a);await a.quit();a=null;await b.quit();b=null;
-  const copy=path.join(output,'copy');await fs.mkdir(copy);a=await start({'打开项目':[path.join(project,'collaboration.json')],'另存我的项目副本 · 选择空文件夹':[copy]},output,exe,options);await a.menu('打开项目');await a.until('document.querySelector(".file-pane")');await expectDocument(a,d=>d.media.length===3,'reopen full catalog');await a.input('搜索音频','beta');await count(a,0);await view(a,'trash');await count(a,1);assert.deepEqual((await snapshot(a)).annotations,beforeA.annotations);
+  const copy=path.join(output,'copy');await fs.mkdir(copy);a=await start({'打开项目':[path.join(project,'collaboration.json')],'另存我的项目副本 · 选择空文件夹':[copy]},output,exe,options);await a.until("document.querySelector('.restore-session-dialog')");await a.clickText('恢复项目与工作状态');await a.until('document.querySelector(".file-pane")');await expectDocument(a,d=>d.media.length===3,'reopen full catalog');await a.input('搜索音频','beta');await count(a,0);await view(a,'trash');await count(a,1);assert.deepEqual((await snapshot(a)).annotations,beforeA.annotations);
   check('restart preserves shared recycle state and all original labels');
   const originalId=(await status(a)).projectId;await a.menu('另存我的项目副本…','协作');await a.until("document.querySelector('.project-identity')?.title.endsWith('copy')");assert.notEqual((await status(a)).projectId,originalId);assert.equal((await recycle(a)).recycle.trashed.length,1);assert.deepEqual((await snapshot(a)).annotations,beforeA.annotations);check('Save As carries recoverable trash and own labels into an independent project');
 }catch(error){report.error=error.stack;console.error(error);await a?.screenshot('failure').catch(()=>{});process.exitCode=1;}

@@ -11,6 +11,8 @@ import { RelinkDialog } from '../features/media/RelinkDialog';
 import { useExchange } from '../features/exchange/useExchange';
 import { ExportDialog } from '../features/exchange/ExportDialog';
 import { ImportDialog } from '../features/exchange/ImportDialog';
+import { RestoreSessionDialog } from '../features/project/RestoreSessionDialog';
+import { useEffect, useState } from 'react';
 
 export function App() {
   const project = useProjectLifecycle();
@@ -18,13 +20,18 @@ export function App() {
   const exchange = useExchange(project);
   const collaboration = useCollaboration(project);
   const identity = useIdentity(project,collaboration);
-  return <CollaborationContext.Provider value={collaboration}><div className="app-root" inert={!!identity.dialog || !!collaboration.dialog || !!exchange.dialog || project.closePending || !!project.recovery || !!media.relink || (!!project.active && project.editingDisabled)}><AppShell project={project} mediaUI={media} exchange={exchange} collaboration={collaboration} identity={identity} /></div>
+  const restoreEligible = !!project.restorePrompt && !project.active && !project.recovery && !project.closePending && !identity.dialog && !collaboration.dialog && !exchange.dialog && !media.relink;
+  const [restorePresented, setRestorePresented] = useState(false);
+  useEffect(() => { if (!restoreEligible) setRestorePresented(false); else if (!project.busy) setRestorePresented(true); }, [restoreEligible, project.busy]);
+  const restoreVisible = restoreEligible && (!project.busy || restorePresented);
+  return <CollaborationContext.Provider value={collaboration}><div className="app-root" inert={restoreVisible || !!identity.dialog || !!collaboration.dialog || !!exchange.dialog || project.closePending || !!project.recovery || !!media.relink || (!!project.active && project.editingDisabled)}><AppShell project={project} mediaUI={media} exchange={exchange} collaboration={collaboration} identity={identity} /></div>
+    {restoreVisible && <RestoreSessionDialog project={project} />}
     <IdentityDialog ui={collaboration} /><ProfileDialog controller={identity} />
     {project.copyProgress&&<div className="dialog-backdrop"><section role="dialog" aria-modal="true" aria-label="另存我的项目副本" className="project-dialog"><h2>另存我的项目副本</h2><p role="status"><progress aria-label="副本复制进度"/>{copyProgressText(project.copyProgress)}</p><button className="button" onClick={project.cancelCopy}>取消任务</button></section></div>}
     {exchange.dialog === 'export' && <ExportDialog shared={!!project.active?.collaboration} {...exchange} onPreview={exchange.prepareExport} onInvalidatePreview={exchange.invalidatePreview} onStart={exchange.startExport} />}
     {exchange.dialog === 'import' && <ImportDialog {...exchange} onStart={exchange.startImport} />}
     <RelinkDialog media={media.relink} disabled={media.disabled} onChoose={media.chooseRelink} onVerify={media.verify} onClose={() => media.setRelink(null)} />
     <RecoveryDialog project={project} /><CloseFailureDialog project={project} />
-    {project.error && !project.closePending && !project.recovery && <div className="project-notice" role="alert"><span>{project.error.message}</span><button className="button" disabled={project.busy} onClick={() => void project.retry()}>重试</button><button className="button" disabled={project.busy || !project.active} onClick={() => void project.saveAs()}>另存我的项目副本…</button><button className="button button-quiet" onClick={project.dismissError}>关闭提示</button></div>}
+    {project.error && !restoreVisible && !project.closePending && !project.recovery && <div className="project-notice" role="alert"><span>{project.error.message}</span><button className="button" disabled={project.busy} onClick={() => void project.retry()}>重试</button><button className="button" disabled={project.busy || !project.active} onClick={() => void project.saveAs()}>另存我的项目副本…</button><button className="button button-quiet" onClick={project.dismissError}>关闭提示</button></div>}
   </CollaborationContext.Provider>;
 }
