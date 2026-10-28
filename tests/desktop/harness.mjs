@@ -73,8 +73,16 @@ export async function start(paths, output, executable = path.resolve('target/deb
   native.stdout.on('data', b => { log += b; }); native.stderr.on('data', b => { log += b; });
   let driver;
   try {
-    for (let i = 0; i < 100; i++) { try { await fetch(`http://127.0.0.1:${port}/status`); break; } catch { await wait(100); } }
-    for (let i=0;i<100;i++) { if(native.exitCode!==null)throw Error(`Native app exited ${native.exitCode}: ${log}`); try { await fetch(`http://127.0.0.1:${ports.debug}/json/version`); break; } catch { await wait(100); } }
+    for (const endpoint of [`http://127.0.0.1:${port}/status`, `http://127.0.0.1:${ports.debug}/json/version`]) {
+      const deadline = performance.now() + 20000;
+      let ready = false;
+      while (performance.now() < deadline) {
+        if (native.exitCode !== null) throw Error(`Native app exited ${native.exitCode}: ${log}`);
+        try { await fetch(endpoint, { signal: AbortSignal.timeout(1000) }); ready = true; break; }
+        catch { await wait(100); }
+      }
+      if (!ready) throw Error(`Owned startup endpoint timed out: ${endpoint}; native exit=${native.exitCode}: ${log}`);
+    }
     driver = await new Builder().usingServer(`http://127.0.0.1:${port}`).withCapabilities({ browserName: 'webview2', 'ms:edgeOptions': { debuggerAddress: `127.0.0.1:${ports.debug}` } }).build();
     await driver.manage().setTimeouts({ implicit: 0, pageLoad: 60000, script: 120000 });
     await driver.wait(until.elementLocated(By.css('.main-menu')), 30000);

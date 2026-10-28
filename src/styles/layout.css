@@ -235,10 +235,12 @@
 .direct-import-progress > .import-progress-details { display: block; min-height: 0; overflow: auto; flex: 1 1 auto; }
 .direct-import-progress > .import-recovery-actions { gap: 8px; }
 .media-folder-row { display:flex; align-items:center; min-height:28px; gap:2px; }
-.media-folder-select { flex:1; min-width:0; border:0; background:transparent; color:inherit; text-align:left; padding:5px 6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.media-folder-row > .icon-button { height:28px; flex-shrink:0; }
+.media-folder-row > .media-folder-disclosure { width:16px; }
+.media-folder-select { flex:1; min-width:0; height:28px; border:0; background:transparent; color:inherit; text-align:left; padding:4px 6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .media-folder-select .count { margin-left:6px; }
 .media-folder-row.is-selected,.media-folder-select[aria-pressed=true] { background:var(--surface-raised); border-radius:4px; }
-.media-folder-content { margin-left:7px; border-left:1px solid var(--border); padding-left:3px; }
+.media-folder-content { margin-left:7px; border-left:1px solid var(--border); padding-left:8px; }
 .media-card { position:relative; }
 .media-context { position:absolute; right:3px; top:3px; }
 .source-import-dialog input:not([type=checkbox]),.source-import-dialog select { max-width:100%; min-width:0; }

@@ -8,10 +8,10 @@ test('sequential release runner preserves all original phases and runs all colla
   for (const phase of ['project', 'view-churn', 'spectral', 'restart', 'sharing', 'recovery',
     'selection-flow', 'rulers-flow', 'compact-layout', 'classification-flow', 'list-workflow', 'folder-scan',
     'folder-flow', 'source-import', 'feedback-flow', 'format-flow', 'fidelity-flow', 'processed-flow',
-    'interaction-flow', 'sharing-flow', 'collaboration-native', 'collaboration-controls', 'collaboration-layers', 'default-collaboration', 'uuid-identities', 'media-folders', 'editing-workspace', 'examples', 'folder-navigation', 'native-responsiveness']) {
+    'interaction-flow', 'sharing-flow', 'collaboration-native', 'collaboration-controls', 'collaboration-layers', 'default-collaboration', 'uuid-identities', 'media-folders', 'editing-workspace', 'examples', 'folder-navigation', 'folder-removal', 'native-responsiveness']) {
     assert.ok(source.includes(`'${phase}'`), `missing release phase ${phase}`);
   }
-  assert.match(source, /\['examples','folder-navigation','native-responsiveness'\]\.includes\(suite\)\?\{ANNOTATOR_WORKSPACE_EXE:/);
+  assert.match(source, /\['examples','folder-navigation','folder-removal','native-responsiveness'\]\.includes\(suite\)\?\{ANNOTATOR_WORKSPACE_EXE:/);
   assert.ok(!source.includes("'switch-performance'"), 'manifest-dependent benchmark must remain opt-in');
 });
 

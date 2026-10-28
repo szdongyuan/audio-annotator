@@ -135,14 +135,16 @@ try {
   await h.until('!document.querySelector("[role=dialog]")', 'recycle completes');
   await h.until("document.querySelector('.media-folder-select[title=\"A/A leaf\"] .count')?.textContent==='0'", 'leaf now has zero visible audio');
   await h.label('文件夹操作 · A leaf');
-  const remove = await h.element('[role="menuitem"][aria-label="删除空文件夹…（仍有关联音频）"]');
-  assert.equal(await remove.getAttribute('aria-disabled'), 'true');
-  assert.match(await remove.getAttribute('title'), /其中 1 个在共享回收站/);
-  assert.match(await remove.getAttribute('title'), /当前列表视图/);
+  const remove = await h.element('[role="menuitem"][aria-label="删除文件夹…"]');
+  assert.notEqual(await remove.getAttribute('aria-disabled'), 'true');
   await remove.click();
-  assert.equal(await h.evaluate('return !!document.querySelector("[role=dialog]")'), false, 'disabled delete cannot open confirmation');
-  await h.screenshot('zero-visible-folder-reason');
-  await key(Key.ESCAPE);
+  await h.until("document.querySelector('[role=dialog] h2')?.textContent==='删除文件夹'");
+  const explanation = await h.evaluate("return document.querySelector('[role=dialog]').textContent");
+  assert.match(explanation, /1 个已在共享回收站/);
+  assert.match(explanation, /目录归属移至「A」/);
+  await h.screenshot('zero-visible-folder-confirmation');
+  await h.clickText('取消');
+  await h.until("!document.querySelector('[role=dialog]')");
 
   const current = await status(h);
   const recycled = await read(h, 'recycle_get', { binding: { projectId: current.projectId, runtimeNonce: current.runtimeNonce } });
@@ -150,7 +152,7 @@ try {
   assert.deepEqual((await organization(h)).folders, layout.folders);
   assert.deepEqual((await organization(h)).media, layout.media);
   for (const media of before.media) assert.equal(hash(await fs.readFile(path.join(project, media.sourceRef))), audioHashes.get(media.id));
-  check('Zero-visible recycled folder explains the disabled delete; folder associations and physical audio remain intact');
+  check('Zero-visible recycled folder offers explained subtree removal; cancelling preserves folder associations and physical audio');
   report.passed = true;
 } catch (error) {
   report.error = error.stack;

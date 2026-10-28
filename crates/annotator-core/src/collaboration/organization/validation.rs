@@ -86,6 +86,14 @@ impl Organization {
         Ok(())
     }
     pub fn apply(&self, operation: OrganizationOperation) -> Result<Self> {
+        self.apply_with_recycled(operation, || Ok(HashSet::new()))
+    }
+    /// Only the repository may authorize recycled memberships using its under-lock read.
+    pub(super) fn apply_with_recycled(
+        &self,
+        operation: OrganizationOperation,
+        recycled: impl FnOnce() -> Result<HashSet<String>>,
+    ) -> Result<Self> {
         self.validate()?;
         let mut next = self.clone();
         match operation {
@@ -113,20 +121,60 @@ impl Organization {
                     .parent_id = parent_id
             }
             OrganizationOperation::RemoveFolder { id } => {
-                require(
-                    !next
-                        .folders
-                        .iter()
-                        .any(|f| f.parent_id.as_ref() == Some(&id))
-                        && !next.media.iter().any(|m| m.folder_id.as_ref() == Some(&id)),
-                    "Folder is not empty",
-                )?;
-                let index = next
+                let parent = next
                     .folders
                     .iter()
-                    .position(|f| f.id == id)
-                    .ok_or_else(|| AppError::invalid("Unknown folder"))?;
-                next.folders.remove(index);
+                    .find(|f| f.id == id)
+                    .ok_or_else(|| AppError::invalid("Unknown folder"))?
+                    .parent_id
+                    .clone();
+                let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+                for folder in &self.folders {
+                    if let Some(parent) = folder.parent_id.as_deref() {
+                        children.entry(parent).or_default().push(&folder.id);
+                    }
+                }
+                // validate() bounds this traversal to 10,000 folders and 16 levels.
+                let mut subtree = HashSet::new();
+                let mut pending = vec![id.as_str()];
+                while let Some(folder) = pending.pop() {
+                    subtree.insert(folder);
+                    if let Some(descendants) = children.get(folder) {
+                        pending.extend(descendants);
+                    }
+                }
+                // Empty subtrees need no recycle authority, including when that file is unavailable.
+                let recycled = if next
+                    .media
+                    .iter()
+                    .any(|m| m.folder_id.as_deref().is_some_and(|f| subtree.contains(f)))
+                {
+                    recycled()?
+                } else {
+                    HashSet::new()
+                };
+                let blocked = next
+                    .media
+                    .iter()
+                    .filter(|m| {
+                        m.folder_id.as_deref().is_some_and(|f| subtree.contains(f))
+                            && !recycled.contains(&m.media_id)
+                    })
+                    .count();
+                require(
+                    blocked == 0,
+                    &format!("目录及子目录仍关联 {blocked} 个未进入共享回收站的音频（包括隐藏或未加载的音频）"),
+                )?;
+                for membership in &mut next.media {
+                    if membership
+                        .folder_id
+                        .as_deref()
+                        .is_some_and(|f| subtree.contains(f))
+                    {
+                        membership.folder_id = parent.clone();
+                    }
+                }
+                next.folders.retain(|f| !subtree.contains(f.id.as_str()));
             }
             OrganizationOperation::MoveMedia {
                 media_id,

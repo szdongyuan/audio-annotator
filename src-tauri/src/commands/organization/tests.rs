@@ -118,6 +118,177 @@ mod guard_tests {
         }
     }
     #[test]
+    fn recycled_subtree_removal_rechecks_restore_and_retains_native_guards() {
+        use annotator_core::collaboration::recycle::RecycleOperation;
+        use std::{
+            sync::{atomic::AtomicBool, mpsc},
+            time::Duration,
+        };
+        for mode in ["commit", "restored", "cancel", "replace"] {
+            let (state, root, binding) = fixture();
+            let folder = uuid::Uuid::new_v4().to_string();
+            tauri::async_runtime::block_on(apply(
+                &state,
+                binding.clone(),
+                0,
+                OrganizationOperation::CreateFolder {
+                    id: folder.clone(),
+                    parent_id: None,
+                    name: "remove".into(),
+                },
+            ))
+            .unwrap();
+            let repo = state.6.current.lock().unwrap().repo.clone().unwrap();
+            let actor = state
+                .0
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .workspace()
+                .unwrap()
+                .author_session()
+                .unwrap();
+            let cancel = AtomicBool::new(false);
+            let plan = repo
+                .seal_media_placement(
+                    1,
+                    Some(folder.clone()),
+                    vec!["deep".into()],
+                    "original.wav".into(),
+                )
+                .unwrap();
+            let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../tests/fixtures/audio/mono16.wav");
+            let prepared = repo
+                .prepare_media(&source, &root.join("pcm"), &cancel)
+                .unwrap()
+                .with_placement(plan)
+                .unwrap();
+            repo.append_media(&actor, &prepared, &cancel).unwrap();
+            let media_id = prepared.media().id.clone();
+            repo.apply_recycle_controlled(
+                &actor,
+                0,
+                RecycleOperation {
+                    operation_id: uuid::Uuid::new_v4().to_string(),
+                    media_ids: vec![media_id.clone()],
+                    trash: true,
+                },
+                &cancel,
+                || Ok(()),
+            )
+            .unwrap();
+            let private_before = serde_json::to_value(
+                state
+                    .0
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .unwrap()
+                    .snapshot()
+                    .unwrap(),
+            )
+            .unwrap();
+            let before = fs::read(root.join("project/organization.json")).unwrap();
+            let audio_path = root
+                .join("project")
+                .join(&repo.reload_catalog().unwrap().manifest().media[0].source_ref);
+            let audio = fs::read(&audio_path).unwrap();
+            if mode == "restored" {
+                repo.apply_recycle_controlled(
+                    &actor,
+                    1,
+                    RecycleOperation {
+                        operation_id: uuid::Uuid::new_v4().to_string(),
+                        media_ids: vec![media_id],
+                        trash: false,
+                    },
+                    &cancel,
+                    || Ok(()),
+                )
+                .unwrap();
+                assert!(tauri::async_runtime::block_on(apply(
+                    &state,
+                    binding,
+                    2,
+                    OrganizationOperation::RemoveFolder { id: folder }
+                ))
+                .is_err());
+            } else {
+                let (entered, wait_entered) = mpsc::channel();
+                let (resume, wait_resume) = mpsc::channel();
+                *state.6.hook.lock().unwrap() = Some(Box::new(move || {
+                    entered.send(()).unwrap();
+                    wait_resume.recv().unwrap();
+                }));
+                let worker_state = state.clone();
+                let worker = std::thread::spawn(move || {
+                    tauri::async_runtime::block_on(apply(
+                        &worker_state,
+                        binding,
+                        2,
+                        OrganizationOperation::RemoveFolder { id: folder },
+                    ))
+                });
+                wait_entered.recv_timeout(Duration::from_secs(10)).unwrap();
+                let lock = fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(root.join("project/catalog/.commit.lock"))
+                    .unwrap();
+                let locked = lock.try_lock().is_err();
+                let responsive = state.0.try_lock().is_ok();
+                drop(lock);
+                if mode == "cancel" {
+                    state.6.retire();
+                }
+                if mode == "replace" {
+                    *state.0.lock().unwrap() = None;
+                }
+                resume.send(()).unwrap();
+                let result = worker.join().unwrap();
+                assert!(
+                    locked,
+                    "recycle and folder changes must share the catalog lock"
+                );
+                assert!(responsive);
+                if mode == "commit" {
+                    let head = result.unwrap().organization;
+                    assert_eq!(head.revision, 3);
+                    assert!(head.folders.is_empty());
+                    assert_eq!(head.media[0].folder_id, None);
+                    assert_eq!(head.media[0].original_filename, "original.wav");
+                } else {
+                    assert!(result.is_err());
+                }
+            }
+            if mode != "commit" {
+                assert_eq!(
+                    fs::read(root.join("project/organization.json")).unwrap(),
+                    before
+                );
+            }
+            assert_eq!(fs::read(audio_path).unwrap(), audio);
+            if mode != "replace" {
+                assert_eq!(
+                    serde_json::to_value(
+                        state
+                            .0
+                            .lock()
+                            .unwrap()
+                            .as_ref()
+                            .unwrap()
+                            .snapshot()
+                            .unwrap()
+                    )
+                    .unwrap(),
+                    private_before
+                );
+            }
+        }
+    }
+    #[test]
     fn readonly_get_and_pending_recovery_get_work_while_writes_are_refused() {
         let (state, root, binding) = fixture();
         let reader = AppState::default();
