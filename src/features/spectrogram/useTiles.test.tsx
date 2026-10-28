@@ -68,6 +68,37 @@ function packet(r: TileRequest) {
   return bytes;
 }
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); tileCache.clear(); });
+it('checks only the selected source and shares unresolved verification across channels, never across runtimes or settled checks', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  const pending: ((value: {mediaId: string; status: 'ready' | 'changed'}[]) => void)[] = [];
+  const status = vi.spyOn(mediaClient, 'status').mockImplementation(() => new Promise(resolve => pending.push(resolve)));
+  vi.spyOn(nativeTileTransport, 'request').mockImplementation(async r => packet(r));
+  vi.spyOn(nativeTileTransport, 'cancel').mockResolvedValue();
+  vi.spyOn(nativeTileTransport, 'register').mockImplementation(async () => crypto.randomUUID());
+  vi.spyOn(nativeTileTransport, 'retire').mockResolvedValue();
+  const active = { store: new ProjectStore({ document: parseProjectDocument(fixture), canUndo: false, canRedo: false }) } as ActiveProject;
+  const hook = renderHook(({owner, view}) => [useTiles(owner, media, defaultSettings, view, 0, 800, 'ready'), useTiles(owner, media, defaultSettings, view, 1, 800, 'ready')], {initialProps: {owner: active, view: defaultView(media)}});
+  await waitFor(() => expect(status).toHaveBeenCalled());
+  await new Promise(resolve => setTimeout(resolve, 60));
+  expect(status).toHaveBeenCalledExactlyOnceWith(fixture.projectId, [media.id]);
+  hook.rerender({owner: {...active}, view: defaultView(media)});
+  await waitFor(() => expect(pending).toHaveLength(2));
+  act(() => pending[0]([{mediaId: media.id, status: 'ready'}]));
+  await new Promise(resolve => setTimeout(resolve, 30));
+  expect(hook.result.current.every(s => s.completed === 0)).toBe(true);
+  act(() => pending[1]([{mediaId: media.id, status: 'ready'}]));
+  await waitFor(() => expect(hook.result.current.every(s => s.completed === 1)).toBe(true));
+  const owner = {...active};
+  hook.rerender({owner, view: {...defaultView(media), endSeconds: 1.5}});
+  await waitFor(() => expect(pending).toHaveLength(3));
+  act(() => pending[2]([{mediaId: media.id, status: 'ready'}]));
+  await waitFor(() => expect(hook.result.current.every(s => s.completed === 1)).toBe(true));
+  hook.rerender({owner, view: defaultView(media)});
+  await waitFor(() => expect(pending).toHaveLength(4));
+  act(() => pending[3]([{mediaId: media.id, status: 'changed'}]));
+  await waitFor(() => expect(hook.result.current.every(s => s.error === '源文件已改变，请重新校验关联' && !s.keys.length)).toBe(true));
+  hook.unmount();
+});
 it('separates channel owners, ignores style/notes and retires a replaced runtime with the same project id', async () => {
   vi.stubGlobal('crypto', webcrypto);
   vi.spyOn(mediaClient, 'status').mockResolvedValue([{ mediaId: media.id, status: 'ready' }]);

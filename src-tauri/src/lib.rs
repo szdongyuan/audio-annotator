@@ -47,6 +47,12 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            #[cfg(feature = "e2e")]
+            e2e::hold_project_lock,
+            #[cfg(feature = "e2e")]
+            e2e::native_heartbeat,
+            #[cfg(feature = "e2e")]
+            e2e::synchronous_playback_probe,
             commands::collaboration::collaboration_status,
             commands::profiles::profile_list,
             commands::profiles::profile_create,

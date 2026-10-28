@@ -340,50 +340,59 @@ pub async fn example_preview_open(
     .await
 }
 #[tauri::command]
-pub fn example_preview_cancel_open(
+pub async fn example_preview_cancel_open(
     state: State<'_, AppState>,
     runtime_nonce: String,
     project_id: String,
     request_id: String,
 ) -> Result<()> {
-    cancel_open_owned(&state, &runtime_nonce, &project_id, &request_id)
+    let state = state.inner().clone();
+    blocking(move || cancel_open_owned(&state, &runtime_nonce, &project_id, &request_id)).await
 }
 fn cancel_open_owned(state: &AppState, nonce: &str, project: &str, request_id: &str) -> Result<()> {
     let owner = capture_owner(state, nonce, project)?;
     owner.with_current(state, || state.6.examples.cancel_open(request_id))
 }
 #[tauri::command]
-pub fn example_preview_register_view(
+pub async fn example_preview_register_view(
     state: State<'_, AppState>,
     runtime_nonce: String,
     project_id: String,
     preview_id: String,
 ) -> Result<String> {
-    state
-        .6
-        .examples
-        .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
-            p.state.2.scheduler.register_view()
-        })
+    let state = state.inner().clone();
+    blocking(move || {
+        state
+            .6
+            .examples
+            .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
+                p.state.2.scheduler.register_view()
+            })
+    })
+    .await
 }
 #[tauri::command]
-pub fn example_preview_retire_view(
+pub async fn example_preview_retire_view(
     state: State<'_, AppState>,
     runtime_nonce: String,
     project_id: String,
     preview_id: String,
     view_id: String,
 ) -> Result<()> {
-    validate_view(&view_id)?;
-    state
-        .6
-        .examples
-        .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
-            p.state.2.scheduler.retire_view(&view_id)
-        })
+    let state = state.inner().clone();
+    blocking(move || {
+        validate_view(&view_id)?;
+        state
+            .6
+            .examples
+            .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
+                p.state.2.scheduler.retire_view(&view_id)
+            })
+    })
+    .await
 }
 #[tauri::command]
-pub fn example_preview_cancel_generation(
+pub async fn example_preview_cancel_generation(
     state: State<'_, AppState>,
     runtime_nonce: String,
     project_id: String,
@@ -391,16 +400,20 @@ pub fn example_preview_cancel_generation(
     view_id: String,
     generation: u64,
 ) -> Result<()> {
-    validate_view(&view_id)?;
-    if generation > 9_007_199_254_740_991 {
-        return Err(AppError::invalid("Invalid analysis generation"));
-    }
-    state
-        .6
-        .examples
-        .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
-            p.state.2.scheduler.cancel_generation(&view_id, generation)
-        })
+    let state = state.inner().clone();
+    blocking(move || {
+        validate_view(&view_id)?;
+        if generation > 9_007_199_254_740_991 {
+            return Err(AppError::invalid("Invalid analysis generation"));
+        }
+        state
+            .6
+            .examples
+            .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
+                p.state.2.scheduler.cancel_generation(&view_id, generation)
+            })
+    })
+    .await
 }
 fn validate_view(id: &str) -> Result<()> {
     if id.is_empty() || id.len() > 128 {
@@ -525,47 +538,56 @@ pub async fn example_preview_playback_configure(
     .await
 }
 #[tauri::command]
-pub fn example_preview_playback_control(
+pub async fn example_preview_playback_control(
     state: State<'_, AppState>,
     runtime_nonce: String,
     project_id: String,
     preview_id: String,
     action: String,
 ) -> Result<PlaybackStatus> {
-    state
-        .6
-        .examples
-        .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
-            p.state.3.control_source(&p.id, &action)
-        })
+    let state = state.inner().clone();
+    blocking(move || {
+        state
+            .6
+            .examples
+            .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
+                p.state.3.control_source(&p.id, &action)
+            })
+    })
+    .await
 }
 #[tauri::command]
-pub fn example_preview_playback_status(
+pub async fn example_preview_playback_status(
     state: State<'_, AppState>,
     runtime_nonce: String,
     project_id: String,
     preview_id: String,
 ) -> Result<PlaybackStatus> {
-    state
-        .6
-        .examples
-        .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
-            let status = p.state.3.status()?;
-            Ok(if status.project_id.as_deref() == Some(&p.id) {
-                status
-            } else {
-                PlaybackStatus::default()
+    let state = state.inner().clone();
+    blocking(move || {
+        state
+            .6
+            .examples
+            .with(&state, &runtime_nonce, &project_id, &preview_id, |p| {
+                let status = p.state.3.status()?;
+                Ok(if status.project_id.as_deref() == Some(&p.id) {
+                    status
+                } else {
+                    PlaybackStatus::default()
+                })
             })
-        })
+    })
+    .await
 }
 #[tauri::command]
-pub fn example_preview_close(
+pub async fn example_preview_close(
     state: State<'_, AppState>,
     runtime_nonce: String,
     project_id: String,
     preview_id: String,
 ) -> Result<()> {
-    close_owned(&state, &runtime_nonce, &project_id, &preview_id)
+    let state = state.inner().clone();
+    blocking(move || close_owned(&state, &runtime_nonce, &project_id, &preview_id)).await
 }
 fn close_owned(state: &AppState, nonce: &str, project: &str, id: &str) -> Result<()> {
     state.6.examples.with(state, nonce, project, id, |p| {

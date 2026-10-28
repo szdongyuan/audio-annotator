@@ -1,11 +1,99 @@
-//! Test-only native picker boundary, absent from ordinary/release builds.
+//! Test-only native boundaries, absent from builds without the e2e feature.
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc, Mutex, TryLockError,
+    },
+    time::{Duration, Instant},
 };
 use tauri::Manager;
 struct Paths(Mutex<BTreeMap<String, VecDeque<Value>>>);
+#[derive(Default)]
+pub(crate) struct Responsiveness {
+    active: Arc<AtomicBool>,
+    held: Arc<AtomicBool>,
+}
+// Independent native timer guarantees release even if synchronous IPC blocks
+// the window. No webview message is needed to release the project lock.
+#[tauri::command]
+pub(crate) async fn hold_project_lock(
+    state: tauri::State<'_, crate::state::AppState>,
+    probe: tauri::State<'_, Responsiveness>,
+) -> Result<(), String> {
+    if probe.active.swap(true, Ordering::AcqRel) {
+        return Err("A responsiveness probe is already running".into());
+    }
+    let state = state.inner().clone();
+    let active = probe.active.clone();
+    let held = probe.held.clone();
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let thread_active = active.clone();
+    if let Err(error) = std::thread::Builder::new()
+        .name("e2e-bounded-project-lock".into())
+        .spawn(move || {
+            let deadline = Instant::now() + Duration::from_millis(500);
+            loop {
+                match state.0.try_lock() {
+                    Ok(_guard) => {
+                        held.store(true, Ordering::Release);
+                        let _ = ready_tx.send(Ok(()));
+                        std::thread::sleep(Duration::from_millis(1500));
+                        held.store(false, Ordering::Release);
+                        break;
+                    }
+                    Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    _ => {
+                        let _ = ready_tx
+                            .send(Err("Project lock unavailable for bounded probe".to_string()));
+                        break;
+                    }
+                }
+            }
+            thread_active.store(false, Ordering::Release);
+        })
+    {
+        active.store(false, Ordering::Release);
+        return Err(error.to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        ready_rx
+            .recv_timeout(Duration::from_secs(2))
+            .map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+pub(crate) async fn native_heartbeat(
+    app: tauri::AppHandle,
+    probe: tauri::State<'_, Responsiveness>,
+) -> Result<bool, String> {
+    let held = probe.held.clone();
+    let (send, receive) = mpsc::channel();
+    app.run_on_main_thread(move || {
+        let _ = send.send(held.load(Ordering::Acquire));
+    })
+    .map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        receive
+            .recv_timeout(Duration::from_secs(3))
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+// Deliberately reproduces the former sync command dispatch for the negative
+// control; it shares the unchanged ownership/mutation implementation.
+#[tauri::command]
+pub(crate) fn synchronous_playback_probe(
+    state: tauri::State<'_, crate::state::AppState>,
+) -> annotator_core::error::Result<crate::commands::playback::PlaybackStatus> {
+    crate::commands::playback::control_owned(&state, None, "reset")
+}
 // Applied before Tauri creates the window. WebView2's environment-only browser
 // arguments are not reliable on every runtime; never accept arbitrary flags.
 pub fn configure_debug_port(
@@ -61,6 +149,7 @@ pub fn plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     tauri::plugin::Builder::new("dialog")
         .setup(move |app, _| {
             app.manage(Paths(Mutex::new(paths)));
+            app.manage(Responsiveness::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![open, save])

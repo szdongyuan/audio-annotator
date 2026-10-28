@@ -56,10 +56,10 @@ it('uses refreshed folder placement and the current project after controller rep
  const select=vi.fn(),props={annotations:[],statuses:[],disabled:false,onSelect:select,onImport:vi.fn(),onRelink:vi.fn()};
  const ui=render(<MediaList {...props} organization={c} media={files.slice(0,2)} selectedId={files[0].id}/>);
  fireEvent.click(screen.getByTitle('A'));await act(()=>c.refresh());fireEvent.keyDown(document.body,{key:'ArrowDown'});
- expect(select).toHaveBeenLastCalledWith(files[1].id);expect(screen.getByRole('button',{name:files[1].displayName})).toBeVisible();expect(c.selectedFolderId).toBeNull();
+ expect(select).toHaveBeenLastCalledWith(files[1].id);expect(screen.getByRole('button',{name:files[1].displayName})).toBeVisible();expect(c.selectedFolderId).toBe(a);
  const replacement=new OrganizationController('new-project','new',true,{} as never);replacement.snapshot={...head,projectId:'new-project',media:[{mediaId:files[2].id,folderId:b,originalFilename:files[2].displayName}]};
  ui.rerender(<MediaList {...props} organization={replacement} media={[files[2]]} selectedId={files[0].id}/>);
- fireEvent.click(screen.getByTitle('A'));fireEvent.keyDown(document.body,{key:'ArrowUp'});expect(select).toHaveBeenLastCalledWith(files[2].id);expect(replacement.selectedFolderId).toBeNull();
+ fireEvent.click(screen.getByTitle('A'));fireEvent.keyDown(document.body,{key:'ArrowUp'});expect(select).toHaveBeenLastCalledWith(files[2].id);expect(replacement.selectedFolderId).toBe(a);
 });
 it('does not navigate from editing controls or dialogs, open menus, non-normal views or a disabled workspace', () => {
  const files=[0,1].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`guard-${i}.wav`})),select=vi.fn();

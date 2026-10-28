@@ -545,15 +545,26 @@ pub async fn playback_devices() -> Result<Vec<OutputDevice>> {
         .map_err(|_| device_error("设备枚举中断"))?
 }
 #[tauri::command]
-pub fn playback_status(
+pub async fn playback_status(
     state: State<'_, AppState>,
     runtime_nonce: Option<String>,
 ) -> Result<PlaybackStatus> {
+    let state = state.inner().clone();
+    blocking(move || status_owned(&state, runtime_nonce.as_deref())).await
+}
+// Even memory-only commands can wait behind project persistence. Keep the
+// entire authority check and mutation together, away from the native UI thread.
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|_| device_error("播放请求中断"))?
+}
+fn status_owned(state: &AppState, nonce: Option<&str>) -> Result<PlaybackStatus> {
     let project = state
         .0
         .lock()
         .map_err(|_| device_error("Project unavailable"))?;
-    check_owner(&state, project.as_ref(), runtime_nonce.as_deref())?;
+    check_owner(state, project.as_ref(), nonce)?;
     state.3.status()
 }
 fn check_owner(
@@ -570,12 +581,13 @@ fn check_owner(
     }
 }
 #[tauri::command]
-pub fn playback_control(
+pub async fn playback_control(
     state: State<'_, AppState>,
     runtime_nonce: Option<String>,
     action: String,
 ) -> Result<PlaybackStatus> {
-    control_owned(&state, runtime_nonce.as_deref(), &action)
+    let state = state.inner().clone();
+    blocking(move || control_owned(&state, runtime_nonce.as_deref(), &action)).await
 }
 pub(crate) fn control_owned(
     state: &AppState,
@@ -805,6 +817,95 @@ mod tests {
     fn document() -> ProjectDocument {
         ProjectDocument::from_json(include_str!("../../../tests/fixtures/document-v3.json"))
             .unwrap()
+    }
+    #[test]
+    fn queued_playback_work_yields_and_rechecks_owner_after_project_lock_wait() {
+        use std::{
+            future::Future,
+            task::{Context, Poll, Wake, Waker},
+        };
+        struct Noop;
+        impl Wake for Noop {
+            fn wake(self: Arc<Self>) {}
+        }
+
+        for stale in [false, true] {
+            for operation in ["status", "reset", "monitor"] {
+                let state = AppState::default();
+                let doc = document();
+                let root =
+                    std::env::temp_dir().join(format!("queued-playback-{}", uuid::Uuid::new_v4()));
+                std::fs::create_dir(&root).unwrap();
+                std::fs::write(root.join("project.json"), serde_json::to_vec(&doc).unwrap())
+                    .unwrap();
+                *state.0.lock().unwrap() =
+                    Some(annotator_core::project::LocalProject::open(&root).unwrap());
+                let nonce = state.6.current.lock().unwrap().nonce.clone();
+                {
+                    let mut c = state.3.control.lock().unwrap();
+                    c.status = PlaybackStatus {
+                        generation: 3,
+                        project_id: Some(doc.project_id.clone()),
+                        media_id: Some(doc.media[0].id.clone()),
+                        state: TransportState::Buffering,
+                        ..Default::default()
+                    };
+                }
+                let (acquired_tx, acquired_rx) = mpsc::channel();
+                let (release_tx, release_rx) = mpsc::channel();
+                let holder_state = state.clone();
+                let holder = std::thread::spawn(move || {
+                    let _guard = holder_state.0.lock().unwrap();
+                    acquired_tx.send(()).unwrap();
+                    // A regression must fail promptly instead of hanging the test runner.
+                    let _ = release_rx.recv_timeout(Duration::from_secs(2));
+                });
+                acquired_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+                let request = MonitorGainRequest {
+                    project_id: doc.project_id,
+                    media_id: doc.media[0].id.clone(),
+                    generation: 3,
+                    monitor_gain_db: -12.0,
+                };
+                let task_state = state.clone();
+                let mut future = Box::pin(blocking(move || match operation {
+                    "status" => status_owned(&task_state, Some(&nonce)),
+                    "reset" => control_owned(&task_state, Some(&nonce), "reset"),
+                    _ => monitor_owned(&task_state, Some(&nonce), &request),
+                }));
+                let waker = Waker::from(Arc::new(Noop));
+                let start = Instant::now();
+                let first = future.as_mut().poll(&mut Context::from_waker(&waker));
+                let poll_elapsed = start.elapsed();
+                if stale {
+                    state.6.retire();
+                }
+                let _ = release_tx.send(());
+                holder.join().unwrap();
+                let result = match first {
+                    Poll::Pending => tauri::async_runtime::block_on(future),
+                    Poll::Ready(result) => result,
+                };
+                let after = state.3.status().unwrap();
+                *state.0.lock().unwrap() = None;
+                std::fs::remove_dir_all(root).unwrap();
+                assert!(
+                    poll_elapsed < Duration::from_millis(250),
+                    "{operation} blocked first poll for {poll_elapsed:?}"
+                );
+                assert_eq!(result.is_err(), stale, "{operation}: stale={stale}");
+                if stale {
+                    assert_eq!(after.generation, 3);
+                    assert_eq!(after.state, TransportState::Buffering);
+                    assert_eq!(state.3.control.lock().unwrap().monitor_gain_db, 0.0);
+                } else if operation == "reset" {
+                    assert_eq!(after.state, TransportState::Stopped);
+                    assert!(after.project_id.is_none());
+                } else if operation == "monitor" {
+                    assert_eq!(state.3.control.lock().unwrap().monitor_gain_db, -12.0);
+                }
+            }
+        }
     }
     #[test]
     fn native_ended_status_waits_for_presentation_but_stop_cancels_immediately() {
@@ -1111,12 +1212,13 @@ impl PlaybackRuntime {
 }
 
 #[tauri::command]
-pub fn playback_monitor_gain(
+pub async fn playback_monitor_gain(
     state: State<'_, AppState>,
     runtime_nonce: Option<String>,
     request: MonitorGainRequest,
 ) -> Result<PlaybackStatus> {
-    monitor_owned(&state, runtime_nonce.as_deref(), &request)
+    let state = state.inner().clone();
+    blocking(move || monitor_owned(&state, runtime_nonce.as_deref(), &request)).await
 }
 pub(crate) fn monitor_owned(
     state: &AppState,

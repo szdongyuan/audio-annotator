@@ -50,16 +50,75 @@ try {
   await clickFolder('A/A leaf');
   await h.click(row('first.wav'));
   await selected('first.wav');
+  await h.label('折叠文件夹 · B');
   assert.equal(await h.evaluate("return document.querySelectorAll('.media-select').length"), 1, 'selected leaf contains exactly one displayed file');
+  await h.label('展开文件夹 · B');
+  await h.until(`document.querySelector(${JSON.stringify(row('second.wav'))})`, 'disclosing sibling reveals audio immediately');
+  assert.equal(await h.evaluate("return document.querySelector('.media-folder-select[title=\"A/A leaf\"]')?.getAttribute('aria-pressed')"), 'true');
+  assert.equal(await h.evaluate("return document.querySelector('.file-pane h2')?.textContent"), 'first.wav');
+  check('Sibling disclosure reveals its audio without right-clicking or changing the import target and selected audio');
   await h.label('折叠文件夹 · B');
   await key(Key.ARROW_DOWN);
   await selected('second.wav');
-  assert.equal(await h.evaluate("return document.querySelector('.media-folder-select:not([title])')?.getAttribute('aria-pressed')"), 'true');
+  assert.equal(await h.evaluate("return document.querySelector('.media-folder-select[title=\"A/A leaf\"]')?.getAttribute('aria-pressed')"), 'true');
   for (const name of ['B', 'B leaf']) assert.equal(await (await h.element(`[aria-label="折叠文件夹 · ${name}"]`)).getAttribute('aria-expanded'), 'true');
   await key(Key.ARROW_UP);
   await selected('first.wav');
   check('ArrowDown leaves a one-file selected leaf, opens sibling ancestors, selects the main audio and focuses/scrolls its row; ArrowUp returns');
   await h.screenshot('cross-folder-navigation');
+
+  const beforeGain = await snapshot(h);
+  await h.evaluate(`const probe={frames:0,pointers:0,keys:0};window.__folderGainProbe=probe;
+    probe.frame=()=>{probe.frames++;probe.raf=requestAnimationFrame(probe.frame);};
+    probe.pointer=()=>probe.pointers++;probe.key=()=>probe.keys++;
+    window.addEventListener('pointerdown',probe.pointer,true);window.addEventListener('keydown',probe.key,true);probe.raf=requestAnimationFrame(probe.frame);`);
+  report.responsiveness = [];
+  for (let round = 0; round < 6; round++) {
+    const dismissal = round % 2 ? 'outside' : 'escape', name = round % 2 ? 'second.wav' : 'first.wav';
+    const previous = await h.evaluate('const p=window.__folderGainProbe;return {frames:p.frames,pointers:p.pointers,keys:p.keys};');
+    await clickFolder(round % 2 ? 'B/B leaf' : 'A/A leaf');
+    await h.selectMedia(name);
+    assert.equal(await (await h.element('[aria-label="快捷区域增益（dB）"]')).isEnabled(), false);
+    assert.equal(await (await h.element('[aria-label="应用区域增益"]')).isEnabled(), false);
+    for (let click = 0; click < 3; click++) {
+      await h.label('快捷区域增益（dB）');
+      await h.label('应用区域增益');
+    }
+    await h.label('更多播放操作');
+    const gain = await h.element('[role="menuitem"][aria-label="区域增益…"]');
+    assert.equal(await gain.getAttribute('aria-disabled'), 'true');
+    await gain.click();
+    assert.equal(await h.evaluate("return !!document.querySelector('[role=dialog]') || document.querySelector('.app-root').inert"), false);
+    if (dismissal === 'escape') await key(Key.ESCAPE);
+    else await h.driver.actions().move({x: 4, y: 300, origin: 'viewport'}).press().release().perform();
+    await h.until('!document.querySelector("[data-app-menu]")', 'disabled gain menu dismisses');
+    const looping = await (await h.element('[aria-label="循环播放"]')).getAttribute('aria-pressed');
+    await h.label('循环播放');
+    assert.notEqual(await (await h.element('[aria-label="循环播放"]')).getAttribute('aria-pressed'), looping);
+    await h.label('循环播放');
+    await h.label('监听增益');
+    await h.select('监听目标', `此音频 · ${name}`);
+    await h.select('监听目标', '全局');
+    await key(Key.ESCAPE);
+    await h.until('!document.querySelector(".monitor-popover")', 'monitor popup dismisses with Escape');
+    await h.label('监听增益');
+    await clickFolder(round % 2 ? 'B/B leaf' : 'A/A leaf');
+    await h.until('!document.querySelector(".monitor-popover")', 'monitor popup dismisses outside');
+    await h.drag('.annotation-overlay', [.2,.25], [.6,.7]);
+    await h.until(`!document.querySelector('[aria-label="快捷区域增益（dB）"]').disabled`, 'temporary selection enables gain');
+    await key(Key.ESCAPE);
+    await h.until(`document.querySelector('[aria-label="快捷区域增益（dB）"]').disabled`, 'Escape clears selection');
+    assert.equal(await h.evaluate("return !!document.querySelector('[role=dialog]') || document.querySelector('.app-root').inert"), false);
+    await h.until(`window.__folderGainProbe.frames>${previous.frames}`, 'animation frame heartbeat continues', 10000);
+    const current = await h.evaluate('const p=window.__folderGainProbe;return {frames:p.frames,pointers:p.pointers,keys:p.keys};');
+    assert.ok(current.pointers > previous.pointers && current.keys > previous.keys, 'trusted input continues reaching the WebView');
+    report.responsiveness.push({round, dismissal, media:name, frameDelta:current.frames-previous.frames, pointerDelta:current.pointers-previous.pointers, keyDelta:current.keys-previous.keys});
+  }
+  await h.evaluate(`const p=window.__folderGainProbe;cancelAnimationFrame(p.raf);window.removeEventListener('pointerdown',p.pointer,true);window.removeEventListener('keydown',p.key,true);delete window.__folderGainProbe;`);
+  await clickFolder('A/A leaf');
+  await h.selectMedia('first.wav');
+  assert.deepEqual((await snapshot(h)).edits, beforeGain.edits);
+  check('Six mixed interaction cycles keep input/rAF heartbeats progressing: disabled gain clicks, menu dismissals, audio/folder switches, monitor dropdowns, selection creation/clear; no stuck inert root or edits');
 
   await h.input('搜索音频', 'first');
   await h.click('[aria-label="搜索音频"]');
