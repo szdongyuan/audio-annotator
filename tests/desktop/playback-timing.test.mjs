@@ -80,6 +80,9 @@ try{
    await h.evaluate('window.__playbackTiming.phase=arguments[0]',phase);await wait(5000);
    assert.deepEqual(await h.evaluate('return [...document.querySelectorAll(".spectrogram-surface canvas")].map(c=>[c.width,c.height])'),canvasSize,'Stable canvas dimensions during each trial');
    await h.evaluate('window.__playbackTiming.phase="control"');
+   await h.input('快捷监听增益（dB）','20'); await wait(150);
+   const gained=await playback(h);check(`${name}/${mode} live gain preserves stream`,gained.generation===started.generation&&gained.state==='playing'&&gained.underrunFrames===0);
+   await h.input('快捷监听增益（dB）','0');
    await h.label('暂停 · 空格');const paused=await waitState('paused');await wait(200);const held=await playback(h);check(`${name}/${mode} pause freezes consumption`,held.consumedFrames===paused.consumedFrames&&held.positionSeconds===paused.positionSeconds);
    await h.label('播放 · 空格');await waitState('playing');await wait(250);
    await setValue('input[aria-label="播放位置"]',1.5);await waitState('playing');await wait(250);

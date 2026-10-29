@@ -9,7 +9,7 @@ export function expectedProject(owner:ActiveProject):Expected{const d=owner.stor
 /** Foreign state is never accepted into ProjectStore. One bounded in-flight read per owner. */
 export class CollaborationController {
  status:CollaborationStatus|null=null;error:AppError|null=null;filter:AuthorFilter={mode:'all'};
- hiddenCategoryNames:string[]=[];includeOwnCategories=false;
+ hiddenCategoryNames:string[]=[];includeOwnCategories=true;collapsedAuthorIds:string[]=[];
  catalogError:AppError|null=null;
  private listeners=new Set<()=>void>();private version=0;private disposed=false;private paused=0;private timer?:ReturnType<typeof setInterval>;private flight:Promise<void>|null=null;
  private unregister?:()=>void;
@@ -24,12 +24,12 @@ export class CollaborationController {
  }
  constructor(readonly owner:ActiveProject,private api:CollaborationCommands=collaborationClient){
   const preferences=readVisibility(owner.store.snapshot.document.projectId,owner.collaboration?.actor?.authorId??null);
-  if(preferences){this.filter=preferences.filter;this.hiddenCategoryNames=preferences.hiddenCategoryNames;this.includeOwnCategories=preferences.includeOwnCategories;}
+  if(preferences){this.filter=preferences.filter;this.hiddenCategoryNames=preferences.hiddenCategoryNames;this.includeOwnCategories=preferences.includeOwnCategories;this.collapsedAuthorIds=preferences.collapsedAuthorIds??[];}
  }
  subscribe=(f:()=>void)=>{this.listeners.add(f);return()=>{this.listeners.delete(f);};};getVersion=()=>this.version;
  private notify(){this.version++;this.listeners.forEach(f=>f());}
  private saveVisibility(){
-  const value:VisibilityPreferences={filter:this.filter,hiddenCategoryNames:this.hiddenCategoryNames,includeOwnCategories:this.includeOwnCategories};
+  const value:VisibilityPreferences={filter:this.filter,hiddenCategoryNames:this.hiddenCategoryNames,includeOwnCategories:this.includeOwnCategories,collapsedAuthorIds:this.collapsedAuthorIds};
   writeVisibility(this.owner.store.snapshot.document.projectId,this.owner.collaboration?.actor?.authorId??null,value);this.notify();
  }
  get authorIdentities(){
@@ -49,6 +49,7 @@ export class CollaborationController {
  }
  setCategoryVisible(name:string,shown:boolean){const names=new Set(this.hiddenCategoryNames);if(shown)names.delete(name.trim());else names.add(name.trim());this.hiddenCategoryNames=[...names];this.saveVisibility();}
  setIncludeOwnCategories(include:boolean){this.includeOwnCategories=include;this.saveVisibility();}
+ setAuthorCollapsed(id:string,collapsed:boolean){const ids=new Set(this.collapsedAuthorIds);if(collapsed)ids.add(id);else ids.delete(id);this.collapsedAuthorIds=[...ids];this.saveVisibility();}
  contentVisible(authorId:string|null,categories:readonly Category[],categoryIds:readonly string[]){
   if(!this.visible(authorId))return false;
   if(!this.hiddenCategoryNames.length)return true;

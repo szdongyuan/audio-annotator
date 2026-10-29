@@ -1,0 +1,162 @@
+{
+  "date": "2026-10-29",
+  "frontend": {
+    "files": 114,
+    "passed": 1154
+  },
+  "rust": {
+    "passed": 585,
+    "ignored": 9,
+    "doctests": "passed on sequential retry after build-artifact race"
+  },
+  "nodeTools": 22,
+  "reviewChecks": [
+    "one compact author control",
+    "collapse survives tab change",
+    "review has no private processed selector",
+    "target stays visible after full reset",
+    "Ctrl+0 restores full time range",
+    "settings dismiss on outside click",
+    "right-click cue plus native playback advances without underrun",
+    "cue is a white dashed line",
+    "resizable review devotes most height to spectrum",
+    "native pointer resize changes review dimensions",
+    "maximize still works after manual resize",
+    "restore preserves manually resized dimensions",
+    "Ctrl+0 also resets the main workspace",
+    "category eye is in the existing shared category row",
+    "category can be hidden in place"
+  ],
+  "reviewGeometry": {
+    "dialog": {
+      "bottom": 760,
+      "height": 720,
+      "left": 80,
+      "right": 1200,
+      "top": 40,
+      "width": 1120,
+      "x": 80,
+      "y": 40
+    },
+    "plot": {
+      "bottom": 708,
+      "height": 593,
+      "left": 89,
+      "right": 1191,
+      "top": 115,
+      "width": 1102,
+      "x": 89,
+      "y": 115
+    },
+    "resize": "both"
+  },
+  "reviewResized": {
+    "bottom": 711.5,
+    "height": 623,
+    "left": 148.5,
+    "right": 1131.5,
+    "top": 88.5,
+    "width": 983,
+    "x": 148.5,
+    "y": 88.5
+  },
+  "e2eExecutableSha256": "771f0ec9e31266655cf44bfc5bdb03af033f9495f8a26e365a56969fe23a65c0",
+  "playback": [
+    {
+      "workload": "empty edits",
+      "checks": 29,
+      "trials": [
+        {
+          "phase": "selected-1.wav/original/steady",
+          "underrunMax": 0,
+          "backsteps": 0
+        },
+        {
+          "phase": "selected-1.wav/processed/steady",
+          "underrunMax": 0,
+          "backsteps": 0
+        },
+        {
+          "phase": "timing-six-channel.wav/original/steady",
+          "underrunMax": 0,
+          "backsteps": 0
+        },
+        {
+          "phase": "timing-six-channel.wav/processed/steady",
+          "underrunMax": 0,
+          "backsteps": 0
+        },
+        {
+          "phase": "induced-stall",
+          "underrunMax": 0,
+          "backsteps": 0
+        }
+      ]
+    },
+    {
+      "workload": "nonempty mask + gain on every channel",
+      "checks": 35,
+      "trials": [
+        {
+          "phase": "selected-1.wav/original/steady",
+          "underrunMax": 0,
+          "backsteps": 0
+        },
+        {
+          "phase": "selected-1.wav/processed/steady",
+          "underrunMax": 0,
+          "backsteps": 0
+        },
+        {
+          "phase": "timing-six-channel.wav/original/steady",
+          "underrunMax": 0,
+          "backsteps": 0
+        },
+        {
+          "phase": "timing-six-channel.wav/processed/steady",
+          "underrunMax": 0,
+          "backsteps": 0
+        },
+        {
+          "phase": "induced-stall",
+          "underrunMax": 0,
+          "backsteps": 0
+        }
+      ]
+    }
+  ],
+  "processingProbes": [
+    {
+      "mediaId": "a67f02d3-4e66-447b-bdc6-81e9bfbfe2a1",
+      "name": "selected-1.wav",
+      "channelIndex": 0,
+      "atSeconds": 2,
+      "frames": 8,
+      "editSignature": "d63a5eb68ec6eec41a8515b75d7640fa29f864e93a6504e2a5cb74fe2544192e",
+      "configHash": "a49e0eb7ae49e2e8563d2a3bca9a8650c6211626b32879e4a5b2d13cd943470b",
+      "maskDeltaDb": -141.58344650268555,
+      "gainDeltaDb": -6,
+      "originalValuesHash": "d76668618c3a5e66a68525bb65068cb27464ca0d91c46d99e9c51bbef3de2cc2",
+      "processedValuesHash": "16649c9383afa4776762f8a3c9e28470706655ae48dcf95be47b106d8e5d28da"
+    },
+    {
+      "mediaId": "aa85cabb-9754-450f-8ff6-21993dc2daed",
+      "name": "timing-six-channel.wav",
+      "channelIndex": 0,
+      "atSeconds": 2,
+      "frames": 8,
+      "editSignature": "07e89e5c84b3cbb8dfc9b6bda185e0d895c7f6c4ab4d92eab353f282c2e18e8a",
+      "configHash": "a49e0eb7ae49e2e8563d2a3bca9a8650c6211626b32879e4a5b2d13cd943470b",
+      "maskDeltaDb": -141.58344650268555,
+      "gainDeltaDb": -6,
+      "originalValuesHash": "d76668618c3a5e66a68525bb65068cb27464ca0d91c46d99e9c51bbef3de2cc2",
+      "processedValuesHash": "16649c9383afa4776762f8a3c9e28470706655ae48dcf95be47b106d8e5d28da"
+    }
+  ],
+  "limitations": [
+    "No acoustic loopback or claim about every sound device.",
+    "Playback binaries precede final presentation-only resize/resume changes; audio source unchanged. Final review uses latest executable.",
+    "Switch black-screen optimization deferred at user request.",
+    "No real user project data changed."
+  ]
+}

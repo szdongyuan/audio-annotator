@@ -1,15 +1,18 @@
 import { labelText } from '../annotations/labels';
-import { useId, useState } from 'react';
+import { useId, useSyncExternalStore } from 'react';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import type { CollaborationUI } from './useCollaboration';
 import { authorsForInspector, useInspectionDocument, type InspectorAuthor, type RemoteTarget } from './remote';
 import { AuthorFilter } from './AuthorFilter';
 import type { CollaborationController } from './controller';
 import { Eye, EyeOff } from 'lucide-react';
+const idleSubscribe = () => () => {};
+const idleVersion = () => 0;
 
 export function RemoteList({ ui, inspect }: { ui: CollaborationUI; inspect: (target: RemoteTarget) => void }) {
   const owner = ui.active;
   useInspectionDocument(owner);
+  useSyncExternalStore(ui.controller?.subscribe ?? idleSubscribe, ui.controller?.getVersion ?? idleVersion);
   if (!owner || ui.controller?.owner !== owner) return <div className="remote-list"><p className="subtle-label">没有可显示的其他作者</p></div>;
   return <><AuthorFilter controller={ui.controller!} compact/><RemoteAuthorList key={owner.collaboration?.runtimeNonce ?? owner.path}
     owner={owner} controller={ui.controller!} authors={authorsForInspector(ui)} inspect={inspect} /></>;
@@ -18,16 +21,11 @@ export function RemoteList({ ui, inspect }: { ui: CollaborationUI; inspect: (tar
 function RemoteAuthorList({ owner, controller, authors, inspect }: {
   owner: ActiveProject; controller: CollaborationController; authors: InspectorAuthor[]; inspect: (target: RemoteTarget) => void;
 }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const listId = useId();
-  const toggle = (id: string) => setCollapsed(previous => {
-    const next = new Set(previous);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
+  const toggle = (id: string) => controller.setAuthorCollapsed(id, !controller.collapsedAuthorIds.includes(id));
   return <div className="remote-list">{!authors.length && <p className="subtle-label">没有可显示的其他作者</p>}{authors.map(author => {
     const id = author.identity.authorId, payload = author.layer?.payload;
-    const contentId = `${listId}-${id}`, isCollapsed = collapsed.has(id);
+    const contentId = `${listId}-${id}`, isCollapsed = controller.collapsedAuthorIds.includes(id);
     return <section key={id} data-remote-author={id}>
       <h3><button type="button" className="remote-author-toggle"
         aria-expanded={!isCollapsed} aria-controls={contentId} onClick={() => toggle(id)}>

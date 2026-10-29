@@ -151,7 +151,12 @@ impl DspProcessor {
         }
         let begin = (self.first + start) as i64;
         let end = begin + count as i64;
-        if matches!(self.mode, PlaybackMode::Original) {
+        // Whole-file processed playback with no enabled edits is exactly the
+        // original PCM. Avoid an otherwise redundant FFT/IFFT for every channel.
+        // Frequency-selected audition still needs the spectral filter below.
+        if matches!(self.mode, PlaybackMode::Original)
+            || matches!(self.mode, PlaybackMode::Processed) && self.edits.is_empty()
+        {
             let input = read(begin as u64, count)?;
             validate_samples(&input, count * self.info.channel_count)?;
             return Ok(input);

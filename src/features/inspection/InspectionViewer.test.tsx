@@ -8,7 +8,7 @@ import type { ActiveProject } from '../project/useProjectLifecycle';
 import { InspectionViewer } from './InspectionViewer';
 import { resolveOwnInspection } from './targets';
 import * as adapter from './adapter';
-vi.mock('../spectrogram/SpectrogramCanvas', () => ({ SpectrogramCanvas: ({ settings, view, active, analysisSource }: any) => <output data-testid="spectrum" data-owner={active.store.snapshot.document.projectId}>{JSON.stringify({settings,view,analysisSource})}</output> }));
+vi.mock('../spectrogram/SpectrogramCanvas', () => ({ SpectrogramCanvas: ({ settings, view, active, analysisSource, children }: any) => <div className="spectrogram-surface" tabIndex={0}><output data-testid="spectrum" data-owner={active.store.snapshot.document.projectId}>{JSON.stringify({settings,view,analysisSource})}</output>{children}</div> }));
 function setup() {
  vi.restoreAllMocks();
  const owner = { store: new ProjectStore({ document: structuredClone(fixture) as never, canUndo: false, canRedo: false }), lifecycle: { registerBackgroundGuard: vi.fn(() => vi.fn()) } } as unknown as ActiveProject;
@@ -27,7 +27,7 @@ it('shows read-only metadata, native spectrum and independent controls without t
  await screen.findByTestId('spectrum'); expect(p.playback.stopAndWait).toHaveBeenCalledOnce(); expect(inspectionClient.configure).not.toHaveBeenCalled();
  expect(screen.getByRole('dialog')).toHaveTextContent('区域备注'); expect(screen.queryByRole('textbox')).toBeNull();
  fireEvent.change(screen.getByLabelText('查看频谱类型'), {target:{value:'mel'}});
- expect(screen.getByTestId('spectrum')).toHaveTextContent('mel'); fireEvent.click(screen.getByRole('button',{name:'放大频率'}));
+ expect(screen.getByTestId('spectrum')).toHaveTextContent('mel'); fireEvent.click(screen.getByRole('button',{name:'重置视图'})); expect(screen.getByLabelText('正在查看的标注框')).toBeInTheDocument();
  expect(p.owner.store.snapshot).toBe(before); fireEvent.click(screen.getByRole('button',{name:'播放区域'}));
  await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledWith(p.binding,expect.any(String),expect.objectContaining({mode:expect.objectContaining({mode:'selection',selectionSource:'original'})})));
  ui.unmount(); expect(inspectionClient.close).toHaveBeenCalledOnce();
@@ -42,8 +42,8 @@ it('source deletion stops owned preview and leaves a focused unavailable modal',
  ui.rerender(<InspectionViewer {...p} value={null}/>); await waitFor(()=>expect(inspectionClient.close).toHaveBeenCalledOnce());
  expect(screen.getByRole('dialog')).toHaveTextContent('不可用'); expect(screen.getByRole('button',{name:'跳转到音频'})).toBeDisabled();
 });
-it('keeps whole-file audition when seeking/changing volume and uses live scalar gain without configuring', async () => {
- const p=setup(); render(<InspectionViewer {...p}/>); await screen.findByTestId('spectrum');
+it('keeps whole-file audition when seeking and uses live scalar gain without configuring', async () => {
+ const p=setup(); render(<InspectionViewer {...p} value={{...p.value,annotation:undefined}}/>); await screen.findByTestId('spectrum');
  fireEvent.click(screen.getByRole('button',{name:'播放音频'})); await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledOnce());
  fireEvent.change(screen.getByLabelText('查看播放位置'),{target:{value:'.05'}});
  await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledTimes(2));
@@ -83,14 +83,34 @@ it('refreshes its native source when main media metadata changes without replayi
  expect(vi.mocked(inspectionClient.open).mock.lastCall?.[2].hopSize).toBe(p.owner.store.snapshot.document.analysis[p.value.media.id].hopSize);
  expect(screen.getByRole('dialog')).toHaveTextContent('new source note'); expect(inspectionClient.configure).not.toHaveBeenCalled();
 });
-it('routes processed/original source choice through both accurate Canvas tiles and native audition', async()=>{
+it('auditions original audio and keeps private processing controls out of annotation review',async()=>{
  const p=setup(); render(<InspectionViewer {...p}/>); await screen.findByTestId('spectrum');
- fireEvent.change(screen.getByLabelText('查看试听来源'),{target:{value:'processed'}});
- expect(screen.getByTestId('spectrum')).toHaveTextContent('"analysisSource":"processed"');
- fireEvent.click(screen.getByRole('button',{name:'播放区域'}));await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledOnce());
- expect(vi.mocked(inspectionClient.configure).mock.lastCall?.[2].mode).toMatchObject({mode:'selection',selectionSource:'processed'});
- fireEvent.change(screen.getByLabelText('查看试听来源'),{target:{value:'original'}});
+ expect(screen.queryByLabelText('查看试听来源')).toBeNull();
  expect(screen.getByTestId('spectrum')).toHaveTextContent('"analysisSource":"original"');
+ fireEvent.click(screen.getByRole('button',{name:'播放区域'})); await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledOnce());
+ expect(vi.mocked(inspectionClient.configure).mock.lastCall?.[2].mode).toMatchObject({mode:'selection',selectionSource:'original'});
+});
+it('keeps the target frame through reset/analysis/channel changes and isolates review cue playback and resizing',async()=>{
+ const p=setup(),before=p.owner.store.snapshot; render(<InspectionViewer {...p}/>); await screen.findByTestId('spectrum');
+ const dialog=screen.getByRole('dialog'),surface=document.querySelector<HTMLElement>('.spectrogram-surface')!;
+ vi.spyOn(surface,'getBoundingClientRect').mockReturnValue({left:100,top:100,width:500,height:300} as DOMRect);
+ fireEvent.click(screen.getByRole('button',{name:'重置视图'}));
+ expect(screen.getByLabelText('正在查看的标注框')).toBeVisible();
+ fireEvent.keyDown(surface,{key:'0',ctrlKey:true}); expect(JSON.parse(screen.getByTestId('spectrum').textContent!).view.lowHz).toBe(0);
+ fireEvent.click(screen.getByRole('button',{name:'最大化查看窗口'})); expect(dialog).toHaveClass('is-maximized');
+ fireEvent.click(screen.getByRole('button',{name:'还原查看窗口'})); expect(dialog).not.toHaveClass('is-maximized');
+ fireEvent.click(screen.getByLabelText('分析与显示设置')); expect(document.querySelector('details')).toHaveAttribute('open');
+ fireEvent.pointerDown(surface); expect(document.querySelector('details')).not.toHaveAttribute('open');
+ fireEvent.contextMenu(surface,{clientX:350,clientY:200}); expect(screen.getByLabelText('查看播放起点')).toHaveStyle({left:'50%'});
+ fireEvent.click(screen.getByRole('menuitem',{name:'从此处播放'}));
+ await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledOnce());
+ expect(vi.mocked(inspectionClient.configure).mock.lastCall?.[2]).toMatchObject({mode:{mode:'original'},seekSeconds:1});
+ expect(p.owner.store.snapshot).toBe(before);
+ const previewId=vi.mocked(inspectionClient.configure).mock.lastCall![1];
+ vi.spyOn(inspectionClient,'control').mockResolvedValue({...emptyPlayback,projectId:previewId,mediaId:p.value.media.id,generation:1,state:'paused',positionSeconds:1.2});
+ fireEvent.click(screen.getByRole('button',{name:'暂停'}));await screen.findByRole('button',{name:'播放音频'});
+ fireEvent.click(screen.getByRole('button',{name:'播放音频'}));await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledTimes(2));
+ expect(vi.mocked(inspectionClient.configure).mock.lastCall?.[2]).toMatchObject({mode:{mode:'original'},seekSeconds:null});
 });
 it('allows an empty numeric gain draft and applies a valid negative gain only to the inspection', async()=>{
  const p=setup(); render(<InspectionViewer {...p}/>); await screen.findByTestId('spectrum');

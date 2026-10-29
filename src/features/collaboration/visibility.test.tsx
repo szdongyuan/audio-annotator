@@ -41,52 +41,35 @@ it('enumerates unpublished self and hidden authors for controls, independently f
  expect(foreignAuthors(s.ui)).toEqual([]);
 });
 
-it('uses one author filter for individual/bulk controls, explicit include-self and old modes without shared writes', () => {
- const s = setup(), snapshot = structuredClone(s.active.store.snapshot), layers = JSON.stringify(s.controller.status);
- function Controls() { useSyncExternalStore(s.controller.subscribe, s.controller.getVersion); return <RemoteList ui={s.ui} inspect={vi.fn()}/>; }
- render(<Controls/>);
- fireEvent.click(screen.getByRole('button', { name: '隐藏作者 Bob' }));
- expect(s.controller.visible(bob)).toBe(false); expect(s.controller.visible(alice)).toBe(true);
- expect(screen.getByRole('button', { name: '显示作者 Bob' })).toBeVisible();
- expect(screen.getByRole('radio', { name: '勾选作者' })).toBeChecked();
- fireEvent.click(screen.getByRole('button', { name: '显示作者 Bob' }));
- expect(s.controller.visible(bob)).toBe(true);
- fireEvent.click(screen.getByRole('button', { name: '隐藏全部作者' }));
- expect(s.controller.visible(alice)).toBe(true); expect(s.controller.visible(bob)).toBe(false);
- fireEvent.click(screen.getByRole('checkbox', { name: '批量操作包括我' }));
- fireEvent.click(screen.getByRole('button', { name: '隐藏全部作者' }));
- expect(s.controller.visible(alice)).toBe(false);
- expect(screen.getByRole('button', { name: /Alice.*我/ })).toBeVisible();
- fireEvent.click(screen.getByRole('checkbox', { name: '批量操作包括我' }));
- fireEvent.click(screen.getByRole('button', { name: '显示全部作者' }));
- expect(s.controller.visible(alice)).toBe(false); expect(s.controller.visible(bob)).toBe(true);
- fireEvent.click(screen.getByRole('button', { name: '显示作者 Alice' }));
- expect(s.controller.visible(alice)).toBe(true);
- fireEvent.click(screen.getByRole('checkbox', { name: '批量操作包括我' }));
- fireEvent.click(screen.getByRole('button', { name: '显示全部作者' }));
- expect(s.controller.visible(alice)).toBe(true); expect(s.controller.visible(bob)).toBe(true);
- expect(screen.getByRole('radio', { name: '全部' })).toBeChecked();
- fireEvent.click(screen.getByRole('radio', { name: '仅我的' }));
- expect(s.controller.visible(bob)).toBe(false);
- fireEvent.click(screen.getByRole('button', { name: '显示作者 Bob' }));
- expect(s.controller.visible(bob)).toBe(true);
- expect(s.active.store.snapshot).toEqual(snapshot); expect(JSON.stringify(s.controller.status)).toBe(layers);
- expect(s.active.queue.enqueue).not.toHaveBeenCalled(); expect(s.active.lifecycle.save).not.toHaveBeenCalled(); expect(s.active.lifecycle.enqueueEdit).not.toHaveBeenCalled();
+it('uses one compact author selector with individual eyes and remembers collapsed authors across tab unmounts',()=>{
+ const s=setup(),before=JSON.stringify(s.active.store.snapshot);
+ function Controls(){useSyncExternalStore(s.controller.subscribe,s.controller.getVersion);return <RemoteList ui={s.ui} inspect={vi.fn()}/>;}
+ let rendered=render(<Controls/>);
+ expect(screen.queryByRole('radio')).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'隐藏作者 Bob'})); expect(s.controller.visible(bob)).toBe(false);
+ expect(screen.getByLabelText('显示作者')).toHaveValue('custom');
+ fireEvent.change(screen.getByLabelText('显示作者'),{target:{value:'mine'}}); expect(s.controller.visible(alice)).toBe(true);expect(s.controller.visible(bob)).toBe(false);
+ fireEvent.change(screen.getByLabelText('显示作者'),{target:{value:'none'}}); expect(s.controller.visible(alice)).toBe(false);
+ fireEvent.change(screen.getByLabelText('显示作者'),{target:{value:'all'}});
+ fireEvent.click(screen.getByRole('button',{name:'Bob'})); expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','false');
+ rendered.unmount(); rendered=render(<Controls/>); expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','false');
+ expect(new CollaborationController(s.active).collapsedAuthorIds).toContain(bob);
+ expect(JSON.stringify(s.active.store.snapshot)).toBe(before);expect(s.active.queue.enqueue).not.toHaveBeenCalled();
 });
 
 it('keeps category control groups across hidden authors, groups exact trimmed names and filters region/file/channel any-match results', () => {
- const s = setup(), command = vi.fn();
+ const s = setup(), command = vi.fn(); s.controller.setIncludeOwnCategories(false);
  s.foreign.layer!.payload.categories.push({ id: 'only-foreign', name: 'Foreign only', color: '#123456' });
- function Contents() { useSyncExternalStore(s.controller.subscribe, s.controller.getVersion); return <CollaborationContext.Provider value={s.ui}><CategoryManager ui={{ active: s.active, command } as never}/><RemoteList ui={s.ui} inspect={vi.fn()}/><AnnotationList doc={s.active.store.snapshot.document} selectedId={null} onLocate={vi.fn()}/></CollaborationContext.Provider>; }
+ function Contents() { useSyncExternalStore(s.controller.subscribe, s.controller.getVersion); return <CollaborationContext.Provider value={s.ui}><CategoryManager ui={{ active: s.active, command, categories:[...s.doc.categories,{id:'only-foreign',name:'Foreign only',color:'#123456',authorName:'Bob'}] } as never}/><RemoteList ui={s.ui} inspect={vi.fn()}/><AnnotationList doc={s.active.store.snapshot.document} selectedId={null} onLocate={vi.fn()}/></CollaborationContext.Provider>; }
  const rendered = render(<Contents/>), before = JSON.stringify(s.active.store.snapshot.document);
- const control = screen.getByRole('group', { name: '类别显示' });
+ const control = rendered.container.querySelector<HTMLElement>('.category-manager')!;
  expect(within(control).getAllByRole('button', { name: '隐藏类别 Bird' })).toHaveLength(1);
  fireEvent.click(within(control).getByRole('button', { name: '隐藏类别 Bird' }));
  expect(rendered.container.querySelector('[data-remote-author="'+bob+'"] .remote-list-entry')).toBeNull();
  expect(rendered.container.querySelectorAll('.annotation-row').length).toBeGreaterThan(1);
  expect(s.controller.contentVisible(bob, s.foreign.layer!.payload.categories, ['foreign-noise','foreign-bird'])).toBe(false);
  expect(s.controller.contentVisible(bob, s.foreign.layer!.payload.categories, [])).toBe(true);
- fireEvent.click(within(control).getByRole('checkbox', { name: '类别过滤包括我的标注' }));
+ fireEvent.change(within(control).getByLabelText('类别隐藏范围'), {target:{value:'all'}});
  expect(rendered.container.querySelectorAll('.annotation-row')).toHaveLength(2); // unclassified channel + unclassified region
  expect(rendered.container.querySelector('[data-remote-author="'+alice+'"] .remote-list-entry')).toBeNull();
  act(() => s.controller.setFilter({ mode: 'custom', authorIds: [] }));
@@ -117,11 +100,11 @@ it('keeps legacy custom checkboxes coherent with the same author visibility, inc
  const s = setup();
  function Controls() { useSyncExternalStore(s.controller.subscribe, s.controller.getVersion); return <AuthorFilter controller={s.controller}/>; }
  render(<Controls/>);
- fireEvent.click(screen.getByRole('radio', { name: '勾选作者' }));
+ fireEvent.change(screen.getByLabelText('显示作者'),{target:{value:'custom'}});
  const self = screen.getByRole('checkbox', { name: 'Alice（我）' }), foreign = screen.getByRole('checkbox', { name: 'Bob' });
  expect(self).toBeChecked(); expect(foreign).toBeChecked();
  fireEvent.click(self); expect(s.controller.visible(alice)).toBe(false);
  fireEvent.click(foreign); expect(s.controller.visible(bob)).toBe(false);
- fireEvent.click(screen.getByRole('radio', { name: '全部' }));
+ fireEvent.change(screen.getByLabelText('显示作者'),{target:{value:'all'}});
  expect(s.controller.visible(alice)).toBe(true); expect(s.controller.visible(carol)).toBe(true);
 });

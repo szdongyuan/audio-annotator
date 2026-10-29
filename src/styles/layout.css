@@ -326,3 +326,8 @@
 .remote-author-toggle { flex:1; min-width:0; }
 .visibility-toggle { display:inline-flex; align-items:center; justify-content:center; flex:0 0 24px; width:24px; height:24px; padding:0; }
 .visibility-toggle[aria-pressed=false] { opacity:.6; }
+.inspector-content .author-filter{margin:0 0 8px;display:block}
+.author-filter select{flex:1;min-width:0;width:auto}
+.category-visibility-scope{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:10px}
+.category-visibility-scope select{flex:1;min-width:0;width:auto}
+.category-row .visibility-toggle{padding:0}

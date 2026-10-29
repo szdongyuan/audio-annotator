@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 /** Capture the stable menu trigger before applying inert; restore it after removing inert. */
-export function MediaDialog({ title, returnFocus, resolveReturnFocus, onClose, busy = false, children }: {
+export function MediaDialog({ title, returnFocus, resolveReturnFocus, onClose, busy = false, className = '', children }: {
     title: string;
+    className?: string;
     returnFocus?: HTMLElement | null;
     resolveReturnFocus?: (previous: HTMLElement | null) => HTMLElement | null;
     onClose: () => void;
@@ -26,7 +27,7 @@ export function MediaDialog({ title, returnFocus, resolveReturnFocus, onClose, b
     useEffect(() => { ref.current?.focus(); }, []);
     return createPortal(<div className="dialog-backdrop" onPointerDown={e => { if (e.target === e.currentTarget && !busy) {
         e.preventDefault();
-        onClose(); } }}><section ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className="project-dialog source-import-dialog" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape' && !busy)
+        onClose(); } }}><section ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`project-dialog source-import-dialog ${className}`} onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape' && !busy)
         onClose(); if (e.key === 'Tab') {
         const items = [...(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary') ?? [])].filter(e => !e.closest('details:not([open])') || e.tagName === 'SUMMARY');
         const first = items[0], last = items.at(-1);

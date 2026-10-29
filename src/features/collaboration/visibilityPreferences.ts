@@ -1,5 +1,5 @@
 export type AuthorFilter = { mode: 'all' | 'mine' } | { mode: 'custom'; authorIds: string[] };
-export interface VisibilityPreferences { filter: AuthorFilter; hiddenCategoryNames: string[]; includeOwnCategories: boolean }
+export interface VisibilityPreferences { filter: AuthorFilter; hiddenCategoryNames: string[]; includeOwnCategories: boolean; collapsedAuthorIds?: string[] }
 export const visibilityKey = 'audio-annotator.annotation-visibility.v1';
 type LocalStorage = Pick<Storage, 'getItem' | 'setItem'>;
 interface Entry extends VisibilityPreferences { projectId: string; actorId: string | null }
@@ -21,7 +21,7 @@ function sanitize(v: unknown): VisibilityPreferences | null {
   if (encodedLength + cost > 131072) break;
   encodedLength += cost; hiddenCategoryNames.push(name);
  }
- return { filter, hiddenCategoryNames, includeOwnCategories: v.includeOwnCategories };
+ return { filter, hiddenCategoryNames, includeOwnCategories: v.includeOwnCategories, ...(Array.isArray(v.collapsedAuthorIds) ? { collapsedAuthorIds: [...new Set(v.collapsedAuthorIds.slice(0, 512).filter(uuid))] } : {}) };
 }
 function entries(target: LocalStorage | undefined): Entry[] {
  try {
@@ -38,7 +38,7 @@ function entries(target: LocalStorage | undefined): Entry[] {
 }
 export function readVisibility(projectId: string, actorId: string | null, target = storage()): VisibilityPreferences | null {
  const entry = entries(target).find(e => e.projectId === projectId && e.actorId === actorId);
- return entry ? { filter: entry.filter, hiddenCategoryNames: entry.hiddenCategoryNames, includeOwnCategories: entry.includeOwnCategories } : null;
+ return entry ? { filter: entry.filter, hiddenCategoryNames: entry.hiddenCategoryNames, includeOwnCategories: entry.includeOwnCategories, ...(entry.collapsedAuthorIds ? { collapsedAuthorIds: entry.collapsedAuthorIds } : {}) } : null;
 }
 export function writeVisibility(projectId: string, actorId: string | null, value: VisibilityPreferences, target = storage()): void {
  if (!uuid(projectId) || actorId !== null && !uuid(actorId)) return;

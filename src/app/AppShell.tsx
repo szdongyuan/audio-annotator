@@ -1,4 +1,5 @@
 import { InspectionViewer } from '../features/inspection/InspectionViewer';
+import { isResetViewShortcut } from '../features/spectrogram/viewShortcut';
 import { inspectionBinding, inspectionTargetKey, resolveOwnInspection, type OwnInspectionTarget } from '../features/inspection/targets';
 import type { ClassificationResult } from '../features/annotations/classification';
 import type { IdentityController } from '../features/identity/controller';
@@ -93,6 +94,14 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   };
   const mediaPanel = useMediaPanelWidth(workspaceHost, propertiesOpen, !!workspace.state.compareMediaId && workspace.state.compareLayout === 'horizontal');
   const selected = project?.active?.store.snapshot.document.media.find(m => m.id === workspace.state.activeMediaId);
+  useEffect(() => {
+    const reset = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || document.querySelector('[role=dialog],[role=alertdialog],[data-app-menu]') || !isResetViewShortcut(event) || project?.active?.store.editingDisabled) return;
+      const media = project?.active?.store.snapshot.document.media.find(m => m.id === (selection.context?.mediaId ?? workspace.state.activeMediaId));
+      if (media) { event.preventDefault(); workspace.patch(media.id, { startSeconds: 0, endSeconds: media.frameCount / media.sampleRate, lowHz: 0, highHz: media.sampleRate / 2 }); }
+    };
+    window.addEventListener('keydown', reset); return () => window.removeEventListener('keydown', reset);
+  });
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const panes = [selected?.id, workspace.state.compareMediaId].filter((id): id is string => !!id && !!project?.active?.store.snapshot.document.media.some(m => m.id === id)).map(mediaId => ({ mediaId, channels: workspace.view(mediaId).visibleChannels }));
   const selection = useSelection(project?.active ?? null, selected?.id ?? null, panes);

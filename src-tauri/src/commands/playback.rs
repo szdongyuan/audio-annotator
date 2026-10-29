@@ -20,6 +20,8 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{Emitter, State};
+#[path = "playback_source_check.rs"]
+mod source_check;
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -503,11 +505,13 @@ fn run(work: &Work, control: &Mutex<Control>, epoch: &Arc<AtomicU64>) -> Result<
     let mut pending = None;
     let mut offset = 0;
     let mut eof = false;
+    let mut source_check = source_check::SourceCheck::new();
     // At most ~2.7 seconds stereo at 48 kHz; never render a full long source.
     let mut fill = |buffer: &OutputBuffer| -> Result<()> {
+        source_check.verify(Instant::now(), || media.verify_source())?;
         while buffer.free() > 65536 && !eof && !work.cancel.load(Ordering::Acquire) {
             if pending.is_none() {
-                media.verify_source()?;
+                source_check.verify(Instant::now(), || media.verify_source())?;
                 pending =
                     renderer.next(|start, count| cache.read_frames(&media.pcm, start, count))?;
                 offset = 0;
@@ -549,14 +553,9 @@ fn run(work: &Work, control: &Mutex<Control>, epoch: &Arc<AtomicU64>) -> Result<
     }
     let _stream = device.start(buffer.clone())?;
     let mut last = Instant::now() - Duration::from_secs(1);
-    let mut verified = Instant::now();
     while !work.cancel.load(Ordering::Acquire) {
         if buffer.device_failed.load(Ordering::Acquire) {
             return Err(device_error("设备已断开或输出流失效"));
-        }
-        if verified.elapsed() >= Duration::from_millis(250) {
-            media.verify_source()?;
-            verified = Instant::now();
         }
         fill(&buffer)?;
         if last.elapsed() >= Duration::from_millis(33) {

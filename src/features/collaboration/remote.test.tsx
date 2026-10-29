@@ -242,7 +242,7 @@ it('expands authors by default and preserves independent UUID state during refre
  expect(within(section('bob')).getByText('new shared note')).toBeVisible();
 });
 
-it('resets collapse state after remount and project runtime changes', () => {
+it('preserves collapse state after tab remount and isolates a different controller', () => {
  const s = remoteFixture(), inspect = vi.fn();
  const view = render(<RemoteList ui={s.ui} inspect={inspect} />);
  fireEvent.click(screen.getByRole('button',{name:'Bob'}));
@@ -250,7 +250,7 @@ it('resets collapse state after remount and project runtime changes', () => {
  expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','false');
  view.unmount();
  const again = render(<RemoteList ui={s.ui} inspect={inspect} />);
- expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','true');
+ expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','false');
  fireEvent.click(screen.getByRole('button',{name:'Bob'}));
  const next = remoteFixture();
  next.active.collaboration!.runtimeNonce = 'next-project-runtime';
@@ -258,14 +258,14 @@ it('resets collapse state after remount and project runtime changes', () => {
  expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','true');
 });
 
-it('shows the list empty state after closing a project and resets on reopening', () => {
+it('shows the list empty state after closing a project and preserves collapse on reopening', () => {
  const s = remoteFixture(), inspect = vi.fn();
  const view = render(<RemoteList ui={s.ui} inspect={inspect} />);
  fireEvent.click(screen.getByRole('button',{name:'Bob'}));
  view.rerender(<RemoteList ui={{...s.ui,active:null,controller:null}} inspect={inspect} />);
  expect(screen.getByText('没有可显示的其他作者')).toBeVisible();
  view.rerender(<RemoteList ui={s.ui} inspect={inspect} />);
- expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','true');
+ expect(screen.getByRole('button',{name:'Bob'})).toHaveAttribute('aria-expanded','false');
 });
 
 it('keeps errors visible when collapsed and filters mine to current self content', () => {

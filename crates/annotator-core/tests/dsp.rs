@@ -70,6 +70,38 @@ fn render(
 fn rms(x: &[f32]) -> f64 {
     (x.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt()
 }
+#[test]
+fn processed_without_enabled_edits_reads_exact_pcm_once_per_block_for_all_channels() {
+    for channels in [1, 2, 6] {
+        let frames = 5003;
+        let input: Vec<f32> = (0..frames * channels)
+            .map(|i| (i % 101) as f32 / 103.0)
+            .collect();
+        let mut disabled = edit(region(0, 0., 0.05, 100., 3000.));
+        disabled.enabled = false;
+        for edits in [vec![], vec![disabled]] {
+            let mut dsp = DspProcessor::new(
+                info(frames, channels),
+                DSP_VERSION,
+                PlaybackMode::Processed,
+                &edits,
+            )
+            .unwrap();
+            let mut calls = Vec::new();
+            let result = dsp
+                .read_frames(17, 997, |start, count| {
+                    calls.push((start, count));
+                    Ok(
+                        input[start as usize * channels..(start as usize + count) * channels]
+                            .to_vec(),
+                    )
+                })
+                .unwrap();
+            assert_eq!(calls, [(17, 997)]);
+            assert_eq!(result, input[17 * channels..1014 * channels]);
+        }
+    }
+}
 fn amplitude(x: &[f32], hz: f64, rate: f64) -> f64 {
     let (a, b) = x.iter().enumerate().fold((0., 0.), |(a, b), (i, x)| {
         let p = TAU * hz * i as f64 / rate;

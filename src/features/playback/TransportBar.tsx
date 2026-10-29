@@ -64,7 +64,7 @@ export function TransportBar({ ui, onGain, onResetView, onResetMasks, onDevices,
       { id: 'sound', label: '声音版本', disabled, children: ([{ id: 'original', label: '原音' }, { id: 'processed', label: '暂存编辑' }] as const).map(source => ({ ...source, checked: ui.workspaceSource === source.id, action: () => { if (valid()) ui.updateWorkspaceSource(source.id); } })) },
       { id: 'source', label: '播放源', disabled, children: ui.active?.store.snapshot.document.media.map(media => ({ id: media.id, label: media.displayName, checked: ui.sourceId === media.id, action: () => { if (valid()) ui.selectSource(media.id); } })) },
       { id: 'gain', label: '区域增益…', disabled: disabled || !hasSelection, action: trigger => { if (valid()) onGain?.(trigger ?? null); } },
-      { id: 'view', label: '重置视图', disabled, action: () => { if (valid()) onResetView?.(); } },
+      { id: 'view', label: '重置视图', title: 'Ctrl+0', disabled, action: () => { if (valid()) onResetView?.(); } },
       { id: 'masks', label: '重置屏蔽', disabled: disabled || !hasMasks, action: () => { if (valid()) onResetMasks?.(); } },
     ]} />}
     {ui.error && <div className="playback-error" role="alert">{ui.error.message}<button className="button" onClick={ui.retry}>重试播放</button></div>}
