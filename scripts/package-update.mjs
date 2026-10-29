@@ -4,11 +4,14 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
-const [buildArgument, outputArgument, fromVersion = '0.7.0'] = process.argv.slice(2);
-if (!buildArgument || !outputArgument) throw Error('Usage: node scripts/package-update.mjs <production-release-directory> <new-delivery-directory> [previous-version]');
+const [buildArgument, outputArgument, fromVersion = '0.7.0', revision = ''] = process.argv.slice(2);
+if (!buildArgument || !outputArgument) throw Error('Usage: node scripts/package-update.mjs <production-release-directory> <new-delivery-directory> [previous-version] [revision: re1, re2, ...]');
 const build = path.resolve(buildArgument), output = path.resolve(outputArgument), version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
 assert.match(version, /^\d+\.\d+\.\d+$/); assert.match(fromVersion, /^\d+\.\d+\.\d+$/);
-assert.notEqual(version, fromVersion, 'Update versions must differ');
+assert.match(revision, /^(?:re[1-9][0-9]*)?$/, 'Revision must be re1, re2, ...');
+if (!revision) assert.notEqual(version, fromVersion, 'Same-version rebuilds require an explicit revision');
+const releaseLabel = revision ? `${version}-${revision}` : version;
+const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim();
 assert.equal(path.basename(build), 'release', 'A normal production release directory is required');
 if (fs.existsSync(output)) throw Error('Refusing to replace an existing delivery directory');
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -27,11 +30,11 @@ for (const [source, relative] of resources) assert.equal(hash(source), hash(path
 fs.mkdirSync(output, { recursive: false });
 const payload = ['annotator-desktop.exe']; fs.copyFileSync(executable, path.join(output, payload[0]));
 for (const [source, relative] of resources) { const destination = path.join(output, relative); fs.mkdirSync(path.dirname(destination), { recursive: true }); fs.copyFileSync(source, destination); payload.push(relative); }
-const information = { kind: 'audio-annotator-file-update', fromVersion, toVersion: version, executable: 'annotator-desktop.exe', installation: 'Close the application; extract these files over the existing program directory. Do not replace or move project folders or user data.', formatsUnchanged: { project: 3, collaboration: 5, authorLayer: 2, privateWorkspace: 2, exchange: 4, dsp: 2, organization: 1, catalog: 2, analysis: 1 }, includesAudioOrPersonalData: false };
+const information = { kind: 'audio-annotator-file-update', fromVersion, toVersion: version, revision: revision || null, releaseLabel, sourceCommit, executable: 'annotator-desktop.exe', installation: 'Close the application; extract these files over the existing program directory. Do not replace or move project folders or user data.', formats: { project: 3, collaboration: { newProjects: 5, supported: [5, 6], upgradeTo: 6, upgradeTrigger: 'first confirmed successful permanent deletion', olderClientsCannotOpenUpgradedProjects: true }, authorLayer: 2, privateWorkspace: 2, exchange: 4, dsp: 2, organization: 1, catalog: 2, analysis: 1 }, includesAudioOrPersonalData: false };
 fs.writeFileSync(path.join(output, 'UPDATE-INFORMATION.json'), JSON.stringify(information, null, 2) + '\n'); payload.push('UPDATE-INFORMATION.json');
-fs.writeFileSync(path.join(output, 'UPDATE-README.txt'), `音频标注 ${fromVersion} → ${version} 更新包\n\n1. 在旧版中保存并同步，处理尚未解决的失败修改，然后关闭所有音频标注程序窗口。\n2. 找到原程序所在目录（包含 annotator-desktop.exe），可先将原程序和配套资源复制一份以备回退。\n3. 将更新 ZIP 中的全部文件解压并覆盖到原程序目录。不要解压到项目或 NAS 数据目录。\n4. 启动原来的 annotator-desktop.exe，从“帮助 → 关于”确认版本为 ${version}，照常打开原来的 collaboration.json。\n\n兼容性：${version} 与 ${fromVersion} 的项目、标注、共享目录、私人处理、监听设置和身份文件格式相同，无需转换或重新导入音频。更早版本的不同格式项目仍按原有规则处理。\n更新包不包含音频、项目、身份或个人设置，也不删除程序目录中的其他文件；现有项目和用户数据应保持原位。\n更新包沿用原有 WebView2 环境，不需要重新安装运行环境。程序未签名。\n\n${fs.existsSync('docs/release-notes-' + version + '.md') ? fs.readFileSync('docs/release-notes-' + version + '.md', 'utf8') : '详细改动请参阅对应版本的发布说明。'}\n`); payload.push('UPDATE-README.txt');
+fs.writeFileSync(path.join(output, 'UPDATE-README.txt'), `音频标注 ${fromVersion} → ${releaseLabel} 更新包\n\n1. 保存并同步，处理尚未解决的修改，然后关闭所有软件窗口。\n2. 找到包含 annotator-desktop.exe 的原程序目录，可先备份程序及资源。\n3. 将 ZIP 中全部文件解压覆盖程序目录，保留项目和音频数据位置。\n4. 启动原程序；程序内部版本仍为 ${version}，本次发布修订为 ${revision || '无'}。通过本说明或 UPDATE-INFORMATION.json 的 releaseLabel/sourceCommit 区分重建版本。\n\n项目兼容：新版支持协作格式 5 和 6；仅打开、保存、预览或取消不会升级。首次有效且确认的永久删除会把格式 5 升级至 6，旧版无法打开格式 6；参与该共享项目的电脑应统一使用支持格式 6 的新版。永久删除不可撤销。\n更新包不包含项目、音频、身份或个人设置，不自动迁移或重新导入；旧版不能用于已经升级的项目。更新包沿用已有 WebView2 环境，程序未签名。\n\n源码提交：${sourceCommit}\n\n${fs.existsSync('docs/release-notes-' + releaseLabel + '.md') ? fs.readFileSync('docs/release-notes-' + releaseLabel + '.md', 'utf8') : fs.existsSync('docs/release-notes-' + version + '.md') ? fs.readFileSync('docs/release-notes-' + version + '.md', 'utf8') : ''}\n`); payload.push('UPDATE-README.txt');
 payload.sort(); fs.writeFileSync(path.join(output, 'UPDATE-SHA256SUMS'), payload.map(file => hash(path.join(output, file)) + ' *' + file).join('\n') + '\n'); payload.push('UPDATE-SHA256SUMS'); payload.sort();
-const archive = path.join(output, `AudioAnnotator-${fromVersion}-to-${version}-update.zip`);
+const archive = path.join(output, `AudioAnnotator-${fromVersion}-to-${releaseLabel}-update.zip`);
 execFileSync('pwsh', ['-NoProfile', '-Command', `Add-Type -AssemblyName System.IO.Compression.FileSystem
 $taskFiles=Get-Content -Raw -LiteralPath $env:UPDATE_FILES|ConvertFrom-Json
 $taskArchive=[IO.Compression.ZipFile]::Open($env:UPDATE_ZIP,[IO.Compression.ZipArchiveMode]::Create)
@@ -41,4 +44,4 @@ $taskZip=[IO.Compression.ZipFile]::OpenRead($env:UPDATE_ZIP)
 try { @($taskZip.Entries|ForEach-Object {$taskEntry=$_;$taskStream=$taskEntry.Open();try {@{file=$taskEntry.FullName;bytes=$taskEntry.Length;sha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($taskStream)).ToLowerInvariant()}}finally{$taskStream.Dispose()}})|ConvertTo-Json -Compress }finally{$taskZip.Dispose()}`], { encoding: 'utf8', windowsHide: true, env: { ...process.env, UPDATE_ZIP: archive } }));
 assert.deepEqual(entries.map(e => e.file).sort(), payload);
 for (const entry of entries) { const file = path.join(output, entry.file); assert.equal(entry.bytes, fs.statSync(file).size, entry.file); assert.equal(entry.sha256, hash(file), entry.file); }
-console.log(JSON.stringify({ passed: true, output, fromVersion, version, payloadFiles: entries.length, archive: path.basename(archive), archiveBytes: fs.statSync(archive).size, archiveSha256: hash(archive), executableSha256: hash(executable), resourceFiles: resources.length, formatsUnchanged: true }, null, 2));
+console.log(JSON.stringify({ passed: true, output, fromVersion, version, revision: revision || null, releaseLabel, sourceCommit, payloadFiles: entries.length, archive: path.basename(archive), archiveBytes: fs.statSync(archive).size, archiveSha256: hash(archive), executableSha256: hash(executable), resourceFiles: resources.length, collaborationFormats: [5, 6] }, null, 2));
