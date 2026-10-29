@@ -43,7 +43,7 @@ try {
   await h.selectMedia(names[0]);await h.clickText('双文件对比');await h.select('对比面板音频',names[1]); await pair(names[0], names[1]);
   await h.until(`document.querySelectorAll('canvas').length===4&&!document.querySelector('.tile-status')`);
   h.nativeRect({ width: 1280, height: 800 }); await wait(250);
-  const frame = await h.evaluate(`return {dpr:devicePixelRatio,inner:[innerWidth,innerHeight],plots:[...document.querySelectorAll('.spectrogram-surface')].map(e=>e.getBoundingClientRect().toJSON()),headers:[...document.querySelectorAll('.file-pane')].map(e=>e.querySelector('.file-heading').getBoundingClientRect().height+e.querySelector('.file-controls').getBoundingClientRect().height),backing:[...document.querySelectorAll('canvas')].map(e=>({width:e.width,height:e.height,css:e.getBoundingClientRect().toJSON()}))};`);
+  const frame = await h.evaluate(`return {dpr:devicePixelRatio,inner:[innerWidth,innerHeight],plots:[...document.querySelectorAll('.spectrogram-surface')].map(e=>e.getBoundingClientRect().toJSON()),headers:[...document.querySelectorAll('.file-pane')].map(e=>e.querySelector('.file-heading').getBoundingClientRect().height+(e.querySelector('.file-controls')?.getBoundingClientRect().height??0)),backing:[...document.querySelectorAll('canvas')].map(e=>({width:e.width,height:e.height,css:e.getBoundingClientRect().toJSON()}))};`);
   assert.equal(frame.plots.length, 4); assert.ok(frame.plots.every(r => r.height >= 180 && r.bottom <= frame.inner[1])); assert.ok(frame.headers.every(v => v <= 56));
   report.layout = { outer: h.nativeRect(), ...frame }; await h.screenshot('four-plots-1280'); check('four plots >=180px and headers <=56px at real 1280x800');
 

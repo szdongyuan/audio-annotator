@@ -120,9 +120,9 @@
 .file-heading > div { min-width: 0; display: flex; flex: 1; gap: 8px; align-items: center; overflow: hidden; }
 .file-heading h2 { font-size: 11px; font-weight: 550; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
 .file-heading small { white-space: nowrap; display: block; margin-top: 0; font-size: 10px; color: var(--text-muted); }
-.file-heading .button { padding: 5px 8px; font-size: 10px; white-space: nowrap; }
+.file-heading .button { flex-shrink: 0; height: 20px; min-height: 20px; padding: 0 6px; font-size: 10px; white-space: nowrap; }
 .file-controls { display: flex; align-items: center; height: 27px; min-height: 27px; gap: 6px; padding: 0 8px; border-bottom: 1px solid var(--border-soft); font-size: 10px; color: #a6a5ad; }
-.file-controls select, .analysis-popover select { background: #25252c; color: #c9c8ce; border: 1px solid #393941; border-radius: 4px; padding: 4px; font-size: 11px; max-width: 240px; }
+.spectrum-kind-select, .analysis-popover select { background: #25252c; color: #c9c8ce; border: 1px solid #393941; border-radius: 4px; padding: 4px; font-size: 11px; max-width: 240px; }
 .channel-select { display: flex; align-items: center; flex-shrink: 0; gap: 4px; white-space: nowrap; }
 .channel-select label { position: relative; display: flex; cursor: pointer; }
 .channel-select input { appearance: none; width: 21px; height: 21px; margin: 0; background: #26262d; border: 1px solid #3b3b44; border-radius: 4px; cursor: pointer; }
@@ -209,7 +209,7 @@
 .workspace-feedback > * { flex-shrink: 0; margin: 0; }
 
 
-.file-controls select { min-width: 0; width: 90px; margin-left: auto; }
+.file-heading .spectrum-kind-select { flex: 0 0 90px; min-width: 0; width: 90px; height: 20px; padding: 0 4px; }
 
 .classification-control { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 110px; height: 18px; flex-shrink: 1; padding: 0 4px; border: 1px solid #41404a; border-radius: 3px; background: #25242b; color: #c5c0cb; font: inherit; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .classification-control i { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
@@ -228,7 +228,8 @@
 .classification-title { display: contents; }
 
 .file-pane { position: relative; }
-.file-pane .analysis-popover { right: 8px; top: 56px; width: min(340px, calc(100% - 16px)); max-height: calc(100% - 64px); }
+.file-pane .analysis-popover { right: 8px; top: 29px; width: min(340px, calc(100% - 16px)); max-height: calc(100% - 37px); }
+.file-pane.has-channel-controls .analysis-popover { top: 56px; max-height: calc(100% - 64px); }
 /* Keep recovery controls visible while detailed file results scroll. */
 .direct-import-progress { display: flex; flex-direction: column; overflow: hidden; }
 .direct-import-progress > div { flex-shrink: 0; }
