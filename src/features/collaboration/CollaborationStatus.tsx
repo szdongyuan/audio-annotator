@@ -4,6 +4,7 @@ import type { CollaborationUI } from './useCollaboration';
 export function syncLabel(c:CollaborationController){
  const s=c.status;
  if(c.error||s?.error)return s?.error?.code==='RevisionConflict'?'共享冲突':'同步异常';
+ if(c.catalogError)return '音频列表更新失败 · 可重试';
  const authorError=s?.snapshot?.authors.some(a=>a.error!==null)??false;
  if(c.owner.lifecycle.hasPendingWork)return authorError?'作者读取异常 · 未保存':'本机未保存';
  if(s?.pending)return authorError?'作者读取异常 · 待同步':'已存本机 · 待同步';

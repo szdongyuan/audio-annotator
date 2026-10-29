@@ -1,0 +1,96 @@
+{
+  "displayMathChanged": false,
+  "passed": true,
+  "timing": "pointerdown to verified complete canvas plus two animation frames; 2 first switches excluded from warm summary",
+  "mediaRecordsPerProject": 876,
+  "selectedSource": {
+    "sampleRate": 48000,
+    "channels": 1,
+    "durationSeconds": 8.85
+  },
+  "baselineCommit": "2f7f93f",
+  "projects": [
+    {
+      "location": "local",
+      "candidate": {
+        "warmCount": 24,
+        "p50": 195.89999985694885,
+        "p95": 240.79999995231628,
+        "max": 242.10000014305115
+      },
+      "warmSwitchesPerBuild": 24,
+      "analysisAndViewportMatch": true,
+      "sources": [
+        {
+          "canvas": [
+            {
+              "height": 568,
+              "sha256": "09e4b7937c23ad142cdf90549c38e6d56a84ac26a59955d3005db0c26befd61a",
+              "width": 693
+            }
+          ],
+          "source": "selected-1.wav",
+          "baselineAndCandidateMatch": true
+        },
+        {
+          "canvas": [
+            {
+              "height": 568,
+              "sha256": "78fb2ada9c679d95b1a7e3fe313607242be28694db1c4dc95fecc89bbfed9aef",
+              "width": 693
+            }
+          ],
+          "source": "selected-2.wav",
+          "baselineAndCandidateMatch": true
+        }
+      ],
+      "baseline": {
+        "warmCount": 24,
+        "p50": 218.5,
+        "p95": 324.69999980926514,
+        "max": 358.2000000476837
+      }
+    },
+    {
+      "location": "nas",
+      "candidate": {
+        "warmCount": 24,
+        "p50": 189.79999995231628,
+        "p95": 257.09999990463257,
+        "max": 274.69999980926514
+      },
+      "warmSwitchesPerBuild": 24,
+      "analysisAndViewportMatch": true,
+      "sources": [
+        {
+          "canvas": [
+            {
+              "height": 568,
+              "sha256": "09e4b7937c23ad142cdf90549c38e6d56a84ac26a59955d3005db0c26befd61a",
+              "width": 693
+            }
+          ],
+          "source": "selected-1.wav",
+          "baselineAndCandidateMatch": true
+        },
+        {
+          "canvas": [
+            {
+              "height": 568,
+              "sha256": "78fb2ada9c679d95b1a7e3fe313607242be28694db1c4dc95fecc89bbfed9aef",
+              "width": 693
+            }
+          ],
+          "source": "selected-2.wav",
+          "baselineAndCandidateMatch": true
+        }
+      ],
+      "baseline": {
+        "warmCount": 24,
+        "p50": 1975.9000000953674,
+        "p95": 2244.600000143051,
+        "max": 3685.2999999523163
+      }
+    }
+  ]
+}

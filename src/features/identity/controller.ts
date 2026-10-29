@@ -42,11 +42,14 @@ export class IdentityController {
   }catch(e){if(!this.disposed){this.error=normalizeError(e);this.notify();}}
   finally{this.operation=null;this.busy=false;if(!this.disposed)this.notify();}
  }
- private mutate(fresh:()=>Promise<ProfileExpected>,valid:()=>boolean,attempt:(expected:ProfileExpected)=>Promise<ProfileResponse>){return retryAdmission(async()=>attempt(await fresh()),{valid});}
- create(displayName:string){return this.run(true,async(fresh,id,valid)=>{const created=await this.mutate(fresh,valid,e=>this.api.create(e,id,displayName));this.accept(created);if(!valid())return created;return this.mutate(fresh,valid,e=>this.api.select(e,id,created.profile!.authorId));});}
- select(authorId:string){if(authorId===this.snapshot?.selectedAuthorId)return Promise.resolve();return this.run(true,async(fresh,id,valid)=>this.mutate(fresh,valid,e=>this.api.select(e,id,authorId)));}
- rename(displayName:string){const authorId=this.selected?.authorId;if(!authorId)return Promise.resolve();return this.run(false,async(fresh,id,valid)=>this.mutate(fresh,valid,e=>this.api.rename(e,id,authorId,displayName)));}
- import(){return this.run(false,async(fresh,id,valid)=>{const path=await this.api.chooseImport();if(!path||!valid())return null;return this.mutate(fresh,valid,e=>this.api.import(e,id,path));});}
- export(){const authorId=this.selected?.authorId;if(!authorId)return Promise.resolve();return this.run(false,async(fresh,id,valid)=>{const path=await this.api.chooseExport(authorId);if(!path||!valid())return null;return this.mutate(fresh,valid,e=>this.api.export(e,id,authorId,path));});}
+ private admitted(fresh:()=>Promise<ProfileExpected>,valid:()=>boolean,mutate:(expected:ProfileExpected)=>Promise<ProfileResponse>){
+  // A create can commit before selection is admitted; retry one mutation only.
+  return retryAdmission(async()=>{const expected=await fresh();if(!valid())throw admissionCancelled();return mutate(expected);},{valid});
+ }
+ create(displayName:string){return this.run(true,async(fresh,id,valid)=>{const created=await this.admitted(fresh,valid,e=>this.api.create(e,id,displayName));this.accept(created);if(!valid())return created;return this.admitted(fresh,valid,e=>this.api.select(e,id,created.profile!.authorId));});}
+ select(authorId:string){if(authorId===this.snapshot?.selectedAuthorId)return Promise.resolve();return this.run(true,async(fresh,id,valid)=>this.admitted(fresh,valid,e=>this.api.select(e,id,authorId)));}
+ rename(displayName:string){const authorId=this.selected?.authorId;if(!authorId)return Promise.resolve();return this.run(false,async(fresh,id,valid)=>this.admitted(fresh,valid,e=>this.api.rename(e,id,authorId,displayName)));}
+ import(){return this.run(false,async(fresh,id,valid)=>{const path=await this.api.chooseImport();if(!path||!valid())return null;return this.admitted(fresh,valid,e=>this.api.import(e,id,path));});}
+ export(){const authorId=this.selected?.authorId;if(!authorId)return Promise.resolve();return this.run(false,async(fresh,id,valid)=>{const path=await this.api.chooseExport(authorId);if(!path||!valid())return null;return this.admitted(fresh,valid,e=>this.api.export(e,id,authorId,path));});}
  dispose(){this.disposed=true;this.generation++;if(this.operation){this.operation.cancelled=true;void this.cancelNative(this.operation.id).catch(()=>{});}this.listeners.clear();}
 }

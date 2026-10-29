@@ -24,6 +24,7 @@ impl AppState {
             .map_err(|_| AppError::invalid("Media service unavailable"))?
             .retire_media(ids);
         self.2.retire_media(ids)?;
+        self.6.inspection.retire_media(ids);
         self.3.retire_media(ids);
         let mut prepared = self
             .6

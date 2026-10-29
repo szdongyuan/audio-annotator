@@ -62,7 +62,9 @@ $taskRect=New-Object OwnedWindow+RECT
   const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',code],{encoding:'utf8',windowsHide:true});
   if(result.status!==0)throw Error(result.stderr);return JSON.parse(result.stdout);
 }
-export async function start(paths, output, executable = path.resolve(process.env.ANNOTATOR_WORKSPACE_EXE ?? 'target/debug/annotator-desktop.exe'), options = {}) {
+export function testExecutable(executable, env = process.env) { return executable ?? path.resolve(env.ANNOTATOR_WORKSPACE_EXE ?? 'target/debug/annotator-desktop.exe'); }
+export async function start(paths, output, executable, options = {}) {
+  executable = testExecutable(executable);
   const {ports,localDataEnv,webviewDirectory}=instanceOptions(options),ownedPorts=Object.values(ports),port=ports.driver;
   await assertTestPortsAvailable(ownedPorts);
   const tools = JSON.parse(await fs.readFile('.tools/webdriver.json', 'utf8'));
@@ -73,8 +75,16 @@ export async function start(paths, output, executable = path.resolve(process.env
   native.stdout.on('data', b => { log += b; }); native.stderr.on('data', b => { log += b; });
   let driver;
   try {
-    for (let i = 0; i < 100; i++) { try { await fetch(`http://127.0.0.1:${port}/status`); break; } catch { await wait(100); } }
-    for (let i=0;i<100;i++) { if(native.exitCode!==null)throw Error(`Native app exited ${native.exitCode}: ${log}`); try { await fetch(`http://127.0.0.1:${ports.debug}/json/version`); break; } catch { await wait(100); } }
+    for (const endpoint of [`http://127.0.0.1:${port}/status`, `http://127.0.0.1:${ports.debug}/json/version`]) {
+      const deadline = performance.now() + 20000;
+      let ready = false;
+      while (performance.now() < deadline) {
+        if (native.exitCode !== null) throw Error(`Native app exited ${native.exitCode}: ${log}`);
+        try { await fetch(endpoint, { signal: AbortSignal.timeout(1000) }); ready = true; break; }
+        catch { await wait(100); }
+      }
+      if (!ready) throw Error(`Owned startup endpoint timed out: ${endpoint}; native exit=${native.exitCode}: ${log}`);
+    }
     driver = await new Builder().usingServer(`http://127.0.0.1:${port}`).withCapabilities({ browserName: 'webview2', 'ms:edgeOptions': { debuggerAddress: `127.0.0.1:${ports.debug}` } }).build();
     await driver.manage().setTimeouts({ implicit: 0, pageLoad: 60000, script: 120000 });
     await driver.wait(until.elementLocated(By.css('.main-menu')), 30000);

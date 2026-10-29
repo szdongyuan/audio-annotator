@@ -18,8 +18,30 @@ it('partial rename warning is committed metadata and status refresh, not an erro
 it('cancelled fresh-list admission cannot invoke a later selection',async()=>{const s=setup();await s.c.refresh();let reply!:(v:ProfileSnapshot)=>void;s.api.list.mockImplementationOnce(()=>new Promise(r=>reply=r));const work=s.c.select(b);s.c.cancel();reply(snap([profile(),profile(b)]));await work;expect(s.api.select).not.toHaveBeenCalled();expect(s.c.selected?.authorId).toBe(a);s.c.dispose();});
 it('picker replies from a replaced owner are ignored and exports capture only the selected UUID',async()=>{const s=setup();await s.c.refresh();let reply!:(p:string)=>void;s.api.chooseImport.mockImplementationOnce(()=>new Promise(r=>reply=r));const importing=s.c.import();s.setOwner({} as never);reply('/late.json');await importing;expect(s.api.import).not.toHaveBeenCalled();s.setOwner(null);await s.c.export();expect(s.api.chooseExport).toHaveBeenCalledWith(a);expect(s.api.export).toHaveBeenCalledWith(expect.objectContaining({project:null}),expect.any(String),a,'/export.json');s.c.dispose();});
 it('does not retry hard native resource limits or overwrite a successful selection with an earlier list',async()=>{const s=setup();await s.c.refresh();s.api.select.mockRejectedValueOnce({code:'ResourceLimit',message:'pending publication',retryable:true});await s.c.select(b);expect(s.api.select).toHaveBeenCalledTimes(1);expect(s.c.error?.message).toBe('pending publication');let reply!:(v:ProfileSnapshot)=>void;s.api.list.mockImplementationOnce(()=>new Promise(r=>reply=r));const listing=s.c.refresh();await s.c.select(b);reply(snap());await listing;expect(s.c.selected?.authorId).toBe(b);s.c.dispose();});
+const busy={code:'ResourceLimit',message:'Collaboration job already running',retryable:true,details:{operationBusy:true}};
+it('retries busy create admission with a fresh snapshot before persisting one profile',async()=>{
+ vi.useFakeTimers();const s=setup();try{await s.c.refresh();s.api.list.mockResolvedValueOnce(snap([profile()],a,4)).mockResolvedValueOnce(snap([profile()],a,5)).mockResolvedValue(snap([profile(),profile(b)],a,6));s.api.create.mockRejectedValueOnce(busy).mockResolvedValue(result(snap([profile(),profile(b)],a,6),profile(b)));s.api.select.mockResolvedValue(result(snap([profile(),profile(b)],b,7)));
+  const work=s.c.create('同名');await vi.runAllTimersAsync();await work;expect(s.api.create.mock.calls.map(call=>call[0].storeRevision)).toEqual([4,5]);expect(s.api.create.mock.calls[0][1]).toBe(s.api.create.mock.calls[1][1]);expect(s.api.select).toHaveBeenCalledOnce();expect(s.c.selected?.authorId).toBe(b);expect(s.c.error).toBeNull();
+ }finally{s.c.dispose();vi.useRealTimers();}
+});
+it('retries only selection after creation committed, preserving the new UUID and fresh revisions',async()=>{
+ vi.useFakeTimers();const s=setup();try{await s.c.refresh();s.api.list.mockResolvedValueOnce(snap()).mockResolvedValueOnce(snap([profile(),profile(b)],a,2)).mockResolvedValue(snap([profile(),profile(b)],a,3));s.api.select.mockRejectedValueOnce(busy).mockResolvedValue(result(snap([profile(),profile(b)],b,4)));
+  const work=s.c.create('同名');await vi.runAllTimersAsync();await work;expect(s.api.create).toHaveBeenCalledOnce();expect(s.api.select.mock.calls.map(call=>[call[0].storeRevision,call[2]])).toEqual([[2,b],[3,b]]);expect(s.api.select.mock.calls[0][1]).toBe(s.api.select.mock.calls[1][1]);expect(s.c.selected?.authorId).toBe(b);expect(s.c.error).toBeNull();
+ }finally{s.c.dispose();vi.useRealTimers();}
+});
+it.each(['select','rename','import','export'] as const)('retries native %s admission without reopening pickers',async kind=>{
+ vi.useFakeTimers();const s=setup();try{await s.c.refresh();s.api[kind].mockRejectedValueOnce(busy);const work=kind==='select'?s.c.select(b):kind==='rename'?s.c.rename('新昵称'):kind==='import'?s.c.import():s.c.export();await vi.runAllTimersAsync();await work;expect(s.api[kind]).toHaveBeenCalledTimes(2);expect(s.c.error).toBeNull();expect(s.api.chooseImport).toHaveBeenCalledTimes(kind==='import'?1:0);expect(s.api.chooseExport).toHaveBeenCalledTimes(kind==='export'?1:0);
+ }finally{s.c.dispose();vi.useRealTimers();}
+});
+it.each(['cancel','owner','dispose'] as const)('stops waiting identity admission after %s',async boundary=>{
+ vi.useFakeTimers();const s=setup();try{await s.c.refresh();s.api.select.mockRejectedValueOnce(busy);const work=s.c.select(b);await vi.advanceTimersByTimeAsync(0);expect(s.api.select).toHaveBeenCalledOnce();if(boundary==='cancel')s.c.cancel();else if(boundary==='owner')s.setOwner({} as never);else s.c.dispose();await vi.runAllTimersAsync();await work;expect(s.api.select).toHaveBeenCalledOnce();expect(s.c.selected?.authorId).toBe(a);
+ }finally{s.c.dispose();vi.useRealTimers();}
+});
+it.each(['SaveFailed','RevisionConflict'] as const)('does not retry native %s failures',async code=>{
+ vi.useFakeTimers();const s=setup();try{await s.c.refresh();s.api.select.mockRejectedValueOnce({code,message:'保留明确失败',retryable:true});const work=s.c.select(b);await vi.runAllTimersAsync();await work;expect(s.api.select).toHaveBeenCalledOnce();expect(s.c.error?.message).toBe('保留明确失败');
+ }finally{s.c.dispose();vi.useRealTimers();}
+});
 
-const busy = {code:'ResourceLimit',message:'Collaboration job already running',retryable:true,details:{operationBusy:true}};
 it('retries only busy create admission with stable operation ID and fresh guarded expectations',async()=>{
  const s=setup();await s.c.refresh();s.api.list.mockResolvedValueOnce(snap()).mockResolvedValueOnce(snap([profile()],a,2)).mockResolvedValueOnce(snap([profile(),profile(b)],a,3));s.api.create.mockRejectedValueOnce(busy);
  await s.c.create('new');expect(s.api.create).toHaveBeenCalledTimes(2);expect(s.api.create.mock.calls.map(c=>c[0].storeRevision)).toEqual([1,2]);const id=s.api.create.mock.calls[0][1];expect(s.api.create.mock.calls[1][1]).toBe(id);expect(s.api.select).toHaveBeenCalledWith(expect.objectContaining({storeRevision:3}),id,b);expect(s.c.error).toBeNull();s.c.dispose();

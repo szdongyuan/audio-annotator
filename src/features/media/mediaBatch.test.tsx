@@ -31,6 +31,13 @@ it('filename previews, ctrl/shift selects range, and Delete is scoped to file li
   const other=vi.fn();window.addEventListener('keydown',other);
   fireEvent.keyDown(row,{key:'Delete'});expect(screen.getByRole('dialog',{name:'移入共享回收站'})).toBeVisible();expect(other).not.toHaveBeenCalled();expect(api.apply).not.toHaveBeenCalled();window.removeEventListener('keydown',other);
 });
+it('context-menu batch entry anchors the next Shift range within the existing scope',()=>{
+ const {props}=setup();fireEvent.contextMenu(screen.getByRole('button',{name:'audio-0.wav'}));
+ fireEvent.click(screen.getByRole('menuitem',{name:'选择多个音频'}));
+ fireEvent.click(screen.getByRole('button',{name:'audio-2.wav'}),{shiftKey:true});
+ for(const file of media)expect(screen.getByLabelText(`选择音频 · ${file.displayName}`)).toBeChecked();
+ expect(screen.getByText('已选 3')).toBeVisible();expect(props.onSelect).not.toHaveBeenCalled();
+});
 it('offline delete keeps immutable selection/operation ID for explicit retry',async()=>{
   const {api}=setup();api.apply.mockRejectedValueOnce({code:'SaveFailed',message:'NAS offline',retryable:true});
   fireEvent.click(screen.getByLabelText('多选音频'));fireEvent.click(screen.getByLabelText('全选筛选结果'));fireEvent.click(screen.getByRole('button',{name:'移入回收站'}));

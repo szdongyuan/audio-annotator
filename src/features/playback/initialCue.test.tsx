@@ -1,10 +1,14 @@
-import { render } from '@testing-library/react';
-import { expect, it } from 'vitest';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
 import { CueLine } from './CueLine';
-import { PlaybackContext } from './usePlayback';
+import { PlaybackContext, usePlayback } from './usePlayback';
 import { emptyPlayback } from '../../bridge/playback';
 import { defaultView } from '../spectrogram/workspace';
 import fixture from '../../../tests/fixtures/document-v3.json';
+import { ProjectStore } from '../../app/store';
+import { CommandQueue, type ProjectCommands } from '../../app/commands';
+import { ProjectLifecycle } from '../project/lifecycle';
+import { parseProjectDocument } from '../../bridge/types';
 it('shows a first-play cue without requiring a prior click or right-click', () => {
   const m = fixture.media[0], ui = { cues: {}, status: emptyPlayback };
   const view = render(<PlaybackContext.Provider value={ui as never}><CueLine mediaId={m.id} view={defaultView(m)} /></PlaybackContext.Provider>);
@@ -13,4 +17,17 @@ it('shows a first-play cue without requiring a prior click or right-click', () =
   expect(document.querySelector('.audio-cue')).toHaveAttribute('data-seconds', '0.2');
   view.rerender(<PlaybackContext.Provider value={{ ...ui, cues: { [m.id]: .4 } } as never}><CueLine mediaId={m.id} view={defaultView(m)} /></PlaybackContext.Provider>);
   expect(document.querySelector('.audio-cue')).toHaveAttribute('data-seconds', '0.4');
+});
+it('restores default pointer cues stopped without configuring audio or retaining a background adoption guard', async () => {
+  const store=new ProjectStore({document:parseProjectDocument(structuredClone(fixture)),canUndo:false,canRedo:false});
+  const queue=new CommandQueue(store,{} as ProjectCommands),lifecycle=new ProjectLifecycle(store,queue,{save:vi.fn(),close:vi.fn()});
+  const owner={store,queue,lifecycle,path:'test'};
+  const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>emptyPlayback),configure:vi.fn(async()=>emptyPlayback)};
+  const hook=renderHook(()=>usePlayback(owner,fixture.media[0].id,undefined,api));
+  await waitFor(()=>expect(lifecycle.allowsBackgroundTransition).toBe(true));
+  act(()=>hook.result.current.restoreCues(owner,{[fixture.media[0].id]:.4,missing:1}));
+  expect(hook.result.current.cues).toEqual({[fixture.media[0].id]:.4}); expect(hook.result.current.playing).toBe(false);
+  expect(hook.result.current.status.state).toBe('stopped'); expect(api.configure).not.toHaveBeenCalled();
+  expect(lifecycle.allowsBackgroundTransition).toBe(true); expect(store.drafts.size).toBe(0);
+  hook.unmount(); lifecycle.dispose();
 });

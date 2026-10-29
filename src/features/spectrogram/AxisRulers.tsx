@@ -5,10 +5,12 @@ import { menuIsOpen, type MenuItem } from '../../components/menu/menuModel';
 import { clamp, coordinates } from './coordinates';
 import { boundRange, zoomViewport } from './viewport';
 import { axisTicks, type Axis } from './ticks';
+import type { ProjectLifecycle } from '../project/lifecycle';
 
 type Drag = { axis: Axis; pointerId: number; element: HTMLDivElement; origin: number; length: number; start: number; view: MediaView };
-export function AxisRulers({ view, nyquist, timeLimit, onView, disabled = false, owner }: { view: MediaView; nyquist: number; timeLimit: number; onView: (patch: Partial<MediaView>) => void; disabled?: boolean; owner?: object }) {
+export function AxisRulers({ view, nyquist, timeLimit, onView, disabled = false, owner, lifecycle }: { view: MediaView; nyquist: number; timeLimit: number; onView: (patch: Partial<MediaView>) => void; disabled?: boolean; owner?: object; lifecycle?: ProjectLifecycle }) {
   const time = useRef<HTMLDivElement>(null), frequency = useRef<HTMLDivElement>(null), drag = useRef<Drag | null>(null);
+  useEffect(() => lifecycle?.registerBackgroundGuard(() => !drag.current), [lifecycle]);
   const [sizes, setSizes] = useState({ time: 0, frequency: 0 });
   const [preview, setPreview] = useState<{ axis: Axis; start: number; end: number } | null>(null);
   const [menu, setMenu] = useState<{ axis: Axis; pointer: number; x: number; y: number } | null>(null);
@@ -31,7 +33,7 @@ export function AxisRulers({ view, nyquist, timeLimit, onView, disabled = false,
     observer.observe(time.current!); observer.observe(frequency.current!);
     return () => { observer.disconnect(); const pending = drag.current; drag.current = null; if (pending?.element.hasPointerCapture(pending.pointerId)) pending.element.releasePointerCapture(pending.pointerId); };
   }, []);
-  useEffect(() => { cancel(); setMenu(null); }, [disabled, view.spectrumKind, nyquist, owner]);
+  useEffect(() => { cancel(); setMenu(null); }, [disabled, view.spectrumKind, nyquist, owner, lifecycle]);
   const down = (axis: Axis, event: ReactPointerEvent<HTMLDivElement>) => {
     if (disabled || menuIsOpen() || event.button !== 0) return;
     const element = event.currentTarget, box = element.getBoundingClientRect();

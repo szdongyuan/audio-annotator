@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import fixture from '../../tests/fixtures/document-v3.json';
 import { parseProjectDocument, type ProjectDocument } from '../bridge/types';
@@ -14,6 +14,7 @@ import { defaultView } from '../features/spectrogram/workspace';
 import { CollaborationContext, type CollaborationUI } from '../features/collaboration/useCollaboration';
 import { CollaborationController } from '../features/collaboration/controller';
 import { coordinates } from '../features/spectrogram/coordinates';
+import { inspectionClient } from '../bridge/inspection';
 
 function setup(projectId = fixture.projectId, authorId?: string) {
   const document = parseProjectDocument(structuredClone(fixture)), first = document.media[0], category = document.categories[0].id;
@@ -44,6 +45,33 @@ function props(active: ActiveProject | null, identity?: IdentityController) {
   } as MediaUI };
 }
 function list() { fireEvent.click(screen.getByRole('tab', { name: '列表' })); }
+it('opens an own list target in the read-only viewer without main selection or navigation until explicit Jump', async () => {
+ const {active}=setup(); render(<AppShell {...props(active)}/>); list();
+ const before=active.store.snapshot.document.viewState;
+ fireEvent.click(screen.getByText('bird region',{selector:'.note-summary'}));
+ expect(screen.getByRole('dialog',{name:'音频查看（只读）'})).toHaveTextContent('bird region');
+ expect(active.store.snapshot.document.viewState).toEqual(before);
+ expect(screen.queryByLabelText('区域备注')).toBeNull();
+});
+it.each(['self','foreign'] as const)('opens %s Author region in the same viewer, preserves main view and selects own regions only after Jump', async source=>{
+ const authorId='00000000-0000-4000-8000-000000000021',{active}=setup(fixture.projectId,authorId),controller=new CollaborationController(active),doc=active.store.snapshot.document;
+ const foreignId='00000000-0000-4000-8000-000000000022';
+ controller.status={snapshot:{projectId:doc.projectId,authors:[{identity:{authorId:foreignId,displayName:'Other',createdAt:doc.createdAt},error:null,layer:{payload:{annotations:structuredClone(doc.annotations),categories:doc.categories,mediaLabels:[]}}}]}} as never;
+ const collaboration={active,controller} as CollaborationUI;
+ const snapshot=structuredClone(active.store.snapshot); snapshot.document.projectId=crypto.randomUUID();snapshot.document.annotations=[];snapshot.document.media=[snapshot.document.media[0]];
+ vi.spyOn(inspectionClient,'open').mockResolvedValue({previewId:snapshot.document.projectId,snapshot});vi.spyOn(inspectionClient,'close').mockResolvedValue();
+ render(<AppShell {...ready(active)} collaboration={collaboration}/>); await settle();
+ fireEvent.click(screen.getByRole('tab',{name:'作者'}));
+ const before=structuredClone(active.store.snapshot.document.viewState),owner=source==='self'?authorId:foreignId;
+ const section=document.querySelector<HTMLElement>(`[data-remote-author="${owner}"]`)!;
+ fireEvent.click(within(section).getByText('bird region').closest('button')!);
+ expect(screen.getByRole('dialog',{name:'音频查看（只读）'})).toHaveTextContent('bird region');expect(active.store.snapshot.document.viewState).toEqual(before);
+ fireEvent.click(screen.getByRole('button',{name:'跳转到音频'}));await settle();
+ expect(screen.queryByRole('dialog',{name:'音频查看（只读）'})).toBeNull();
+ fireEvent.click(screen.getByRole('tab',{name:'区域'}));
+ if(source==='self')expect(screen.getByLabelText('区域备注')).toHaveValue('bird region');
+ else expect(screen.queryByLabelText('区域备注')).toBeNull();
+});
 function filters(category: string, channel: string, query: string) {
   fireEvent.change(screen.getByLabelText('筛选类别'), { target: { value: category } });
   fireEvent.change(screen.getByLabelText('筛选通道'), { target: { value: channel } });
@@ -64,7 +92,7 @@ it('restores filters after tab/panel unmount and project reopen, saves defaults 
   await act(async () => {});
   const storage = vi.spyOn(Storage.prototype, 'setItem');
   list(); filters(category, '1', 'bird');
-  expect(screen.getByText('2 / 6 个对象 · 点击定位')).toBeInTheDocument();
+  expect(screen.getByText('2 / 6 个对象 · 点击查看')).toBeInTheDocument();
   expect(screen.getByText('bird region')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: '区域' })); list();
   expectFilters(category, '1', 'bird');
@@ -75,7 +103,7 @@ it('restores filters after tab/panel unmount and project reopen, saves defaults 
   const reopened = setup();
   ui.rerender(<AppShell {...props(reopened.active)} />); list();
   expectFilters(category, '1', 'bird');
-  expect(screen.getByText('2 / 6 个对象 · 点击定位')).toBeInTheDocument();
+  expect(screen.getByText('2 / 6 个对象 · 点击查看')).toBeInTheDocument();
   filters('*', '*', '');
   ui.rerender(<AppShell {...props(null)} />); ui.rerender(<AppShell {...props(active)} />); list();
   expectFilters('*', '*', '');
@@ -108,7 +136,7 @@ it('recomputes results from current data, preserves empty filters and resets onl
   const { active } = setup(), doc = active.store.snapshot.document, category = doc.categories[0].id;
   render(<AppShell {...props(active)} />); list(); filters(category, '1', 'bird');
   accept(active, { annotations: [{ ...doc.annotations[0], note: 'silent' }] });
-  expect(screen.getByText('1 / 6 个对象 · 点击定位')).toBeInTheDocument();
+  expect(screen.getByText('1 / 6 个对象 · 点击查看')).toBeInTheDocument();
   expect(screen.queryByText('bird region')).not.toBeInTheDocument();
   filters(category, '1', '  absent  ');
   expect(screen.getByText('没有符合条件的标注')).toBeInTheDocument();
@@ -117,7 +145,7 @@ it('recomputes results from current data, preserves empty filters and resets onl
   filters('', '1', 'bird');
   accept(active, { media: doc.media.map(m => ({ ...m, channelCount: 1, channelCategoryIds: [[]], channelNotes: m.channelNotes.slice(0, 1) })), annotations: [] });
   expectFilters('', '*', 'bird');
-  expect(screen.getByText('1 / 4 个对象 · 点击定位')).toBeInTheDocument();
+  expect(screen.getByText('1 / 4 个对象 · 点击查看')).toBeInTheDocument();
   expect(screen.queryByText('bird region')).not.toBeInTheDocument();
 });
 
@@ -143,6 +171,7 @@ function ready(active: ActiveProject) {
   value.mediaUI.statuses = active.store.snapshot.document.media.map(m => ({ mediaId: m.id, status: 'ready' }));
   return value;
 }
+function jump() { fireEvent.click(screen.getByRole('button', { name: '跳转到音频' })); }
 function row(note: string) { return screen.getByText(note, { selector: '.note-summary' }).closest('button')!; }
 function expectTab(name: string) { expect(screen.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true'); }
 async function settle() { await act(async () => {}); }
@@ -156,7 +185,7 @@ it.each(['file', 'channel', 'region'] as const)('keeps list and locates %s with 
     const category = filtered ? doc.categories[0].id : '*', channel = filtered && scope !== 'file' ? '1' : '*', query = filtered ? 'bird' : '';
     filters(category, channel, query);
     for (let i = 0; i < 2; i++) {
-      fireEvent.click(row(`bird ${scope === 'channel' ? 'right' : scope}`)); await settle();
+      fireEvent.click(row(`bird ${scope === 'channel' ? 'right' : scope}`)); jump(); await settle();
       expectTab('列表'); expectFilters(category, channel, query);
       const canvas = ui.container.querySelector('[data-context]')!;
       expect(JSON.parse(canvas.getAttribute('data-context')!)).toEqual({ mediaId: media.id, channelIndex: scope === 'file' ? null : 1 });
@@ -177,7 +206,7 @@ it.each(['file', 'channel'] as const)('observes same-target %s title click and k
   const { active } = setup();
   const ui = render(<AppShell {...ready(active)} />);
   for (const event of ['click', 'focus'] as const) {
-    list(); fireEvent.click(row(scope === 'file' ? 'bird file' : 'bird right')); await settle(); expectTab('列表');
+    list(); fireEvent.click(row(scope === 'file' ? 'bird file' : 'bird right')); jump(); await settle(); expectTab('列表');
     const title = ui.container.querySelector(scope === 'file' ? '.file-heading h2' : '.channel-caption strong')!;
     const target = scope === 'channel' ? ui.container.querySelectorAll('.channel-caption strong')[1] : title;
     fireEvent[event](target); await settle(); expectTab('文件/通道');
@@ -206,7 +235,7 @@ it('keeps comparison panes stable through same-file and cross-file list clicks, 
   const ui = render(<AppShell {...ready(active)} />); list();
   const before = applyChange.mock.calls.length;
   for (const note of ['bird file', 'bird right', 'bird region', 'other file', 'other region', 'bird region']) {
-    fireEvent.click(row(note)); await settle(); expectTab('列表');
+    fireEvent.click(row(note)); jump(); await settle(); expectTab('列表');
     expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(a.id);
     expect(screen.getByRole('combobox', { name: '对比面板音频' })).toHaveValue(b.id);
   }
@@ -214,7 +243,7 @@ it('keeps comparison panes stable through same-file and cross-file list clicks, 
   expect(applyChange.mock.calls.slice(before).every(call => call[2].type === 'updateViewState')).toBe(true);
   fireEvent.click(screen.getByRole('menuitem', { name: '标注' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '类别管理' })); await settle(); expectTab('类别');
-  list(); fireEvent.click(row('other region')); await settle();
+  list(); fireEvent.click(row('other region')); jump(); await settle();
   fireEvent.click(screen.getByRole('button', { name: '选择处理对象 A.wav 1' })); await settle(); expectTab('处理');
   fireEvent.click(screen.getByRole('button', { name: '定位屏蔽 1' })); await settle(); expectTab('处理');
 });
@@ -223,17 +252,17 @@ it.each(['file', 'channel', 'region'] as const)('opens a cross-file %s result in
   const { active } = setup(), b = active.store.snapshot.document.media[1];
   active.store.snapshot.document.annotations.push({ ...active.store.snapshot.document.annotations[0], id: '00000000-0000-4000-8000-000000000045', region: { ...active.store.snapshot.document.annotations[0].region, mediaId: b.id, channelIndex: 0 }, note: 'other region' });
   render(<AppShell {...ready(active)} />); list();
-  fireEvent.click(row(`other ${scope}`)); await settle(); expectTab('列表');
+  fireEvent.click(row(`other ${scope}`)); jump(); await settle(); expectTab('列表');
   expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(b.id);
 });
 
 it.each(['tab', 'menu', 'newer', 'close', 'project', 'identity'] as const)('invalidates delayed location on %s', async action => {
   const pending = pauseReveal(), a = setup(fixture.projectId, 'author-a'), b = setup('00000000-0000-4000-8000-000000000033', 'author-b');
   const ui = render(<AppShell {...ready(a.active)} />); list(); filters('*', '*', '');
-  fireEvent.click(row('other file')); expect(pending).toHaveLength(1);
+  fireEvent.click(row('other file')); jump(); expect(pending).toHaveLength(1);
   if (action === 'tab') fireEvent.click(screen.getByRole('tab', { name: '类别' }));
   if (action === 'menu') { fireEvent.click(screen.getByRole('menuitem', { name: '标注' })); fireEvent.click(screen.getByRole('menuitem', { name: '类别管理' })); }
-  if (action === 'newer') { fireEvent.click(row('bird right')); await release(pending[1]); expectTab('列表'); }
+  if (action === 'newer') { fireEvent.click(row('bird right')); jump(); await release(pending[1]); expectTab('列表'); }
   if (action === 'close') { ui.rerender(<AppShell {...props(null)} />); ui.rerender(<AppShell {...ready(setup(fixture.projectId, 'author-a').active)} />); list(); }
   if (action === 'project') { ui.rerender(<AppShell {...ready(b.active)} />); list(); filters('*', '*', 'other'); }
   if (action === 'identity') { a.active.collaboration!.actor = { ...a.active.collaboration!.actor!, authorId: 'author-b' }; ui.rerender(<AppShell {...ready(a.active)} />); list(); filters('*', '*', 'other'); }
@@ -245,8 +274,8 @@ it.each(['tab', 'menu', 'newer', 'close', 'project', 'identity'] as const)('inva
 
 it.each([['file', 'click'], ['file', 'focus'], ['channel', 'click'], ['channel', 'focus']] as const)('same-target %s title invalidates pending reveal through %s', async (scope, event) => {
   const pending = pauseReveal(), { active } = setup(), ui = render(<AppShell {...ready(active)} />);
-  list(); fireEvent.click(row(scope === 'file' ? 'bird file' : 'bird right')); await release(pending[0]); expectTab('列表');
-  fireEvent.click(row(scope === 'file' ? 'bird file' : 'bird right'));
+  list(); fireEvent.click(row(scope === 'file' ? 'bird file' : 'bird right')); jump(); await release(pending[0]); expectTab('列表');
+  fireEvent.click(row(scope === 'file' ? 'bird file' : 'bird right')); jump();
   expect(pending).toHaveLength(2);
   const title = ui.container.querySelector(scope === 'file' ? '.file-heading h2' : '.channel-pane[aria-label="通道 2"] strong')!;
   fireEvent[event](title); await settle(); expectTab('文件/通道');
@@ -256,7 +285,7 @@ it.each([['file', 'click'], ['file', 'focus'], ['channel', 'click'], ['channel',
 it('applies only the latest request when two delayed reveals settle in reverse order', async () => {
   const pending = pauseReveal(), { active } = setup();
   render(<AppShell {...ready(active)} />); list();
-  fireEvent.click(row('other file')); fireEvent.click(row('bird right'));
+  fireEvent.click(row('other file')); jump(); fireEvent.click(row('bird right')); jump();
   await release(pending[1]); expectTab('列表');
   await release(pending[0]); expectTab('列表');
   expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(active.store.snapshot.document.media[0].id);
@@ -265,19 +294,19 @@ it('applies only the latest request when two delayed reveals settle in reverse o
 
 it('re-resolves a delayed region from current authority and rejects deleted or invalid targets', async () => {
   const pending = pauseReveal(), { active } = setup(), doc = active.store.snapshot.document;
-  const ui = render(<AppShell {...ready(active)} />); list(); fireEvent.click(row('bird region'));
+  const ui = render(<AppShell {...ready(active)} />); list(); fireEvent.click(row('bird region')); jump();
   const annotation = { ...doc.annotations[0], region: { ...doc.annotations[0].region, startSeconds: .5, endSeconds: 1 } };
   accept(active, { annotations: [annotation] }); await release(pending[0]); expectTab('列表');
   expect(JSON.parse(ui.container.querySelector('[data-selection]')!.getAttribute('data-selection')!).region).toEqual(annotation.region);
   fireEvent.click(ui.container.querySelector('.file-heading h2')!); list();
-  fireEvent.click(row('bird region')); accept(active, { annotations: [] }); await release(pending[1]); expectTab('列表');
-  fireEvent.click(row('bird right')); accept(active, { media: doc.media.map(m => ({ ...m, channelCount: 1, channelCategoryIds: [[]], channelNotes: m.channelNotes.slice(0, 1) })) });
+  fireEvent.click(row('bird region')); jump(); accept(active, { annotations: [] }); await release(pending[1]); expectTab('列表');
+  fireEvent.click(row('bird right')); jump(); accept(active, { media: doc.media.map(m => ({ ...m, channelCount: 1, channelCategoryIds: [[]], channelNotes: m.channelNotes.slice(0, 1) })) });
   await release(pending[2]); expectTab('列表');
 });
 
 it('failed reveal leaves no suppression for the next real title or spectrum action', async () => {
   const pending = pauseReveal(), { active } = setup(), ui = render(<AppShell {...ready(active)} />); list();
-  fireEvent.click(row('other file')); await release(pending[0], false); expectTab('列表');
+  fireEvent.click(row('other file')); jump(); await release(pending[0], false); expectTab('列表');
   fireEvent.click(ui.container.querySelector('.file-heading h2')!); await settle(); expectTab('文件/通道');
   list(); fireEvent.click(screen.getByRole('button', { name: '选择频谱 A.wav 1' })); await settle(); expectTab('区域');
 });
@@ -290,7 +319,7 @@ it.each([true, false])('runs the real hidden-media reveal boundary, success=%s, 
   const hideMedia = vi.fn(async () => { await wait; if (!success) throw new Error('reveal failed'); });
   const collaboration = { controller: null, active, hideMedia } as unknown as import('../features/collaboration/useCollaboration').CollaborationUI;
   const ui = render(<AppShell {...ready(active)} collaboration={collaboration} />); list();
-  fireEvent.click(row('other file')); expect(hideMedia).toHaveBeenCalledWith(b.id, false);
+  fireEvent.click(row('other file')); jump(); expect(hideMedia).toHaveBeenCalledWith(b.id, false);
   await act(async () => { complete(); await wait; }); expectTab('列表');
   expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(success ? b.id : active.store.snapshot.document.media[0].id);
   fireEvent.click(ui.container.querySelector('.file-heading h2')!); await settle(); expectTab('文件/通道');
@@ -304,7 +333,7 @@ it('reveals a result when every media was hidden and passive workspace context a
   const hideMedia = vi.fn(async () => { await wait; });
   const collaboration = { controller: null, active, hideMedia } as unknown as import('../features/collaboration/useCollaboration').CollaborationUI;
   const ui = render(<AppShell {...ready(active)} collaboration={collaboration} />); list();
-  fireEvent.click(row('other file')); expect(hideMedia).toHaveBeenCalledWith(media.id, false);
+  fireEvent.click(row('other file')); jump(); expect(hideMedia).toHaveBeenCalledWith(media.id, false);
   // Collaboration publishes its accepted visibility before the asynchronous API returns.
   active.collaboration!.hiddenMediaIds = active.collaboration!.hiddenMediaIds.filter(id => id !== media.id);
   ui.rerender(<AppShell {...ready(active)} collaboration={collaboration} />);
@@ -320,7 +349,7 @@ it.each(['pane', 'channel'] as const)('context-only %s interaction supersedes a 
   const c = { ...b, id: '00000000-0000-4000-8000-000000000046', displayName: 'C.wav', note: 'third file' };
   doc.media.push(c); doc.viewState.compareMediaId = c.id;
   const ui = render(<AppShell {...ready(active)} />); list(); filters('*', '*', 'other');
-  fireEvent.click(row('other file')); expect(pending).toHaveLength(1);
+  fireEvent.click(row('other file')); jump(); expect(pending).toHaveLength(1);
   if (target === 'pane') fireEvent.focus(screen.getByRole('combobox', { name: '对比面板音频' }));
   else fireEvent(ui.container.querySelector('[data-pane="primary"] .channel-pane[aria-label="通道 2"]')!, new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
   await settle(); expectTab('文件/通道');
@@ -342,7 +371,7 @@ it.each(['sidebar', 'same sidebar', 'primary selector', 'compare selector', 'wor
   const ui = render(<AppShell {...ready(active)} />);
   const changesPrimary = entry === 'sidebar' || entry === 'primary selector';
   if (changesPrimary) fireEvent.click(ui.container.querySelector('[data-pane="compare"] .file-heading h2')!);
-  list(); filters('*', '*', 'third'); fireEvent.click(row('third file')); expect(pending).toHaveLength(1);
+  list(); filters('*', '*', 'third'); fireEvent.click(row('third file')); jump(); expect(pending).toHaveLength(1);
   const before = ui.container.querySelector('[data-context]')!.getAttribute('data-context');
   if (entry === 'same sidebar') fireEvent.click(screen.getByRole('button', { name: 'A.wav' }));
   if (entry === 'sidebar') fireEvent.click(screen.getByRole('button', { name: 'D.wav' }));
@@ -383,7 +412,7 @@ function realViewport(collaborate?: (active: ActiveProject) => CollaborationUI) 
 
 it.each(['bird region', 'other file'])('real arrow-key viewport pan supersedes delayed %s location without changing context', async note => {
   const pending = pauseReveal(), viewport = realViewport();
-  list(); fireEvent.click(row(note));
+  list(); fireEvent.click(row(note)); jump();
   const before = viewport.view(), context = viewport.canvas().getAttribute('data-context');
   fireEvent.keyDown(viewport.surface, { key: 'ArrowRight' }); await settle();
   const panned = viewport.view(); expect(panned.startSeconds).toBeGreaterThan(before.startSeconds);
@@ -398,7 +427,7 @@ it.each([
   ['alt', 'completed'], ['middle', 'completed'], ['alt', 'completed without movement'], ['middle', 'completed without movement'],
 ] as const)('real %s pointer pan in phase %s supersedes same-media reveal permanently', async (method, phase) => {
   const pending = pauseReveal(), viewport = realViewport();
-  list(); fireEvent.click(row('bird region'));
+  list(); fireEvent.click(row('bird region')); jump();
   const before = viewport.view(), context = viewport.canvas().getAttribute('data-context');
   fireEvent.pointerDown(viewport.surface, { button: method === 'alt' ? 0 : 1, altKey: method === 'alt', clientX: 400, clientY: 150 });
   expect(viewport.canvas()).toHaveAttribute('data-gesture', 'true');
@@ -420,7 +449,7 @@ it.each([
 });
 
 it('same-pane explicit view menu patch supersedes pending region location', async () => {
-  const pending = pauseReveal(), viewport = realViewport(); list(); fireEvent.click(row('bird region'));
+  const pending = pauseReveal(), viewport = realViewport(); list(); fireEvent.click(row('bird region')); jump();
   fireEvent.click(screen.getByRole('menuitem', { name: '视图' })); fireEvent.click(screen.getByRole('menuitem', { name: '缩小视图' }));
   await settle(); const latest = viewport.view();
   await release(pending[0]); expect(viewport.view()).toEqual(latest); expectTab('列表');
@@ -433,14 +462,14 @@ it.each(['older first', 'newer first', 'newer failed'] as const)('real shared-re
     controller.status = { snapshot: { projectId: doc.projectId, authors: [{ identity: { authorId: 'other-author', displayName: 'Other author', createdAt: doc.createdAt }, error: null, layer: { kind: 'audio-annotator-author-layer', formatVersion: 2, projectId: doc.projectId, authorId: 'other-author', revision: 1, parent: null, hash: 'verified', payload: { categories: doc.categories, annotations: [remote], mediaLabels: [] } } }] } } as never;
     return { active, controller } as CollaborationUI;
   });
-  list(); fireEvent.click(row('bird region'));
+  list(); fireEvent.click(row('bird region')); jump();
   const context = viewport.canvas().getAttribute('data-context');
   const overlay = screen.getByLabelText('通道 1 标注图层');
   vi.spyOn(overlay, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 800, 300));
   const mapping = coordinates(viewport.view(), viewport.media.sampleRate / 2, 800, 300);
-  fireEvent.contextMenu(overlay, { clientX: mapping.secondsToX(.45), clientY: mapping.hzToY(1250) });
-  expect(screen.getByRole('dialog', { name: '共享标注详情（只读）' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '定位' }));
+  fireEvent.contextMenu(overlay, { clientX: mapping.secondsToX(.4), clientY: mapping.hzToY(1250) });
+  expect(screen.getByRole('dialog', { name: '音频查看（只读）' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '跳转到音频' }));
   expect(pending).toHaveLength(2);
   const original = viewport.view();
   const expectNoLocalSelection = () => expect(viewport.ui.container.querySelector('[data-selection]')).toHaveAttribute('data-selection', 'null');

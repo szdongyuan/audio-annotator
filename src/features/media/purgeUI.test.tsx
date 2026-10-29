@@ -209,7 +209,7 @@ it('retains selected directories and refreshes organization/recycle after commit
     fireEvent.click(screen.getByRole('button', { name: '关闭' }));
     expect(organization.selectedFolderId).toBe(nonce); expect(screen.getByRole('button', { name: /^retained folder/ })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: '文件夹操作 · retained folder' }));
-    expect(screen.getByRole('menuitem', { name: '删除空文件夹…' })).toHaveAttribute('aria-disabled', 'false');
+    expect(screen.getByRole('menuitem', { name: '删除文件夹…' })).toHaveAttribute('aria-disabled', 'false');
 });
 
 it('preserves raw native cleanup diagnostics in addition to the summary message', async () => {

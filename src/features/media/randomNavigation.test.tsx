@@ -10,6 +10,7 @@ import { RecycleController } from './recycle';
 type Props = Partial<ComponentProps<typeof MediaList>>;
 let frames: FrameRequestCallback[];
 beforeEach(() => {
+  localStorage.clear();
   frames = [];
   vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => frames.push(callback)));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
@@ -143,6 +144,24 @@ it('intersects search, selected folder, whole-project search and tag filters', (
   ui.select.mockClear();
   fireEvent.change(screen.getByLabelText('标签筛选'), { target: { value: fixture.categories[0].id } });
   press(); expect(ui.select).not.toHaveBeenCalled(); expect(screen.getByRole('status')).toHaveTextContent('当前范围内没有未分类音频');
+});
+
+it('keeps random candidates in flat scope while arrows reveal the next project-wide file', () => {
+  const media = files(), { controller, child } = organization(media), ui = setup(media, { organization: controller, selectedId: media[1].id });
+  fireEvent.click(screen.getByTitle('父目录'));
+  fireEvent.change(screen.getByLabelText('音频显示方式'), { target: { value: 'flat' } });
+  fireEvent.change(screen.getByLabelText('平铺显示范围'), { target: { value: child } });
+  press('r');
+  expect(ui.select).not.toHaveBeenCalled();
+  expect(screen.getByRole('status')).toHaveTextContent('没有其他未分类音频');
+  press('ArrowDown'); flush();
+  expect(ui.select).toHaveBeenLastCalledWith(media[0].id);
+  expect(screen.getByLabelText('平铺显示范围')).toHaveValue('');
+  expect(screen.getByRole('button', { name: media[0].displayName })).toHaveFocus();
+  expect(controller.selectedFolderId).not.toBeNull();
+  ui.select.mockClear(); vi.mocked(Math.random).mockReturnValue(0.999);
+  press('r');
+  expect(ui.select).toHaveBeenLastCalledWith(media[2].id, 'random');
 });
 
 it('keeps the existing unannotated filter meaning for an untagged region box', () => {

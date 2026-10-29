@@ -112,3 +112,23 @@ export function organizationIndex(head: Organization | null, known: ReadonlySet<
     }
     return { folders, children, paths, counts, mediaFolder };
 }
+/** Preview only; native rechecks organization and recycle state under its commit lock. */
+export function folderRemoval(head: Organization | null, folderId: string, recycled: ReadonlySet<string> | null) {
+    const index = organizationIndex(head, new Set()), folder = index.folders.get(folderId);
+    const subtree = new Set<string>(), pending = folder ? [folderId] : [];
+    while (pending.length) {
+        const id = pending.pop()!;
+        subtree.add(id);
+        pending.push(...index.children.get(id) ?? []);
+    }
+    let associated = 0, trashed = 0;
+    for (const membership of head?.media ?? []) {
+        if (membership.folderId && subtree.has(membership.folderId)) {
+            associated++;
+            if (recycled?.has(membership.mediaId)) trashed++;
+        }
+    }
+    const blocked = associated - trashed;
+    const reason = associated && recycled === null ? '回收站状态不可用' : blocked ? '仍有关联音频' : '';
+    return { allowed: !!folder && !reason, reason, folderCount: subtree.size, associated, trashed, blocked, parentPath: folder?.parentId ? index.paths.get(folder.parentId)! : '全部音频' };
+}

@@ -31,8 +31,18 @@ async function listRetained(expected, count) {
   assert.match(await h.evaluate(`return document.querySelector('.annotation-list > .subtle-label').textContent`), new RegExp(`^${count} / 8 个对象`));
 }
 async function locate(note, expected, count) {
+  // Explicit Jump may still have an accepted debounced viewport draft. Flush
+  // that prior action before measuring whether opening the viewer writes.
+  await saved(h);
+  const currentName = await h.evaluate("return document.querySelector('.file-pane h2').textContent");
+  await h.driver.wait(async () => { const d=await snapshot(h); return d.media.find(m=>m.id===d.viewState.activeMediaId)?.displayName===currentName; },10000,'previous navigation reaches native workspace');
+  const before = await snapshot(h);
   const row = await h.driver.findElement(By.xpath(`//button[contains(@class,'annotation-row') and .//span[@class='note-summary' and .='${note}']]`));
   await row.click();
+  await h.until("document.querySelector('.inspection-viewer')");
+  assert.deepEqual(await snapshot(h), before, 'opening List viewer leaves main workspace unchanged');
+  await h.clickText('跳转到音频');
+  await h.until("!document.querySelector('.inspection-viewer')");
   const name = note.endsWith('a') ? 'list-a.wav' : 'list-b.wav';
   await h.until(`document.querySelector('.file-pane h2')?.textContent===${JSON.stringify(name)}&&!document.querySelector('.tile-status')`);
   if (note.includes('region')) {

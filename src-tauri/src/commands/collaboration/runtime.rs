@@ -15,6 +15,9 @@ use std::{
 type JobSlot = Arc<Mutex<Option<(String, Arc<AtomicBool>)>>>;
 
 pub struct Service {
+    // Both command surfaces own one current preview and one four-permit pool.
+    pub examples: Arc<crate::commands::examples::preview::Manager>,
+    pub inspection: Arc<crate::commands::examples::preview::Manager>,
     pub current: Mutex<Runtime>,
     pub sources: Mutex<crate::commands::source_import::Registry>,
     pub prepared: Mutex<std::collections::HashMap<String, super::catalog::PendingMedia>>,
@@ -48,7 +51,10 @@ impl Default for Service {
                 count.fetch_sub(1, Ordering::AcqRel);
             }
         });
+        let previews = Arc::new(crate::commands::examples::preview::Manager::default());
         Self {
+            examples: previews.clone(),
+            inspection: previews,
             prepared_count,
             sources: Mutex::new(Default::default()),
             cleanup: Mutex::new(Some(sender)),
@@ -213,6 +219,7 @@ impl Service {
         self.job.lock().map(|j| j.is_some()).unwrap_or(true)
     }
     pub fn retire(&self) {
+        self.examples.invalidate();
         if let Ok(mut purge) = self.purge.lock() {
             *purge = Default::default();
         }
@@ -236,6 +243,7 @@ impl Service {
         }
     }
     pub fn install(&self, repo: Option<Arc<CollaborationRepository>>) -> Result<()> {
+        self.examples.invalidate();
         *self.purge.lock().map_err(|_| unavailable())? = Default::default();
         self.sources.lock().map_err(|_| unavailable())?.reset();
         let mut runtime = self.current.lock().map_err(|_| unavailable())?;
@@ -254,6 +262,7 @@ impl Service {
 }
 impl Drop for Service {
     fn drop(&mut self) {
+        self.examples.invalidate();
         // Service shutdown is outside authority locks; drain the disposal worker before returning.
         self.cleanup
             .get_mut()

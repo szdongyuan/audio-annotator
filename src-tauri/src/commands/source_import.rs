@@ -322,12 +322,18 @@ pub async fn import_source_page(
         .map_err(|_| runtime::unavailable())?
 }
 #[tauri::command]
-pub fn cancel_import_source_scan(state: State<'_, AppState>, token: Token) -> Result<()> {
-    cancel(&state, &token, false)
+pub async fn cancel_import_source_scan(state: State<'_, AppState>, token: Token) -> Result<()> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || cancel(&state, &token, false))
+        .await
+        .map_err(|_| runtime::unavailable())?
 }
 #[tauri::command]
-pub fn release_import_source_scan(state: State<'_, AppState>, token: Token) -> Result<()> {
-    cancel(&state, &token, true)
+pub async fn release_import_source_scan(state: State<'_, AppState>, token: Token) -> Result<()> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || cancel(&state, &token, true))
+        .await
+        .map_err(|_| runtime::unavailable())?
 }
 #[tauri::command]
 pub async fn import_source_batch(

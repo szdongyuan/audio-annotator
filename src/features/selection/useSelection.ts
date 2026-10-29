@@ -10,6 +10,7 @@ export type RegionMenuTarget = { seconds?: number; x: number; y: number; target:
 export function useSelection(active: ActiveProject | null, primaryId: string | null, panes?: VisiblePane[]) {
   const vocabulary = useCategoryChoices(active), vocabularyRef = useRef(vocabulary); vocabularyRef.current = vocabulary;
   const state = useMemo(() => new SelectionState(), [active]);
+  useEffect(() => active?.lifecycle.registerBackgroundGuard(() => !state.getGesture()), [active, state]);
   const selection = useSyncExternalStore(state.subscribe, state.getActiveSelection);
   const candidate = useSyncExternalStore(state.subscribe, state.getCandidate);
   const context = useSyncExternalStore(state.subscribe, state.getContext);

@@ -7,6 +7,7 @@ import { pickUnclassifiedMedia } from './randomNavigation';
 interface MediaNavigationOptions {
   scope: object | null;
   navigationIds: readonly string[];
+  randomIds: readonly string[];
   selectedId: string | null;
   navigationDisabled: boolean;
   media: readonly MediaDescriptor[];
@@ -37,7 +38,7 @@ export function useMediaNavigation(options: MediaNavigationOptions): string | nu
       let intent: 'random' | undefined;
       if (mediaRandomShortcut(event)) {
         event.preventDefault();
-        const result = pickUnclassifiedMedia(current.navigationIds, current.media, current.annotations, current.statuses, current.selectedId);
+        const result = pickUnclassifiedMedia(current.randomIds, current.media, current.annotations, current.statuses, current.selectedId);
         if (result.kind !== 'selected') {
           setNotice({ scope: current.scope, message: result.kind === 'empty' ? '当前范围内没有未分类音频' : '没有其他未分类音频' });
           return;

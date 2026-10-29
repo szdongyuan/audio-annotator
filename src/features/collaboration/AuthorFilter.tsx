@@ -1,5 +1,10 @@
 import type { CollaborationController } from './controller';
-export function AuthorFilter({controller}:{controller:CollaborationController}){
- const filter=controller.filter;
- return <fieldset className="author-filter"><legend>显示作者</legend><div className="author-filter-modes">{(['all','mine','custom'] as const).map(mode=><label key={mode}><input type="radio" name="author-filter" checked={filter.mode===mode} onChange={()=>controller.setFilter(mode==='custom'?{mode,authorIds:controller.status?.snapshot?.authors.map(a=>a.identity.authorId)??[]}:{mode})}/>{mode==='all'?'全部':mode==='mine'?'仅我的':'勾选作者'}</label>)}</div>{filter.mode==='custom'&&controller.status?.snapshot?.authors.map(a=><label key={a.identity.authorId}><input type="checkbox" checked={filter.authorIds.includes(a.identity.authorId)} onChange={e=>controller.setFilter({mode:'custom',authorIds:e.target.checked?[...filter.authorIds,a.identity.authorId]:filter.authorIds.filter(id=>id!==a.identity.authorId)})}/>{a.identity.displayName}{a.error?' · 读取失败':''}</label>)}</fieldset>;
+export function AuthorFilter({ controller, compact = false }: { controller: CollaborationController; compact?: boolean }) {
+ const filter = controller.filter;
+ return <div className="author-filter"><label>显示<select aria-label="显示作者" value={filter.mode === 'custom' && !filter.authorIds.length ? 'none' : filter.mode} onChange={e => {
+   const mode = e.target.value;
+   controller.setFilter(mode === 'all' || mode === 'mine' ? { mode } : { mode: 'custom', authorIds: mode === 'none' ? [] : controller.authorIdentities.filter(a => controller.visible(a.authorId)).map(a => a.authorId) });
+  }}><option value="all">全部作者</option><option value="mine">仅自己</option><option value="none">全部隐藏</option><option value="custom">自定义</option></select></label>
+  {!compact && filter.mode === 'custom' && controller.authorIdentities.map(a => <label key={a.authorId}><input type="checkbox" checked={controller.visible(a.authorId)} onChange={e => controller.setAuthorVisible(a.authorId, e.target.checked)}/>{a.displayName}{a.authorId === controller.owner.collaboration?.actor?.authorId ? '（我）' : ''}</label>)}
+ </div>;
 }

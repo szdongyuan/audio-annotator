@@ -15,6 +15,7 @@ import { defaultView } from '../spectrogram/workspace';
 import { FilePane } from '../spectrogram/FilePane';
 import { SpectrogramCanvas } from '../spectrogram/SpectrogramCanvas';
 import { CollaborationContext, type CollaborationUI } from '../collaboration/useCollaboration';
+import { CollaborationController } from '../collaboration/controller';
 vi.mock('../spectrogram/useTiles', () => ({ useTiles: () => ({ keys: [], completed: 0, total: 0, version: 0 }) }));
 
 let plot = new DOMRect(100, 100, 400, 240), clip = new DOMRect(100, 100, 400, 240);
@@ -73,7 +74,18 @@ const toolbar = () => screen.queryByRole('toolbar', { name: '选区操作' });
 const category = (name = '清空标签') => { fireEvent.click(screen.getByRole('button', { name: '标注' })); fireEvent.click(screen.getByRole('menuitemcheckbox', { name })); fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); };
 it('hidden own annotation has no floating toolbar but keeps its writable selection and restores with the filter',()=>{
  let visible=true;const collaboration={controller:{visible:()=>visible}} as unknown as CollaborationUI,s=setup('annotation',false,collaboration),selected=s.ui().selection;
+ Object.assign(collaboration,{active:s.owner});Object.assign(collaboration.controller!,{owner:s.owner});
  expect(toolbar()).toBeTruthy();visible=false;s.view({});expect(toolbar()).toBeNull();expect(s.ui().selection).toBe(selected);visible=true;s.view({});expect(toolbar()).toBeTruthy();s.dispose();
+});
+it.each(['temporary', 'annotation', 'mask'] as const)('category visibility suppresses the saved annotation toolbar only (%s)', kind => {
+ localStorage.clear();
+ const collaboration = {} as CollaborationUI, s = setup(kind, false, collaboration), selected = s.ui().selection;
+ const controller = new CollaborationController(s.owner);
+ Object.assign(collaboration, { active: s.owner, controller });
+ controller.setIncludeOwnCategories(true); controller.setCategoryVisible(s.owner.store.snapshot.document.categories[0].name, false); s.view({});
+ expect(!!toolbar()).toBe(kind !== 'annotation'); expect(s.ui().selection).toBe(selected);
+ controller.setCategoryVisible(s.owner.store.snapshot.document.categories[0].name, true); s.view({});
+ expect(toolbar()).toBeInTheDocument(); expect(s.changes).toEqual([]); s.dispose(); localStorage.clear();
 });
 
 it.each(['temporary', 'annotation', 'mask'] as const)('shows one always-visible toolbar for active %s and none for inactive candidate', kind => {

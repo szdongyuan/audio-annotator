@@ -85,6 +85,8 @@ impl Scheduler {
                         state.queue.pop_front().unwrap()
                     };
                     let result = if job.cancel.load(Ordering::Acquire) {
+                        // A captured runtime must be released before idle is published.
+                        drop(job.work);
                         Err(cancelled())
                     } else {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -300,6 +302,50 @@ impl Drop for Scheduler {
         for worker in self.workers.drain(..) {
             let _ = worker.join();
         }
+    }
+}
+#[cfg(test)]
+mod lifetime_tests {
+    use super::*;
+    struct ObserveDrop {
+        shared: Arc<Shared>,
+        observed: mpsc::Sender<usize>,
+    }
+    impl Drop for ObserveDrop {
+        fn drop(&mut self) {
+            let active = self.shared.state.lock().unwrap().active;
+            self.observed.send(active).unwrap();
+        }
+    }
+    #[test]
+    fn cancelled_uncalled_work_is_dropped_before_the_worker_reports_idle() {
+        let scheduler = Scheduler::new(1, 1);
+        let (observed, receive_drop) = mpsc::channel();
+        let guard = ObserveDrop {
+            shared: scheduler.shared.clone(),
+            observed,
+        };
+        let (result, receive) = mpsc::channel();
+        scheduler.shared.state.lock().unwrap().queue.push_back(Job {
+            visible: true,
+            cancel: Arc::new(AtomicBool::new(true)),
+            work: Box::new(move |_| {
+                drop(guard);
+                Ok(vec![])
+            }),
+            result,
+        });
+        scheduler.shared.wake.notify_one();
+        assert!(receive
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap()
+            .is_err());
+        assert_eq!(
+            receive_drop
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap(),
+            1
+        );
     }
 }
 

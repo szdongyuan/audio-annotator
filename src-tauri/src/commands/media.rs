@@ -480,11 +480,52 @@ pub struct MediaStatus {
     media_id: String,
     status: &'static str,
 }
+// Filter before registry capture or filesystem work. Explicit empty/unknown
+// selections must never silently fall back to a whole-project source scan.
+fn selected_media(
+    media: Vec<MediaDescriptor>,
+    ids: Option<Vec<String>>,
+) -> Result<Vec<MediaDescriptor>> {
+    let Some(ids) = ids else { return Ok(media) };
+    let requested: std::collections::HashSet<_> = ids.into_iter().collect();
+    if requested.contains("") {
+        return Err(AppError::invalid("未知音频"));
+    }
+    let selected: Vec<_> = media
+        .into_iter()
+        .filter(|m| requested.contains(&m.id))
+        .collect();
+    if selected.len() != requested.len() {
+        return Err(AppError::invalid("未知音频"));
+    }
+    Ok(selected)
+}
+
+fn source_status(
+    media: &MediaDescriptor,
+    source: &Path,
+    entry: Option<SourceStamp>,
+) -> MediaStatus {
+    let status = match SourceStamp::read(source) {
+        Err(_) => "missing",
+        Ok(stamp) if stamp.bytes != media.byte_length => "changed",
+        Ok(stamp) => match entry {
+            Some(verified) if verified == stamp => "ready",
+            Some(_) => "changed",
+            None => "unverified",
+        },
+    };
+    MediaStatus {
+        media_id: media.id.clone(),
+        status,
+    }
+}
 #[tauri::command]
 pub async fn media_status(
     state: State<'_, AppState>,
     runtime_nonce: Option<String>,
     project_id: String,
+    media_ids: Option<Vec<String>>,
 ) -> Result<Vec<MediaStatus>> {
     let tasks = state.1.clone();
     let service = state.6.clone();
@@ -498,15 +539,15 @@ pub async fn media_status(
             if d.project_id != project_id {
                 return Err(AppError::invalid("Project identity mismatch"));
             }
+            let media = selected_media(d.media, media_ids)?;
             let tasks = tasks
                 .lock()
                 .map_err(|_| AppError::invalid("Media unavailable"))?;
-            let entries = d
-                .media
+            let entries = media
                 .iter()
                 .map(|m| tasks.registry.verified_stamp(m))
                 .collect::<Vec<_>>();
-            Ok((d.media, p.root().to_path_buf(), entries, tasks.generation()))
+            Ok((media, p.root().to_path_buf(), entries, tasks.generation()))
         })
         .await?;
     let generation = capture.3;
@@ -522,19 +563,7 @@ pub async fn media_status(
                 } else {
                     capture.1.join(source)
                 };
-                let status = match SourceStamp::read(&source) {
-                    Err(_) => "missing",
-                    Ok(stamp) if stamp.bytes != m.byte_length => "changed",
-                    Ok(stamp) => match entry {
-                        Some(verified) if verified == stamp => "ready",
-                        Some(_) => "changed",
-                        None => "unverified",
-                    },
-                };
-                MediaStatus {
-                    media_id: m.id.clone(),
-                    status,
-                }
+                source_status(m, &source, entry)
             })
             .collect()
     })
@@ -550,4 +579,68 @@ pub async fn media_status(
         return Err(super::collaboration::runtime::stale());
     }
     Ok(statuses)
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+
+    fn descriptor() -> MediaDescriptor {
+        let document: annotator_core::model::ProjectDocument =
+            serde_json::from_str(include_str!("../../../tests/fixtures/document-v3.json")).unwrap();
+        document.media[0].clone()
+    }
+
+    #[test]
+    fn scoped_status_selects_only_requested_descriptors_without_full_scan_fallback() {
+        let first = descriptor();
+        let mut other = first.clone();
+        other.id = "another".into();
+        other.source_ref = "unrelated/source/must/not/be/checked.wav".into();
+        let all = vec![first.clone(), other];
+        let selected =
+            selected_media(all.clone(), Some(vec![first.id.clone(), first.id.clone()])).unwrap();
+        assert_eq!(selected, vec![first]);
+        assert!(selected_media(all.clone(), Some(vec![]))
+            .unwrap()
+            .is_empty());
+        assert_eq!(selected_media(all.clone(), None).unwrap(), all);
+        for ids in [
+            vec!["unknown".into()],
+            vec!["".into()],
+            vec![all[0].id.clone(), "unknown".into()],
+        ] {
+            assert!(selected_media(all.clone(), Some(ids)).is_err());
+        }
+    }
+
+    #[test]
+    fn scoped_source_verification_preserves_missing_changed_and_unverified_states() {
+        let root = std::env::temp_dir().join(format!("annotator-status-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let source = root.join("source.wav");
+        let mut media = descriptor();
+        std::fs::write(&source, b"source").unwrap();
+        media.byte_length = 6;
+        let stamp = SourceStamp::read(&source).unwrap();
+        assert_eq!(
+            source_status(&media, &source, Some(stamp.clone())).status,
+            "ready"
+        );
+        assert_eq!(source_status(&media, &source, None).status, "unverified");
+        let mut old_stamp = stamp.clone();
+        old_stamp.modified = std::time::UNIX_EPOCH;
+        assert_eq!(
+            source_status(&media, &source, Some(old_stamp)).status,
+            "changed"
+        );
+        std::fs::write(&source, b"changed source bytes").unwrap();
+        assert_eq!(
+            source_status(&media, &source, Some(stamp)).status,
+            "changed"
+        );
+        std::fs::remove_file(&source).unwrap();
+        assert_eq!(source_status(&media, &source, None).status, "missing");
+        std::fs::remove_dir(root).unwrap();
+    }
 }

@@ -10,6 +10,7 @@ import { resolveSelection, type Selection } from './state';
 import { useSelectionContext } from './useSelection';
 import { targetCommands } from './targetCommands';
 import { useCollaborationContext } from '../collaboration/useCollaboration';
+import { ownSelectionVisible } from '../collaboration/annotationVisibility';
 
 type Box = { left: number; top: number; right: number; bottom: number };
 const intersect = (a: Box, b: Box): Box => ({ left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom) });
@@ -23,8 +24,7 @@ export function SelectionToolbar({ media, channel, view, status }: { media: Medi
   const [menu, setMenu] = useState<{ owner: NonNullable<typeof ui>['active']; target: Selection; kind: 'category' | 'audition'; x: number; y: number; trigger: HTMLElement } | null>(null);
   const latest = useRef({ ui, status }); latest.current = { ui, status };
   const target = ui?.active ? resolveSelection(ui.active.store.snapshot.document, ui.selection) : null;
-  const ownVisible = !collaboration?.controller || collaboration.controller.visible(ui?.active?.collaboration?.actor?.authorId ?? null);
-  const eligible = !!target && (target.object?.kind !== 'annotation' || ownVisible) && target.region.mediaId === media.id && target.region.channelIndex === channel && view.visibleChannels.includes(channel) && !ui?.gesturing;
+  const eligible = !!target && ownSelectionVisible(collaboration, ui?.active ?? null, target) && target.region.mediaId === media.id && target.region.channelIndex === channel && view.visibleChannels.includes(channel) && !ui?.gesturing;
   useLayoutEffect(() => {
     const element = host.current;
     if (!element) return;
@@ -73,7 +73,6 @@ export function SelectionToolbar({ media, channel, view, status }: { media: Medi
     {eligible && <div ref={bar} role="toolbar" aria-label="选区操作" className="selection-toolbar" style={{ ...position, visibility: shown ? 'visible' : 'hidden' }}>
       <button disabled={disabled || !!reason} title={reason || '播放当前选区'} onClick={() => { if (target) commands(target).audition(); }}>播放</button>
       <button aria-label="试听选区版本" aria-haspopup="menu" aria-expanded={validMenu?.kind === 'audition'} disabled={disabled || !!reason} title={reason || '选择本次试听版本'} onClick={e => open('audition', e.currentTarget)}>▾</button>
-      <button aria-label="应用区域增益" disabled={disabled} onClick={e => { if (target) ui!.openGain(target, e.currentTarget); }}>增益</button>
       <button aria-label="标注" aria-haspopup="menu" aria-expanded={validMenu?.kind === 'category'} disabled={disabled||annotationDisabled(ui?.active)} onClick={e => open('category', e.currentTarget)}>标注 ▾</button>
     </div>}
     {validMenu && <Menu items={items} anchor={validMenu} returnFocus={validMenu.trigger} onClose={() => setMenu(null)} />}

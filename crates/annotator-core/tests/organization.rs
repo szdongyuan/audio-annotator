@@ -87,9 +87,10 @@ fn manual_operations_enforce_empty_removal_and_increment_layout() {
             name: "B".into(),
         })
         .unwrap();
-    assert!(o
+    let removed = o
         .apply(OrganizationOperation::RemoveFolder { id: a.clone() })
-        .is_err());
+        .unwrap();
+    assert!(removed.folders.is_empty());
     o.media.push(MediaMembership {
         media_id: m.clone(),
         folder_id: Some(b.clone()),
@@ -124,6 +125,339 @@ fn manual_operations_enforce_empty_removal_and_increment_layout() {
     assert!(o
         .apply(OrganizationOperation::RemoveFolder { id: id() })
         .is_err());
+}
+#[test]
+fn removal_empty_tree_is_bounded_recursive_and_preserves_unrelated_memberships() {
+    let mut head = Organization::empty(id());
+    let survivor = id();
+    head.folders.push(Folder {
+        id: survivor.clone(),
+        parent_id: None,
+        name: "survivor".into(),
+    });
+    head.media.push(MediaMembership {
+        media_id: id(),
+        folder_id: Some(survivor.clone()),
+        original_filename: "original.wav".into(),
+    });
+    let mut parent = None;
+    let root = id();
+    for depth in 0..16 {
+        let folder = if depth == 0 { root.clone() } else { id() };
+        head.folders.push(Folder {
+            id: folder.clone(),
+            parent_id: parent,
+            name: format!("level {depth}"),
+        });
+        parent = Some(folder);
+    }
+    let removed = head
+        .apply(OrganizationOperation::RemoveFolder { id: root.clone() })
+        .unwrap();
+    assert_eq!(removed.folders.len(), 1);
+    assert_eq!(removed.folders[0].id, survivor);
+    assert_eq!(removed.media, head.media);
+    assert_eq!((removed.revision, removed.layout_revision), (1, 1));
+    // Without native recycle authority even a descendant unknown to the catalog blocks removal.
+    head.media.push(MediaMembership {
+        media_id: id(),
+        folder_id: parent,
+        original_filename: "unadopted.wav".into(),
+    });
+    assert!(head
+        .apply(OrganizationOperation::RemoveFolder { id: root })
+        .is_err());
+}
+
+fn removal_fixture(
+    nested: bool,
+) -> (
+    std::path::PathBuf,
+    CollaborationRepository,
+    AuthorSession,
+    String,
+    Option<String>,
+) {
+    let root = std::env::temp_dir().join(format!("removal-{}", id()));
+    fs::create_dir(&root).unwrap();
+    let (repo, actor) = CollaborationRepository::create_default(
+        &root,
+        "Removal",
+        &profiles::Profile::new("Alice").unwrap(),
+    )
+    .unwrap();
+    let cancel = AtomicBool::new(false);
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/audio/mono16.wav");
+    for name in ["原名.wav", "second.wav"] {
+        let mut segments = if nested {
+            vec!["survivor".into()]
+        } else {
+            vec![]
+        };
+        segments.extend(["remove".into(), "leaf".into()]);
+        let plan = repo
+            .seal_media_placement(0, None, segments, name.into())
+            .unwrap();
+        let prepared = repo
+            .prepare_media(&source, &root.join(format!("pcm-{name}")), &cancel)
+            .unwrap()
+            .with_placement(plan)
+            .unwrap();
+        repo.append_media(&actor, &prepared, &cancel).unwrap();
+    }
+    let repo = repo.reload_catalog().unwrap();
+    let mut doc = repo.manifest().base_document().unwrap();
+    doc.media[0].note = "retained Alice note".into();
+    repo.publish(&actor, None, &LayerPayload::from_document(&doc).unwrap())
+        .unwrap();
+    let bob = repo.adopt(&profiles::Profile::new("Bob").unwrap()).unwrap();
+    doc.media[0].note = "retained Bob note".into();
+    repo.publish(&bob, None, &LayerPayload::from_document(&doc).unwrap())
+        .unwrap();
+    let folder = repo
+        .organization()
+        .folders
+        .iter()
+        .find(|f| f.name == "remove")
+        .unwrap();
+    let removed = folder.id.clone();
+    let parent = folder.parent_id.clone();
+    (root, repo, actor, removed, parent)
+}
+fn removal_files(
+    root: &std::path::Path,
+) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    fn visit(
+        root: &std::path::Path,
+        path: &std::path::Path,
+        files: &mut std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>,
+    ) {
+        for entry in fs::read_dir(path).unwrap() {
+            let entry = entry.unwrap();
+            if entry.file_type().unwrap().is_dir() {
+                visit(root, &entry.path(), files);
+            } else if entry.file_name() != "organization.json"
+                && !entry.file_name().to_string_lossy().ends_with(".lock")
+            {
+                files.insert(
+                    entry.path().strip_prefix(root).unwrap().to_owned(),
+                    fs::read(entry.path()).unwrap(),
+                );
+            }
+        }
+    }
+    let mut files = std::collections::BTreeMap::new();
+    visit(root, root, &mut files);
+    files
+}
+#[test]
+fn removal_empty_subtree_needs_no_recycle_authority() {
+    let (root, repo, actor, removed, _) = removal_fixture(true);
+    let mut head = repo.read_organization().unwrap();
+    for membership in &mut head.media {
+        membership.folder_id = None;
+    }
+    fs::write(
+        root.join("organization.json"),
+        serde_json::to_vec(&head).unwrap(),
+    )
+    .unwrap();
+    fs::write(root.join("recycle.json"), b"unavailable recycle metadata").unwrap();
+    let next = repo
+        .apply_organization(
+            &actor,
+            head.revision,
+            OrganizationOperation::RemoveFolder { id: removed },
+        )
+        .unwrap();
+    assert_eq!(next.folders.len(), 1);
+    assert_eq!(next.media, head.media);
+    assert_eq!(
+        fs::read(root.join("recycle.json")).unwrap(),
+        b"unavailable recycle metadata"
+    );
+    drop((repo, actor));
+    fs::remove_dir_all(root).unwrap();
+}
+#[test]
+fn removal_recycled_subtree_preserves_all_files_and_restores_to_surviving_parent_or_root() {
+    use recycle::RecycleOperation;
+    let cancel = AtomicBool::new(false);
+    for nested in [true, false] {
+        let (root, repo, actor, removed, parent) = removal_fixture(nested);
+        let original = repo.read_organization().unwrap();
+        let ids: Vec<_> = original.media.iter().map(|m| m.media_id.clone()).collect();
+        repo.apply_recycle_controlled(
+            &actor,
+            0,
+            RecycleOperation {
+                operation_id: id(),
+                media_ids: ids.clone(),
+                trash: true,
+            },
+            &cancel,
+            || Ok(()),
+        )
+        .unwrap();
+        let files = removal_files(&root);
+        let next = repo
+            .apply_organization(
+                &actor,
+                original.revision,
+                OrganizationOperation::RemoveFolder { id: removed },
+            )
+            .unwrap();
+        assert_eq!(next.folders.len(), usize::from(nested));
+        assert_eq!(
+            (next.revision, next.layout_revision),
+            (original.revision + 1, original.layout_revision + 1)
+        );
+        for (before, after) in original.media.iter().zip(&next.media) {
+            assert_eq!(after.media_id, before.media_id);
+            assert_eq!(after.original_filename, before.original_filename);
+            assert_eq!(after.folder_id, parent);
+        }
+        assert_eq!(
+            removal_files(&root),
+            files,
+            "only organization metadata may change"
+        );
+        assert_eq!(repo.reload_catalog().unwrap().manifest().media.len(), 2);
+        repo.apply_recycle_controlled(
+            &actor,
+            1,
+            RecycleOperation {
+                operation_id: id(),
+                media_ids: ids,
+                trash: false,
+            },
+            &cancel,
+            || Ok(()),
+        )
+        .unwrap();
+        assert!(repo.read_recycle().unwrap().trashed.is_empty());
+        assert!(repo
+            .read_organization()
+            .unwrap()
+            .media
+            .iter()
+            .all(|m| m.folder_id == parent));
+        drop((repo, actor));
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+#[test]
+fn removal_rechecks_live_restored_unknown_and_unavailable_memberships_without_writing() {
+    use recycle::RecycleOperation;
+    let cancel = AtomicBool::new(false);
+    let (root, repo, actor, removed, _) = removal_fixture(true);
+    let original = repo.read_organization().unwrap();
+    let ids: Vec<_> = original.media.iter().map(|m| m.media_id.clone()).collect();
+    let operation = OrganizationOperation::RemoveFolder { id: removed };
+    let unchanged = || assert_eq!(repo.read_organization().unwrap(), original);
+    repo.apply_recycle_controlled(
+        &actor,
+        0,
+        RecycleOperation {
+            operation_id: id(),
+            media_ids: vec![ids[0].clone()],
+            trash: true,
+        },
+        &cancel,
+        || Ok(()),
+    )
+    .unwrap();
+    assert!(
+        repo.apply_organization(&actor, original.revision, operation.clone())
+            .is_err(),
+        "mixed live/recycled descendants block even when not adopted by an editor"
+    );
+    unchanged();
+    repo.apply_recycle_controlled(
+        &actor,
+        1,
+        RecycleOperation {
+            operation_id: id(),
+            media_ids: vec![ids[1].clone()],
+            trash: true,
+        },
+        &cancel,
+        || Ok(()),
+    )
+    .unwrap();
+    // This repository was captured before trash/restore. The fresh under-lock read must win.
+    repo.apply_recycle_controlled(
+        &actor,
+        2,
+        RecycleOperation {
+            operation_id: id(),
+            media_ids: vec![ids[0].clone()],
+            trash: false,
+        },
+        &cancel,
+        || Ok(()),
+    )
+    .unwrap();
+    assert!(repo
+        .apply_organization(&actor, original.revision, operation.clone())
+        .is_err());
+    unchanged();
+    repo.apply_recycle_controlled(
+        &actor,
+        3,
+        RecycleOperation {
+            operation_id: id(),
+            media_ids: ids,
+            trash: true,
+        },
+        &cancel,
+        || Ok(()),
+    )
+    .unwrap();
+    for mode in ["guard", "cancel", "stale", "corrupt", "missing"] {
+        let recycle = fs::read(root.join("recycle.json")).unwrap();
+        let bytes = fs::read(root.join("organization.json")).unwrap();
+        if mode == "corrupt" {
+            fs::write(root.join("recycle.json"), b"broken").unwrap();
+        }
+        if mode == "missing" {
+            fs::remove_file(root.join("recycle.json")).unwrap();
+        }
+        let result = repo.apply_organization_controlled(
+            &actor,
+            original.revision + u64::from(mode == "stale"),
+            operation.clone(),
+            &AtomicBool::new(mode == "cancel"),
+            || {
+                if mode == "guard" {
+                    Err(annotator_core::error::AppError::invalid("owner replaced"))
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert!(result.is_err(), "{mode} must fail closed");
+        assert_eq!(fs::read(root.join("organization.json")).unwrap(), bytes);
+        fs::write(root.join("recycle.json"), recycle).unwrap();
+    }
+    let mut unknown = original.clone();
+    unknown.media.push(MediaMembership {
+        media_id: id(),
+        folder_id: original.media[0].folder_id.clone(),
+        original_filename: "unknown.wav".into(),
+    });
+    fs::write(
+        root.join("organization.json"),
+        serde_json::to_vec(&unknown).unwrap(),
+    )
+    .unwrap();
+    assert!(repo
+        .apply_organization(&actor, original.revision, operation)
+        .is_err());
+    assert_eq!(repo.read_organization().unwrap(), unknown);
+    drop((actor, repo));
+    fs::remove_dir_all(root).unwrap();
 }
 #[test]
 fn repository_cas_required_head_and_safe_root_filename() {

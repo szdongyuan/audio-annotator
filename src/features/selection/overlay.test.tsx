@@ -2,7 +2,7 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-li
 import { beforeEach, expect, it, vi } from 'vitest';
 import { flushSync } from 'react-dom';
 import fixture from '../../../tests/fixtures/document-v3.json';
-import { parseProjectDocument, type Change } from '../../bridge/types';
+import { parseProjectDocument, type Change, type MediaView } from '../../bridge/types';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue } from '../../app/commands';
 import { ProjectLifecycle } from '../project/lifecycle';
@@ -15,6 +15,8 @@ import { coordinates } from '../spectrogram/coordinates';
 import { CollaborationContext, type CollaborationUI } from '../collaboration/useCollaboration';
 import { RemoteContext } from '../collaboration/remote';
 import { PlaybackContext } from '../playback/usePlayback';
+import { CollaborationController } from '../collaboration/controller';
+import type { ActiveProject } from '../project/useProjectLifecycle';
 function setup() {
   const doc = parseProjectDocument(structuredClone(fixture)), store = new ProjectStore({ document: doc, canUndo: true, canRedo: false });
   const applyChange = vi.fn(async (_id: string, revision: number, c: Change) => {
@@ -29,21 +31,68 @@ function setup() {
   return { active: { store, queue, lifecycle, path: '' }, applyChange, doc };
 }
 beforeEach(() => {
+  localStorage.clear();
   vi.stubGlobal('PointerEvent', MouseEvent);
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
 });
-function mounted(shared = false) {
+function mounted(shared = false, options: { view?: Partial<MediaView>; width?: number; height?: number } = {}) {
   const s = setup(), media = s.doc.media[0]; let ui!: SelectionUI;
+  const view = { ...defaultView(media), ...options.view }, width = options.width ?? 800, height = options.height ?? 400;
   const inspect=vi.fn(),setCue=vi.fn(),remote=structuredClone(s.doc.annotations[0]);
-  const collaboration=shared?{active:s.active,controller:{owner:s.active,visible:()=>true,status:{snapshot:{authors:[{identity:{authorId:'bob',displayName:'Bob'},layer:{payload:{annotations:[remote],categories:s.doc.categories}},error:null}]}}}} as unknown as CollaborationUI:null;
+  const collaboration=shared?{active:s.active,controller:{owner:s.active,visible:()=>true,status:{snapshot:{authors:[{identity:{authorId:'bob',displayName:'Bob'},layer:{payload:{annotations:[remote],categories:s.doc.categories,mediaLabels:[]}},error:null}]}}}} as unknown as CollaborationUI:null;
   if(shared)Object.assign(s.active,{collaboration:{actor:null,runtimeNonce:'nonce'}});
-  function Workspace() { ui = useSelection(s.active, media.id); useAnnotations(s.active, ui); useMasks(s.active, ui); return <PlaybackContext.Provider value={{setCue} as never}><CollaborationContext.Provider value={collaboration}><RemoteContext.Provider value={{inspect} as never}><SelectionContext.Provider value={ui}><AnnotationOverlay media={media} channel={1} view={defaultView(media)} /></SelectionContext.Provider></RemoteContext.Provider></CollaborationContext.Provider></PlaybackContext.Provider>; }
+  function Workspace() { ui = useSelection(s.active, media.id); useAnnotations(s.active, ui); useMasks(s.active, ui); return <PlaybackContext.Provider value={{setCue} as never}><CollaborationContext.Provider value={collaboration}><RemoteContext.Provider value={{inspect} as never}><SelectionContext.Provider value={ui}><AnnotationOverlay media={media} channel={1} view={view} /></SelectionContext.Provider></RemoteContext.Provider></CollaborationContext.Provider></PlaybackContext.Provider>; }
   const component = render(<Workspace />), surface = screen.getByLabelText('通道 2 标注图层');
   surface.setPointerCapture = vi.fn();
-  vi.spyOn(surface, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100, width: 800, height: 400 } as DOMRect);
+  vi.spyOn(surface, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100, width, height } as DOMRect);
   const pointer = (kind: 'pointerDown' | 'pointerMove' | 'pointerUp', x: number, y: number, target = surface) => fireEvent[kind](target, { button: 0, pointerId: 1, clientX: x, clientY: y });
-  return { ...s, component, surface, pointer, inspect,setCue,remote,collaboration, refresh:()=>component.rerender(<Workspace/>), ui: () => ui, finish: () => { component.unmount(); s.active.lifecycle.dispose(); } };
+  return { ...s, component, surface, pointer, inspect,setCue,remote,collaboration, view, c: coordinates(view, media.sampleRate / 2, width, height), refresh:()=>component.rerender(<Workspace/>), ui: () => ui, finish: () => { component.unmount(); s.active.lifecycle.dispose(); } };
 }
+function personalVisibility(s: ReturnType<typeof mounted>) {
+ Object.assign((s.active as ActiveProject).collaboration!, { actor: { authorId: '11111111-1111-4111-8111-111111111111', displayName: 'Alice', createdAt: '2026-10-23T00:00:00Z' } });
+ const controller = new CollaborationController(s.active as ActiveProject);
+ controller.status = s.collaboration!.controller!.status;
+ s.collaboration!.controller = controller;
+ s.refresh();
+ return controller;
+}
+it.each(['author', 'category'] as const)('hides selected/candidate own %s frames and handles without changing selection or allowing hidden hit/menu fallback', kind => {
+ const s = mounted(true), c = personalVisibility(s), own = s.doc.annotations[0], before = structuredClone(s.active.store.snapshot.document);
+ s.remote.region = { ...s.remote.region, startSeconds: 1.2, endSeconds: 1.7, lowHz: 6000, highHz: 10000 };
+ act(() => s.ui().selectObject('annotation', own.id));
+ expect(s.surface.querySelectorAll('[data-handle]')).toHaveLength(8);
+ if (kind === 'author') c.setAuthorVisible((s.active as ActiveProject).collaboration!.actor!.authorId, false);
+ else { c.setIncludeOwnCategories(true); c.setCategoryVisible(s.doc.categories[0].name, false); }
+ s.refresh();
+ expect(s.surface.querySelectorAll('[data-annotation-id],[data-handle]')).toHaveLength(0);
+ expect(s.ui().selection?.object?.id).toBe(own.id);
+ const x = 100 + s.c.secondsToX((own.region.startSeconds + own.region.endSeconds) / 2), y = 100 + s.c.hzToY((own.region.lowHz + own.region.highHz) / 2);
+ fireEvent.contextMenu(s.surface, { clientX: x, clientY: y });
+ expect(s.ui().menu).toMatchObject({ target: null, overlaps: [] });
+ act(() => s.ui().closeMenu());
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ expect(s.ui().selection).toBeNull(); expect(s.setCue).toHaveBeenCalled();
+ expect(s.surface.querySelectorAll('[data-annotation-id],[data-handle]')).toHaveLength(0);
+ expect(s.active.store.snapshot.document).toEqual(before); expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it('applies category any-match and author hiding to foreign paint and border hits while keeping unclassified frames', () => {
+ const s = mounted(true), c = personalVisibility(s);
+ s.remote.region = { ...s.remote.region, startSeconds: 1.2, endSeconds: 1.7, lowHz: 6000, highHz: 10000 };
+ s.remote.categoryIds = ['unknown', s.doc.categories[0].id]; s.refresh();
+ const x = 100 + s.c.secondsToX(1.2), y = 100 + s.c.hzToY(8000);
+ expect(s.surface.querySelector('[data-remote-key]')).not.toBeNull();
+ c.setCategoryVisible(s.doc.categories[0].name, false); s.refresh();
+ expect(s.surface.querySelector('[data-remote-key]')).toBeNull();
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ expect(s.inspect).not.toHaveBeenCalled(); expect(s.setCue).toHaveBeenCalledTimes(1);
+ s.remote.categoryIds = []; s.refresh();
+ expect(s.surface.querySelector('[data-remote-key]')).not.toBeNull();
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y); expect(s.inspect).toHaveBeenCalledTimes(1);
+ c.setFilter({ mode: 'mine' }); s.refresh();
+ expect(s.surface.querySelector('[data-remote-key]')).toBeNull();
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y); expect(s.inspect).toHaveBeenCalledTimes(1);
+ expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
 it.each([false, true])('first blank gesture in another channel deactivates global selection (shared=%s)', shared => {
  const s=mounted(shared), selected={region:{...s.doc.annotations[0].region,channelIndex:0},object:null};
  act(()=>s.ui().state.select(selected));
@@ -53,12 +102,178 @@ it.each([false, true])('first blank gesture in another channel deactivates globa
  s.pointer('pointerDown',740,140);s.pointer('pointerUp',800,170);
  expect(s.ui().selection?.region.channelIndex).toBe(1);s.finish();
 });
-it('foreign click and context open qualified details without selecting or mutating; dragging still draws privately',()=>{
+it('foreign border click and context open qualified details without selecting or mutating; dragging still draws privately',()=>{
  const s=mounted(true);s.remote.region={...s.remote.region,startSeconds:1.2,endSeconds:1.7,lowHz:5000,highHz:10000};s.refresh();
- const c=coordinates(defaultView(s.doc.media[0]),s.doc.media[0].sampleRate/2,800,400),x=100+c.secondsToX(1.4),y=100+c.hzToY(7500);
+ const c=coordinates(defaultView(s.doc.media[0]),s.doc.media[0].sampleRate/2,800,400),x=100+c.secondsToX(1.2),y=100+c.hzToY(7500);
  s.pointer('pointerDown',x,y);s.pointer('pointerUp',x,y);expect(s.inspect).toHaveBeenCalledWith({owner:s.active,authorId:'bob',scope:'region',annotationId:s.remote.id});expect(s.ui().selection).toBeNull();expect(s.applyChange).not.toHaveBeenCalled();
  fireEvent.contextMenu(s.surface,{clientX:x,clientY:y});expect(s.inspect).toHaveBeenCalledTimes(2);expect(s.ui().menu).toBeNull();
  s.pointer('pointerDown',x,y);s.pointer('pointerUp',x+30,y+20);expect(s.ui().selection?.object).toBeNull();expect(s.ui().selection?.region).toBeTruthy();expect(s.inspect).toHaveBeenCalledTimes(2);expect(s.applyChange).not.toHaveBeenCalled();s.finish();
+});
+const frequencyViews = [
+ { spectrumKind: 'stft', frequencyMix: 0 },
+ { spectrumKind: 'stft', frequencyMix: 1 },
+ { spectrumKind: 'mel', frequencyMix: 0 },
+] as const;
+it.each(frequencyViews.flatMap(view => [120, 400, 900].map(height => ({ view, height }))))('foreign edges use exactly 4 CSS pixels at $height px in $view', ({ view, height }) => {
+ const s = mounted(true, { view: { ...view, lowHz: 100, highHz: 20000 }, height });
+ s.remote.region = { ...s.remote.region, startSeconds: 1.2, endSeconds: 1.7, lowHz: 6000, highHz: 16000 }; s.refresh();
+ const left = 100 + s.c.secondsToX(1.2), top = 100 + s.c.hzToY(16000), bottom = 100 + s.c.hzToY(6000);
+ const middleX = 100 + s.c.secondsToX(1.45), middleY = (top + bottom) / 2;
+ for (const [x, y] of [[left - 4, middleY], [left + 4, middleY], [middleX, top - 4], [middleX, top + 4]]) {
+  s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ }
+ expect(s.inspect).toHaveBeenCalledTimes(4);
+ for (const [x, y] of [[left - 4.1, middleY], [left + 4.1, middleY], [middleX, top - 4.1], [middleX, top + 4.1]]) {
+  s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ }
+ expect(s.inspect).toHaveBeenCalledTimes(4); expect(s.setCue).toHaveBeenCalledTimes(4);
+ expect(s.ui().selection).toBeNull(); expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it('foreign interiors retain blank cue, drawing and context-menu behavior', () => {
+ const s = mounted(true); s.remote.region = { ...s.remote.region, startSeconds: 1.2, endSeconds: 1.7, lowHz: 5000, highHz: 16000 }; s.refresh();
+ const x = 100 + s.c.secondsToX(1.4), y = 100 + s.c.hzToY(10000);
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ expect(s.inspect).not.toHaveBeenCalled(); expect(s.setCue).toHaveBeenLastCalledWith(s.active, s.doc.media[0].id, 1.4);
+ fireEvent.contextMenu(s.surface, { clientX: x, clientY: y });
+ expect(s.inspect).not.toHaveBeenCalled(); expect(s.ui().menu).toMatchObject({ target: null, overlaps: [] });
+ act(() => s.ui().closeMenu());
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x + 30, y + 20);
+ expect(s.ui().selection).toMatchObject({ object: null }); expect(s.ui().selection?.region).toBeTruthy();
+ expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it.each([false, true])('remote edge wins over an own interior (selected=%s) for click and context without changing selection', selected => {
+ const s = mounted(true), own = s.doc.annotations[0];
+ s.remote.region = { ...s.remote.region, startSeconds: .8, endSeconds: 1.8, lowHz: 0, highHz: 5000 }; s.refresh();
+ if (selected) act(() => s.ui().selectObject('annotation', own.id));
+ const before = s.ui().selection, x = 100 + s.c.secondsToX(.8), y = 100 + s.c.hzToY(1000);
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ expect(s.inspect).toHaveBeenCalledWith({ owner: s.active, authorId: 'bob', scope: 'region', annotationId: s.remote.id });
+ expect(s.ui().selection).toBe(before); expect(s.setCue).not.toHaveBeenCalled();
+ fireEvent.contextMenu(s.surface, { clientX: x, clientY: y });
+ expect(s.inspect).toHaveBeenCalledTimes(2); expect(s.ui().menu).toBeNull(); expect(s.ui().selection).toBe(before);
+ expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it.each([false, true])('own border retains priority over a remote edge including outside tolerance (selected=%s)', selected => {
+ const s = mounted(true), own = s.doc.annotations[0];
+ if (selected) act(() => s.ui().selectObject('annotation', own.id));
+ const x = 100 + s.c.secondsToX(own.region.startSeconds) - 3, y = 100 + s.c.hzToY(1000);
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ expect(s.ui().selection?.object?.id).toBe(own.id); expect(s.inspect).not.toHaveBeenCalled();
+ fireEvent.contextMenu(s.surface, { clientX: x, clientY: y });
+ expect(s.ui().menu?.target?.object?.id).toBe(own.id); expect(s.inspect).not.toHaveBeenCalled(); s.finish();
+});
+it('own resize handles win over a remote edge and remote interiors retain own selection and move', async () => {
+ const s = mounted(true), own = s.doc.annotations[0], p = objectPoint(s);
+ act(() => s.ui().selectObject('annotation', own.id));
+ const x = 100 + s.c.secondsToX(own.region.endSeconds), handle = document.querySelector<HTMLElement>('.annotation-rect.is-selected .handle-e')!;
+ s.pointer('pointerDown', x, p.y, handle); s.pointer('pointerUp', x + 20, p.y);
+ await waitFor(() => expect(s.applyChange).toHaveBeenCalledOnce()); expect(s.inspect).not.toHaveBeenCalled();
+ s.pointer('pointerDown', p.x, p.y); s.pointer('pointerUp', p.x + 20, p.y);
+ await waitFor(() => expect(s.applyChange).toHaveBeenCalledTimes(2)); expect(s.inspect).not.toHaveBeenCalled(); s.finish();
+});
+it.each(frequencyViews)('clipped $spectrumKind/$frequencyMix view hits only actual intersecting segments, never a viewport-created border', view => {
+ const s = mounted(true, { view: { ...view, startSeconds: .6, endSeconds: 1.4, lowHz: 1000, highHz: 10000 } });
+ s.doc.annotations = [];
+ s.remote.region = { ...s.remote.region, startSeconds: .2, endSeconds: 1.8, lowHz: 300, highHz: 16000 }; s.refresh();
+ for (const [x, y] of [[102, 300], [898, 300], [500, 102], [500, 498]]) { s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y); }
+ expect(s.inspect).not.toHaveBeenCalled();
+ s.remote.region = { ...s.remote.region, startSeconds: .8, highHz: 6000 }; s.refresh();
+ const x = 100 + s.c.secondsToX(.8), top = 100 + s.c.hzToY(6000);
+ for (const [px, py] of [[x, 498], [898, top]]) { s.pointer('pointerDown', px, py); s.pointer('pointerUp', px, py); }
+ expect(s.inspect).toHaveBeenCalledTimes(2);
+ s.remote.region = { ...s.remote.region, startSeconds: .2, endSeconds: .598 }; s.refresh();
+ s.pointer('pointerDown', 101, top); s.pointer('pointerUp', 101, top);
+ expect(s.inspect).toHaveBeenCalledTimes(2); expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it('overlapping foreign edges follow the last painted author/annotation order', () => {
+ const s = mounted(true), first = s.collaboration!.controller!.status!.snapshot!.authors[0];
+ s.doc.annotations = [];
+ const later = { ...s.remote, id: 'later', region: { ...s.remote.region } };
+ first.layer!.payload.annotations.push(later);
+ const author = { ...first, identity: { ...first.identity, authorId: 'carol', displayName: 'Carol' }, layer: { ...first.layer!, payload: { ...first.layer!.payload, annotations: [{ ...later, id: 'top' }] } } };
+ s.collaboration!.controller!.status!.snapshot!.authors.push(author); s.refresh();
+ const p = objectPoint({ ...s, doc: { ...s.doc, annotations: [s.remote] } }, true);
+ s.pointer('pointerDown', p.x, p.y); s.pointer('pointerUp', p.x, p.y);
+ expect(s.inspect).toHaveBeenLastCalledWith({ owner: s.active, authorId: 'carol', scope: 'region', annotationId: 'top' });
+ s.collaboration!.controller!.status!.snapshot!.authors.pop(); s.refresh();
+ s.pointer('pointerDown', p.x, p.y); s.pointer('pointerUp', p.x, p.y);
+ expect(s.inspect).toHaveBeenLastCalledWith({ owner: s.active, authorId: 'bob', scope: 'region', annotationId: 'later' }); s.finish();
+});
+it.each(['pointerCancel', 'lostPointerCapture', 'escape', 'context'] as const)('foreign pending click is cancelled by %s', event => {
+ const s = mounted(true); s.doc.annotations = []; s.refresh();
+ const x = 100 + s.c.secondsToX(s.remote.region.startSeconds), y = 100 + s.c.hzToY(1000);
+ s.pointer('pointerDown', x, y);
+ if (event === 'escape') fireEvent.keyDown(window, { key: 'Escape' });
+ else if (event === 'context') { fireEvent.contextMenu(s.surface, { clientX: 850, clientY: 120 }); act(() => s.ui().closeMenu()); }
+ else fireEvent[event](s.surface);
+ s.pointer('pointerUp', x, y);
+ expect(s.inspect).not.toHaveBeenCalled(); expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it.each(['remove', 'move', 'hide', 'runtime', 'channel', 'media'] as const)('foreign click rejects a stale target after %s before release', change => {
+ const s = mounted(true); s.doc.annotations = []; s.refresh();
+ const x = 100 + s.c.secondsToX(s.remote.region.startSeconds), y = 100 + s.c.hzToY(1000);
+ s.pointer('pointerDown', x, y);
+ if (change === 'remove') s.collaboration!.controller!.status!.snapshot!.authors[0].layer!.payload.annotations = [];
+ if (change === 'move') s.remote.region = { ...s.remote.region, startSeconds: .6 };
+ if (change === 'hide') s.collaboration!.controller!.visible = () => false;
+ if (change === 'runtime') s.collaboration!.active!.collaboration!.runtimeNonce = 'replacement';
+ if (change === 'channel') s.remote.region = { ...s.remote.region, channelIndex: 0 };
+ if (change === 'media') s.doc.media = [];
+ s.refresh(); s.pointer('pointerUp', x, y);
+ expect(s.inspect).not.toHaveBeenCalled(); expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it('foreign edge clicks retain the existing 4px click/drag threshold despite subthreshold release jitter', () => {
+ const s = mounted(true); s.doc.annotations = []; s.refresh();
+ const x = 100 + s.c.secondsToX(s.remote.region.startSeconds) - 4, y = 100 + s.c.hzToY(1000);
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x - 4, y);
+ expect(s.inspect).toHaveBeenCalledOnce(); expect(s.ui().selection).toBeNull();
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x - 4.1, y + 1);
+ expect(s.inspect).toHaveBeenCalledOnce(); expect(s.ui().selection).toMatchObject({ object: null });
+ expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it('an unselected own border near a remote edge is not blank when another own annotation is active', () => {
+ const s = mounted(true), own = s.doc.annotations[0];
+ const other = { ...own, id: 'other', region: { ...own.region, startSeconds: 1.7, endSeconds: 1.9 } };
+ s.doc.annotations.push(other); s.refresh(); act(() => s.ui().selectObject('annotation', other.id));
+ const x = 100 + s.c.secondsToX(own.region.startSeconds) - 3, y = 100 + s.c.hzToY(1000);
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ expect(s.ui().selection?.object?.id).toBe(own.id); expect(s.inspect).not.toHaveBeenCalled(); s.finish();
+});
+it('foreign edges keep temporary selection interiors and retained candidate activation unchanged', () => {
+ const s = mounted(true), temporary = { object: null, region: { ...s.remote.region, startSeconds: .1, endSeconds: 1.8, lowHz: 0, highHz: 5000 } };
+ s.doc.annotations = []; s.refresh();
+ const x = 100 + s.c.secondsToX(s.remote.region.startSeconds), y = 100 + s.c.hzToY(1000);
+ act(() => s.ui().state.select(temporary));
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ expect(s.ui().selection).toBe(temporary); expect(s.inspect).not.toHaveBeenCalled();
+ act(() => s.ui().state.deactivate());
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ expect(s.ui().selection).toBe(temporary); expect(s.inspect).not.toHaveBeenCalled(); s.finish();
+});
+it('foreign edge inspection focuses the plot and still lets Alt/middle panning reach the surface', () => {
+ const s = mounted(true); s.doc.annotations = []; s.refresh();
+ const plot = s.surface.parentElement!; plot.className = 'spectrogram-surface'; plot.tabIndex = 0;
+ const bubble = vi.fn(); plot.addEventListener('pointerdown', bubble);
+ const x = 100 + s.c.secondsToX(s.remote.region.startSeconds), y = 100 + s.c.hzToY(1000);
+ fireEvent.pointerDown(s.surface, { button: 0, altKey: true, clientX: x, clientY: y }); s.pointer('pointerUp', x, y);
+ fireEvent.pointerDown(s.surface, { button: 1, clientX: x, clientY: y }); s.pointer('pointerUp', x, y);
+ expect(bubble).toHaveBeenCalledTimes(2); expect(s.inspect).not.toHaveBeenCalled();
+ s.pointer('pointerDown', x, y); s.pointer('pointerUp', x, y);
+ expect(document.activeElement).toBe(plot); expect(s.inspect).toHaveBeenCalledOnce();
+ expect(s.ui().selection).toBeNull(); expect(s.surface.querySelector('.region-handle')).toBeNull();
+ fireEvent.keyDown(window, { key: 'Delete' }); expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
+});
+it('disabling own annotation writes retains own border priority and foreign inspection without handles or edits', () => {
+ const s = mounted(true), own = s.doc.annotations[0];
+ Object.assign(s.active, { collaboration: { ...s.collaboration!.active!.collaboration, canWriteAnnotations: false } });
+ act(() => s.ui().selectObject('annotation', own.id));
+ const p = objectPoint(s, true);
+ s.pointer('pointerDown', p.x, p.y); s.pointer('pointerUp', p.x + 20, p.y);
+ expect(s.inspect).not.toHaveBeenCalled(); expect(s.applyChange).not.toHaveBeenCalled(); expect(s.surface.querySelector('.region-handle')).toBeNull();
+ s.remote.region = { ...s.remote.region, startSeconds: .8, endSeconds: 1.8, lowHz: 0, highHz: 5000 }; s.refresh();
+ const x = 100 + s.c.secondsToX(.8);
+ s.pointer('pointerDown', x, p.y); s.pointer('pointerUp', x, p.y);
+ expect(s.inspect).toHaveBeenCalledOnce(); expect(s.ui().selection?.object?.id).toBe(own.id); expect(s.applyChange).not.toHaveBeenCalled(); s.finish();
 });
 it('own selected overlapping frame keeps drag/handle priority, and unselected own clicks win over foreign geometry',async()=>{
  const s=mounted(true),p=objectPoint(s);expect(document.querySelectorAll('[data-remote-key]')).toHaveLength(1);
