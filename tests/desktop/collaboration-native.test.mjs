@@ -117,10 +117,12 @@ try {
   // IPC error. Restore the exact DACL in finally; do not touch shared/user paths.
   const authorDirectory = path.join(shared, 'annotations', synced.actor.authorId);
   const ps = script => execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference='Stop';${script}`], { encoding: 'utf8', windowsHide: true }).trim();
+  const descriptorBytes = sddl => ps(`$d=[Security.AccessControl.RawSecurityDescriptor]::new('${sddl.replaceAll("'", "''")}');$d.SetFlags([Security.AccessControl.ControlFlags]([int]$d.ControlFlags -band (-bnot [int][Security.AccessControl.ControlFlags]::DiscretionaryAclAutoInherited)));$bytes=[byte[]]::new($d.BinaryLength);$d.GetBinaryForm($bytes,0);[Convert]::ToBase64String($bytes)`);
   const quoted = authorDirectory.replaceAll("'", "''");
   const dacl = ps(`(Get-Acl -LiteralPath '${quoted}').Sddl`);
   try {
     ps(`$a=Get-Acl -LiteralPath '${quoted}';$s=[Security.Principal.WindowsIdentity]::GetCurrent().User;$r=[Security.AccessControl.FileSystemAccessRule]::new($s,[Security.AccessControl.FileSystemRights]'CreateFiles,CreateDirectories',[Security.AccessControl.AccessControlType]::Deny);$a.AddAccessRule($r);Set-Acl -LiteralPath '${quoted}' -AclObject $a`);
+    assert.notEqual(descriptorBytes(ps(`(Get-Acl -LiteralPath '${quoted}').Sddl`)), descriptorBytes(dacl), 'the real Deny ACE changes the compared security descriptor');
     await addCategory('durable-readonly'); await save(); await settle();
     const readonly = await invoke('collaboration_refresh', { expected: expected() });
     assert.equal(readonly.pending, true); assert.ok(readonly.error);
@@ -128,10 +130,10 @@ try {
   } finally {
     ps(`$a=Get-Acl -LiteralPath '${quoted}';$a.SetSecurityDescriptorSddlForm('${dacl.replaceAll("'", "''")}');Set-Acl -LiteralPath '${quoted}' -AclObject $a`);
   }
-  assert.equal(ps(`(Get-Acl -LiteralPath '${quoted}').Sddl`), dacl);
+  assert.equal(descriptorBytes(ps(`(Get-Acl -LiteralPath '${quoted}').Sddl`)), descriptorBytes(dacl), 'all security descriptor bytes restore except the Windows auto-inherited bookkeeping bit');
   synced = await invoke('collaboration_refresh', { expected: expected() });
   assert.equal(synced.pending, false);
-  report.checks.push('real owned Windows DACL denies shared author writes; native save remains durable/pending; exact DACL restoration permits retry');
+  report.checks.push('real owned Windows DACL denies shared author writes; native save remains durable/pending; full permission restoration ignoring only OS auto-inherited bookkeeping permits retry');
   await invoke('close_project', { ...expected(), discard: false });
   adopt(await invoke('open_project', { path: manifest }));
   assert.equal(opened.collaboration.actor.authorId,bob.authorId);

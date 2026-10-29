@@ -53,10 +53,12 @@ export async function selectionFlow(h, context) {
   await h.label('撤销 · Ctrl Z');
   await h.driver.wait(async()=>(await h.snapshot(context.id)).document.edits.length===0,30000);
   assert.equal((await h.snapshot(context.id)).document.annotations.length, 1);
+  const annotationBeforeDelete = (await h.snapshot(context.id)).document.annotations[0];
   await h.click(`[data-annotation-id="${annotation.id}"]`);await h.driver.actions().sendKeys(Key.DELETE).perform();
   await h.driver.wait(async()=>(await h.snapshot(context.id)).document.annotations.length===0,30000);
   assert.equal((await h.snapshot(context.id)).document.edits.length,0,'saved Delete removes annotation without masking');
   await h.label('撤销 · Ctrl Z');await h.driver.wait(async()=>(await h.snapshot(context.id)).document.annotations.length===1,30000);
+  assert.deepEqual((await h.snapshot(context.id)).document.annotations[0], annotationBeforeDelete, 'undo restores the complete annotation and its note');
 
   // First blank gesture deactivates; the second creates the next temporary range.
   await h.drag('.annotation-overlay', [.65,.2], [.9,.6]);

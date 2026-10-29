@@ -5,8 +5,8 @@ use annotator_core::{
         organization::{NativePlacementCapture, NativePlacementPlan},
         CollaborationRepository,
     },
-    error::{AppError, Result},
-    media::import_source::ScanResult,
+    error::{AppError, ErrorCode, Result},
+    media::import_source::{ImportPathKey, ScanResult},
 };
 use std::sync::Arc;
 #[derive(Clone)]
@@ -59,7 +59,7 @@ pub(crate) async fn prepare_batch(
     let service = state.6.clone();
     let t = token.clone();
     let selected = indices.clone();
-    let (repo, layout, scan) = state
+    let (repo, layout, scan, skip_duplicates) = state
         .run(move |current| {
             let project = current.as_ref().ok_or_else(runtime::stale)?;
             super::check(project, &service, &t.runtime_nonce, &t.project_id)?;
@@ -79,11 +79,36 @@ pub(crate) async fn prepare_batch(
                 .repo
                 .clone()
                 .ok_or_else(runtime::stale)?;
-            Ok((repo, layout, scan))
+            Ok((repo, layout, scan, registry.get(&t)?.skip_duplicates))
         })
         .await?;
     tauri::async_runtime::spawn_blocking(move || {
-        let capture = layout.fresh(&repo)?;
+        let capture = if skip_duplicates {
+            let current = repo.reload_catalog()?;
+            let active = super::dedup::ActiveImportPaths::read(&current)?;
+            let capture =
+                current.capture_loaded_media_placement(layout.target_folder_id.clone())?;
+            if capture.layout_revision() != layout.layout_revision {
+                return Err(runtime::stale());
+            }
+            // Earlier successful batches now occupy their own keys. Only this
+            // batch's selected indices must still be free.
+            if indices.iter().any(|i| {
+                let c = &scan.candidates()[*i];
+                active.keys.contains(&ImportPathKey::new(
+                    &c.resulting_folder_path,
+                    &c.original_filename,
+                ))
+            }) {
+                let mut error =
+                    AppError::new(ErrorCode::RevisionConflict, "项目音频已变化，请重新扫描");
+                error.details = Some(serde_json::json!({"sourceImportRescanRequired": true}));
+                return Err(error);
+            }
+            capture
+        } else {
+            layout.fresh(&repo)?
+        };
         let placements = indices
             .iter()
             .map(|i| layout.seal(&capture, &scan.candidates()[*i]))

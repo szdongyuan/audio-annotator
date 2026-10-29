@@ -22,7 +22,7 @@ function setup(count=257){
  const queue=new CommandQueue(store,commands), lifecycle=new ProjectLifecycle(store,queue,{save:vi.fn(async(_id,r)=>r),close:vi.fn()});
  const owner={store,queue,lifecycle,path:'D:/project'};
  const token={runtimeNonce:nonce,projectId:fixture.projectId,taskId:nonce};
- const counts={checked:count,candidates:count,skipped:0,issues:0,selectedBytes:count*20};
+ const counts={checked:count,candidates:count,skipped:0,duplicateSkipped:0,issues:0,selectedBytes:count*20};
  let scan!:(e:SourceEvent)=>void;const callbacks:((e:MediaEvent)=>void)[]=[];
  const api:SourceCommands={start:vi.fn(async(_id,_config,receive)=>{scan=receive;receive({type:'result',token,counts});return token;}),page:vi.fn(async(_t,offset,limit=256)=>({counts,issues:[],folderSummary:[],candidates:Array.from({length:Math.min(limit,count-offset)},(_,i)=>({index:offset+i,sourceIndex:0,sourceName:'a.zip',relativePath:`record${offset+i}/audio/CH2.wav`,displayName:`a.zip/record${offset+i}/audio/CH2.wav`,byteLength:20,logicalPosition:1,resultingFolderPath:[],originalFilename:'CH2.wav'}))})),cancel:vi.fn(async()=>{}),release:vi.fn(async()=>{}),batch:vi.fn(async(_token,_indices,receive)=>{callbacks.push(receive);return `batch${callbacks.length}`;})};
  const media:MediaCommands={start:vi.fn(),cancel:vi.fn(async()=>{}),release:vi.fn(async()=>{}),status:vi.fn(async()=>[])};
@@ -114,4 +114,118 @@ it('cancelling while refresh is draining resumes it without starting native impo
  const s=setup(1);await s.preview();let release!:()=>void;const flight=new Promise<void>(r=>{release=r;}),resume=vi.fn();
  cleanup.push(registerSuspension(s.owner.lifecycle,async()=>{await flight;return resume;}));
  const work=s.c.importAll();await s.c.cancel();release();await work;expect(s.api.batch).not.toHaveBeenCalled();expect(resume).toHaveBeenCalledTimes(1);
+});
+
+it.each(['zip', 'folder'] as const)('shows default duplicate skipping outside advanced settings for %s and invalidates its preview on toggle', async kind => {
+ window.localStorage.clear();
+ const s=setup(1);s.c.begin(kind);
+ render(<SourceImportDialog controller={s.c}/>);
+ const checkbox=screen.getByRole('checkbox',{name:'跳过重复音频'});
+ expect(checkbox).toBeVisible();expect(checkbox).toBeChecked();expect(checkbox.closest('details')).toBeNull();
+ expect(screen.getByText('按目标目录和文件名判断，不区分大小写；回收站中的音频不参与')).toBeVisible();
+ await act(()=>s.c.choose(async()=>kind==='zip'?['D:/a.zip']:['D:/audio']));
+ await act(()=>s.c.scan());await waitFor(()=>expect(s.c.page?.candidates).toHaveLength(1));
+ expect(screen.getByRole('button',{name:'导入 1 个音频'})).toBeEnabled();
+ fireEvent.click(checkbox);
+ expect(s.c.page).toBeNull();expect(s.c.state).toBe('choosing');
+ expect(screen.getByRole('button',{name:'导入 0 个音频'})).toBeDisabled();
+ await waitFor(()=>expect(s.api.release).toHaveBeenCalledWith(s.token));
+ await act(()=>s.c.scan());await waitFor(()=>expect(s.c.canImport).toBe(true));
+ expect(vi.mocked(s.api.start).mock.calls.at(-1)?.[1].rules.skipDuplicates).toBe(false);
+});
+
+it.each([true,false])('restores duplicate skipping=%s from custom and last plans while builtins stay checked',async enabled=>{
+ window.localStorage.clear();cleanup.push(()=>window.localStorage.clear());
+ const s=setup(1);s.c.begin('zip');const view=render(<SourceImportDialog controller={s.c}/>);
+ if(!enabled)fireEvent.click(screen.getByRole('checkbox',{name:'跳过重复音频'}));
+ fireEvent.click(screen.getByText('高级设置'));
+ fireEvent.change(screen.getByLabelText('新方案名称'),{target:{value:'重复策略'}});fireEvent.click(screen.getByRole('button',{name:'保存'}));
+ await waitFor(()=>expect(s.c.presetId).toMatch(/^custom-/));const customId=s.c.presetId;
+ for(const preset of s.c.plans.presets.filter(p=>!p.id.startsWith('custom-'))){
+  await act(()=>s.c.applyPreset(preset.id));expect(screen.getByRole('checkbox',{name:'跳过重复音频'})).toBeChecked();
+ }
+ fireEvent.change(screen.getByLabelText('导入方案'),{target:{value:customId}});
+ await waitFor(()=>expect(s.c.presetId).toBe(customId));
+ expect((screen.getByRole('checkbox',{name:'跳过重复音频'}) as HTMLInputElement).checked).toBe(enabled);
+ await act(()=>s.c.choose(async()=>['D:/a.zip']));await act(()=>s.c.scan());
+ expect(JSON.parse(window.localStorage.getItem('annotator.import-plans.v3')!).version).toBe(3);
+ await act(()=>s.c.cancel());view.unmount();
+ const reopened=setup(1);reopened.c.begin('folder');render(<SourceImportDialog controller={reopened.c}/>);
+ expect((screen.getByRole('checkbox',{name:'跳过重复音频'}) as HTMLInputElement).checked).toBe(enabled);
+ fireEvent.change(screen.getByLabelText('导入方案'),{target:{value:customId}});
+ await waitFor(()=>expect(reopened.c.presetId).toBe(customId));
+ expect((screen.getByRole('checkbox',{name:'跳过重复音频'}) as HTMLInputElement).checked).toBe(enabled);
+});
+
+it('disables duplicate policy while picking, importing and paused',async()=>{
+ window.localStorage.clear();const s=setup(1);s.c.begin('zip');render(<SourceImportDialog controller={s.c}/>);
+ let picked!:(paths:string[])=>void;let choosing!:Promise<void>;
+ act(()=>{choosing=s.c.choose(()=>new Promise(resolve=>{picked=resolve;}));});
+ expect(screen.getByRole('checkbox',{name:'跳过重复音频'})).toBeDisabled();
+ await act(async()=>{picked(['D:/a.zip']);await choosing;});
+ expect(screen.getByRole('checkbox',{name:'跳过重复音频'})).toBeEnabled();
+ await act(()=>s.c.scan());await waitFor(()=>expect(s.c.canImport).toBe(true));
+ vi.mocked(s.media.release).mockRejectedValueOnce(new Error('ack failed'));
+ act(()=>{void s.c.importAll();});await waitFor(()=>expect(s.api.batch).toHaveBeenCalled());act(()=>s.c.show());
+ expect(screen.getByRole('checkbox',{name:'跳过重复音频'})).toBeDisabled();
+ act(()=>s.finish(1));await waitFor(()=>expect(s.c.state).toBe('paused'));
+ expect(screen.getByRole('checkbox',{name:'跳过重复音频'})).toBeDisabled();
+});
+
+it('shows duplicate skips as a subset in the 40/60 preview and final result',async()=>{
+ const s=setup(40);Object.assign(s.counts,{checked:100,skipped:60,duplicateSkipped:60});await s.preview();
+ render(<><SourceImportDialog controller={s.c}/><SourceImportProgress controller={s.c}/></>);
+ expect(screen.getByRole('button',{name:'导入 40 个音频'})).toBeEnabled();
+ expect(screen.getByText(/跳过 60（其中重复 60）/)).toBeVisible();expect(screen.queryByText(/跳过 120/)).toBeNull();
+ act(()=>{void s.c.importAll();});await waitFor(()=>expect(s.api.batch).toHaveBeenCalled());act(()=>s.finish(1));
+ await waitFor(()=>expect(s.c.state).toBe('finished'));
+ expect(screen.getByText(/跳过 60（其中重复 60）/)).toBeVisible();expect(screen.queryByText(/跳过 120/)).toBeNull();
+ expect(s.c.successCount).toBe(40);expect(s.c.failures).toHaveLength(0);
+});
+
+it.each([
+ {duplicates:60,issues:0,allDuplicate:true},
+ {duplicates:0,issues:0,allDuplicate:false},
+ {duplicates:0,issues:1,allDuplicate:false},
+ {duplicates:60,issues:1,allDuplicate:false},
+])('only reports all duplicates for a clean empty scan: %j',async({duplicates,issues,allDuplicate})=>{
+ const s=setup(0);Object.assign(s.counts,{checked:60,skipped:duplicates,duplicateSkipped:duplicates,issues});
+ const original=vi.mocked(s.api.page).getMockImplementation()!;
+ vi.mocked(s.api.page).mockImplementation(async(...args)=>({...await original(...args),issues:issues?[{sourceIndex:0,relativePath:'broken.wav',message:'无法读取音频'}]:[]}));
+ await s.preview();render(<SourceImportDialog controller={s.c}/>);
+ const message=screen.queryByText('所选音频均已存在，无需重复导入');
+ if(allDuplicate)expect(message).toBeVisible();else expect(message).toBeNull();
+ expect(screen.getByRole('button',{name:'导入 0 个音频'})).toBeDisabled();
+ if(issues)expect(screen.getByText(/扫描问题 \/ 缺失字段/)).toBeVisible();
+});
+
+it('requests a fresh scan after stale batch start without creating a publication retry',async()=>{
+ const s=setup(1);await s.preview();
+ const stale={code:'RevisionConflict',message:'项目音频已变化，请重新扫描',retryable:false,details:{sourceImportRescanRequired:true}};
+ vi.mocked(s.api.batch).mockRejectedValueOnce(stale);
+ await s.c.importAll();expect(s.c.state).toBe('failed');expect(s.c.error).toEqual(stale);
+ expect(s.c.items[0]).toMatchObject({state:'failed',error:stale});expect(s.c.failures).toHaveLength(0);
+ expect(s.queue.unresolvedFailures).toHaveLength(0);expect(s.commands.applyChange).not.toHaveBeenCalled();
+ render(<><SourceImportDialog controller={s.c}/><SourceImportProgress controller={s.c}/></>);
+ expect(screen.queryByRole('button',{name:'重试并继续导入'})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'重新配置并扫描'}));
+ await act(()=>s.c.scan());await waitFor(()=>expect(s.c.canImport).toBe(true));
+ expect(s.api.start).toHaveBeenCalledTimes(2);expect(s.api.batch).toHaveBeenCalledTimes(1);expect(s.media.start).not.toHaveBeenCalled();
+});
+
+it('keeps earlier publications when a later batch requires rescanning and does not decode the old batch again',async()=>{
+ const s=setup(257),before=s.store.snapshot.document.media.length;await s.preview();
+ const stale={code:'RevisionConflict',message:'项目音频已变化，请重新扫描',retryable:false,details:{sourceImportRescanRequired:true}};
+ const original=vi.mocked(s.api.batch).getMockImplementation()!;
+ vi.mocked(s.api.batch).mockImplementation((...args)=>vi.mocked(s.api.batch).mock.calls.length===2?Promise.reject(stale):original(...args));
+ render(<><SourceImportDialog controller={s.c}/><SourceImportProgress controller={s.c}/></>);
+ act(()=>{void s.c.importAll();});await waitFor(()=>expect(s.api.batch).toHaveBeenCalledTimes(1));act(()=>s.finish(1));
+ await waitFor(()=>expect(s.c.state).toBe('failed'));
+ expect(s.c.successCount).toBe(256);expect(s.store.snapshot.document.media.length).toBe(before+256);
+ expect(s.c.items[256]).toMatchObject({state:'failed',error:stale});expect(s.c.failures).toHaveLength(0);
+ expect(s.c.pendingAcknowledgements).toHaveLength(0);expect(s.api.release).toHaveBeenCalledWith(s.token);
+ expect(s.media.start).not.toHaveBeenCalled();expect(screen.queryByRole('button',{name:'重试并继续导入'})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'重新配置并扫描'}));await act(()=>s.c.scan());
+ expect(s.api.start).toHaveBeenCalledTimes(2);expect(s.api.batch).toHaveBeenCalledTimes(2);
+ expect(s.store.snapshot.document.media.length).toBe(before+256);
 });

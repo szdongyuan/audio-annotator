@@ -4,6 +4,7 @@ mod archive;
 mod rules;
 mod staging;
 pub use staging::{StagedAudio, StagingSession};
+mod dedup;
 mod discovery;
 mod jingcheng;
 mod organization;
@@ -11,6 +12,7 @@ use crate::{
     error::{AppError, ErrorCode, Result},
     media::identity::SourceStamp,
 };
+pub use dedup::ImportPathKey;
 pub use discovery::scan;
 pub use organization::{FolderSummary, OrganizationConfig, OrganizationMode};
 pub use rules::{Mode, Rules};
@@ -89,6 +91,7 @@ pub struct Counts {
     pub checked: usize,
     pub candidates: usize,
     pub skipped: usize,
+    pub duplicate_skipped: usize,
     pub issues: usize,
     pub selected_bytes: u64,
 }

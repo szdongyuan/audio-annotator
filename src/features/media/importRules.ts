@@ -4,7 +4,7 @@ export interface RulePreset {
   name: string;
   rules: SourceRules;
 }
-const defaults: SourceRules = { mode: 'generic', recursive: true, extensions: ['wav', 'flac', 'mp3'], include: ['**/*'], exclude: [], includeSecond: true };
+const defaults: SourceRules = { mode: 'generic', recursive: true, extensions: ['wav', 'flac', 'mp3'], include: ['**/*'], exclude: [], includeSecond: true, skipDuplicates: true };
 export const builtinPresets: readonly RulePreset[] = [{ id: 'generic', name: '全部音频', rules: defaults }, { id: 'jingcheng', name: '精成采集数据', rules: { ...defaults, mode: 'jingcheng' } }];
 export const splitPatterns = (text: string) => text.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
 const key = 'annotator.import-rules.v1';

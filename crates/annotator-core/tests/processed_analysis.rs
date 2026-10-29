@@ -149,7 +149,9 @@ fn processed_tiles_match_independent_dsp_then_stft_for_masks_channels_and_large_
                 &cancel,
                 |s, n| {
                     Ok(pcm[s as usize * 2..(s as usize + n) * 2]
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|f| f[channel as usize])
                         .collect())
                 },
@@ -183,7 +185,9 @@ fn random_access_head_tail_overlap_reuse_and_cancellation_are_bounded() {
                     Ok(input[s as usize * 2..(s as usize + n) * 2].to_vec())
                 })
                 .unwrap()
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|f| f[0]),
             );
         }
@@ -277,7 +281,9 @@ fn original_and_processed_cache_identities_never_alias_and_geometry_is_authorita
         })
         .unwrap(),
         input[34..(17 + 32768) * 2]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|f| f[1])
             .collect::<Vec<_>>()
     );

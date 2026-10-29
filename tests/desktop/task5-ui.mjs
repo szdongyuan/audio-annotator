@@ -11,6 +11,11 @@ async function bitmap(h) {
  return h.evaluate(`return [...document.querySelectorAll('canvas')].map(c=>{const a=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let hash=2166136261;for(const x of a)hash=Math.imul(hash^x,16777619);return {hash:hash>>>0,width:c.width,height:c.height};})`);
 }
 export async function processedUI(h,projectId,report) {
+ const exactPixels=async(expected,label)=>{
+  const started=performance.now(),evidence={label,expected,samples:[]};(report.pixelTransitions??=[]).push(evidence);let actual;
+  await h.driver.wait(async()=>{actual=await bitmap(h);evidence.samples.push({elapsedMs:performance.now()-started,bitmaps:actual});return JSON.stringify(actual)===JSON.stringify(expected);},10000,label,50);
+  return actual;
+ };
  await h.clickText('双文件对比');await h.until(`document.querySelectorAll('canvas').length===4&&!document.querySelector('.tile-status')`);
  assert.equal(await h.evaluate(`return document.querySelector('[aria-label="声音版本"]').value`),'processed');
  await h.evaluate(`window.__task5tiles=[];const callbacks=window.__TAURI_INTERNALS__.callbacks,register=callbacks.set;callbacks.set=function(id,callback){return register.call(this,id,function(result){if(result instanceof ArrayBuffer&&result.byteLength>8&&new DataView(result).getUint32(0,false)===0x41543031){const v=new DataView(result),length=v.getUint32(4,true),offset=Math.ceil((8+length)/4)*4,header=JSON.parse(new TextDecoder().decode(new Uint8Array(result,8,length)));window.__task5tiles.push({request:header.request,header,values:Array.from(new Float32Array(result,offset))});}return callback(result);});};`);
@@ -25,16 +30,16 @@ export async function processedUI(h,projectId,report) {
  const bin=Math.round(1500*t.request.settings.fftSize/m.sampleRate),row=Math.round(.8*m.sampleRate/t.request.settings.hopSize)-t.request.startFrame;
  const rejectedDb=t.values[row*t.header.tile.columns+bin];assert.ok(rejectedDb < -40,`masked 1500Hz ${rejectedDb}`);
  report.checks.push({name:'UI Delete accepts mask; actual processed tile and canvas change only selected channel/file',region:edit.region,rejectedDb,original,processed,requestCount:tiles.length});await h.screenshot('ui-processed-mask');
- await h.label('撤销 · Ctrl Z');const undone=await bitmap(h);assert.deepEqual(undone,original);
- await h.label('重做 · Ctrl Y');assert.deepEqual(await bitmap(h),processed);
- await h.select('声音版本','原音');assert.deepEqual(await bitmap(h),original);
- await h.select('声音版本','暂存编辑');assert.deepEqual(await bitmap(h),processed);
- await h.clickText('处理');await h.label('启用屏蔽 1');assert.deepEqual(await bitmap(h),original);
- await h.clickText('处理');await h.label('启用屏蔽 1');assert.deepEqual(await bitmap(h),processed);
+ await h.label('撤销 · Ctrl Z');const undone=await exactPixels(original,'undo commits four exact original bitmaps');assert.deepEqual(undone,original);
+ await h.label('重做 · Ctrl Y');assert.deepEqual(await exactPixels(processed,'redo commits four exact processed bitmaps'),processed);
+ await h.select('声音版本','原音');assert.deepEqual(await exactPixels(original,'raw source commits four exact original bitmaps'),original);
+ await h.select('声音版本','暂存编辑');assert.deepEqual(await exactPixels(processed,'processed source commits four exact processed bitmaps'),processed);
+ await h.clickText('处理');await h.label('启用屏蔽 1');assert.deepEqual(await exactPixels(original,'disabled mask commits four exact original bitmaps'),original);
+ await h.clickText('处理');await h.label('启用屏蔽 1');assert.deepEqual(await exactPixels(processed,'enabled mask commits four exact processed bitmaps'),processed);
  await h.drag(plot,[.5,.5],[.65,.5]);const moved=await bitmap(h);assert.deepEqual(moved,processed,'DSP has no draggable geometry or pixel mutation from blank gesture');
  assert.deepEqual((await h.snapshot(projectId)).document.edits[0],edit);await h.driver.actions().sendKeys(Key.ESCAPE).perform();
- await h.label('删除屏蔽 1');assert.deepEqual(await bitmap(h),original);
- await h.label('撤销 · Ctrl Z');assert.deepEqual(await bitmap(h),moved);
+ await h.label('删除屏蔽 1');assert.deepEqual(await exactPixels(original,'deleted mask commits four exact original bitmaps'),original);
+ await h.label('撤销 · Ctrl Z');assert.deepEqual(await exactPixels(moved,'undo deletion commits four exact processed bitmaps'),moved);
  report.checks.push({name:'real UI undo/redo, raw switch, disable/enable, no DSP hit/move and list delete recompute matching pixels',moved});
  // Explicit opposite auditions preserve both file graphs, while consuming native device frames.
  await h.drag(plot,[.2,c.hzToY(2100)],[.8,c.hzToY(900)]);await h.context(plot,[.5,c.hzToY(1500)]);await h.label('播放选区');await outputAfter(h,0);await h.label('停止');

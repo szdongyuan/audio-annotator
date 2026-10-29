@@ -249,18 +249,21 @@ impl LocalProject {
     }
     pub fn open(root: &Path) -> Result<Self> {
         let (store, report) = FileStore::open(root)?;
-        if report.primary.is_none() || !report.candidates.is_empty() {
-            Ok(Self {
+        match report {
+            LoadReport {
+                primary: Some(document),
+                ref candidates,
+                ..
+            } if candidates.is_empty() => Ok(Self {
+                store: Storage::Local(store),
+                session: Some(ProjectSession::new(document)?),
+                recovery: None,
+            }),
+            report => Ok(Self {
                 store: Storage::Local(store),
                 session: None,
                 recovery: Some(report),
-            })
-        } else {
-            Ok(Self {
-                store: Storage::Local(store),
-                session: Some(ProjectSession::new(report.primary.unwrap())?),
-                recovery: None,
-            })
+            }),
         }
     }
     pub fn root(&self) -> &Path {

@@ -1,5 +1,31 @@
 use annotator_core::media::import_source::*;
 #[test]
+fn duplicate_policy_defaults_true_only_for_missing_compatible_input() {
+    assert!(Rules::default().skip_duplicates);
+    let mut value = serde_json::to_value(Rules::default()).unwrap();
+    assert_eq!(value["skipDuplicates"], true);
+    value.as_object_mut().unwrap().remove("skipDuplicates");
+    assert!(
+        serde_json::from_value::<Rules>(value.clone())
+            .unwrap()
+            .skip_duplicates
+    );
+    value["skipDuplicates"] = false.into();
+    assert!(
+        !serde_json::from_value::<Rules>(value.clone())
+            .unwrap()
+            .skip_duplicates
+    );
+    for invalid in [serde_json::Value::Null, "false".into(), 1.into()] {
+        value["skipDuplicates"] = invalid;
+        assert!(serde_json::from_value::<Rules>(value.clone()).is_err());
+    }
+    let counts = Counts::default();
+    assert_eq!(counts.duplicate_skipped, 0);
+    assert_eq!(serde_json::to_value(counts).unwrap()["duplicateSkipped"], 0);
+}
+
+#[test]
 fn rules_shorthand_globs_extensions_and_precedence() {
     let mut rules = Rules {
         include: vec!["*/CH1".into(), "*/CH2".into()],

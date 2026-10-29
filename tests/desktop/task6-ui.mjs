@@ -65,7 +65,7 @@ export async function toolbarUI(h, projectId, report) {
   await h.label('循环播放'); const beforePlay = await playbackStatus(h); await h.click('.selection-toolbar button:first-child');
   const played = await outputAfter(h, beforePlay.generation); assert.equal(played.mediaId, moved.region.mediaId); assert.ok(Math.abs(played.firstSeconds - moved.region.startSeconds) < 1/48000); assert.ok(Math.abs(played.endSeconds - moved.region.endSeconds) < 1/48000);
   await h.label('停止'); check('right comparison toolbar category creates once then updates stable ID, preserves playback source, supports keyboard and moved selection actual audio', { temporary, created, moved, played });
-  await h.driver.actions().sendKeys(Key.DELETE).perform(); await h.driver.wait(async()=>(await documentState()).edits.length===1,30000); await bitmap();
+  await h.menu('屏蔽选区','音频'); await h.driver.wait(async()=>(await documentState()).edits.length===1,30000); await bitmap();
   const masked = (await documentState()).edits.at(-1);assert.equal(await h.evaluate(`return ${visible}.length`),0,'successful DSP clears toolbar without persistent frame');await h.click(`[data-annotation-id="${id}"]`);await bounded('saved annotation toolbar remains independently reachable after DSP');
   const auditions = [];
   for (const [workspace, label] of [['暂存编辑', '试听选区原音'], ['原音', '试听选区（应用屏蔽）']]) {
