@@ -64,6 +64,9 @@ pub fn store_prepared_source(
         ));
     }
     let descriptor = prepared.decoded().descriptor.clone();
+    if runtime.retired_media_ids.contains(&descriptor.id) {
+        return Err(runtime::stale());
+    }
     if pending.contains_key(&descriptor.id) {
         return Err(AppError::invalid("Prepared UUID already registered"));
     }
@@ -98,9 +101,9 @@ pub fn release(service: &Service, task: &str, media: &str) -> Result<()> {
 pub fn can_import(project: &annotator_core::project::LocalProject) -> bool {
     !project.is_shared()
         || project.workspace().is_ok_and(|w| {
-            w.manifest().format_version
-                == annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
-                && w.actor().is_some()
+            annotator_core::collaboration::consts::supported_catalog_format(
+                w.manifest().format_version,
+            ) && w.actor().is_some()
         })
 }
 pub async fn import(
@@ -152,7 +155,7 @@ fn import_batch_worker(
     {
         return Err(AppError::invalid("Invalid prepared batch"));
     }
-    let (repo, actor, prepared) = {
+    let (_repo, actor, prepared) = {
         let current = state.0.lock().map_err(|_| runtime::unavailable())?;
         let p = current.as_ref().ok_or_else(runtime::stale)?;
         let r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
@@ -194,6 +197,16 @@ fn import_batch_worker(
             prepared,
         )
     };
+    super::operations::converge_retirement(&state, &expected)?;
+    let expected = super::operations::current_expected(&state, &expected.runtime_nonce)?;
+    let repo = state
+        .6
+        .current
+        .lock()
+        .map_err(|_| runtime::unavailable())?
+        .repo
+        .clone()
+        .ok_or_else(runtime::stale)?;
     #[cfg(test)]
     state.6.run_hook();
     let before_commit = || {
@@ -251,24 +264,45 @@ fn import_batch_worker(
                 pcm: item.decoded().pcm.clone(),
             }));
         }
+        let (source, binding) = {
+            let current = state.0.lock().map_err(|_| runtime::unavailable())?;
+            let p = current.as_ref().ok_or_else(runtime::stale)?;
+            let r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
+            let d = p.snapshot()?.document;
+            if r.nonce != expected.runtime_nonce || d.project_id != expected.project_id {
+                return Err(runtime::stale());
+            }
+            (
+                p.workspace()?.catalog_source(),
+                Expected {
+                    runtime_nonce: r.nonce.clone(),
+                    project_id: d.project_id,
+                    expected_revision: d.revision,
+                },
+            )
+        };
+        let catalog = source.prepare(next.clone())?;
+        let retired = catalog.retired_media_ids().clone();
         let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
         let p = current.as_mut().ok_or_else(runtime::stale)?;
         let mut runtime = state.6.current.lock().map_err(|_| runtime::unavailable())?;
         let before = p.snapshot()?.document;
-        if runtime.nonce != expected.runtime_nonce || before.project_id != expected.project_id {
-            return Err(runtime::stale());
-        }
+        binding.check(p, &runtime, false)?;
         let mut layers = runtime.layers.clone().ok_or_else(runtime::stale)?;
-        layers.adopt_catalog(next.manifest().clone())?;
+        layers.adopt_prepared_catalog(&catalog)?;
         let snapshot =
-            p.adopt_shared_catalog(&expected.project_id, before.revision, next.clone())?;
+            p.adopt_prepared_catalog(&binding.project_id, binding.expected_revision, catalog)?;
         runtime.layers = Some(layers);
         runtime.repo = Some(next);
+        state.retire_media_resources(&retired.iter().cloned().collect::<Vec<_>>())?;
+        runtime.retired_media_ids.extend(retired);
+        runtime.retired_media_ids.sort();
+        runtime.retired_media_ids.dedup();
         runtime.catalog_pending = !runtime.deferred.is_empty();
         runtime.error = None;
         let mut tasks = state.1.lock().map_err(|_| runtime::unavailable())?;
         for media in decoded {
-            tasks.registry.insert(media);
+            tasks.commit(media)?;
         }
         state.3.changed(&before, &snapshot.document);
         Ok(snapshot)
@@ -325,23 +359,30 @@ pub async fn adopt(
     let permit = state.6.begin(operation_id)?;
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let (repo, mut layers) = {
+        let (repo, mut layers, source) = {
             let current = state.0.lock().map_err(|_| runtime::unavailable())?;
             let r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
             expected.check(current.as_ref().ok_or_else(runtime::stale)?, &r, true)?;
             (
                 r.repo.clone().ok_or_else(runtime::stale)?,
                 r.layers.clone().ok_or_else(runtime::stale)?,
+                current
+                    .as_ref()
+                    .ok_or_else(runtime::stale)?
+                    .workspace()?
+                    .catalog_source(),
             )
         };
-        let next = Arc::new(repo.reload_catalog()?);
+        let next = Arc::new(CollaborationRepository::open(repo.root())?);
+        let prepared = source.prepare(next.clone())?;
+        let retired = prepared.retired_media_ids().clone();
         #[cfg(test)]
         state.6.run_hook();
         let mut remote = next.snapshot_with_catalog()?;
         let deferred = retain_deferred(Some(&layers), &mut remote);
         // Validate the complete proposed display state off the application lock and before
         // any durable/private adoption. Failure leaves live documents, history and layers intact.
-        layers.adopt_catalog(next.manifest().clone())?;
+        layers.adopt_prepared_catalog(&prepared)?;
         layers.update(remote.snapshot)?;
         check_cancel(&permit.cancel)?;
         let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
@@ -349,13 +390,14 @@ pub async fn adopt(
         let mut r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
         expected.check(p, &r, true)?;
         let before = p.snapshot()?.document;
-        let snapshot = p.adopt_shared_catalog(
-            &expected.project_id,
-            expected.expected_revision,
-            next.clone(),
-        )?;
+        let snapshot =
+            p.adopt_prepared_catalog(&expected.project_id, expected.expected_revision, prepared)?;
         r.layers = Some(layers);
         r.repo = Some(next);
+        state.retire_media_resources(&retired.iter().cloned().collect::<Vec<_>>())?;
+        r.retired_media_ids.extend(retired);
+        r.retired_media_ids.sort();
+        r.retired_media_ids.dedup();
         r.catalog_pending = remote.catalog_update_available;
         r.error = None;
         r.deferred = deferred;

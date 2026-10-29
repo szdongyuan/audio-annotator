@@ -163,15 +163,34 @@ fn copy_inner(
     mut progress: impl FnMut(&str, u64),
 ) -> Result<PreparedCopy> {
     let organization = annotator_core::exchange::capture_organization(document, organization)?;
-    let source_recycle = if source
+    let source_repo = if source
         .join("collaboration.json")
         .try_exists()
         .map_err(|_| runtime::unavailable())?
     {
-        Some(CollaborationRepository::open(source)?.read_recycle()?)
+        Some(CollaborationRepository::open(source)?)
     } else {
         None
     };
+    let source_authority = source_repo
+        .as_ref()
+        .map(annotator_core::exchange::SharedSourceAuthority::capture);
+    if let Some(repo) = &source_repo {
+        let surviving: std::collections::HashSet<_> = repo
+            .manifest()
+            .media
+            .iter()
+            .map(|m| m.id.as_str())
+            .collect();
+        if document
+            .media
+            .iter()
+            .any(|m| !surviving.contains(m.id.as_str()))
+        {
+            return Err(runtime::stale());
+        }
+    }
+    let source_recycle = source_repo.as_ref().map(|r| r.read_recycle()).transpose()?;
     atomic::safe_existing(target)?;
     let target = target.canonicalize().map_err(|_| runtime::unavailable())?;
     let source = source.canonicalize().map_err(|_| runtime::unavailable())?;
@@ -303,6 +322,7 @@ fn copy_inner(
         }
     }
     progress("publishManifest", document.media.len() as u64);
+    let _source_guard = source_authority.as_ref().map(|a| a.lock()).transpose()?;
     atomic::publish_new(
         &target.join("organization.json"),
         &fs::read(staging.join("organization.json")).map_err(|_| runtime::unavailable())?,
@@ -389,7 +409,7 @@ pub async fn save_as_controlled(
     let permit = state.6.begin(operation_id.clone())?;
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let (expected, document, root, preferences, hidden) = {
+        let (expected, shared) = {
             let current = state.0.lock().map_err(|_| runtime::unavailable())?;
             let p = current.as_ref().ok_or_else(runtime::stale)?;
             runtime::check_mutation(p, &state.6, runtime_nonce.as_deref())?;
@@ -399,11 +419,21 @@ pub async fn save_as_controlled(
                 project_id,
                 expected_revision,
             };
+            expected.check(p, &r, false)?;
+            (expected, p.is_shared())
+        };
+        if shared {
+            super::operations::converge_retirement(&state, &expected)?;
+        }
+        let (document, root, preferences, hidden, authority) = {
+            let current = state.0.lock().map_err(|_| runtime::unavailable())?;
+            let p = current.as_ref().ok_or_else(runtime::stale)?;
+            runtime::check_mutation(p, &state.6, runtime_nonce.as_deref())?;
+            let r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
             // Save As is also the recovery path after source persistence fails.
             // Capture the current revision, without requiring a source save.
             expected.check(p, &r, false)?;
             (
-                expected,
                 p.snapshot()?.document,
                 p.root().to_path_buf(),
                 p.workspace().ok().map(|w| w.preferences().clone()),
@@ -411,6 +441,9 @@ pub async fn save_as_controlled(
                     .ok()
                     .map(|w| w.hidden_media_ids().to_vec())
                     .unwrap_or_default(),
+                r.repo
+                    .as_ref()
+                    .map(|r| annotator_core::exchange::SharedSourceAuthority::capture(r)),
             )
         };
         let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
@@ -455,6 +488,7 @@ pub async fn save_as_controlled(
             .project
             .workspace_mut()?
             .set_hidden_media_ids(hidden)?;
+        let _source_guard = authority.as_ref().map(|a| a.lock()).transpose()?;
         let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
         expected.check(
             current.as_ref().ok_or_else(runtime::stale)?,
@@ -529,6 +563,8 @@ pub async fn open_project_view_only(
     super::operations::open_mode(&state, path, true).await
 }
 
+#[cfg(test)]
+pub(crate) mod purge_tests;
 #[cfg(test)]
 mod tests {
     use crate::{

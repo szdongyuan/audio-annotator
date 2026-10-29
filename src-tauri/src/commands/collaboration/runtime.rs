@@ -25,10 +25,13 @@ pub struct Service {
     preparation: JobSlot,
     local: Mutex<Option<PathBuf>>,
     pub selected: Mutex<Option<String>>,
+    pub purge: Mutex<crate::commands::purge::Capabilities>,
     #[cfg(test)]
     pub hook: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     #[cfg(test)]
     pub after_io: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    #[cfg(test)]
+    pub before_retirement_io: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     #[cfg(test)]
     pub list_after_identity: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
@@ -56,10 +59,13 @@ impl Default for Service {
             preparation: Arc::new(Mutex::new(None)),
             local: Mutex::new(None),
             selected: Mutex::new(None),
+            purge: Mutex::new(Default::default()),
             #[cfg(test)]
             hook: Mutex::new(None),
             #[cfg(test)]
             after_io: Mutex::new(None),
+            #[cfg(test)]
+            before_retirement_io: Mutex::new(None),
             #[cfg(test)]
             list_after_identity: Mutex::new(None),
         }
@@ -73,6 +79,8 @@ pub struct Runtime {
     pub updated: Option<u64>,
     pub catalog_pending: bool,
     pub deferred: Vec<String>,
+    pub retired_media_ids: Vec<String>,
+    pub purge_maintenance: crate::commands::purge::MaintenanceSnapshot,
 }
 impl Default for Runtime {
     fn default() -> Self {
@@ -84,6 +92,8 @@ impl Default for Runtime {
             updated: None,
             catalog_pending: false,
             deferred: vec![],
+            retired_media_ids: vec![],
+            purge_maintenance: Default::default(),
         }
     }
 }
@@ -189,6 +199,7 @@ impl Service {
                 cancel.store(true, Ordering::Relaxed);
             }
         }
+        self.purge.lock().map_err(|_| unavailable())?.cancel(id);
         Ok(())
     }
     pub fn preparing(&self) -> Result<bool> {
@@ -202,6 +213,9 @@ impl Service {
         self.job.lock().map(|j| j.is_some()).unwrap_or(true)
     }
     pub fn retire(&self) {
+        if let Ok(mut purge) = self.purge.lock() {
+            *purge = Default::default();
+        }
         if let Ok(mut sources) = self.sources.lock() {
             sources.reset();
         }
@@ -222,6 +236,7 @@ impl Service {
         }
     }
     pub fn install(&self, repo: Option<Arc<CollaborationRepository>>) -> Result<()> {
+        *self.purge.lock().map_err(|_| unavailable())? = Default::default();
         self.sources.lock().map_err(|_| unavailable())?.reset();
         let mut runtime = self.current.lock().map_err(|_| unavailable())?;
         for (_, item) in self.prepared.lock().map_err(|_| unavailable())?.drain() {
@@ -337,6 +352,18 @@ pub struct Status {
     pub last_success_ms: Option<u64>,
     pub error: Option<AppError>,
     pub snapshot: Option<CollaborationSnapshot>,
+    /// Authoritative removal notification. Consumers remove these exact IDs
+    /// from documents/drafts/queues while retaining surviving pending input.
+    /// This personal native snapshot supplies revision/history authority;
+    /// foreign author layers in `snapshot` never replace the personal document.
+    pub retirement: Option<RetirementUpdate>,
+    pub purge_maintenance: crate::commands::purge::MaintenanceSnapshot,
+}
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetirementUpdate {
+    pub media_ids: Vec<String>,
+    pub snapshot: annotator_core::project::ProjectSnapshot,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -363,6 +390,7 @@ pub fn status_for_runtime(
 ) -> Result<Status> {
     let workspace = project.and_then(|p| p.workspace().ok());
     Ok(Status {
+        purge_maintenance: r.purge_maintenance.clone(),
         project_flavor: match workspace {
             None => ProjectFlavor::Ordinary,
             Some(_) => ProjectFlavor::Default,
@@ -375,9 +403,9 @@ pub fn status_for_runtime(
         can_write_annotations: project.is_some() && workspace.is_none_or(|w| !w.is_view_only()),
         can_import_media: project.is_some()
             && workspace.is_none_or(|w| {
-                w.manifest().format_version
-                    == annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
-                    && w.actor().is_some()
+                annotator_core::collaboration::consts::supported_catalog_format(
+                    w.manifest().format_version,
+                ) && w.actor().is_some()
             }),
         hidden_media_ids: workspace
             .map(|w| w.hidden_media_ids().to_vec())
@@ -399,6 +427,14 @@ pub fn status_for_runtime(
             .and_then(|w| w.sync_error().cloned())
             .or_else(|| r.error.clone()),
         snapshot: r.layers.as_ref().map(|l| l.snapshot().clone()),
+        retirement: if r.retired_media_ids.is_empty() {
+            None
+        } else {
+            Some(RetirementUpdate {
+                media_ids: r.retired_media_ids.clone(),
+                snapshot: project.ok_or_else(stale)?.snapshot()?,
+            })
+        },
     })
 }
 

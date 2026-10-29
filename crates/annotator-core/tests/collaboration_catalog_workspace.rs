@@ -121,6 +121,47 @@ fn media_note(p: &LocalProject, id: &str) -> String {
 }
 
 #[test]
+fn prepared_append_keeps_sequence_barrier_and_installs_without_share_io() {
+    let f = Fixture::new();
+    let mut p = f.open();
+    let added = f.append();
+    let current = f.latest();
+    let prepared = p
+        .workspace()
+        .unwrap()
+        .catalog_source()
+        .prepare(current.clone())
+        .unwrap();
+    let mut prefs = p.workspace().unwrap().preferences().clone();
+    prefs.volume = 0.31;
+    p.workspace_mut().unwrap().save_preferences(prefs).unwrap();
+    let d = p.snapshot().unwrap().document;
+    assert!(p
+        .adopt_prepared_catalog(&d.project_id, d.revision, prepared)
+        .is_err());
+    let prepared = p
+        .workspace()
+        .unwrap()
+        .catalog_source()
+        .prepare(current)
+        .unwrap();
+    let entry = f.repo.root().join("collaboration.json");
+    let unavailable = f.repo.root().join("collaboration.offline");
+    fs::rename(&entry, &unavailable).unwrap();
+    p.adopt_prepared_catalog(&d.project_id, d.revision, prepared)
+        .unwrap();
+    assert!(p
+        .snapshot()
+        .unwrap()
+        .document
+        .media
+        .iter()
+        .any(|m| m.id == added));
+    assert_eq!(p.workspace().unwrap().preferences().volume, 0.31);
+    fs::rename(unavailable, entry).unwrap();
+}
+
+#[test]
 fn adoption_preserves_a_in_flight_b_saved_c_live_and_history_relinks_preferences() {
     let f = Fixture::new();
     let mut p = f.open();

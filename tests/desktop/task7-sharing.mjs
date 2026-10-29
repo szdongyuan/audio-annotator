@@ -105,7 +105,7 @@ export async function standaloneSharing() {
     await h.drag('.channel-pane:first-child .annotation-overlay', [.2, c.hzToY(2100)], [.8, c.hzToY(900)]);
     await h.until("[...document.querySelectorAll('.selection-toolbar')].some(e=>getComputedStyle(e).visibility==='visible')",'actual selection toolbar placement visible');await h.click('.selection-toolbar button[aria-label="标注"]'); await h.label('分享分类');await h.driver.actions().sendKeys(Key.ESCAPE).perform(); await h.until(`document.querySelector('.annotation-inspector')`);
     await h.input('区域备注', '区域备注：屏蔽可恢复');
-    await h.click('.annotation-rect.is-selected'); await h.driver.actions().sendKeys(Key.DELETE).perform(); await waitMasked(h);
+    await h.context('.annotation-rect.is-selected'); await h.label('屏蔽选区'); await waitMasked(h);
     await save(h);
     const saved = (await h.snapshot(id)).document, categoryId = saved.categories[0].id;
     assert.deepEqual(saved.media.find(m=>m.displayName==='dual-tone.wav').categoryIds,[ categoryId]); assert.deepEqual(saved.media.find(m=>m.displayName==='dual-tone.wav').channelCategoryIds[1],[ categoryId]); assert.deepEqual(saved.annotations[0].categoryIds,[ categoryId]);

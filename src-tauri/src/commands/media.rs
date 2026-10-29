@@ -253,6 +253,12 @@ async fn start_inner(
                 .lock()
                 .map_err(|_| AppError::invalid("媒体服务不可用"))?;
             let (generation, cancel) = tasks.begin(id.clone())?;
+            if let Some(expected) = &expected {
+                if let Err(error) = tasks.bind_media(&id, &expected.id) {
+                    tasks.finish(&id);
+                    return Err(error);
+                }
+            }
             let preparation = if catalog.is_some() {
                 match service.begin_preparation(id.clone(), cancel.clone()) {
                     Ok(permit) => Some(permit),

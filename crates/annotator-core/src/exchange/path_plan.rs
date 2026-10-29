@@ -8,6 +8,37 @@ use crate::{
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+/// Exact source entry binding for independent copies. The returned commit guard
+/// orders final target publication against source retirement without app locks.
+pub struct SharedSourceAuthority {
+    root: std::path::PathBuf,
+    entry_hash: String,
+}
+impl SharedSourceAuthority {
+    pub fn capture(repo: &crate::collaboration::CollaborationRepository) -> Self {
+        Self {
+            root: repo.root().to_path_buf(),
+            entry_hash: repo.manifest_identity().into(),
+        }
+    }
+    pub fn lock(&self) -> Result<std::fs::File> {
+        use crate::collaboration::atomic;
+        use sha2::{Digest, Sha256};
+        let guard = atomic::short_lock(&self.root.join("catalog/.commit.lock"))?;
+        let bytes = atomic::read(
+            &self.root.join("collaboration.json"),
+            crate::collaboration::MAX_LAYER_BYTES,
+        )?;
+        if format!("{:x}", Sha256::digest(&bytes)) != self.entry_hash {
+            return Err(AppError::new(
+                crate::error::ErrorCode::RevisionConflict,
+                "Source retirement authority changed; refresh and retry",
+            ));
+        }
+        Ok(guard)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PathChange {

@@ -5,7 +5,7 @@ use crate::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -24,6 +24,8 @@ pub fn same_identity(a: &MediaDescriptor, b: &MediaDescriptor) -> bool {
 pub struct MediaTasks {
     generation: u64,
     running: HashMap<String, Arc<AtomicBool>>,
+    running_media: HashMap<String, String>,
+    retired: HashSet<String>,
     pending: HashMap<String, (String, Arc<DecodedMedia>)>,
     pub registry: MediaRegistry,
 }
@@ -39,7 +41,7 @@ impl MediaTasks {
         generation: u64,
         media: DecodedMedia,
     ) -> Result<Arc<DecodedMedia>> {
-        if generation != self.generation {
+        if generation != self.generation || self.retired.contains(&media.descriptor.id) {
             return Err(AppError::new(ErrorCode::Cancelled, "项目运行态已替换"));
         }
         let media = Arc::new(media);
@@ -64,12 +66,35 @@ impl MediaTasks {
     }
     pub fn finish(&mut self, task_id: &str) {
         self.running.remove(task_id);
+        self.running_media.remove(task_id);
+    }
+    pub fn bind_media(&mut self, task_id: &str, media_id: &str) -> Result<()> {
+        if self.retired.contains(media_id) || !self.running.contains_key(task_id) {
+            return Err(AppError::new(ErrorCode::Cancelled, "Media task retired"));
+        }
+        self.running_media.insert(task_id.into(), media_id.into());
+        Ok(())
+    }
+    /// Fence exact IDs before dropping resources. Other jobs keep their epoch.
+    pub fn retire_media(&mut self, ids: &[String]) {
+        for id in ids {
+            self.retired.insert(id.clone());
+            self.pending.remove(id);
+            self.registry.remove(id);
+            for (task, media) in &self.running_media {
+                if media == id {
+                    self.cancel(task);
+                }
+            }
+        }
     }
     pub fn reset(&mut self) {
         for cancel in self.running.values() {
             cancel.store(true, Ordering::Relaxed);
         }
         self.running.clear();
+        self.running_media.clear();
+        self.retired.clear();
         self.pending.clear();
         self.registry.clear();
         self.generation += 1;
@@ -80,7 +105,7 @@ impl MediaTasks {
         task_id: &str,
         media: DecodedMedia,
     ) -> Result<MediaDescriptor> {
-        if generation != self.generation {
+        if generation != self.generation || self.retired.contains(&media.descriptor.id) {
             return Err(AppError::new(
                 ErrorCode::Cancelled,
                 "项目已关闭或被另存替换",
@@ -115,9 +140,13 @@ impl MediaTasks {
         }
         Ok(media.clone())
     }
-    pub fn commit(&mut self, media: Arc<DecodedMedia>) {
+    pub fn commit(&mut self, media: Arc<DecodedMedia>) -> Result<()> {
+        if self.retired.contains(&media.descriptor.id) {
+            return Err(AppError::new(ErrorCode::Cancelled, "Media retired"));
+        }
         self.pending.remove(&media.descriptor.id);
         self.registry.insert(media);
+        Ok(())
     }
     pub fn release_for_task(&mut self, task_id: &str, media_id: &str) {
         if self
@@ -139,6 +168,13 @@ pub struct MediaRegistry {
     bytes: u64,
 }
 impl MediaRegistry {
+    pub fn remove(&mut self, media_id: &str) {
+        self.verified.remove(media_id);
+        self.order.retain(|id| id != media_id);
+        if let Some(media) = self.entries.remove(media_id) {
+            self.bytes -= pcm_bytes(&media);
+        }
+    }
     pub fn insert(&mut self, media: Arc<DecodedMedia>) {
         let id = media.descriptor.id.clone();
         self.verified

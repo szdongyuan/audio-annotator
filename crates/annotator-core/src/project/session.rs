@@ -19,6 +19,19 @@ pub struct ProjectSession {
     history: History,
 }
 impl ProjectSession {
+    pub(super) fn retire_media(
+        &mut self,
+        retired: &std::collections::HashSet<String>,
+    ) -> Result<()> {
+        for document in std::iter::once(&mut self.document)
+            .chain(&mut self.history.undo)
+            .chain(&mut self.history.redo)
+        {
+            crate::collaboration::purge::projection::project_document(document, retired)?;
+        }
+        self.history.break_merge();
+        Ok(())
+    }
     pub(super) fn adopt_catalog(
         &mut self,
         manifest: &crate::collaboration::CollaborationManifest,

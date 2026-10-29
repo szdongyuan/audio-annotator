@@ -62,7 +62,7 @@ $taskRect=New-Object OwnedWindow+RECT
   const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',code],{encoding:'utf8',windowsHide:true});
   if(result.status!==0)throw Error(result.stderr);return JSON.parse(result.stdout);
 }
-export async function start(paths, output, executable = path.resolve('target/debug/annotator-desktop.exe'), options = {}) {
+export async function start(paths, output, executable = path.resolve(process.env.ANNOTATOR_WORKSPACE_EXE ?? 'target/debug/annotator-desktop.exe'), options = {}) {
   const {ports,localDataEnv,webviewDirectory}=instanceOptions(options),ownedPorts=Object.values(ports),port=ports.driver;
   await assertTestPortsAvailable(ownedPorts);
   const tools = JSON.parse(await fs.readFile('.tools/webdriver.json', 'utf8'));

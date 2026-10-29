@@ -5,7 +5,7 @@ import fixture from '../../tests/fixtures/document-v3.json';
 const id='11111111-1111-4111-8111-111111111111';
 const actor={authorId:id,displayName:'Alice',createdAt:'2026-10-23T00:00:00Z'};
 const preferences={monitorGainDb:0,mediaMonitorGainDb:{},volume:.75,deviceId:null,loopEnabled:false,source:'processed'};
-export const statusFixture=()=>({formatVersion:1,runtimeNonce:id,projectId:id,shared:true,projectFlavor:'default' as const,identityMode:'profile' as const,canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false,actor,preferences,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:null,error:null,snapshot:{projectId:id,authors:[]}});
+export const statusFixture=()=>({formatVersion:1,runtimeNonce:id,projectId:id,shared:true,projectFlavor:'default' as const,identityMode:'profile' as const,canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false,actor,preferences,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:null,error:null,retirement:null,purgeMaintenance:{total:0,items:[]},snapshot:{projectId:id,authors:[]}});
 function documentStatus(document:ProjectDocument){
  const payload={categories:document.categories,annotations:document.annotations,mediaLabels:document.media.map(m=>({mediaId:m.id,note:m.note,channelNotes:m.channelNotes,categoryIds:m.categoryIds,channelCategoryIds:m.channelCategoryIds}))};
  const layer={kind:'audio-annotator-author-layer',formatVersion:2,projectId:document.projectId,authorId:id,revision:1,parent:null,hash:'a'.repeat(64),payload};
@@ -101,4 +101,20 @@ it('accepts bounded private monitor maps beyond the former small context budget'
  const mediaMonitorGainDb=Object.fromEntries(Array.from({length:6000},(_,i)=>[`${i.toString(16).padStart(8,'0')}-0000-4000-8000-000000000001`,-59.99999999999999]));
  expect(()=>parseSharedContext({runtimeNonce:id,projectFlavor:'default',identityMode:'profile',canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false,actor,preferences:{...preferences,monitorGainDb:0,mediaMonitorGainDb}})).not.toThrow();
  expect(()=>parseCollaborationStatus({...statusFixture(),preferences:{...preferences,monitorGainDb:0,mediaMonitorGainDb}})).not.toThrow();
+});
+
+it('strictly parses native personal retirement and maintenance independently of foreign snapshots',()=>{
+ const document=parseProjectDocument(structuredClone(fixture)),retired=document.media[0].id;
+ document.media=[];document.annotations=[];document.edits=[];document.analysis={};document.playbackMix={};document.viewState={...document.viewState,media:{},activeMediaId:null,compareMediaId:null};
+ const status={...statusFixture(),projectId:document.projectId,snapshot:null,retirement:{mediaIds:[retired],snapshot:{document,canUndo:false,canRedo:false}},purgeMaintenance:{total:1,items:[{operationId:id,status:'committed-pending-cleanup',committed:true,cleanupPendingCount:2,cleanupFailedCount:1,deletedAudioBytes:0}]}};
+ expect(parseCollaborationStatus(status).retirement?.snapshot.document.media).toEqual([]);
+ for(const patch of [{retirement:{...status.retirement,extra:1}},{retirement:{...status.retirement,mediaIds:[retired,retired]}},{purgeMaintenance:{total:1,items:[{...status.purgeMaintenance.items[0],cleanupFailedCount:3}]}},{purgeMaintenance:{total:1,items:[{...status.purgeMaintenance.items[0],status:'accepted'}]}}])expect(()=>parseCollaborationStatus({...status,...patch})).toThrow();
+});
+
+it('accepts legitimate personal document maps beyond 32 keys and rejects unknown snapshot fields',()=>{
+ const document=parseProjectDocument(structuredClone(fixture)),source=document.media[0],view={visibleChannels:[0,1],startSeconds:0,endSeconds:2,lowHz:0,highHz:24000,frequencyMix:0,spectrumKind:'stft' as const,gainDb:0,dynamicRangeDb:80,palette:'magma'},analysis=document.analysis[source.id],mix=document.playbackMix[source.id];
+ document.media=Array.from({length:80},(_,i)=>({...structuredClone(source),id:`${(i+200).toString(16).padStart(8,'0')}-0000-4000-8000-000000000001`}));document.annotations=[];document.edits=[];
+ document.analysis=Object.fromEntries(document.media.map(m=>[m.id,analysis]));document.playbackMix=Object.fromEntries(document.media.map(m=>[m.id,mix]));document.viewState={...document.viewState,media:Object.fromEntries(document.media.map(m=>[m.id,view])),activeMediaId:document.media[0].id,compareMediaId:null};
+ const status={...statusFixture(),projectId:document.projectId,snapshot:null,retirement:{mediaIds:[source.id],snapshot:{document,canUndo:false,canRedo:false}}};
+ expect(()=>parseCollaborationStatus(status)).not.toThrow();expect(()=>parseCollaborationStatus({...status,retirement:{...status.retirement,snapshot:{...status.retirement.snapshot,secret:true}}})).toThrow();
 });

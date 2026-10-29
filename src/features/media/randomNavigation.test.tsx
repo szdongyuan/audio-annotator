@@ -108,7 +108,7 @@ it('uses the latest statuses and media without requiring ready status', () => {
 });
 
 it('excludes hidden, trashed, and comparison audio from the actual list results', () => {
-  const media = files(5), recycle = new RecycleController(fixture.projectId, 'runtime', true, {} as never);
+  const media = files(5), recycle = new RecycleController(fixture.projectId, crypto.randomUUID(), true, {} as never);
   recycle.snapshot = { kind: 'audio-annotator-recycle', formatVersion: 1, projectId: fixture.projectId, revision: 0, trashed: [{ mediaId: media[2].id, deletedBy: 'author' }], recentOperations: [] };
   const ui = setup(media, { recycle, hiddenMediaIds: [media[1].id], navigationExcludedId: media[3].id });
   press(); expect(ui.select).toHaveBeenLastCalledWith(media[4].id, 'random');

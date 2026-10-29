@@ -6,15 +6,20 @@ import type { ActiveProject } from '../project/useProjectLifecycle';
 export class AnnotationDrafts {
   private registrations = new Map<string, () => void>();
   private pending = new Map<string, Promise<unknown>>();
-  constructor(private active: ActiveProject) {}
+  private unregisterRetirement: () => void;
+  constructor(private active: ActiveProject) {
+    this.unregisterRetirement = active.store.onRetirement(() => {
+      for (const [key, unregister] of this.registrations) if (!active.store.drafts.has(key)) { unregister(); this.registrations.delete(key); }
+    });
+  }
   owns(key: string) { return this.registrations.has(key); }
   read(key: string): Change | undefined {
     const value = this.active.store.drafts.get(key); return value ? JSON.parse(value) as Change : undefined;
   }
   write(key: string, change: Change) {
     if(annotationDisabled(this.active))return;
-    if (!this.registrations.has(key)) this.registrations.set(key, this.active.lifecycle.registerDraft(key, () => this.submit(key)));
     this.active.store.setDraft(key, JSON.stringify(change));
+    if (this.active.store.drafts.has(key) && !this.registrations.has(key)) this.registrations.set(key, this.active.lifecycle.registerDraft(key, () => this.submit(key)));
   }
   async submit(key: string): Promise<unknown> {
     if (this.pending.has(key)) return this.pending.get(key);
@@ -40,5 +45,5 @@ export class AnnotationDrafts {
     })();
     this.pending.set(key, work); return work;
   }
-  dispose() { this.registrations.forEach(unregister => unregister()); this.registrations.clear(); }
+  dispose() { this.unregisterRetirement(); this.registrations.forEach(unregister => unregister()); this.registrations.clear(); }
 }

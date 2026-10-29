@@ -1,7 +1,7 @@
 import { profileClient, type ProfileCommands, type ProfileExpected, type ProfileResponse, type ProfileSnapshot } from '../../bridge/profiles';
 import { collaborationClient, type CollaborationStatus } from '../../bridge/collaboration';
 import { normalizeError } from '../../bridge/client';
-import { admissionCancelled } from '../../bridge/admission';
+import { admissionCancelled, retryAdmission } from '../../bridge/admission';
 import type { AppError } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 export type IdentityDialogKind='create'|'switch'|'rename'|'import'|'export';
@@ -42,10 +42,11 @@ export class IdentityController {
   }catch(e){if(!this.disposed){this.error=normalizeError(e);this.notify();}}
   finally{this.operation=null;this.busy=false;if(!this.disposed)this.notify();}
  }
- create(displayName:string){return this.run(true,async(fresh,id,valid)=>{const created=await this.api.create(await fresh(),id,displayName);this.accept(created);if(!valid())return created;const expected=await fresh();if(!valid())return created;return this.api.select(expected,id,created.profile!.authorId);});}
- select(authorId:string){if(authorId===this.snapshot?.selectedAuthorId)return Promise.resolve();return this.run(true,async(fresh,id)=>this.api.select(await fresh(),id,authorId));}
- rename(displayName:string){const authorId=this.selected?.authorId;if(!authorId)return Promise.resolve();return this.run(false,async(fresh,id)=>this.api.rename(await fresh(),id,authorId,displayName));}
- import(){return this.run(false,async(fresh,id,valid)=>{const path=await this.api.chooseImport();if(!path||!valid())return null;return this.api.import(await fresh(),id,path);});}
- export(){const authorId=this.selected?.authorId;if(!authorId)return Promise.resolve();return this.run(false,async(fresh,id,valid)=>{const path=await this.api.chooseExport(authorId);if(!path||!valid())return null;return this.api.export(await fresh(),id,authorId,path);});}
+ private mutate(fresh:()=>Promise<ProfileExpected>,valid:()=>boolean,attempt:(expected:ProfileExpected)=>Promise<ProfileResponse>){return retryAdmission(async()=>attempt(await fresh()),{valid});}
+ create(displayName:string){return this.run(true,async(fresh,id,valid)=>{const created=await this.mutate(fresh,valid,e=>this.api.create(e,id,displayName));this.accept(created);if(!valid())return created;return this.mutate(fresh,valid,e=>this.api.select(e,id,created.profile!.authorId));});}
+ select(authorId:string){if(authorId===this.snapshot?.selectedAuthorId)return Promise.resolve();return this.run(true,async(fresh,id,valid)=>this.mutate(fresh,valid,e=>this.api.select(e,id,authorId)));}
+ rename(displayName:string){const authorId=this.selected?.authorId;if(!authorId)return Promise.resolve();return this.run(false,async(fresh,id,valid)=>this.mutate(fresh,valid,e=>this.api.rename(e,id,authorId,displayName)));}
+ import(){return this.run(false,async(fresh,id,valid)=>{const path=await this.api.chooseImport();if(!path||!valid())return null;return this.mutate(fresh,valid,e=>this.api.import(e,id,path));});}
+ export(){const authorId=this.selected?.authorId;if(!authorId)return Promise.resolve();return this.run(false,async(fresh,id,valid)=>{const path=await this.api.chooseExport(authorId);if(!path||!valid())return null;return this.mutate(fresh,valid,e=>this.api.export(e,id,authorId,path));});}
  dispose(){this.disposed=true;this.generation++;if(this.operation){this.operation.cancelled=true;void this.cancelNative(this.operation.id).catch(()=>{});}this.listeners.clear();}
 }

@@ -10,7 +10,7 @@ export interface ProjectCommands {
 }
 type CommandOwner = 'annotations' | 'masks' | 'playback' | `media:${string}`;
 type QueuedCommand = (
-  | { kind: 'change'; change: Change; draftKey?: string; draft?: string }
+  | { kind: 'change'; change: Change; mediaIds: readonly string[]; draftKey?: string; draft?: string }
   | { kind: 'undo' | 'redo' }) & { owner?: CommandOwner; onAccepted?: () => void };
 export interface CommandFailure { id: number; error: AppError; draftKey?: string; owner?: CommandOwner }
 interface FailedCommand { command: QueuedCommand; error: AppError }
@@ -28,18 +28,25 @@ function changeTarget(change: Change): string {
 
 export class CommandQueue {
   private tail: Promise<unknown> = Promise.resolve();
-  private epoch = 0;
   private blocked: AppError | null = null;
+  private blockedCommand: QueuedCommand | null = null;
+  private readonly pendingCommands = new Set<{command: QueuedCommand; cancelledBy: QueuedCommand | null}>();
   private nextFailureId = 0;
   private readonly failures = new Map<number, FailedCommand>();
   private readonly retrying = new Set<number>();
-  constructor(private readonly store: ProjectStore, private readonly api: ProjectCommands) {}
+  constructor(private readonly store: ProjectStore, private readonly api: ProjectCommands) {
+    store.onRetirement(() => {
+      for (const [id, failure] of this.failures) if (this.targetsRetired(failure.command)) this.failures.delete(id);
+      if (this.blockedCommand && this.targetsRetired(this.blockedCommand)) { this.blocked = null; this.blockedCommand = null; }
+      this.publishError();
+    });
+  }
 
   enqueue(change: Change, options: { draftKey?: string; owner?: CommandOwner; onAccepted?: () => void } = {}): Promise<ProjectSnapshot> {
     // Capture caller values now; text may continue changing while the queue runs.
     const captured = structuredClone(parseChange(change));
     const draft = options.draftKey === undefined ? undefined : this.store.drafts.get(options.draftKey);
-    return this.run({ kind: 'change', change: captured, draftKey: options.draftKey, draft, owner: options.owner, onAccepted: options.onAccepted });
+    return this.run({ kind: 'change', change: captured, mediaIds: this.store.captureChangeMediaIds(captured, options.draftKey, draft), draftKey: options.draftKey, draft, owner: options.owner, onAccepted: options.onAccepted });
   }
   undo(options: { owner?: CommandOwner } = {}) { return this.run({ kind: 'undo', owner: options.owner }); }
   redo(options: { owner?: CommandOwner } = {}) { return this.run({ kind: 'redo', owner: options.owner }); }
@@ -98,22 +105,29 @@ export class CommandQueue {
     const next = this.tail.then(async () => {
       this.store.accept(await this.api.getSnapshot(this.store.snapshot.document.projectId));
       this.blocked = null;
+      this.blockedCommand = null;
       this.publishError();
     });
     this.tail = next.catch(() => undefined);
     return next;
   }
+  private targetsRetired(command: QueuedCommand): boolean {
+    return command.kind === 'change' && (command.mediaIds.some(id => this.store.isRetired(id)) || this.store.targetsRetired(command.change));
+  }
   private run(command: QueuedCommand, failureId?: number): Promise<ProjectSnapshot> {
     this.store.assertEditable();
-    const epoch = this.epoch;
+    const admission = {command, cancelledBy: null as QueuedCommand | null};
+    this.pendingCommands.add(admission);
     const next = this.tail.then(async () => {
       const { projectId, revision } = this.store.snapshot.document;
+      if (this.targetsRetired(command)) return this.store.snapshot;
       let attempted = false;
       try {
-        if (this.blocked || epoch !== this.epoch) throw this.blocked ?? { code: 'RevisionConflict', message: 'Queued change cancelled after conflict; review refreshed content', retryable: false } satisfies AppError;
+        const cancelledBy = admission.cancelledBy;
+        if (this.blocked || cancelledBy && !(this.targetsRetired(cancelledBy))) throw this.blocked ?? { code: 'RevisionConflict', message: 'Queued change cancelled after conflict; review refreshed content', retryable: false } satisfies AppError;
         attempted = true;
         const snapshot = command.kind === 'change'
-          ? await this.api.applyChange(projectId, revision, command.change)
+          ? await this.api.applyChange(projectId, revision, this.store.projectChange(command.change))
           : await this.api[command.kind](projectId, revision);
         this.store.accept(snapshot);
         if (failureId !== undefined) this.failures.delete(failureId);
@@ -121,14 +135,20 @@ export class CommandQueue {
           this.store.clearDraftIfUnchanged(command.draftKey, command.draft);
         }
         this.publishError();
-        return snapshot;
+        return this.store.snapshot;
       } catch (cause) {
+        if (this.targetsRetired(command)) return this.store.snapshot;
         const error = normalizeError(cause);
         if (attempted && error.code === 'RevisionConflict') {
-          this.epoch += 1;
           this.blocked = error;
+          this.blockedCommand = command;
+          // Remember why each already queued command was stopped. Trusted retirement
+          // can invalidate that exact cause without cancelling unrelated survivor work.
+          for (const pending of this.pendingCommands) if (pending !== admission) pending.cancelledBy ??= command;
           try { this.store.accept(await this.api.getSnapshot(projectId)); this.blocked = null; }
           catch { /* Keep blocked until explicit refresh succeeds; retain all drafts. */ }
+          if (this.targetsRetired(command)) { this.blocked = null; this.blockedCommand = null; this.publishError(); return this.store.snapshot; }
+          if (!this.blocked) this.blockedCommand = null;
         }
         this.failures.set(failureId ?? ++this.nextFailureId, { command, error });
         this.publishError();
@@ -137,8 +157,8 @@ export class CommandQueue {
     });
     // UI completion belongs after native acknowledgement. A local observer
     // error must never make an accepted edit available for replay.
-    const accepted = next.then(snapshot => { command.onAccepted?.(); return snapshot; });
+    const accepted = next.then(snapshot => { if (!this.targetsRetired(command)) command.onAccepted?.(); return snapshot; });
     this.tail = accepted.catch(() => undefined);
-    return accepted;
+    return accepted.finally(() => { this.pendingCommands.delete(admission); });
   }
 }

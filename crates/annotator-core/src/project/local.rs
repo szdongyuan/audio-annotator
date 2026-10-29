@@ -18,22 +18,53 @@ pub struct LocalProject {
     recovery: Option<LoadReport>,
 }
 impl LocalProject {
-    /// The caller loads the repository outside its app mutex, then installs it behind
-    /// the expected-revision barrier. Saved content and live history remain separate.
+    /// Convenience preparation + installation. Callers with an app mutex capture
+    /// workspace.catalog_source(), prepare off-lock, then adopt_prepared_catalog.
     pub fn adopt_shared_catalog(
         &mut self,
         id: &str,
         revision: u64,
         repo: std::sync::Arc<CollaborationRepository>,
     ) -> Result<ProjectSnapshot> {
+        let prepared = self.workspace()?.catalog_source().prepare(repo)?;
+        self.adopt_prepared_catalog(id, revision, prepared)
+    }
+    /// Install a verified off-lock read without accessing shared storage. The
+    /// caller also guards its project instance/runtime before invoking this method.
+    pub fn adopt_prepared_catalog(
+        &mut self,
+        id: &str,
+        revision: u64,
+        prepared: crate::collaboration::PreparedCatalogUpdate,
+    ) -> Result<ProjectSnapshot> {
+        if self.recovery.is_some() {
+            let d = &self.workspace()?.envelope().document;
+            if d.project_id != id || d.revision != revision {
+                return Err(AppError::new(
+                    ErrorCode::RevisionConflict,
+                    "Private recovery changed",
+                ));
+            }
+            self.workspace_mut()?.adopt_prepared_catalog(prepared)?;
+            self.recovery = self.workspace()?.recovery_report();
+            let document = self.workspace()?.envelope().document.clone();
+            return Ok(ProjectSnapshot {
+                document,
+                can_undo: false,
+                can_redo: false,
+            });
+        }
         self.check(id, revision)?;
-        self.workspace()?.validate_catalog(&repo)?;
-        if self.workspace()?.manifest() == repo.manifest() {
+        self.workspace()?.validate_prepared_catalog(&prepared)?;
+        if self.workspace()?.manifest() == prepared.repo.manifest()
+            && !prepared.retirement.changed()
+        {
             return self.snapshot();
         }
         let mut session = self.active_session()?.clone();
-        session.adopt_catalog(repo.manifest())?;
-        self.workspace_mut()?.adopt_catalog(repo)?;
+        session.retire_media(&prepared.retirement.retired)?;
+        session.adopt_catalog(prepared.repo.manifest())?;
+        self.workspace_mut()?.adopt_prepared_catalog(prepared)?;
         self.session = Some(session);
         self.snapshot()
     }
@@ -307,6 +338,21 @@ impl LocalProject {
     }
     pub fn save_as(&mut self, root: &Path, id: &str, revision: u64) -> Result<()> {
         let mut document = self.check(id, revision)?.document;
+        let authority = if self.is_shared() {
+            let fresh = CollaborationRepository::open(self.root())?;
+            let authority = crate::exchange::SharedSourceAuthority::capture(&fresh);
+            let prepared = self
+                .workspace()?
+                .catalog_source()
+                .prepare_retirement(fresh)?;
+            self.adopt_prepared_catalog(id, revision, prepared)?;
+            // Retirement is a system update, but cannot silently change the
+            // caller's explicit revision contract for the copy being requested.
+            document = self.check(id, revision)?.document;
+            Some(authority)
+        } else {
+            None
+        };
         if self.is_shared() {
             // Resolve aliases before FileStore can create even its lock file.
             let destination = root.canonicalize().map_err(super::store::io_error)?;
@@ -327,6 +373,7 @@ impl LocalProject {
             }
         }
         // Acquire and publish the new project first. Any failure leaves this session intact.
+        let _authority = authority.as_ref().map(|a| a.lock()).transpose()?;
         let store = FileStore::create(root, &document)?;
         let old_root = self.root().to_path_buf();
         self.active_session()?.rebase_sources(&old_root);
