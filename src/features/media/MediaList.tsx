@@ -11,6 +11,8 @@ import type { MenuItem } from '../../components/menu/menuModel';
 import { organizationIndex, type OrganizationController, type OrganizationDraft } from './organization';
 import { MediaDialog } from './MediaDialog';
 import { useMediaNavigation } from './useMediaNavigation';
+import { PurgeDialog } from './PurgeDialog';
+import type { PurgeSelection } from '../../bridge/purge';
 export const statusLabel = { ready: '已校验', missing: '源文件缺失', changed: '源文件已改变', unverified: '等待校验' };
 function StructuredName({ name }: {
     name: string;
@@ -64,6 +66,11 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
 }) {
     useSyncExternalStore(c?.subscribe ?? noop, c?.getVersion ?? zero);
     useSyncExternalStore(recycle?.subscribe ?? noop, recycle?.getVersion ?? zero);
+    useSyncExternalStore(recycle?.purge.subscribe ?? noop, recycle?.purge.getVersion ?? zero);
+    const currentRecycle = useRef(recycle);
+    currentRecycle.current = recycle;
+    const [purgeDialog, setPurgeDialog] = useState<{ owner: RecycleController; trigger: HTMLElement | null; all: boolean } | null>(null);
+    const activePurge = purgeDialog?.owner === recycle ? purgeDialog : null;
     const rootMenu = useRef<HTMLButtonElement>(null);
     const listRoot = useRef<HTMLDivElement>(null);
     const searchInput = useRef<HTMLInputElement>(null);
@@ -154,6 +161,27 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
             }
     const filteredIds:string[]=[];const visitFiltered=(folder:string|null)=>{for(const child of index.children.get(folder)??[])visitFiltered(child);for(const m of mediaByFolder.get(folder)??[])filteredIds.push(m.id);};visitFiltered(null);
     const batch=useMediaBatch(JSON.stringify([c?.runtimeNonce,search,selectedFolder,listView,classification,tag,wholeProject]),filteredIds,disabled,onHideBatch,recycle);
+    const purge = recycle?.purge;
+    const purgeBusy = batch.busy || !!purge?.pending;
+    const unresolvedCommit = !!purge?.committed && !purge.result;
+    const requestPurge = (selection: PurgeSelection, trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null) => {
+        if (!recycle?.writable || !recycle.snapshot || purgeBusy || unresolvedCommit) return;
+        setPurgeDialog({ owner: recycle, trigger, all: selection.kind === 'all' });
+        void recycle.purge.begin(selection);
+    };
+    const closePurge = () => {
+        if (!activePurge || activePurge.owner.purge.pending) return;
+        activePurge.owner.purge.cancel();
+        setPurgeDialog(null);
+    };
+    const refreshAfterPurge = () => {
+        if (currentRecycle.current !== recycle || currentOrganization.current !== c) return;
+        void recycle?.refresh(true);
+        void c?.refresh(true);
+    };
+    const cleanupOperations = purge?.maintenance.items.filter(i => i.committed) ?? [];
+    const currentPending = purge?.committed && purge.operationId && (!purge.result || purge.result.cleanupPendingCount > 0) ? purge.operationId : null;
+    const cleanupOperationIds = [...new Set([...cleanupOperations.map(i => i.operationId), ...(currentPending ? [currentPending] : [])])];
     const descendants=new Map<string,string[]>();for(const mediaId of filteredIds){let parent=index.mediaFolder.get(mediaId);while(parent){const list=descendants.get(parent)??[];list.push(mediaId);descendants.set(parent,list);parent=index.folders.get(parent)?.parentId;}}
     const folderIds=(id:string)=>descendants.get(id)??[];
     const navigation: string[] = [];
@@ -194,7 +222,8 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
         ...(onHide && listView === 'normal' ? [{ id: 'hide', label: '从我的列表隐藏', disabled: disabled || !menuTargetExists, action: () => { const target = currentMedia(); if (target) onHide(target.id); } }] : []),
         ...(onRestore && listView==='hidden' ? [{id:'unhide',label:'取消隐藏',disabled,action:()=>{const target=currentMedia();if(target)onRestore(target.id);}}] : []),
         {id:'batch',label:'选择多个音频',disabled,action:()=>{const target=currentMedia();if(target){batch.setMode(true);batch.replace([target.id]);}}},
-        {id:'trash',label:listView==='trash'?'从回收站恢复':'移入共享回收站…',disabled:batch.busy||!recycle?.writable||!recycle.snapshot,action:()=>{const target=currentMedia();if(target)batch.requestTrash(listView!=='trash',[target.id]);}},
+        {id:'trash',label:listView==='trash'?'从回收站恢复':'移入共享回收站…',disabled:purgeBusy||!recycle?.writable||!recycle.snapshot,action:()=>{const target=currentMedia();if(target)batch.requestTrash(listView!=='trash',[target.id]);}},
+        ...(listView === 'trash' ? [{ id: 'purge', label: '永久删除…', disabled: purgeBusy || unresolvedCommit || !recycle?.writable || !menuTargetExists, action: (trigger?: HTMLElement | null) => { const target = currentMedia(); if (target) requestPurge({ kind: 'selected', mediaIds: [target.id] }, trigger); } }] : []),
         { id: 'relink', label: '重新关联…', disabled: disabled || !menuTargetExists, action: () => { const target = currentMedia(); if (target) onRelink(target); } }
     ] : [
         { id: 'create', label: '新建子文件夹…', disabled: !canEdit || !menuTargetExists, action: trigger => begin({ type: 'createFolder', id: crypto.randomUUID(), parentId: menu?.folderId ?? null, name: '' }, trigger) },
@@ -211,13 +240,29 @@ export function MediaList({ recycle, authors = [], onHideBatch, organization: c,
         next.add(parent);
         parent = index.folders.get(parent)?.parentId ?? null;
     } return next; }); }} onContextMenu={e => openMenu(e, { folderId: id })} title={index.paths.get(id)}>{folder.name}<span className="count">{viewCounts.get(id) ?? 0}</span></button><button className="icon-button" aria-label={`文件夹操作 · ${folder.name}`} onClick={e => openMenu(e, { folderId: id })}><MoreHorizontal size={14}/></button></div>{open && <div className="media-folder-content">{(index.children.get(id) ?? []).map(child => renderFolder(child, depth + 1))}{(mediaByFolder.get(id) ?? []).map(card)}</div>}</div>; };
-    return <div ref={listRoot} className="media-list-content" data-media-list="true" onKeyDown={e=>{if(e.key==='Delete'&&listView==='trash'){e.preventDefault();e.stopPropagation();}else batch.keys(e);}}><div className="panel-heading"><h2><ListMusic size={16}/>音频文件<span className="count">{media.filter(m => !hidden.has(m.id)&&!trash.has(m.id)).length}</span></h2><button className="icon-button" aria-label="筛选音频" title="筛选音频" aria-expanded={filters} onClick={()=>setFilters(!filters)}><SlidersHorizontal size={15}/></button><button className="icon-button" aria-label="多选音频" title="多选音频" aria-pressed={batch.mode} onClick={()=>{batch.setMode(!batch.mode);batch.replace([]);}}><ListChecks size={16}/></button><button className="icon-button" aria-label="添加音频" onClick={onImport} disabled={disabled || catalogLocked}><Plus size={17}/></button></div><div className="media-filters"><label className="search-field"><Search size={15} aria-hidden="true"/><input ref={searchInput} aria-label="搜索音频" placeholder="搜索音频或目录…" value={search} onChange={e => setSearch(e.target.value)}/></label></div><div className="media-list-view"><select aria-label="音频列表视图" value={listView} onChange={e=>setListView(e.target.value)}><option value="normal">正常音频</option><option value="hidden">我的隐藏（{media.filter(m=>hidden.has(m.id)&&!trash.has(m.id)).length}）</option><option value="trash">共享回收站（{trash.size}）</option></select>{batch.mode&&<TriCheckbox ids={filteredIds} selected={batch.selected} onToggle={batch.toggle} label="全选筛选结果"/>}<span className="count">{filteredIds.length}</span></div>
+    return <div ref={listRoot} className="media-list-content" data-media-list="true" onKeyDown={e => {
+        const target = e.target as HTMLElement;
+        if (target.closest('input:not([type="checkbox"]),textarea,select,[contenteditable]:not([contenteditable="false"]),[role="menu"],[role="dialog"]')) return;
+        if (e.key === 'Delete' && listView === 'trash') {
+            const row = target.closest<HTMLElement>('.media-card'), batchControl = target.closest('.media-batch-actions');
+            if (!row && !(batchControl && batch.selected.size)) return;
+            e.preventDefault(); e.stopPropagation();
+            const id = row?.querySelector<HTMLElement>('[data-media-id]')?.dataset.mediaId;
+            const ids = id && !batch.selected.has(id) ? [id] : [...batch.selected];
+            if (ids.length) requestPurge({ kind: 'selected', mediaIds: ids });
+        } else batch.keys(e);
+    }}><div className="panel-heading"><h2><ListMusic size={16}/>音频文件<span className="count">{media.filter(m => !hidden.has(m.id)&&!trash.has(m.id)).length}</span></h2><button className="icon-button" aria-label="筛选音频" title="筛选音频" aria-expanded={filters} onClick={()=>setFilters(!filters)}><SlidersHorizontal size={15}/></button><button className="icon-button" aria-label="多选音频" title="多选音频" aria-pressed={batch.mode} onClick={()=>{batch.setMode(!batch.mode);batch.replace([]);}}><ListChecks size={16}/></button><button className="icon-button" aria-label="添加音频" onClick={onImport} disabled={disabled || catalogLocked}><Plus size={17}/></button></div><div className="media-filters"><label className="search-field"><Search size={15} aria-hidden="true"/><input ref={searchInput} aria-label="搜索音频" placeholder="搜索音频或目录…" value={search} onChange={e => setSearch(e.target.value)}/></label></div><div className="media-list-view"><select aria-label="音频列表视图" value={listView} onChange={e=>setListView(e.target.value)}><option value="normal">正常音频</option><option value="hidden">我的隐藏（{media.filter(m=>hidden.has(m.id)&&!trash.has(m.id)).length}）</option><option value="trash">共享回收站（{trash.size}）</option></select>{batch.mode&&<TriCheckbox ids={filteredIds} selected={batch.selected} onToggle={batch.toggle} label="全选筛选结果"/>}<span className="count">{filteredIds.length}</span></div>
  {filters&&<div className="media-advanced-filters"><label>我的标注<select aria-label="标注状态筛选" value={classification} onChange={e=>setClassification(e.target.value)}><option value="all">全部</option><option value="annotated">已标注</option><option value="unannotated">未标注</option></select></label><label>我的标签<select aria-label="标签筛选" value={tag} onChange={e=>setTag(e.target.value)}><option value="">全部标签</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label><input type="checkbox" checked={wholeProject} onChange={e=>setWholeProject(e.target.checked)}/>搜索整个项目</label></div>}
  {recycle?.error&&!batch.confirm&&<div className="media-copy-message" role="alert">{recycle.error.message}<button onClick={()=>void recycle.refresh()}>重试</button></div>}
 
  {c?.error && !edit && <div className="media-filters" role="alert">{c.error.message}<button className="button button-quiet" onClick={() => void c.refresh()}>刷新目录</button></div>}
  <div className="media-items">{c && <div className="media-folder-row"><button className="media-folder-select" aria-pressed={!selectedFolder} onClick={() => c.select(null)} onContextMenu={e => openMenu(e, { folderId: null })}>全部音频<span className="count">{viewCounts.get(null) ?? 0}</span></button><button ref={rootMenu} className="icon-button" aria-label="根目录操作" onClick={e => openMenu(e, { folderId: null })}><MoreHorizontal size={14}/></button></div>}{(index.children.get(null) ?? []).map(id => renderFolder(id, 0))}{(mediaByFolder.get(null) ?? []).map(card)}{!media.length && !index.folders.size && <div className="sidebar-empty"><FileAudio2 size={30}/><p>还没有音频文件</p></div>}{query && !mediaByFolder.size && !matched.size && <div className="sidebar-empty">没有匹配的音频</div>}</div>
- <BatchActions batch={batch} view={listView} canHide={!!onHideBatch} canTrash={!!recycle?.writable&&!!recycle.snapshot}/>{recycle&&<BatchConfirmation batch={batch} recycle={recycle} annotations={annotations} authors={authors}/>}
+ {listView === 'trash' && <div className="media-batch-actions"><button disabled={purgeBusy || unresolvedCommit || !recycle?.writable || !recycle.snapshot || !trash.size} onClick={() => requestPurge({ kind: 'all' })}>清空回收站…</button>{cleanupOperationIds.map((operationId, i) => <button key={operationId} disabled={purgeBusy} aria-label={`查看待清理操作 ${i + 1}`} onClick={e => { if (!recycle) return; if (purge?.operationId === operationId && purge.committed || purge?.viewOperation(operationId)) setPurgeDialog({ owner: recycle, trigger: e.currentTarget, all: false }); }}>查看待清理操作 {i + 1}</button>)}</div>}
+ <BatchActions batch={batch} view={listView} canHide={!!onHideBatch} canTrash={!!recycle?.writable&&!!recycle.snapshot} onPurge={ids => requestPurge({ kind: 'selected', mediaIds: ids })} canPurge={!!recycle?.writable && !purgeBusy && !unresolvedCommit}/>{recycle&&<BatchConfirmation batch={batch} recycle={recycle} annotations={annotations} authors={authors}/>}
+ {activePurge && <PurgeDialog controller={activePurge.owner.purge} all={activePurge.all} trigger={activePurge.trigger} resolveReturnFocus={previous => {
+     if (currentRecycle.current !== activePurge.owner || currentOrganization.current !== c) return null;
+     return previous?.isConnected ? previous : rootMenu.current ?? searchInput.current;
+ }} onClose={closePurge} onCommitted={refreshAfterPurge}/>}
  {navigationMessage && <span className="media-copy-message" role="status" aria-live="polite">{navigationMessage}</span>}
  {copyMessage && <span className="media-copy-message" role={copyMessage.failed ? "alert" : "status"}>{copyMessage.text}</span>}
  {menu && <Menu anchor={menu} returnFocus={menuTargetExists ? menu.trigger : rootMenu.current} onClose={() => setMenu(null)} items={items}/>}{edit && c && edit.owner === c && <FolderEdit controller={c} draft={edit.draft} trigger={edit.trigger} resolveReturnFocus={previous => currentOrganization.current === c && previous?.isConnected ? previous : currentOrganization.current && rootMenu.current?.isConnected ? rootMenu.current : searchInput.current} onClose={() => setEdit(current => current === edit ? null : current)}/>}</div>;

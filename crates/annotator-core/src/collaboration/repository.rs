@@ -12,11 +12,12 @@ use std::{
     fs::{self, File},
     io::Write,
     path::{Path, PathBuf},
-    sync::atomic::AtomicBool,
+    sync::{atomic::AtomicBool, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 pub struct CollaborationRepository {
     pub(super) root: PathBuf,
+    pub(super) metadata_root: PathBuf,
     pub(super) organization: organization::Organization,
     pub(super) manifest: CollaborationManifest,
     pub(super) manifest_hash: String,
@@ -30,6 +31,10 @@ pub struct AuthorSession {
     project_id: String,
     identity: AuthorIdentity,
     _lock: File,
+    // Lifetime gate for this process's publications, including the frozen old
+    // sequence in regression tests. The OS lease excludes external workers of
+    // this author; an exclusive gate proves all local old phases have drained.
+    publications: RwLock<()>,
 }
 impl AuthorSession {
     pub(crate) fn belongs_to(&self, repo: &CollaborationRepository) -> bool {
@@ -37,6 +42,19 @@ impl AuthorSession {
     }
     pub fn identity(&self) -> &AuthorIdentity {
         &self.identity
+    }
+    fn publishing(&self) -> Result<RwLockReadGuard<'_, ()>> {
+        self.publications.try_read().map_err(|_| {
+            AppError::new(ErrorCode::ProjectLocked, "Author publications are draining")
+        })
+    }
+    pub(super) fn try_drain_publications(&self) -> Result<RwLockWriteGuard<'_, ()>> {
+        self.publications.try_write().map_err(|_| {
+            AppError::new(
+                ErrorCode::ProjectLocked,
+                "Author still has an in-flight publication",
+            )
+        })
     }
 }
 fn conflict() -> AppError {
@@ -49,6 +67,14 @@ struct ReadBudget {
     remaining: usize,
     exhausted: bool,
 }
+/// Boundaries of the frozen format-5 publisher, for real concurrency regression tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegacyPublishBoundary {
+    BeforeNoReplace,
+    AfterStagingSync,
+    AfterFinalHeadCheck,
+    AfterPruneEnumeration,
+}
 impl ReadBudget {
     fn new(remaining: usize) -> Self {
         Self {
@@ -58,6 +84,56 @@ impl ReadBudget {
     }
 }
 impl CollaborationRepository {
+    /// All new-version shared writers take this guard before registration locks.
+    /// Stable root placement keeps one serialization boundary across generations.
+    pub(super) fn commit_guard(&self) -> Result<File> {
+        atomic::short_lock(&self.root.join("catalog/.commit.lock")).map_err(|mut error| {
+            if error.code == ErrorCode::ProjectLocked {
+                error.retryable = true;
+                error.message =
+                    "Shared catalog commit is busy; retry after the active writer finishes".into();
+            }
+            error
+        })
+    }
+    pub(super) fn reject_retired_media<'a>(
+        &self,
+        ids: impl IntoIterator<Item = &'a str>,
+    ) -> Result<()> {
+        if self.manifest.format_version != consts::GENERATION_COLLABORATION_FORMAT {
+            return Ok(());
+        }
+        let entry_bytes = atomic::read(&self.root.join("collaboration.json"), MAX_LAYER_BYTES)?;
+        require(
+            hash(&entry_bytes) == self.manifest_hash,
+            "Retirement authority changed",
+        )?;
+        let entry = purge::generation::GenerationEntry::parse(&entry_bytes)?;
+        let bytes = atomic::read(&self.metadata_root.join("generation.json"), MAX_LAYER_BYTES)?;
+        require(
+            hash(&bytes) == entry.generation_hash,
+            "Retirement generation digest mismatch",
+        )?;
+        let descriptor = purge::generation::GenerationDescriptor::parse(&bytes)?;
+        let retired: HashSet<_> = descriptor
+            .retired
+            .iter()
+            .map(|m| m.media_id.as_str())
+            .collect();
+        require(
+            ids.into_iter().all(|id| !retired.contains(id)),
+            "Retired media identity cannot be imported",
+        )
+    }
+    /// Read-only project opening plus discoverable recovery work. Native callers
+    /// may retire media workers before explicitly resuming writable cleanup.
+    pub fn open_with_purge_inventory(
+        root: &Path,
+    ) -> Result<(Self, Vec<purge::cleanup::MaintenanceOperation>)> {
+        let repo = Self::open(root)?;
+        let operations = repo.purge_maintenance_operations()?;
+        Ok((repo, operations))
+    }
     pub fn open(root: &Path) -> Result<Self> {
         Self::open_catalog_interleaved(root, |_| Ok(()))
     }
@@ -76,9 +152,15 @@ impl CollaborationRepository {
             atomic::safe_existing(&path)?;
             require(path.is_dir(), "Missing collaboration directory")?;
         }
+        atomic::safe_existing(&loaded.metadata_root.join("annotations"))?;
+        require(
+            loaded.metadata_root.join("annotations").is_dir(),
+            "Missing author history directory",
+        )?;
         // load() has already validated every referenced source against this head.
         let repo = Self {
             root,
+            metadata_root: loaded.metadata_root,
             manifest,
             manifest_hash: hash(&bytes),
             catalog_revision: loaded.revision,
@@ -86,6 +168,9 @@ impl CollaborationRepository {
             organization: loaded.organization,
         };
         repo.authors()?;
+        if repo.manifest.format_version == consts::GENERATION_COLLABORATION_FORMAT {
+            repo.read_recycle()?;
+        }
         Ok(repo)
     }
     pub fn root(&self) -> &Path {
@@ -99,7 +184,15 @@ impl CollaborationRepository {
         require(
             hash(&bytes) == self.manifest_hash,
             "Immutable collaboration manifest changed",
-        )
+        )?;
+        if self.manifest.format_version == consts::GENERATION_COLLABORATION_FORMAT {
+            let entry = purge::generation::GenerationEntry::parse(&bytes)?;
+            require(
+                entry.resolve(&self.root)? == self.metadata_root,
+                "Metadata generation changed",
+            )?;
+        }
+        Ok(())
     }
     fn author(&self, author_id: &str) -> Result<AuthorRecord> {
         uuid(author_id)?;
@@ -114,7 +207,7 @@ impl CollaborationRepository {
         )?;
         Ok(record)
     }
-    fn authors(&self) -> Result<Vec<AuthorRecord>> {
+    pub(super) fn authors(&self) -> Result<Vec<AuthorRecord>> {
         let dir = self.root.join("authors");
         atomic::safe_existing(&dir)?;
         let mut records = Vec::new();
@@ -148,7 +241,7 @@ impl CollaborationRepository {
     pub fn adopt(&self, profile: &profiles::Profile) -> Result<AuthorSession> {
         profile.validate()?;
         self.authority()?;
-        let dir = self.author_dir(&profile.author_id)?;
+        let dir = self.lease_dir(&profile.author_id)?;
         atomic::ensure_dir(&dir)?;
         let mut lock = atomic::lock(&dir.join(".writer.lock"))?;
         lock.set_len(0).map_err(atomic::io)?;
@@ -160,6 +253,7 @@ impl CollaborationRepository {
             project_id: self.manifest.project_id.clone(),
             identity: profile.clone().into(),
             _lock: lock,
+            publications: RwLock::new(()),
         };
         self.write_author(profile)?;
         self.session_authority(&session)?;
@@ -179,6 +273,7 @@ impl CollaborationRepository {
     }
     fn write_author(&self, profile: &profiles::Profile) -> Result<()> {
         profile.validate()?;
+        let _catalog = self.commit_guard()?;
         self.authority()?;
         let _registration = atomic::short_lock(&self.root.join("authors/.registration.lock"))?;
         let existing = self.authors()?;
@@ -210,6 +305,10 @@ impl CollaborationRepository {
     }
     fn author_dir(&self, author: &str) -> Result<PathBuf> {
         uuid(author)?;
+        Ok(self.metadata_root.join("annotations").join(author))
+    }
+    fn lease_dir(&self, author: &str) -> Result<PathBuf> {
+        uuid(author)?;
         Ok(self.root.join("annotations").join(author))
     }
     pub(super) fn session_authority(&self, session: &AuthorSession) -> Result<()> {
@@ -221,7 +320,7 @@ impl CollaborationRepository {
         self.author(&session.identity.author_id)?;
         atomic::verify_lock_path(
             &self
-                .author_dir(&session.identity.author_id)?
+                .lease_dir(&session.identity.author_id)?
                 .join(".writer.lock"),
             &session._lock,
         )
@@ -330,8 +429,135 @@ impl CollaborationRepository {
     ) -> Result<Checkpoint> {
         self.publish_controlled(session, base, payload, None, None)
     }
+    /// Frozen format-5 publication/prune sequence from 9fe9f1e. Keep independent
+    /// from future format-6 commit locking: these tests model an old executable.
+    #[doc(hidden)]
+    pub fn publish_legacy_interleaved(
+        &self,
+        session: &AuthorSession,
+        base: Option<&Checkpoint>,
+        payload: &LayerPayload,
+        mut boundary: impl FnMut(LegacyPublishBoundary) -> Result<()>,
+    ) -> Result<Checkpoint> {
+        let _worker = session.publishing()?;
+        require(
+            self.manifest.format_version == CURRENT_COLLABORATION_FORMAT,
+            "Frozen publisher requires format 5",
+        )?;
+        self.session_authority(session)?;
+        payload.project(&self.manifest)?;
+        if let Some(base) = base {
+            require(
+                base.revision > 0 && base.revision < MAX_SAFE_INTEGER,
+                "Unsafe base revision",
+            )?;
+            digest(&base.hash)?;
+        }
+        let author = &session.identity.author_id;
+        atomic::ensure_dir(&self.author_dir(author)?)?;
+        let mut layer = AuthorLayer {
+            kind: LAYER_KIND.into(),
+            format_version: 2,
+            project_id: self.manifest.project_id.clone(),
+            author_id: author.clone(),
+            revision: base.map_or(1, |b| b.revision + 1),
+            parent: base.cloned(),
+            payload: payload.clone(),
+            hash: String::new(),
+        };
+        layer.hash = layer.computed_hash()?;
+        let mut budget = ReadBudget::new(MAX_TOTAL_LAYER_BYTES);
+        let head = self.head(author, &mut budget)?;
+        let checkpoint = layer.checkpoint();
+        if head.as_ref().map(AuthorLayer::checkpoint) != Some(checkpoint.clone()) {
+            if head.as_ref().map(AuthorLayer::checkpoint).as_ref() != base {
+                return Err(conflict());
+            }
+            let bytes =
+                serde_json::to_vec(&layer).map_err(|_| AppError::invalid("Cannot encode layer"))?;
+            limit(bytes.len() <= MAX_LAYER_BYTES)?;
+            self.session_authority(session)?;
+            boundary(LegacyPublishBoundary::BeforeNoReplace)?;
+            // Observation-only seam: identical generic old publication, with no
+            // new durable ownership protocol or generation check inside it.
+            atomic::publish_new_owned(
+                &self
+                    .author_dir(author)?
+                    .join(format!("{:020}.json", layer.revision)),
+                &bytes,
+                None,
+                None,
+                |_, _| Ok(()),
+                |point| {
+                    if point == PublishFault::Sync {
+                        boundary(LegacyPublishBoundary::AfterStagingSync)?;
+                    }
+                    Ok(())
+                },
+            )?;
+        }
+        self.session_authority(session)?;
+        let mut budget = ReadBudget::new(MAX_TOTAL_LAYER_BYTES);
+        if self
+            .head(author, &mut budget)?
+            .as_ref()
+            .map(AuthorLayer::checkpoint)
+            != Some(checkpoint.clone())
+        {
+            return Err(conflict());
+        }
+        boundary(LegacyPublishBoundary::AfterFinalHeadCheck)?;
+        let revisions = self.revisions(author)?;
+        boundary(LegacyPublishBoundary::AfterPruneEnumeration)?;
+        for revision in revisions.iter().take(revisions.len().saturating_sub(16)) {
+            self.session_authority(session)?;
+            let mut budget = ReadBudget::new(MAX_LAYER_BYTES);
+            self.read_revision(author, *revision, &mut budget)?;
+            fs::remove_file(
+                self.author_dir(author)?
+                    .join(format!("{revision:020}.json")),
+            )
+            .map_err(atomic::io)?;
+        }
+        Ok(checkpoint)
+    }
     /// Same production path with deterministic interruption/cancellation boundaries for integration tests.
     pub fn publish_controlled(
+        &self,
+        session: &AuthorSession,
+        base: Option<&Checkpoint>,
+        payload: &LayerPayload,
+        fault: Option<PublishFault>,
+        cancel: Option<&AtomicBool>,
+    ) -> Result<Checkpoint> {
+        self.publish_with_source(session, base, payload, fault, cancel)
+            .map(|(checkpoint, _)| checkpoint)
+    }
+    pub(super) fn publish_with_source(
+        &self,
+        session: &AuthorSession,
+        base: Option<&Checkpoint>,
+        payload: &LayerPayload,
+        fault: Option<PublishFault>,
+        cancel: Option<&AtomicBool>,
+    ) -> Result<(Checkpoint, String)> {
+        let _worker = session.publishing()?;
+        // Validate against the captured source before applying trusted retirement.
+        payload.project(&self.manifest)?;
+        let _catalog = self.commit_guard()?;
+        let current = Self::open(&self.root)?;
+        let retirement = purge::projection::Retirement::read(
+            &current,
+            &self.manifest_hash,
+            self.manifest.media.clone(),
+        )?;
+        let base = retirement.checkpoint(&session.identity.author_id, base)?;
+        let mut payload = payload.clone();
+        purge::projection::project_payload(&mut payload, &retirement.retired);
+        let checkpoint = current.publish_locked(session, base.as_ref(), &payload, fault, cancel)?;
+        Ok((checkpoint, current.manifest_hash))
+    }
+    fn publish_locked(
         &self,
         session: &AuthorSession,
         base: Option<&Checkpoint>,
@@ -349,6 +575,7 @@ impl CollaborationRepository {
             digest(&base.hash)?;
         }
         let author = &session.identity.author_id;
+        atomic::ensure_dir(&self.author_dir(author)?)?;
         let mut layer = AuthorLayer {
             kind: LAYER_KIND.into(),
             format_version: 2,
@@ -409,7 +636,7 @@ impl CollaborationRepository {
         Ok(())
     }
     pub fn snapshot(&self) -> Result<CollaborationSnapshot> {
-        if self.manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT {
+        if crate::collaboration::consts::supported_catalog_format(self.manifest.format_version) {
             let mut result = self.snapshot_with_catalog()?;
             // Legacy snapshot consumers retain their last verified layer on this explicit
             // deferred condition; catalog-aware callers receive the complete staged payload.
@@ -455,5 +682,48 @@ impl CollaborationRepository {
             project_id: self.manifest.project_id.clone(),
             authors,
         })
+    }
+    /// Strict native authority reader. Display snapshots may retain individual
+    /// author errors; destructive permissions must reject every such error.
+    pub(super) fn complete_author_snapshot(&self) -> Result<CollaborationSnapshot> {
+        let snapshot = self.snapshot_loaded()?;
+        for author in &snapshot.authors {
+            if let Some(error) = &author.error {
+                return Err(error.clone());
+            }
+        }
+        let accounts = self.authors()?;
+        if !accounts
+            .iter()
+            .map(|a| &a.identity)
+            .eq(snapshot.authors.iter().map(|a| &a.identity))
+        {
+            return Err(conflict());
+        }
+        let registered: HashSet<_> = accounts
+            .iter()
+            .map(|a| a.identity.author_id.as_str())
+            .collect();
+        let dir = self.metadata_root.join("annotations");
+        atomic::safe_existing(&dir)?;
+        for (index, entry) in fs::read_dir(&dir).map_err(atomic::io)?.enumerate() {
+            limit(index < 256)?;
+            let entry = entry.map_err(atomic::io)?;
+            atomic::safe_existing(&entry.path())?;
+            require(
+                entry.file_type().map_err(atomic::io)?.is_dir(),
+                "Invalid author history directory",
+            )?;
+            let name = entry.file_name();
+            let author = name
+                .to_str()
+                .ok_or_else(|| AppError::invalid("Invalid author directory name"))?;
+            uuid(author)?;
+            // An orphan history must never disappear from the permission decision
+            // just because its registry record was lost or removed.
+            require(registered.contains(author), "Unregistered author history")?;
+        }
+        self.authority()?;
+        Ok(snapshot)
     }
 }

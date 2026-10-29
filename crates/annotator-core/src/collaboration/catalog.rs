@@ -1,5 +1,5 @@
 //! Prepared media capabilities and transactional publication through the organization head.
-use super::{atomic, atomic::short_lock, validation::*, *};
+use super::{atomic, validation::*, *};
 use crate::{
     error::{AppError, ErrorCode, Result},
     media::{
@@ -312,7 +312,7 @@ impl CollaborationRepository {
     ) -> Result<PreparedCatalogMedia> {
         self.authority()?;
         require(
-            self.manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
+            crate::collaboration::consts::supported_catalog_format(self.manifest.format_version),
             "Legacy project catalog is immutable",
         )?;
         atomic::safe_existing(source)?;
@@ -485,7 +485,7 @@ impl CollaborationRepository {
     ) -> Result<(PublicMedia, Self)> {
         self.session_authority(session)?;
         require(
-            self.manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
+            crate::collaboration::consts::supported_catalog_format(self.manifest.format_version),
             "Legacy project catalog is immutable",
         )?;
         require(
@@ -495,7 +495,7 @@ impl CollaborationRepository {
         // Expensive source/hash work precedes the short commit lock. Retry after committed/lost ack
         // works even when the source disappears or cancellation arrives after commit.
         let record_path = self
-            .root
+            .metadata_root
             .join("catalog")
             .join(format!("{}.json", prepared.media.id));
         atomic::safe_existing(record_path.parent().unwrap())?;
@@ -526,9 +526,10 @@ impl CollaborationRepository {
             "Staged media changed",
         )
         .map_err(|error| prepared.retained_error(error))?;
-        let _lock = short_lock(&self.root.join("catalog/.commit.lock"))?;
+        let _lock = self.commit_guard()?;
         self.session_authority(session)?;
         let mut current = self.reload_catalog()?;
+        current.reject_retired_media([prepared.media.id.as_str()])?;
         if let Some(existing) = current
             .manifest
             .media
@@ -563,7 +564,7 @@ impl CollaborationRepository {
         )?;
         // Reserve one directory slot for the record temporary/final name while holding
         // the catalog commit lock. Foreign abandoned temporaries count and remain untouched.
-        for (index, entry) in fs::read_dir(self.root.join("catalog"))
+        for (index, entry) in fs::read_dir(self.metadata_root.join("catalog"))
             .map_err(atomic::io)?
             .enumerate()
         {
@@ -608,7 +609,7 @@ impl CollaborationRepository {
                 return Err(atomic::io(std::io::Error::other("Injected after record")));
             }
             atomic::replace_metadata_controlled(
-                &self.root.join("organization.json"),
+                &self.metadata_root.join("organization.json"),
                 &head_bytes,
                 fault,
                 Some(cancel),
@@ -660,7 +661,8 @@ impl CollaborationRepository {
             }
             return Ok(CatalogSnapshot {
                 snapshot,
-                catalog_update_available: current.catalog_revision != self.catalog_revision,
+                catalog_update_available: current.catalog_revision != self.catalog_revision
+                    || current.manifest.media != self.manifest.media,
                 revision: current.catalog_revision,
                 deferred_authors,
             });

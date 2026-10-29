@@ -21,6 +21,17 @@ function setup(overrides: Partial<ProjectCommands> = {}) {
 }
 const note = (text: string): Change => ({ type: 'updateMediaNote', mediaId: fixture.media[0].id, note: text, mergeKey: null });
 
+it('retirement while a conflict snapshot is in flight does not cancel queued survivor work',async()=>{
+ const refresh=deferred<ProjectSnapshot>(),s=setup({applyChange:vi.fn().mockRejectedValueOnce({code:'RevisionConflict',message:'retired',retryable:true}).mockResolvedValueOnce(snapshot(3)),getSnapshot:vi.fn(()=>refresh.promise)}),accepted=vi.fn();
+ const a=s.queue.enqueue(note('A'));await vi.waitFor(()=>expect(s.api.getSnapshot).toHaveBeenCalled());
+ const global=s.queue.enqueue({type:'addCategory',category:{id:'22222222-2222-4222-8222-222222222222',name:'surviving global',color:'#aabbcc'}},{onAccepted:accepted});s.store.retire([fixture.media[0].id],{...snapshot(2),document:{...snapshot(2).document,media:[],annotations:[],edits:[],analysis:{},playbackMix:{},viewState:{...snapshot(2).document.viewState,media:{},activeMediaId:null,compareMediaId:null}}});refresh.resolve(snapshot(1));await a;await global;expect(accepted).toHaveBeenCalledOnce();expect(s.queue.unresolvedFailures).toHaveLength(0);
+});
+
+it('retirement clears only a retired command conflict block and keeps unrelated failures',async()=>{
+ const s=setup({applyChange:vi.fn().mockRejectedValueOnce({code:'RevisionConflict',message:'A stale',retryable:true}).mockResolvedValueOnce(snapshot(3)),getSnapshot:vi.fn().mockRejectedValue({code:'SaveFailed',message:'offline',retryable:true})});await expect(s.queue.enqueue(note('A'))).rejects.toBeDefined();expect(s.queue.needsRefresh).toBe(true);
+ s.store.retire([fixture.media[0].id],snapshot(2));expect(s.queue.needsRefresh).toBe(false);await s.queue.enqueue({type:'addCategory',category:{id:'22222222-2222-4222-8222-222222222222',name:'global',color:'#aabbcc'}});expect(s.queue.unresolvedFailures).toHaveLength(0);
+});
+
 it('transition admission blocks new mutations while accepted commands and refresh finish', async () => {
   const write = deferred<ProjectSnapshot>();
   const read = deferred<ProjectSnapshot>();

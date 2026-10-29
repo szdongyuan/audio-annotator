@@ -91,7 +91,7 @@ impl Recycle {
             recent_operations: vec![],
         }
     }
-    fn validate(&self, project_id: &str) -> Result<()> {
+    pub(super) fn validate(&self, project_id: &str) -> Result<()> {
         require(
             self.kind == "audio-annotator-recycle"
                 && self.format_version == 1
@@ -185,9 +185,12 @@ impl Recycle {
 impl CollaborationRepository {
     pub fn read_recycle(&self) -> Result<Recycle> {
         self.authority()?;
-        let path = self.root.join("recycle.json");
+        let path = self.metadata_root.join("recycle.json");
         match std::fs::symlink_metadata(&path) {
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(e)
+                if e.kind() == std::io::ErrorKind::NotFound
+                    && self.manifest.format_version == super::CURRENT_COLLABORATION_FORMAT =>
+            {
                 return Ok(Recycle::empty(self.manifest.project_id.clone()))
             }
             Err(e) => return Err(atomic::io(e)),
@@ -208,7 +211,7 @@ impl CollaborationRepository {
         before_commit: impl FnOnce() -> Result<Guard>,
     ) -> Result<Recycle> {
         crate::media::identity::check_cancel(cancel)?;
-        let _lock = atomic::short_lock(&self.root.join("catalog/.commit.lock"))?;
+        let _lock = self.commit_guard()?;
         self.session_authority(session)?;
         let catalog = self.reload_catalog()?;
         let head = self.read_recycle()?;
@@ -224,7 +227,7 @@ impl CollaborationRepository {
         limit(bytes.len() <= MAX_BYTES)?;
         let _guard = before_commit()?;
         if next.revision != head.revision {
-            let path = self.root.join("recycle.json");
+            let path = self.metadata_root.join("recycle.json");
             if path.try_exists().map_err(atomic::io)? {
                 atomic::replace_metadata_controlled(&path, &bytes, None, Some(cancel))?;
             } else {

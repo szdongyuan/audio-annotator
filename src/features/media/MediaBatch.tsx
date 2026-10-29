@@ -16,7 +16,7 @@ export function useMediaBatch(scope:string, ids:string[], disabled:boolean, onHi
   const current=useRef(scope);current.current=scope;
   useEffect(()=>{setState({scope,ids:[]});anchor.current=null;setConfirm(null);setNotice(null);setError(null);},[scope]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(null),6000);return()=>clearTimeout(timer);},[notice]);
-  const busy=disabled||pending||!!recycle?.pending;
+  const busy=disabled||pending||!!recycle?.pending||!!recycle?.purge.pending;
   const replace=(next:string[])=>{setState({scope,ids:next});};
   const toggle=(targets:string[])=>{if(busy)return;setMode(true);const next=new Set(selected),remove=targets.every(id=>next.has(id));for(const id of targets)remove?next.delete(id):next.add(id);replace([...next]);};
   const pick=(id:string,e:MouseEvent)=>{if(busy)return;if(e.shiftKey&&anchor.current&&ids.includes(anchor.current)){const a=ids.indexOf(anchor.current),b=ids.indexOf(id);setMode(true);replace([...new Set([...selected,...ids.slice(Math.min(a,b),Math.max(a,b)+1)])]);}else toggle([id]);anchor.current=id;};
@@ -29,7 +29,7 @@ export function useMediaBatch(scope:string, ids:string[], disabled:boolean, onHi
   const requestTrash=(trash:boolean,targets=[...selected])=>{if(busy||!recycle?.writable||!recycle.snapshot||!targets.length)return;setConfirm({scope,draft:recycle.beginEdit({operationId:crypto.randomUUID(),mediaIds:targets,trash}),trigger:document.activeElement as HTMLElement});};
   const submit=async()=>{if(!confirm||confirm.scope!==scope||busy||!recycle)return;const target=confirm;const ok=await recycle.submit(target.draft);if(ok&&current.current===scope){setConfirm(null);replace([]);setNotice({text:target.draft.operation.trash?'已移入共享回收站':'已从回收站恢复；个人隐藏设置保持不变'});}};
   const keys=(e:KeyboardEvent)=>{
-    if((e.target as HTMLElement).closest('input:not([type="checkbox"]),textarea,select,[role="dialog"],[role="menu"]'))return;
+    if((e.target as HTMLElement).closest('input:not([type="checkbox"]),textarea,select,[contenteditable]:not([contenteditable="false"]),[role="dialog"],[role="menu"]'))return;
     if(e.key==='Delete'){e.preventDefault();e.stopPropagation();if(selected.size)requestTrash(true);}
     else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();if(!busy){setMode(false);replace([]);}}
     else if(e.key.toLowerCase()==='a'&&(e.ctrlKey||e.metaKey)){e.preventDefault();e.stopPropagation();if(!busy){setMode(true);replace(ids);}}
@@ -37,8 +37,8 @@ export function useMediaBatch(scope:string, ids:string[], disabled:boolean, onHi
   return {mode,setMode,selected,toggle,pick,replace,busy,hide,requestTrash,keys,notice,error,confirm:confirm?.scope===scope?confirm:null,submit,cancel:()=>{if(!busy)setConfirm(null);},undo:async()=>{if(!notice?.undo||busy)return;setPending(true);try{await notice.undo();setNotice(null);}catch(e){setError((e as Error).message??'撤销失败');}finally{setPending(false);}}};
 }
 export type MediaBatch=ReturnType<typeof useMediaBatch>;
-export function BatchActions({batch:b,view,canHide,canTrash}:{batch:MediaBatch;view:string;canHide:boolean;canTrash:boolean}) {
-  return <>{b.mode&&<div className="media-batch-actions"><span>已选 {b.selected.size}</span>{view==='trash'?<button disabled={b.busy||!canTrash||!b.selected.size} onClick={()=>b.requestTrash(false)}>恢复</button>:<><button disabled={b.busy||!canHide||!b.selected.size} onClick={()=>void b.hide(view!=='hidden')}>{view==='hidden'?'取消隐藏':'隐藏'}</button><button disabled={b.busy||!canTrash||!b.selected.size} onClick={()=>b.requestTrash(true)}>移入回收站</button></>}<button disabled={b.busy} onClick={()=>{b.setMode(false);b.replace([]);}}>完成</button></div>}
+export function BatchActions({batch:b,view,canHide,canTrash,onPurge,canPurge=false}:{batch:MediaBatch;view:string;canHide:boolean;canTrash:boolean;onPurge?:(ids:string[])=>void;canPurge?:boolean}) {
+  return <>{b.mode&&<div className="media-batch-actions"><span>已选 {b.selected.size}</span>{view==='trash'?<><button disabled={b.busy||!canTrash||!b.selected.size} onClick={()=>b.requestTrash(false)}>恢复</button>{onPurge&&<button disabled={b.busy||!canPurge||!b.selected.size} onClick={()=>onPurge([...b.selected])}>永久删除…</button>}</>:<><button disabled={b.busy||!canHide||!b.selected.size} onClick={()=>void b.hide(view!=='hidden')}>{view==='hidden'?'取消隐藏':'隐藏'}</button><button disabled={b.busy||!canTrash||!b.selected.size} onClick={()=>b.requestTrash(true)}>移入回收站</button></>}<button disabled={b.busy} onClick={()=>{b.setMode(false);b.replace([]);}}>完成</button></div>}
   {(b.error||b.notice)&&<div className="media-batch-notice" role={b.error?'alert':'status'}>{b.error??b.notice?.text}{b.notice?.undo&&<button disabled={b.busy} onClick={()=>void b.undo()}>撤销</button>}</div>}</>;
 }
 export function BatchConfirmation({batch:b,recycle,annotations,authors}:{batch:MediaBatch;recycle:RecycleController;annotations:Annotation[];authors:AuthorSnapshot[]}) {

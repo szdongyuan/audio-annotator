@@ -6,7 +6,7 @@ import { PlaybackModeControl } from './PlaybackMode';
 import { usePlayback } from './usePlayback';
 import {emptyPlayback,type PlaybackRequest,type PlaybackStatus,type MonitorGainRequest} from '../../bridge/playback';
 import fixture from '../../../tests/fixtures/document-v3.json';
-import { parseProjectDocument,type Change } from '../../bridge/types';
+import { parseProjectDocument,type Change,type Region } from '../../bridge/types';
 import { ProjectStore } from '../../app/store';
 import { CommandQueue } from '../../app/commands';
 import { ProjectLifecycle } from '../project/lifecycle';
@@ -90,6 +90,15 @@ function activeProject(){
  const queue=new CommandQueue(store,{applyChange,getSnapshot:async()=>store.snapshot,undo:async()=>store.snapshot,redo:async()=>store.snapshot});
  const save=vi.fn(async(_id:string,r:number)=>r),lifecycle=new ProjectLifecycle(store,queue,{save,close:async()=>{}});return{active:{store,queue,lifecycle,path:''},applyChange,save};
 }
+it('retiring a selection on A preserves explicit B playback while retiring B invalidates its intent',async()=>{
+ const s=activeProject(),a=fixture.media[0].id,b='22222222-2222-4222-8222-222222222222',before=s.active.store.snapshot,d=before.document;
+ s.active.store.accept({...before,document:{...d,media:[...d.media,{...structuredClone(d.media[0]),id:b}],analysis:{...d.analysis,[b]:d.analysis[a]},playbackMix:{...d.playbackMix,[b]:d.playbackMix[a]}}});let generation=0;
+ const api={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(r:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:'playing' as const}))};
+ const hook=renderHook(({selection}:{selection:Region|undefined})=>usePlayback(s.active,b,selection,api),{initialProps:{selection:d.annotations[0].region as Region|undefined}});act(()=>hook.result.current.playFile());await waitFor(()=>expect(api.configure).toHaveBeenCalledOnce());expect(api.configure.mock.calls[0][0].mediaId).toBe(b);const controls=api.control.mock.calls.length;
+ act(()=>{const doc=s.active.store.snapshot.document;s.active.store.retire([a],{...s.active.store.snapshot,document:{...doc,revision:1,media:doc.media.filter(m=>m.id!==a),annotations:[],edits:[],analysis:{[b]:doc.analysis[b]},playbackMix:{[b]:doc.playbackMix[b]},viewState:{...doc.viewState,activeMediaId:b,compareMediaId:null}}});});hook.rerender({selection:undefined});await act(async()=>{});
+ expect(hook.result.current.playing).toBe(true);expect(api.control).toHaveBeenCalledTimes(controls);expect(api.configure).toHaveBeenCalledOnce();
+ act(()=>{const doc=s.active.store.snapshot.document;s.active.store.retire([a,b],{...s.active.store.snapshot,document:{...doc,revision:2,media:[],annotations:[],edits:[],analysis:{},playbackMix:{},viewState:{...doc.viewState,activeMediaId:null,compareMediaId:null}}});});hook.rerender({selection:undefined});await waitFor(()=>expect(hook.result.current.playing).toBe(false));hook.unmount();s.active.lifecycle.dispose();
+});
 it('rapid persistent channel toggles merge against latest authority and save waits for both',async()=>{
  const s=activeProject(),id=s.active.store.snapshot.document.media[0].id;s.active.store.snapshot.document.playbackMix[id]={soloChannels:[],mutedChannels:[]};
  const api={available:()=>false,devices:async()=>[],listen:async()=>()=>{},control:async()=>emptyPlayback,configure:async()=>emptyPlayback};

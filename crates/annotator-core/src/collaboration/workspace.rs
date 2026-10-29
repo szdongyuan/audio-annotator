@@ -1,5 +1,6 @@
 //! App-local durable personal projections. No save/capture/ack method accesses the share.
 use super::catalog_workspace::{equivalent, extend_document, validate_extension};
+use super::purge::projection::{project_document, project_payload, Retirement};
 use super::{atomic, validation::*, *};
 use crate::{
     error::{AppError, ErrorCode, Result},
@@ -124,6 +125,136 @@ struct PrivateRecovery {
     primary_error: Option<AppError>,
 }
 
+/// Cheap owned capture under the app mutex; preparation does shared I/O off-lock.
+#[derive(Clone)]
+pub struct CatalogSource {
+    root: PathBuf,
+    hash: String,
+    pub(crate) manifest: CollaborationManifest,
+    workspace: PathBuf,
+    actor: String,
+    sequence: u64,
+    has_recovery: bool,
+    valid_primary: bool,
+}
+pub struct PreparedCatalogUpdate {
+    pub(crate) source: CatalogSource,
+    pub(crate) repo: Arc<CollaborationRepository>,
+    pub(crate) retirement: Retirement,
+    local: PreparedLocalCatalog,
+}
+struct PreparedLocalCatalog {
+    durable: Vec<(&'static str, PrivateEnvelope)>,
+    snapshots: Vec<(&'static str, String)>,
+}
+impl PreparedCatalogUpdate {
+    pub fn repository(&self) -> Arc<CollaborationRepository> {
+        self.repo.clone()
+    }
+    pub fn retired_media_ids(&self) -> &std::collections::HashSet<String> {
+        &self.retirement.retired
+    }
+}
+impl CatalogSource {
+    pub fn prepare(self, repo: Arc<CollaborationRepository>) -> Result<PreparedCatalogUpdate> {
+        require(
+            self.root == repo.root(),
+            "Catalog repository identity changed",
+        )?;
+        if self.hash == repo.manifest_identity() {
+            validate_extension(&self.manifest, repo.manifest())?;
+        }
+        let retirement = Retirement::read(&repo, &self.hash, self.manifest.media.clone())?;
+        require(
+            retirement.source == self.manifest,
+            "Retirement source catalog changed",
+        )?;
+        let local = self.prepare_local(&repo, &retirement, false)?;
+        Ok(PreparedCatalogUpdate {
+            source: self,
+            repo,
+            retirement,
+            local,
+        })
+    }
+    /// Retirement of adopted media is independent of explicit catalog growth.
+    /// The owned repository was freshly read by the caller outside its app mutex.
+    pub fn prepare_retirement(
+        self,
+        mut repo: CollaborationRepository,
+    ) -> Result<PreparedCatalogUpdate> {
+        let retirement = Retirement::read(&repo, &self.hash, self.manifest.media.clone())?;
+        require(
+            self.root == repo.root() && retirement.source == self.manifest,
+            "Retirement source catalog changed",
+        )?;
+        // Independent durable proposals may have adopted more media than the
+        // accepted session. Verify all of them against full shared authority
+        // before selecting the accepted session's narrower adoption scope.
+        let local = self.prepare_local(&repo, &retirement, true)?;
+        let adopted: std::collections::HashSet<_> =
+            self.manifest.media.iter().map(|m| &m.id).collect();
+        repo.manifest.media.retain(|m| adopted.contains(&m.id));
+        Ok(PreparedCatalogUpdate {
+            source: self,
+            repo: Arc::new(repo),
+            retirement,
+            local,
+        })
+    }
+    fn prepare_local(
+        &self,
+        repo: &CollaborationRepository,
+        retirement: &Retirement,
+        retain_candidate_scope: bool,
+    ) -> Result<PreparedLocalCatalog> {
+        let mut durable = vec![];
+        let mut local_snapshots = vec![];
+        if retirement.changed() {
+            for name in ["workspace.recovery.json", "workspace.json"] {
+                if name == "workspace.json" && !self.valid_primary {
+                    continue;
+                }
+                let bytes = atomic::read(&self.workspace.join(name), MAX_CACHE_BYTES)?;
+                local_snapshots.push((name, hash(&bytes)));
+                let mut candidate: PrivateEnvelope = decode(&bytes, MAX_CACHE_BYTES, CACHE_KIND)?;
+                let proof = Retirement::read(
+                    repo,
+                    &candidate.manifest_hash,
+                    candidate
+                        .catalog
+                        .clone()
+                        .ok_or_else(|| AppError::invalid("Missing private catalog authority"))?,
+                )?;
+                let migrated = proof.changed();
+                let mut identity = candidate.clone();
+                identity.root_key = hash(self.root.to_string_lossy().as_bytes());
+                identity.actor = self.actor.clone();
+                validate_envelope(&candidate, &identity, &proof.source)?;
+                let mut target = repo.manifest().clone();
+                if retain_candidate_scope {
+                    let adopted: std::collections::HashSet<_> =
+                        proof.source.media.iter().map(|m| &m.id).collect();
+                    target.media.retain(|m| adopted.contains(&m.id));
+                }
+                project_envelope(&mut candidate, &proof, repo.manifest_identity())?;
+                extend_document(&mut candidate.document, &target)?;
+                candidate.catalog = Some(target.media.clone());
+                identity.manifest_hash = repo.manifest_identity().to_owned();
+                if !self.has_recovery && migrated {
+                    candidate.document.revision = increment(candidate.document.revision)?;
+                }
+                validate_envelope(&candidate, &identity, &target)?;
+                durable.push((name, candidate));
+            }
+        }
+        Ok(PreparedLocalCatalog {
+            durable,
+            snapshots: local_snapshots,
+        })
+    }
+}
+
 pub struct PrivateWorkspace {
     repo: Arc<CollaborationRepository>,
     actor: Option<Arc<AuthorSession>>,
@@ -183,6 +314,7 @@ impl PrivateWorkspace {
         self.require_ready()?;
         require(
             ack.nonce == self.nonce
+                && ack.manifest_hash == self.repo.manifest_identity()
                 && ack.base == self.envelope.base
                 && self.envelope.in_flight.as_ref() == Some(&ack.pending),
             "Stale publication acknowledgement",
@@ -215,7 +347,7 @@ impl PrivateWorkspace {
     }
     pub fn open_view_only(repo: Arc<CollaborationRepository>, app_local: &Path) -> Result<Self> {
         require(
-            repo.manifest().format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
+            crate::collaboration::consts::supported_catalog_format(repo.manifest().format_version),
             "Unsupported collaboration format",
         )?;
         Self::open_inner(repo, None, app_local)
@@ -225,6 +357,7 @@ impl PrivateWorkspace {
         actor: Option<Arc<AuthorSession>>,
         app_local: &Path,
     ) -> Result<Self> {
+        repo.authority()?;
         if let Some(actor) = &actor {
             require(
                 actor.belongs_to(&repo),
@@ -253,9 +386,9 @@ impl PrivateWorkspace {
             atomic::ensure_dir(&root)?;
         }
         let lock = atomic::lock(&root.join(".workspace.lock"))?;
-        let manifest_hash = if repo.manifest().format_version
-            == crate::collaboration::CURRENT_COLLABORATION_FORMAT
-        {
+        let manifest_hash = if crate::collaboration::consts::supported_catalog_format(
+            repo.manifest().format_version,
+        ) {
             repo.manifest_identity().to_owned()
         } else {
             hash(
@@ -270,9 +403,10 @@ impl PrivateWorkspace {
             format_version: 2,
             root_key,
             manifest_hash,
-            catalog: (repo.manifest().format_version
-                == crate::collaboration::CURRENT_COLLABORATION_FORMAT)
-                .then(|| repo.manifest().media.clone()),
+            catalog: (crate::collaboration::consts::supported_catalog_format(
+                repo.manifest().format_version,
+            ))
+            .then(|| repo.manifest().media.clone()),
             actor: actor_id,
             sequence: 0,
             generation: 0,
@@ -289,6 +423,7 @@ impl PrivateWorkspace {
         let mut candidate = None;
         let mut primary_error = None;
         let mut last_error = None;
+        let mut migrated = vec![];
         for (name, is_primary) in [("workspace.json", true), ("workspace.recovery.json", false)] {
             let path = root.join(name);
             if path.try_exists().map_err(atomic::io)? {
@@ -296,19 +431,33 @@ impl PrivateWorkspace {
                 let result = atomic::read(&path, MAX_CACHE_BYTES)
                     .and_then(|b| decode::<PrivateEnvelope>(&b, MAX_CACHE_BYTES, CACHE_KIND))
                     .and_then(|mut candidate| {
-                        if repo.manifest().format_version
-                            == crate::collaboration::CURRENT_COLLABORATION_FORMAT
-                        {
-                            let mut previous = repo.manifest().clone();
-                            previous.media = candidate.catalog.clone().ok_or_else(|| {
+                        let mut rebased = false;
+                        if crate::collaboration::consts::supported_catalog_format(
+                            repo.manifest().format_version,
+                        ) {
+                            let catalog = candidate.catalog.clone().ok_or_else(|| {
                                 AppError::invalid("Missing private catalog authority")
                             })?;
-                            validate_envelope(&candidate, &envelope, &previous)?;
-                            validate_extension(&previous, repo.manifest())?;
+                            let retirement =
+                                Retirement::read(&repo, &candidate.manifest_hash, catalog)?;
+                            let mut source_identity = envelope.clone();
+                            source_identity.manifest_hash = candidate.manifest_hash.clone();
+                            validate_envelope(&candidate, &source_identity, &retirement.source)?;
+                            if retirement.changed() {
+                                project_envelope(
+                                    &mut candidate,
+                                    &retirement,
+                                    repo.manifest_identity(),
+                                )?;
+                                rebased = true;
+                            }
                             candidate.catalog = Some(repo.manifest().media.clone());
                             extend_document(&mut candidate.document, repo.manifest())?;
                         }
                         validate_envelope(&candidate, &envelope, repo.manifest())?;
+                        if rebased {
+                            migrated.push((name, candidate.clone()));
+                        }
                         Ok(candidate)
                     });
                 match result {
@@ -365,6 +514,27 @@ impl PrivateWorkspace {
             nonce: uuid::Uuid::new_v4(),
             recovery,
         };
+        // Migrate both independent durable choices without promoting recovery to
+        // primary or changing sequence ordering. Each replacement is atomic; a
+        // crash between them is idempotently completed on the next open.
+        for (name, candidate) in migrated {
+            let bytes = serde_json::to_vec(&candidate)
+                .map_err(|_| AppError::invalid("Cannot encode retired checkpoint"))?;
+            let faults = if name == "workspace.json" {
+                [
+                    WorkspaceFault::MainWrite,
+                    WorkspaceFault::MainSync,
+                    WorkspaceFault::MainReplace,
+                ]
+            } else {
+                [
+                    WorkspaceFault::RecoveryWrite,
+                    WorkspaceFault::RecoverySync,
+                    WorkspaceFault::RecoveryReplace,
+                ]
+            };
+            workspace.write(name, &bytes, faults)?;
+        }
         if workspace.recovery.is_none() {
             if let Some(actor) = &workspace.actor {
                 match workspace.repo.read_author(&actor.identity().author_id) {
@@ -384,27 +554,129 @@ impl PrivateWorkspace {
             "Choose a private recovery checkpoint before editing or publishing",
         )
     }
-    pub(crate) fn adopt_catalog(&mut self, repo: Arc<CollaborationRepository>) -> Result<()> {
+    pub fn catalog_source(&self) -> CatalogSource {
+        CatalogSource {
+            root: self.repo.root().to_owned(),
+            hash: self.envelope.manifest_hash.clone(),
+            manifest: self.repo.manifest().clone(),
+            workspace: self.root.clone(),
+            actor: self.envelope.actor.clone(),
+            sequence: self.envelope.sequence,
+            has_recovery: self.recovery.is_some(),
+            valid_primary: self.recovery.as_ref().is_none_or(|r| r.primary.is_some()),
+        }
+    }
+    pub(crate) fn validate_prepared_catalog(&self, prepared: &PreparedCatalogUpdate) -> Result<()> {
+        require(
+            prepared.source.root == self.repo.root()
+                && prepared.source.workspace == self.root
+                && prepared.source.actor == self.envelope.actor
+                && prepared.source.sequence == self.envelope.sequence
+                && prepared.source.has_recovery == self.recovery.is_some()
+                && prepared.source.hash == self.envelope.manifest_hash
+                && prepared.source.manifest == *self.repo.manifest(),
+            "Stale prepared catalog source",
+        )?;
+        // Failed writes can replace recovery at the same sequence while leaving
+        // memory unchanged. Check every original local snapshot before replacing
+        // either file. The workspace lock and caller's mutex serialize writers.
+        for (name, expected) in &prepared.local.snapshots {
+            let bytes = atomic::read(&self.root.join(name), MAX_CACHE_BYTES)?;
+            require(
+                hash(&bytes) == *expected,
+                "Private checkpoint changed after retirement preparation",
+            )?;
+        }
+        Ok(())
+    }
+    pub(crate) fn adopt_prepared_catalog(&mut self, prepared: PreparedCatalogUpdate) -> Result<()> {
+        self.validate_prepared_catalog(&prepared)?;
+        let PreparedCatalogUpdate {
+            repo,
+            retirement,
+            local,
+            ..
+        } = prepared;
+        if let Some(recovery) = &self.recovery {
+            require(
+                retirement.changed(),
+                "Choose recovery before extending the catalog",
+            )?;
+            let projected = |name: &str| -> Result<PrivateEnvelope> {
+                local
+                    .durable
+                    .iter()
+                    .find(|(file, _)| *file == name)
+                    .map(|(_, e)| e.clone())
+                    .ok_or_else(|| AppError::invalid("Missing prepared private checkpoint"))
+            };
+            let primary = recovery
+                .primary
+                .as_ref()
+                .map(|_| projected("workspace.json"))
+                .transpose()?;
+            let candidate = projected("workspace.recovery.json")?;
+            self.write_candidates(&local.durable)?;
+            self.envelope = primary.as_ref().unwrap_or(&candidate).clone();
+            self.recovery = Some(PrivateRecovery {
+                primary,
+                candidate,
+                primary_error: recovery.primary_error.clone(),
+            });
+            self.repo = repo;
+            self.nonce = uuid::Uuid::new_v4();
+            return Ok(());
+        }
         self.require_ready()?;
-        self.validate_catalog(&repo)?;
         let mut next = self.envelope.clone();
+        if retirement.changed() {
+            project_envelope(&mut next, &retirement, repo.manifest_identity())?;
+        }
         extend_document(&mut next.document, repo.manifest())?;
-        next.catalog = (repo.manifest().format_version
-            == crate::collaboration::CURRENT_COLLABORATION_FORMAT)
-            .then(|| repo.manifest().media.clone());
+        next.catalog = (crate::collaboration::consts::supported_catalog_format(
+            repo.manifest().format_version,
+        ))
+        .then(|| repo.manifest().media.clone());
         next.document.revision = increment(next.document.revision)?;
-        self.commit_for_manifest(next, repo.manifest())?;
-        // Keep the admitted capture nonce and author lease: old payloads remain valid.
+        if retirement.changed() {
+            // A prior failed save may have left a newer unaccepted recovery on
+            // disk even while this session is active. Preserve it independently.
+            let mut identity = self.envelope.clone();
+            identity.manifest_hash = repo.manifest_identity().to_owned();
+            validate_envelope(&next, &identity, repo.manifest())?;
+            self.write_candidates(&local.durable)?;
+            self.envelope = next;
+        } else {
+            self.commit_for_manifest(next, repo.manifest(), repo.manifest_identity())?;
+        }
+        if retirement.changed() {
+            self.nonce = uuid::Uuid::new_v4();
+        }
+        // Ordinary append keeps admitted captures. Retirement invalidates old acks
+        // while preserving the projected admission and the stable author lease.
         self.repo = repo;
         Ok(())
     }
-    pub(crate) fn validate_catalog(&self, repo: &CollaborationRepository) -> Result<()> {
-        require(
-            repo.root() == self.repo.root()
-                && repo.manifest_identity() == self.repo.manifest_identity(),
-            "Catalog repository identity changed",
-        )?;
-        validate_extension(self.repo.manifest(), repo.manifest())
+    fn write_candidates(&self, candidates: &[(&str, PrivateEnvelope)]) -> Result<()> {
+        for (name, candidate) in candidates {
+            let bytes = serde_json::to_vec(candidate)
+                .map_err(|_| AppError::invalid("Cannot encode retired recovery"))?;
+            let faults = if *name == "workspace.json" {
+                [
+                    WorkspaceFault::MainWrite,
+                    WorkspaceFault::MainSync,
+                    WorkspaceFault::MainReplace,
+                ]
+            } else {
+                [
+                    WorkspaceFault::RecoveryWrite,
+                    WorkspaceFault::RecoverySync,
+                    WorkspaceFault::RecoveryReplace,
+                ]
+            };
+            self.write(name, &bytes, faults)?;
+        }
+        Ok(())
     }
     pub fn persisted_revision(&self) -> u64 {
         self.recovery
@@ -475,7 +747,7 @@ impl PrivateWorkspace {
         &self.envelope.preferences
     }
     pub fn is_view_only(&self) -> bool {
-        self.repo.manifest().format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT
+        crate::collaboration::consts::supported_catalog_format(self.repo.manifest().format_version)
             && self.actor.is_none()
     }
     pub fn hidden_media_ids(&self) -> &[String] {
@@ -508,8 +780,9 @@ impl PrivateWorkspace {
     pub fn set_hidden_media_ids(&mut self, mut ids: Vec<String>) -> Result<()> {
         self.require_ready()?;
         require(
-            self.repo.manifest().format_version
-                == crate::collaboration::CURRENT_COLLABORATION_FORMAT,
+            crate::collaboration::consts::supported_catalog_format(
+                self.repo.manifest().format_version,
+            ),
             "Unsupported collaboration format",
         )?;
         limit(ids.len() <= super::validation::MAX_MEDIA)?;
@@ -590,15 +863,18 @@ impl PrivateWorkspace {
     }
     fn commit(&mut self, next: PrivateEnvelope) -> Result<()> {
         let repo = self.repo.clone();
-        self.commit_for_manifest(next, repo.manifest())
+        self.commit_for_manifest(next, repo.manifest(), &self.envelope.manifest_hash.clone())
     }
     fn commit_for_manifest(
         &mut self,
         mut next: PrivateEnvelope,
         manifest: &CollaborationManifest,
+        manifest_hash: &str,
     ) -> Result<()> {
         next.sequence = increment(self.envelope.sequence.max(next.sequence))?;
-        validate_envelope(&next, &self.envelope, manifest)?;
+        let mut identity = self.envelope.clone();
+        identity.manifest_hash = manifest_hash.to_owned();
+        validate_envelope(&next, &identity, manifest)?;
         let bytes = serde_json::to_vec(&next)
             .map_err(|_| AppError::invalid("Cannot encode private workspace"))?;
         limit(bytes.len() <= MAX_CACHE_BYTES)?;
@@ -703,9 +979,9 @@ impl PrivateWorkspace {
         install_payload(&mut next.document, &payload, self.repo.manifest())?;
         next.document.revision = increment(next.document.revision)?;
         next.base = checkpoint;
-        next.confirmed = if self.repo.manifest().format_version
-            == crate::collaboration::CURRENT_COLLABORATION_FORMAT
-        {
+        next.confirmed = if crate::collaboration::consts::supported_catalog_format(
+            self.repo.manifest().format_version,
+        ) {
             payload
         } else {
             LayerPayload::from_document(&next.document)?
@@ -773,9 +1049,9 @@ impl PrivateWorkspace {
         install_payload(&mut next.document, &payload, self.repo.manifest())?;
         next.document.revision = increment(next.document.revision)?;
         next.base = remote.map(AuthorLayer::checkpoint);
-        next.confirmed = if self.repo.manifest().format_version
-            == crate::collaboration::CURRENT_COLLABORATION_FORMAT
-        {
+        next.confirmed = if crate::collaboration::consts::supported_catalog_format(
+            self.repo.manifest().format_version,
+        ) {
             payload
         } else {
             LayerPayload::from_document(&next.document)?
@@ -787,6 +1063,29 @@ impl PrivateWorkspace {
         self.nonce = uuid::Uuid::new_v4();
         Ok(self.envelope.document.clone())
     }
+}
+fn project_envelope(
+    e: &mut PrivateEnvelope,
+    retirement: &Retirement,
+    manifest_hash: &str,
+) -> Result<()> {
+    e.base = retirement.checkpoint(&e.actor, e.base.as_ref())?;
+    project_document(&mut e.document, &retirement.retired)?;
+    project_payload(&mut e.confirmed, &retirement.retired);
+    for pending in [&mut e.pending, &mut e.in_flight].into_iter().flatten() {
+        project_payload(&mut pending.payload, &retirement.retired);
+        pending.hash = pending.payload.hash()?;
+    }
+    if let Some(catalog) = &mut e.catalog {
+        catalog.retain(|m| !retirement.retired.contains(&m.id));
+    }
+    e.hidden_media_ids
+        .retain(|id| !retirement.retired.contains(id));
+    e.preferences
+        .media_monitor_gain_db
+        .retain(|id, _| !retirement.retired.contains(id));
+    e.manifest_hash = manifest_hash.to_owned();
+    Ok(())
 }
 fn increment(n: u64) -> Result<u64> {
     limit(n < MAX_SAFE_INTEGER)?;
@@ -807,7 +1106,7 @@ fn validate_envelope(
     )?;
     limit(e.sequence <= MAX_SAFE_INTEGER && e.generation <= MAX_SAFE_INTEGER)?;
     require(
-        if manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT {
+        if crate::collaboration::consts::supported_catalog_format(manifest.format_version) {
             e.catalog.as_ref() == Some(&manifest.media)
         } else {
             e.catalog.is_none()
@@ -895,7 +1194,7 @@ fn validate_envelope(
             "Invalid hidden media preference",
         )?;
     }
-    if manifest.format_version == crate::collaboration::CURRENT_COLLABORATION_FORMAT
+    if crate::collaboration::consts::supported_catalog_format(manifest.format_version)
         && e.actor == "view-only"
     {
         require(

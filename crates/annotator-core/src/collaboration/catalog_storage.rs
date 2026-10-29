@@ -87,6 +87,7 @@ pub(super) struct LoadedCatalog {
     pub revision: Option<CatalogRevision>,
     pub record_hashes: Vec<(String, String)>,
     pub organization: organization::Organization,
+    pub metadata_root: std::path::PathBuf,
 }
 pub(super) fn record_digest(records: &[(String, String)]) -> Result<String> {
     Ok(hash(
@@ -113,22 +114,30 @@ pub(super) fn load(
     limit(bytes.len() <= MAX_LAYER_BYTES)?;
     let header: Header =
         serde_json::from_slice(bytes).map_err(|_| AppError::invalid("Invalid manifest header"))?;
-    if header.format_version != crate::collaboration::CURRENT_COLLABORATION_FORMAT {
-        return Err(AppError::new(
-            ErrorCode::UnsupportedVersion,
-            "Unsupported collaboration version; use the prior app or exchange/export workflow",
-        ));
-    }
-    let fixed: DefaultManifest = serde_json::from_slice(bytes)
-        .map_err(|_| AppError::invalid("Invalid default manifest structure"))?;
-    let mut manifest = fixed.effective()?;
-    let organization = organization::read(root, &manifest.project_id)?;
+    let (mut manifest, metadata_root) =
+        match header.format_version {
+            CURRENT_COLLABORATION_FORMAT => {
+                let fixed: DefaultManifest = serde_json::from_slice(bytes)
+                    .map_err(|_| AppError::invalid("Invalid default manifest structure"))?;
+                (fixed.effective()?, root.to_path_buf())
+            }
+            consts::GENERATION_COLLABORATION_FORMAT => {
+                let entry = purge::generation::GenerationEntry::parse(bytes)?;
+                let path = entry.resolve(root)?;
+                (entry.effective(), path)
+            }
+            _ => return Err(AppError::new(
+                ErrorCode::UnsupportedVersion,
+                "Unsupported collaboration version; use the prior app or exchange/export workflow",
+            )),
+        };
+    let organization = organization::read(&metadata_root, &manifest.project_id)?;
     let referenced = organization
         .media
         .iter()
         .map(|m| m.media_id.as_str())
         .collect::<std::collections::HashSet<_>>();
-    let dir = root.join("catalog");
+    let dir = metadata_root.join("catalog");
     atomic::safe_existing(&dir)?;
     let mut entries = Vec::new();
     for (index, entry) in fs::read_dir(&dir).map_err(atomic::io)?.enumerate() {
@@ -237,5 +246,6 @@ pub(super) fn load(
         revision: Some(revision),
         record_hashes,
         organization,
+        metadata_root,
     })
 }

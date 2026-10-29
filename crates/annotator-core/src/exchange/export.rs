@@ -49,10 +49,11 @@ impl Drop for TemporaryFile {
         let _ = fs::remove_file(&self.0);
     }
 }
-fn publish(
+fn publish_controlled<Guard>(
     target: &Path,
     cancel: &AtomicBool,
     write: impl FnOnce(File) -> Result<()>,
+    before_publish: impl FnOnce() -> Result<Guard>,
 ) -> Result<()> {
     check_cancel(cancel)?;
     let parent = target
@@ -77,8 +78,18 @@ fn publish(
         .map_err(io)?;
     write(file)?;
     check_cancel(cancel)?;
+    let _guard = before_publish()?;
+    check_cancel(cancel)?;
     publish_no_replace(&temp.0, &target).map_err(io)?;
     Ok(())
+}
+#[cfg(test)]
+fn publish(
+    target: &Path,
+    cancel: &AtomicBool,
+    write: impl FnOnce(File) -> Result<()>,
+) -> Result<()> {
+    publish_controlled(target, cancel, write, || Ok(()))
 }
 #[cfg(windows)]
 fn publish_no_replace(source: &Path, target: &Path) -> std::io::Result<()> {
@@ -116,18 +127,36 @@ pub fn export_annotations_with_plan(
     target: &Path,
     cancel: &AtomicBool,
     limits: Limits,
+    progress: impl FnMut(&str, u64),
+) -> Result<()> {
+    export_annotations_controlled(doc, plan, target, cancel, limits, progress, || Ok(()))
+}
+/// Prepare the complete artifact off-lock; hold the returned source authority
+/// guard only across the final cancellation check and no-replace publication.
+pub fn export_annotations_controlled<Guard>(
+    doc: &ProjectDocument,
+    plan: &ExportPathPlan,
+    target: &Path,
+    cancel: &AtomicBool,
+    limits: Limits,
     mut progress: impl FnMut(&str, u64),
+    before_publish: impl FnOnce() -> Result<Guard>,
 ) -> Result<()> {
     if plan.bundle {
         return Err(super::invalid("Expected annotation plan"));
     }
     let bytes = encode(doc, plan, limits)?;
-    publish(target, cancel, |mut file| {
-        file.write_all(&bytes).map_err(io)?;
-        file.sync_all().map_err(io)?;
-        progress("清单", bytes.len() as u64);
-        Ok(())
-    })
+    publish_controlled(
+        target,
+        cancel,
+        |mut file| {
+            file.write_all(&bytes).map_err(io)?;
+            file.sync_all().map_err(io)?;
+            progress("清单", bytes.len() as u64);
+            Ok(())
+        },
+        before_publish,
+    )
 }
 pub fn export_bundle(
     doc: &ProjectDocument,
@@ -148,7 +177,20 @@ pub fn export_bundle_with_plan(
     target: &Path,
     cancel: &AtomicBool,
     limits: Limits,
+    progress: impl FnMut(&str, u64),
+) -> Result<()> {
+    export_bundle_controlled(doc, plan, root, target, cancel, limits, progress, || Ok(()))
+}
+#[allow(clippy::too_many_arguments)]
+pub fn export_bundle_controlled<Guard>(
+    doc: &ProjectDocument,
+    plan: &ExportPathPlan,
+    root: &Path,
+    target: &Path,
+    cancel: &AtomicBool,
+    limits: Limits,
     mut progress: impl FnMut(&str, u64),
+    before_publish: impl FnOnce() -> Result<Guard>,
 ) -> Result<()> {
     if !plan.bundle {
         return Err(super::invalid("Expected bundle plan"));
@@ -161,83 +203,125 @@ pub fn export_bundle_with_plan(
     if total > limits.total_bytes {
         return Err(limit());
     }
-    publish(target, cancel, |file| {
-        let mut zip = ZipWriter::new(file);
-        let options = SimpleFileOptions::default()
-            .compression_method(CompressionMethod::Stored)
-            .unix_permissions(0o644);
-        zip.start_file("manifest.json", options)
-            .map_err(zip_error)?;
-        zip.write_all(&manifest).map_err(io)?;
-        for directory in &plan.directories {
-            zip.add_directory(
-                directory,
-                SimpleFileOptions::default().unix_permissions(0o755),
-            )
-            .map_err(zip_error)?;
-        }
-        for media in &doc.media {
-            check_cancel(cancel)?;
-            let source = Path::new(&media.source_ref);
-            let source = if source.is_absolute() {
-                source.to_path_buf()
-            } else {
-                root.join(source)
-            };
-            let stamp = SourceStamp::read(&source)?;
-            if stamp.bytes > limits.media_bytes {
-                return Err(limit());
+    publish_controlled(
+        target,
+        cancel,
+        |file| {
+            let mut zip = ZipWriter::new(file);
+            let options = SimpleFileOptions::default()
+                .compression_method(CompressionMethod::Stored)
+                .unix_permissions(0o644);
+            zip.start_file("manifest.json", options)
+                .map_err(zip_error)?;
+            zip.write_all(&manifest).map_err(io)?;
+            for directory in &plan.directories {
+                zip.add_directory(
+                    directory,
+                    SimpleFileOptions::default().unix_permissions(0o755),
+                )
+                .map_err(zip_error)?;
             }
-            if stamp.bytes != media.byte_length
-                || fingerprint(&source, cancel, |n| progress("校验原文件", n))? != media.sha256
-            {
-                return Err(AppError::new(
-                    ErrorCode::IdentityMismatch,
-                    "源音频指纹已改变",
-                ));
-            }
-            stamp.verify(&source)?;
-            zip.start_file(
-                &plan.media_paths[&media.id],
-                options.large_file(media.byte_length >= u32::MAX as u64),
-            )
-            .map_err(zip_error)?;
-            let mut input = File::open(&source).map_err(io)?;
-            let mut hash = Sha256::new();
-            let mut count = 0;
-            let mut buffer = [0; 65536];
-            loop {
+            for media in &doc.media {
                 check_cancel(cancel)?;
-                let n = input.read(&mut buffer).map_err(io)?;
-                if n == 0 {
-                    break;
-                }
-                count += n as u64;
-                total += n as u64;
-                if count > limits.media_bytes || total > limits.total_bytes {
+                let source = Path::new(&media.source_ref);
+                let source = if source.is_absolute() {
+                    source.to_path_buf()
+                } else {
+                    root.join(source)
+                };
+                let stamp = SourceStamp::read(&source)?;
+                if stamp.bytes > limits.media_bytes {
                     return Err(limit());
                 }
-                hash.update(&buffer[..n]);
-                zip.write_all(&buffer[..n]).map_err(io)?;
-                progress("复制原始媒体", total);
+                if stamp.bytes != media.byte_length
+                    || fingerprint(&source, cancel, |n| progress("校验原文件", n))? != media.sha256
+                {
+                    return Err(AppError::new(
+                        ErrorCode::IdentityMismatch,
+                        "源音频指纹已改变",
+                    ));
+                }
+                stamp.verify(&source)?;
+                zip.start_file(
+                    &plan.media_paths[&media.id],
+                    options.large_file(media.byte_length >= u32::MAX as u64),
+                )
+                .map_err(zip_error)?;
+                let mut input = File::open(&source).map_err(io)?;
+                let mut hash = Sha256::new();
+                let mut count = 0;
+                let mut buffer = [0; 65536];
+                loop {
+                    check_cancel(cancel)?;
+                    let n = input.read(&mut buffer).map_err(io)?;
+                    if n == 0 {
+                        break;
+                    }
+                    count += n as u64;
+                    total += n as u64;
+                    if count > limits.media_bytes || total > limits.total_bytes {
+                        return Err(limit());
+                    }
+                    hash.update(&buffer[..n]);
+                    zip.write_all(&buffer[..n]).map_err(io)?;
+                    progress("复制原始媒体", total);
+                }
+                stamp.verify(&source)?;
+                if count != media.byte_length || format!("{:x}", hash.finalize()) != media.sha256 {
+                    return Err(AppError::new(
+                        ErrorCode::IdentityMismatch,
+                        "复制期间源音频已改变",
+                    ));
+                }
             }
-            stamp.verify(&source)?;
-            if count != media.byte_length || format!("{:x}", hash.finalize()) != media.sha256 {
-                return Err(AppError::new(
-                    ErrorCode::IdentityMismatch,
-                    "复制期间源音频已改变",
-                ));
-            }
-        }
-        zip.finish().map_err(zip_error)?.sync_all().map_err(io)?;
-        Ok(())
-    })
+            zip.finish().map_err(zip_error)?.sync_all().map_err(io)?;
+            Ok(())
+        },
+        before_publish,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::Ordering;
+    #[test]
+    fn controlled_publication_preserves_authority_failure_and_post_guard_cancellation() {
+        let root =
+            std::env::temp_dir().join(format!("exchange-authority-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let target = root.join("copy.json");
+        let cancel = AtomicBool::new(false);
+        let failure = publish_controlled(
+            &target,
+            &cancel,
+            |mut file| {
+                file.write_all(b"complete").map_err(io)?;
+                file.sync_all().map_err(io)
+            },
+            || Err::<(), _>(AppError::new(ErrorCode::RevisionConflict, "source retired")),
+        )
+        .unwrap_err();
+        assert_eq!(failure.code, ErrorCode::RevisionConflict);
+        assert_eq!(failure.message, "source retired");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+        let failure = publish_controlled(
+            &target,
+            &cancel,
+            |mut file| {
+                file.write_all(b"complete").map_err(io)?;
+                file.sync_all().map_err(io)
+            },
+            || {
+                cancel.store(true, Ordering::Relaxed);
+                Ok(())
+            },
+        )
+        .unwrap_err();
+        assert_eq!(failure.code, ErrorCode::Cancelled);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn publication_refuses_a_target_created_during_write_and_cleans_only_its_temp() {
         let root = std::env::temp_dir().join(format!("exchange-publish-{}", uuid::Uuid::new_v4()));

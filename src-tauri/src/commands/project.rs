@@ -76,26 +76,96 @@ pub async fn resolve_recovery(
     runtime_nonce: Option<String>,
     source: Option<RecoverySource>,
 ) -> Result<OpenProject> {
-    let collaboration = state.6.clone();
-    state
-        .run(move |s| {
-            super::collaboration::runtime::check_mutation(
-                active(s)?,
-                &collaboration,
-                runtime_nonce.as_deref(),
-            )?;
-            let p = active(s)?;
+    resolve_recovery_for(&state, runtime_nonce, source).await
+}
+pub(crate) async fn resolve_recovery_for(
+    state: &AppState,
+    runtime_nonce: Option<String>,
+    source: Option<RecoverySource>,
+) -> Result<OpenProject> {
+    use super::collaboration::runtime;
+    use annotator_core::collaboration::CollaborationRepository;
+    let state = state.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let captured = {
+            let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
+            let p = active(&mut current)?;
+            runtime::check_mutation(p, &state.6, runtime_nonce.as_deref())?;
+            if p.is_shared() {
+                let w = p.workspace()?;
+                let r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
+                Some((
+                    r.nonce.clone(),
+                    r.repo.clone().ok_or_else(runtime::stale)?,
+                    w.catalog_source(),
+                    w.envelope().document.project_id.clone(),
+                    w.envelope().document.revision,
+                ))
+            } else {
+                // Ordinary recovery keeps its original atomic native lifecycle;
+                // only shared recovery needs an off-lock authority preparation.
+                p.resolve_recovery(source)?;
+                state.6.install(None)?;
+                return info_shared(p, &state.6);
+            }
+        };
+        #[cfg(test)]
+        {
+            let hook = state.6.before_retirement_io.lock().unwrap().take();
+            if let Some(hook) = hook {
+                hook();
+            }
+        }
+        // Resolve ancestry and independently project both recovery choices off
+        // the application mutex before either choice can be accepted.
+        let prepared = if let Some((_, repo, catalog, _, _)) = &captured {
+            let fresh = CollaborationRepository::open(repo.root())?;
+            if fresh.manifest_identity() != repo.manifest_identity() {
+                Some(catalog.clone().prepare_retirement(fresh)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
+        let p = active(&mut current)?;
+        runtime::check_mutation(p, &state.6, runtime_nonce.as_deref())?;
+        if let Some((nonce, _, _, project_id, revision)) = captured {
+            let mut r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
+            let w = p.workspace()?;
+            if r.nonce != nonce
+                || w.envelope().document.project_id != project_id
+                || w.envelope().document.revision != revision
+                || p.recovery().is_none()
+            {
+                return Err(runtime::stale());
+            }
+            if let Some(prepared) = prepared {
+                let next = prepared.repository();
+                let retired = prepared.retired_media_ids().clone();
+                let mut layers = r.layers.clone().ok_or_else(runtime::stale)?;
+                layers.adopt_prepared_catalog(&prepared)?;
+                let before = p.workspace()?.envelope().document.clone();
+                let snapshot = p.adopt_prepared_catalog(&project_id, revision, prepared)?;
+                state.retire_media_resources(&retired.iter().cloned().collect::<Vec<_>>())?;
+                state.3.changed(&before, &snapshot.document);
+                r.repo = Some(next);
+                r.layers = Some(layers);
+                r.retired_media_ids.extend(retired);
+                r.retired_media_ids.sort();
+                r.retired_media_ids.dedup();
+            }
             p.resolve_recovery(source)?;
-            let repo = collaboration
-                .current
-                .lock()
-                .map_err(|_| super::collaboration::runtime::unavailable())?
-                .repo
-                .clone();
-            collaboration.install(repo)?;
-            info_shared(p, &collaboration)
-        })
-        .await
+            drop(r);
+        } else {
+            p.resolve_recovery(source)?;
+            state.6.install(None)?;
+        }
+        info_shared(p, &state.6)
+    })
+    .await
+    .map_err(|_| runtime::unavailable())?
 }
 #[tauri::command]
 pub async fn get_project_snapshot(
@@ -220,7 +290,7 @@ pub(crate) async fn apply(
             let snapshot = active(s)?.apply_change(&project_id, expected_revision, change)?;
             playback.changed(&before, &snapshot.document);
             if let Some(media) = prepared {
-                tasks.commit(media);
+                tasks.commit(media)?;
             }
             Ok(snapshot)
         })
@@ -374,7 +444,7 @@ pub async fn close_project(
                 .lock()
                 .map_err(|_| AppError::invalid("扫描服务不可用"))?
                 .reset();
-            analysis.scheduler.reset();
+            analysis.reset();
             Ok(())
         })
         .await

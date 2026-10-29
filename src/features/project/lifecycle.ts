@@ -52,6 +52,14 @@ export class ProjectLifecycle {
   private async flushEdits() {
     while (this.pendingEdits.size) await Promise.all([...this.pendingEdits]);
   }
+  /** Persist within this admitted edit without waiting for the edit itself or resetting playback. */
+  enqueuePersistedEdit<T>(action: () => Promise<T>): Promise<T> {
+    return this.enqueueEdit(async () => {
+      await this.submitDrafts();
+      await this.persistSnapshot();
+      return action();
+    }) as Promise<T>;
+  }
   registerDraft(key: string, submit: () => Promise<unknown>) {
     this.drafts.set(key, submit);
     return () => { if (this.drafts.get(key) === submit) this.drafts.delete(key); };

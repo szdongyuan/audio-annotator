@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 pub const MANIFEST_KIND: &str = "audio-annotator-collaboration";
 pub const LAYER_KIND: &str = "audio-annotator-author-layer";
 pub const AUTHOR_KIND: &str = "audio-annotator-author";
+// Default for newly created projects; readers deliberately dispatch formats 5 and 6.
 pub const CURRENT_COLLABORATION_FORMAT: u32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

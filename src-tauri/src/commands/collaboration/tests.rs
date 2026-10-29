@@ -112,6 +112,426 @@ fn refresh_now(state: &AppState) -> Status {
 }
 
 #[test]
+fn refresh_automatically_retires_adopted_media_preserving_unsaved_input_and_nonce() {
+    use annotator_core::collaboration::{
+        profiles::Profile, purge::transaction::PurgeSelection, recycle::RecycleOperation,
+    };
+    use std::sync::atomic::AtomicBool;
+    let f = Fixture::new();
+    let importer = f.repo.adopt(&Profile::new("Importer").unwrap()).unwrap();
+    let source =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/audio/mono16.wav");
+    let mut ids = vec![];
+    for _ in 0..2 {
+        let prepared = f
+            .repo
+            .prepare_media(&source, &f.root.join("pcm"), &AtomicBool::new(false))
+            .unwrap();
+        ids.push(prepared.media().id.clone());
+        f.repo
+            .append_media(&importer, &prepared, &AtomicBool::new(false))
+            .unwrap();
+    }
+    let a = f.state("local-a");
+    edit(&a, "B saved pending", true);
+    edit(&a, "B unsaved input", false);
+    let nonce = expected(&a).runtime_nonce;
+    let prepared_unrelated = CollaborationRepository::open(f.repo.root())
+        .unwrap()
+        .prepare_media(
+            &source,
+            &f.root.join("unrelated-pcm"),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+    super::catalog::store_prepared(&a.6, &nonce, "unrelated-import", prepared_unrelated).unwrap();
+    let repo = CollaborationRepository::open(f.repo.root()).unwrap();
+    repo.apply_recycle_controlled(
+        &importer,
+        0,
+        RecycleOperation {
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            media_ids: vec![ids[0].clone()],
+            trash: true,
+        },
+        &AtomicBool::new(false),
+        || Ok(()),
+    )
+    .unwrap();
+    let preview = repo
+        .preview_purge(
+            &importer,
+            "foreign",
+            &uuid::Uuid::new_v4().to_string(),
+            PurgeSelection::Selected(vec![ids[0].clone()]),
+        )
+        .unwrap();
+    repo.commit_purge(&importer, "foreign", &preview, &AtomicBool::new(false))
+        .unwrap();
+    let fresh = CollaborationRepository::open(f.repo.root()).unwrap();
+    let new_c = fresh
+        .prepare_media(&source, &f.root.join("new-c-pcm"), &AtomicBool::new(false))
+        .unwrap();
+    fresh
+        .append_media(&importer, &new_c, &AtomicBool::new(false))
+        .unwrap();
+    let (entered, arrival) = mpsc::channel();
+    let (release, wait) = mpsc::channel();
+    let locks = a.clone();
+    *a.6.before_retirement_io.lock().unwrap() = Some(Box::new(move || {
+        assert!(locks.0.try_lock().is_ok());
+        assert!(locks.6.current.try_lock().is_ok());
+        entered.send(()).unwrap();
+        wait.recv().unwrap();
+    }));
+    let worker = a.clone();
+    let binding = expected(&a);
+    let join =
+        std::thread::spawn(move || tauri::async_runtime::block_on(refresh(&worker, binding)));
+    arrival.recv_timeout(Duration::from_secs(10)).unwrap();
+    edit(&a, "B during retirement IO", false);
+    release.send(()).unwrap();
+    assert!(
+        join.join().unwrap().is_err(),
+        "prepared retirement must recheck the exact live revision"
+    );
+    let status = refresh_now(&a);
+    assert!(status.error.is_none(), "{:?}", status.error);
+    assert_eq!(status.runtime_nonce, nonce);
+    assert!(status.can_import_media);
+    assert_eq!(
+        a.6.prepared_count
+            .load(std::sync::atomic::Ordering::Acquire),
+        1,
+        "retirement preserves unrelated prepared imports"
+    );
+    assert!(
+        status.catalog_pending,
+        "unadopted remote C keeps its explicit update prompt"
+    );
+    assert_eq!(
+        status.retirement.as_ref().unwrap().media_ids,
+        vec![ids[0].clone()]
+    );
+    let current = a.0.lock().unwrap();
+    let p = current.as_ref().unwrap();
+    let doc = p.snapshot().unwrap().document;
+    assert_eq!(
+        doc.media.iter().map(|m| &m.id).collect::<Vec<_>>(),
+        vec![&ids[1]]
+    );
+    assert!(doc.categories.iter().any(|c| c.name == "B unsaved input"));
+    assert!(doc
+        .categories
+        .iter()
+        .any(|c| c.name == "B during retirement IO"));
+    assert!(doc.categories.iter().any(|c| c.name == "B saved pending"));
+    assert!(p.snapshot().unwrap().can_undo);
+    assert!(p.persisted_revision() < doc.revision);
+    drop(current);
+    {
+        let mut current = a.0.lock().unwrap();
+        let p = current.as_mut().unwrap();
+        let d = p.snapshot().unwrap().document;
+        p.save(&d.project_id, d.revision).unwrap();
+    }
+    tauri::async_runtime::block_on(super::catalog::adopt(
+        &a,
+        expected(&a),
+        uuid::Uuid::new_v4().to_string(),
+    ))
+    .unwrap();
+    let current = a.0.lock().unwrap();
+    let p = current.as_ref().unwrap();
+    assert!(p
+        .snapshot()
+        .unwrap()
+        .document
+        .media
+        .iter()
+        .any(|m| m.id == new_c.media().id));
+    assert!(p.workspace().unwrap().envelope().pending.is_some());
+    assert_eq!(a.6.current.lock().unwrap().nonce, nonce);
+}
+
+#[test]
+fn retirement_authority_io_releases_app_mutex_for_unsaved_editing() {
+    let f = Fixture::new();
+    let a = f.state("local-a");
+    let (entered, arrival) = mpsc::channel();
+    let (release, wait) = mpsc::channel();
+    let locks = a.clone();
+    *a.6.before_retirement_io.lock().unwrap() = Some(Box::new(move || {
+        assert!(locks.0.try_lock().is_ok());
+        assert!(locks.6.current.try_lock().is_ok());
+        entered.send(()).unwrap();
+        wait.recv().unwrap();
+    }));
+    let binding = expected(&a);
+    let worker = a.clone();
+    let join =
+        std::thread::spawn(move || tauri::async_runtime::block_on(refresh(&worker, binding)));
+    arrival.recv_timeout(Duration::from_secs(10)).unwrap();
+    edit(&a, "unsaved during proof I/O", false);
+    release.send(()).unwrap();
+    join.join().unwrap().unwrap();
+    let current = a.0.lock().unwrap();
+    assert!(current
+        .as_ref()
+        .unwrap()
+        .snapshot()
+        .unwrap()
+        .document
+        .categories
+        .iter()
+        .any(|c| c.name == "unsaved during proof I/O"));
+}
+
+#[test]
+fn admitted_publication_crossing_purge_keeps_later_unsaved_input() {
+    use annotator_core::collaboration::{
+        profiles::Profile, purge::transaction::PurgeSelection, recycle::RecycleOperation,
+    };
+    use std::sync::atomic::AtomicBool;
+    let f = Fixture::new();
+    let importer = f.repo.adopt(&Profile::new("Importer").unwrap()).unwrap();
+    let source =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/audio/mono16.wav");
+    let prepared = f
+        .repo
+        .prepare_media(&source, &f.root.join("pcm"), &AtomicBool::new(false))
+        .unwrap();
+    let media_id = prepared.media().id.clone();
+    f.repo
+        .append_media(&importer, &prepared, &AtomicBool::new(false))
+        .unwrap();
+    let a = f.state("local-a");
+    edit(&a, "saved pending", true);
+    let nonce = expected(&a).runtime_nonce;
+    let (entered, arrival) = mpsc::channel();
+    let (release, wait) = mpsc::channel();
+    *a.6.hook.lock().unwrap() = Some(Box::new(move || {
+        entered.send(()).unwrap();
+        wait.recv().unwrap();
+    }));
+    let worker = a.clone();
+    let binding = expected(&a);
+    let join =
+        std::thread::spawn(move || tauri::async_runtime::block_on(refresh(&worker, binding)));
+    arrival.recv_timeout(Duration::from_secs(10)).unwrap();
+    edit(&a, "later unsaved input", false);
+    let repo = CollaborationRepository::open(f.repo.root()).unwrap();
+    repo.apply_recycle_controlled(
+        &importer,
+        0,
+        RecycleOperation {
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            media_ids: vec![media_id.clone()],
+            trash: true,
+        },
+        &AtomicBool::new(false),
+        || Ok(()),
+    )
+    .unwrap();
+    let preview = repo
+        .preview_purge(
+            &importer,
+            "foreign",
+            &uuid::Uuid::new_v4().to_string(),
+            PurgeSelection::Selected(vec![media_id.clone()]),
+        )
+        .unwrap();
+    repo.commit_purge(&importer, "foreign", &preview, &AtomicBool::new(false))
+        .unwrap();
+    release.send(()).unwrap();
+    let status = join.join().unwrap().unwrap();
+    assert!(status.error.is_none(), "{:?}", status.error);
+    assert_eq!(status.runtime_nonce, nonce);
+    let current = a.0.lock().unwrap();
+    let p = current.as_ref().unwrap();
+    let doc = p.snapshot().unwrap().document;
+    assert!(doc.media.is_empty());
+    assert!(doc
+        .categories
+        .iter()
+        .any(|c| c.name == "later unsaved input"));
+    assert!(p.persisted_revision() < doc.revision);
+}
+
+#[test]
+fn recovery_resolution_reads_retirement_before_accepting_old_candidate() {
+    use annotator_core::{
+        collaboration::{
+            profiles::Profile, purge::transaction::PurgeSelection, recycle::RecycleOperation,
+        },
+        project::RecoverySource,
+    };
+    use std::sync::atomic::AtomicBool;
+    let f = Fixture::new();
+    let importer = f.repo.adopt(&Profile::new("Importer").unwrap()).unwrap();
+    let source =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/audio/mono16.wav");
+    let prepared = f
+        .repo
+        .prepare_media(&source, &f.root.join("pcm"), &AtomicBool::new(false))
+        .unwrap();
+    let target = prepared.media().id.clone();
+    f.repo
+        .append_media(&importer, &prepared, &AtomicBool::new(false))
+        .unwrap();
+    let a = f.state("local-a");
+    edit(&a, "primary", true);
+    edit(&a, "independent recovery", false);
+    let actor = {
+        let mut current = a.0.lock().unwrap();
+        let p = current.as_mut().unwrap();
+        p.workspace_mut()
+            .unwrap()
+            .inject_fault(Some(WorkspaceFault::MainReplace));
+        let doc = p.snapshot().unwrap().document;
+        assert!(p.save(&doc.project_id, doc.revision).is_err());
+        let actor = p.workspace().unwrap().author_session().unwrap();
+        *current = None;
+        actor
+    };
+    let repo = a.6.current.lock().unwrap().repo.clone().unwrap();
+    let p = LocalProject::open_shared(repo, Some(actor), &a.6.local().unwrap()).unwrap();
+    assert!(p.recovery().is_some());
+    *a.0.lock().unwrap() = Some(p);
+    let nonce = a.6.current.lock().unwrap().nonce.clone();
+    let repo = CollaborationRepository::open(f.repo.root()).unwrap();
+    repo.apply_recycle_controlled(
+        &importer,
+        0,
+        RecycleOperation {
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            media_ids: vec![target.clone()],
+            trash: true,
+        },
+        &AtomicBool::new(false),
+        || Ok(()),
+    )
+    .unwrap();
+    let preview = repo
+        .preview_purge(
+            &importer,
+            "foreign",
+            &uuid::Uuid::new_v4().to_string(),
+            PurgeSelection::Selected(vec![target.clone()]),
+        )
+        .unwrap();
+    repo.commit_purge(&importer, "foreign", &preview, &AtomicBool::new(false))
+        .unwrap();
+    tauri::async_runtime::block_on(crate::commands::project::resolve_recovery_for(
+        &a,
+        Some(nonce),
+        Some(RecoverySource::Recovery),
+    ))
+    .unwrap();
+    let current = a.0.lock().unwrap();
+    let doc = current.as_ref().unwrap().snapshot().unwrap().document;
+    assert!(
+        doc.media.is_empty(),
+        "old recovery must not resurrect retired media"
+    );
+    assert!(doc
+        .categories
+        .iter()
+        .any(|c| c.name == "independent recovery"));
+}
+
+#[test]
+fn view_only_refresh_and_generation_six_open_do_not_acknowledge_shared_cleanup() {
+    use annotator_core::collaboration::{
+        profiles::Profile, purge::transaction::PurgeSelection, recycle::RecycleOperation,
+    };
+    use std::sync::atomic::AtomicBool;
+    fn files(root: &std::path::Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut result = vec![];
+        for entry in fs::read_dir(root).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                result.extend(files(&path));
+            } else {
+                result.push((path.clone(), fs::read(&path).unwrap()));
+            }
+        }
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result
+    }
+    let f = Fixture::new();
+    let importer = f.repo.adopt(&Profile::new("Importer").unwrap()).unwrap();
+    let source =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/audio/mono16.wav");
+    let prepared = f
+        .repo
+        .prepare_media(&source, &f.root.join("pcm"), &AtomicBool::new(false))
+        .unwrap();
+    let target = prepared.media().id.clone();
+    f.repo
+        .append_media(&importer, &prepared, &AtomicBool::new(false))
+        .unwrap();
+    let state = AppState::default();
+    state.6.set_local(f.root.join("local-a")).unwrap();
+    tauri::async_runtime::block_on(open_mode(
+        &state,
+        f.repo.root().to_string_lossy().into_owned(),
+        true,
+    ))
+    .unwrap();
+    let current = CollaborationRepository::open(f.repo.root()).unwrap();
+    current
+        .apply_recycle_controlled(
+            &importer,
+            0,
+            RecycleOperation {
+                operation_id: uuid::Uuid::new_v4().to_string(),
+                media_ids: vec![target.clone()],
+                trash: true,
+            },
+            &AtomicBool::new(false),
+            || Ok(()),
+        )
+        .unwrap();
+    let preview = current
+        .preview_purge(
+            &importer,
+            "foreign",
+            &uuid::Uuid::new_v4().to_string(),
+            PurgeSelection::Selected(vec![target]),
+        )
+        .unwrap();
+    current
+        .commit_purge(&importer, "foreign", &preview, &AtomicBool::new(false))
+        .unwrap();
+    let before = files(&f.root.join("shared/maintenance"));
+    let status = refresh_now(&state);
+    assert!(status.error.is_none(), "{:?}", status.error);
+    assert!(!status.can_import_media && !status.can_write_annotations);
+    assert!(state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .snapshot()
+        .unwrap()
+        .document
+        .media
+        .is_empty());
+    assert_eq!(files(&f.root.join("shared/maintenance")), before);
+    let second = AppState::default();
+    second.6.set_local(f.root.join("local-b")).unwrap();
+    tauri::async_runtime::block_on(open_mode(
+        &second,
+        f.repo.root().to_string_lossy().into_owned(),
+        true,
+    ))
+    .unwrap();
+    assert_eq!(files(&f.root.join("shared/maintenance")), before);
+}
+
+#[test]
 fn unknown_shared_json_and_subdirectory_open_never_write_project_locks() {
     let f = Fixture::new();
     crate::commands::collaboration::test_profiles::seed(&f.repo, "alice", "Alice").unwrap();
@@ -465,6 +885,40 @@ fn ordinary_missing_primary_still_opens_valid_recovery() {
     ))
     .unwrap();
     assert!(a.0.lock().unwrap().as_ref().unwrap().recovery().is_some());
+}
+
+#[test]
+fn ordinary_recovery_keeps_its_original_single_mutex_lifecycle() {
+    use annotator_core::project::RecoverySource;
+    let f = Fixture::new();
+    for name in ["original", "replacement"] {
+        let root = f.root.join(name);
+        fs::create_dir(&root).unwrap();
+        drop(LocalProject::create(&root, name.into()).unwrap());
+        fs::remove_file(root.join("project.json")).unwrap();
+    }
+    let a = AppState::default();
+    a.6.set_local(f.root.join("ordinary-local")).unwrap();
+    *a.0.lock().unwrap() = Some(LocalProject::open(&f.root.join("original")).unwrap());
+    let owner = a.0.clone();
+    let service = Arc::downgrade(&a.6);
+    let replacement = f.root.join("replacement");
+    *a.6.before_retirement_io.lock().unwrap() = Some(Box::new(move || {
+        *owner.lock().unwrap() = Some(LocalProject::open(&replacement).unwrap());
+        service.upgrade().unwrap().install(None).unwrap();
+    }));
+    let resolved = tauri::async_runtime::block_on(crate::commands::project::resolve_recovery_for(
+        &a,
+        None,
+        Some(RecoverySource::Recovery),
+    ))
+    .unwrap();
+    a.6.before_retirement_io.lock().unwrap().take();
+    assert_eq!(
+        resolved.snapshot.unwrap().document.name,
+        "original",
+        "ordinary recovery must remain in the original single mutex operation"
+    );
 }
 #[test]
 fn view_only_catalog_rejects_async_scan_import_and_forged_local_change() {

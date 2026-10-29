@@ -10,4 +10,5 @@ pub mod source_import;
 
 pub mod profiles;
 
+pub mod purge;
 pub mod recycle;
