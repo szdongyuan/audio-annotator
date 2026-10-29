@@ -31,6 +31,8 @@ pub struct AnalysisRuntime {
     pcm: Mutex<PcmCache>,
     // Only analysis workers wait here. Recheck registry after waiting to avoid duplicate decode.
     pub(crate) hydration: Mutex<()>,
+    #[cfg(test)]
+    pub(crate) before_hydration_publish: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 impl Default for AnalysisRuntime {
     fn default() -> Self {
@@ -39,6 +41,21 @@ impl Default for AnalysisRuntime {
             cache: Mutex::new(None),
             pcm: Mutex::new(PcmCache::for_analysis()),
             hydration: Mutex::new(()),
+            #[cfg(test)]
+            before_hydration_publish: Mutex::new(None),
+        }
+    }
+}
+impl AnalysisRuntime {
+    pub fn retire_media(&self, ids: &[String]) -> Result<()> {
+        self.scheduler.retire_media(ids);
+        self.pcm.lock().map_err(|_| failure())?.retire_media(ids);
+        Ok(())
+    }
+    pub fn reset(&self) {
+        self.scheduler.reset();
+        if let Ok(mut pcm) = self.pcm.lock() {
+            pcm.clear();
         }
     }
 }
@@ -149,10 +166,12 @@ pub(crate) fn enqueue_owned(
     let generation = state.1.lock().map_err(|_| failure())?.generation();
     let scope = request.view_id.clone();
     let worker_state = state.clone();
-    state
-        .2
-        .scheduler
-        .submit(&scope, request.generation, request.visible, move |cancel| {
+    state.2.scheduler.submit_media(
+        &scope,
+        request.generation,
+        request.visible,
+        &descriptor.id.clone(),
+        move |cancel| {
             let state = worker_state;
             let mut last = Instant::now() - Duration::from_secs(1);
             let mut progress = |phase: &str, completed: u64, total: u64| {
@@ -195,6 +214,13 @@ pub(crate) fn enqueue_owned(
                         )?;
                         check_cancel(cancel)?;
                         current(&state, &request, &descriptor, generation)?;
+                        #[cfg(test)]
+                        {
+                            let hook = state.2.before_hydration_publish.lock().unwrap().take();
+                            if let Some(hook) = hook {
+                                hook();
+                            }
+                        }
                         state
                             .1
                             .lock()
@@ -255,7 +281,7 @@ pub(crate) fn enqueue_owned(
                                     .pcm
                                     .lock()
                                     .map_err(|_| failure())?
-                                    .read_frames(&media.pcm, start, count)
+                                    .read_media_frames(&descriptor.id, &media.pcm, start, count)
                             })
                         },
                         |done, total| progress("analysis", done, total),
@@ -266,6 +292,7 @@ pub(crate) fn enqueue_owned(
                     if let Ok(bytes) = encode_cached(&tile) {
                         if let Ok(mut cache) = state.2.cache.lock() {
                             if let Some(cache) = cache.as_mut() {
+                                check_cancel(cancel)?;
                                 let _ = cache.put(&key, bytes);
                             }
                         }
@@ -283,7 +310,8 @@ pub(crate) fn enqueue_owned(
             check_cancel(cancel)?;
             current(&state, &request, &descriptor, generation)?;
             Ok(bytes)
-        })
+        },
+    )
 }
 #[tauri::command]
 pub async fn request_tile(

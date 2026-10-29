@@ -48,7 +48,8 @@ it('offline delete keeps immutable selection/operation ID for explicit retry',as
 it('trash view only contains trashed files and restores rather than deleting twice',async()=>{
   const {recycle,api}=setup();recycle.snapshot={...recycle.snapshot!,revision:1,trashed:[{mediaId:media[1].id,deletedBy:nonce}]};
   fireEvent.change(screen.getByLabelText('音频列表视图'),{target:{value:'trash'}});expect(screen.queryByRole('button',{name:'audio-0.wav'})).toBeNull();
-  fireEvent.click(screen.getByRole('button',{name:'audio-1.wav'}));fireEvent.keyDown(screen.getByRole('button',{name:'audio-1.wav'}),{key:'Delete'});expect(screen.queryByRole('dialog')).toBeNull();
+  const preview=vi.spyOn(recycle.purge,'begin').mockResolvedValue(false);
+  fireEvent.click(screen.getByRole('button',{name:'audio-1.wav'}));fireEvent.keyDown(screen.getByRole('button',{name:'audio-1.wav'}),{key:'Delete'});expect(screen.getByRole('dialog',{name:'永久删除音频'})).toBeVisible();expect(preview).toHaveBeenCalledWith({kind:'selected',mediaIds:[media[1].id]});fireEvent.click(screen.getByRole('button',{name:'取消'}));
   fireEvent.click(screen.getByRole('button',{name:'恢复'}));fireEvent.click(screen.getByRole('button',{name:'恢复音频'}));await waitFor(()=>expect(api.apply).toHaveBeenCalled());expect((api.apply.mock.calls[0] as unknown[])[2]).toMatchObject({trash:false,mediaIds:[media[1].id]});
 });
 it('controller refreshes conflict but retains operation, refuses late old owner responses',async()=>{

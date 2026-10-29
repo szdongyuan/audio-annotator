@@ -77,7 +77,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   const [listNavigation] = useState(() => new ListNavigation());
   const workspaceHost = useRef<HTMLDivElement>(null);
   const hiddenMediaIds=collaboration?.controller?.status?.hiddenMediaIds??project?.active?.collaboration?.hiddenMediaIds??[];
-  const recycle = useRecycle(project?.active ?? null);
+  const recycle = useRecycle(project?.active ?? null, collaboration?.controller?.status);
   const trashedMediaIds = recycle?.snapshot?.trashed.map(m=>m.mediaId) ?? [];
   const excludedMediaIds = [...new Set([...hiddenMediaIds,...trashedMediaIds])];
   const projectWorkspace = useWorkspace(project?.active ?? null,excludedMediaIds,collaboration?async id=>{if(trashedMediaIds.includes(id))throw new Error('请先从回收站恢复音频');await collaboration.hideMedia(id,false);}:undefined);

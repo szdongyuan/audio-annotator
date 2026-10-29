@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, VecDeque},
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc, Arc, Condvar, Mutex,
+        mpsc, Arc, Condvar, Mutex, Weak,
     },
     thread,
 };
@@ -17,10 +17,22 @@ struct Job {
 struct Scope {
     generation: u64,
     cancel: Arc<AtomicBool>,
+    jobs: Vec<Weak<AtomicBool>>,
+}
+impl Scope {
+    fn cancel(&self) {
+        self.cancel.store(true, Ordering::Release);
+        for job in &self.jobs {
+            if let Some(cancel) = job.upgrade() {
+                cancel.store(true, Ordering::Release);
+            }
+        }
+    }
 }
 struct State {
     queue: VecDeque<Job>,
     scopes: HashMap<String, Scope>,
+    media_jobs: HashMap<String, Vec<Weak<AtomicBool>>>,
     next_view: u64,
     active: usize,
     shutdown: bool,
@@ -49,6 +61,7 @@ impl Scheduler {
             state: Mutex::new(State {
                 queue: VecDeque::new(),
                 scopes: HashMap::new(),
+                media_jobs: HashMap::new(),
                 next_view: 0,
                 active: 0,
                 shutdown: false,
@@ -114,6 +127,7 @@ impl Scheduler {
             Scope {
                 generation: 0,
                 cancel: Arc::new(AtomicBool::new(false)),
+                jobs: vec![],
             },
         );
         Ok(view)
@@ -121,7 +135,7 @@ impl Scheduler {
     pub fn retire_view(&self, view: &str) -> Result<()> {
         let mut state = self.shared.state.lock().map_err(|_| cancelled())?;
         let scope = state.scopes.remove(view).ok_or_else(cancelled)?;
-        scope.cancel.store(true, Ordering::Release);
+        scope.cancel();
         Self::purge(&mut state);
         Ok(())
     }
@@ -133,6 +147,26 @@ impl Scheduler {
         view: &str,
         generation: u64,
         visible: bool,
+        work: impl FnOnce(&AtomicBool) -> Result<Vec<u8>> + Send + 'static,
+    ) -> Result<mpsc::Receiver<Result<Vec<u8>>>> {
+        self.submit_bound(view, generation, visible, None, work)
+    }
+    pub fn submit_media(
+        &self,
+        view: &str,
+        generation: u64,
+        visible: bool,
+        media_id: &str,
+        work: impl FnOnce(&AtomicBool) -> Result<Vec<u8>> + Send + 'static,
+    ) -> Result<mpsc::Receiver<Result<Vec<u8>>>> {
+        self.submit_bound(view, generation, visible, Some(media_id), work)
+    }
+    fn submit_bound(
+        &self,
+        view: &str,
+        generation: u64,
+        visible: bool,
+        media_id: Option<&str>,
         work: impl FnOnce(&AtomicBool) -> Result<Vec<u8>> + Send + 'static,
     ) -> Result<mpsc::Receiver<Result<Vec<u8>>>> {
         let mut state = self
@@ -147,7 +181,7 @@ impl Scheduler {
                 return Err(cancelled());
             }
             if generation > scope.generation {
-                scope.cancel.store(true, Ordering::Release);
+                scope.cancel();
             }
         } else {
             return Err(cancelled());
@@ -164,9 +198,29 @@ impl Scheduler {
             *scope = Scope {
                 generation,
                 cancel: Arc::new(AtomicBool::new(false)),
+                jobs: vec![],
             };
         }
-        let cancel = scope.cancel.clone();
+        scope.jobs.retain(|job| job.strong_count() > 0);
+        let cancel = if media_id.is_some() {
+            Arc::new(AtomicBool::new(false))
+        } else {
+            scope.cancel.clone()
+        };
+        if media_id.is_some() {
+            scope.jobs.push(Arc::downgrade(&cancel));
+        }
+        if let Some(media_id) = media_id {
+            state.media_jobs.retain(|_, jobs| {
+                jobs.retain(|job| job.strong_count() > 0);
+                !jobs.is_empty()
+            });
+            state
+                .media_jobs
+                .entry(media_id.into())
+                .or_default()
+                .push(Arc::downgrade(&cancel));
+        }
         let (tx, rx) = mpsc::channel();
         let job = Job {
             visible,
@@ -201,7 +255,7 @@ impl Scheduler {
         let mut state = self.shared.state.lock().unwrap();
         if let Some(scope) = state.scopes.get_mut(view) {
             if generation >= scope.generation {
-                scope.cancel.store(true, Ordering::Release);
+                scope.cancel();
                 scope.generation = generation;
             }
         } else {
@@ -213,10 +267,24 @@ impl Scheduler {
     pub fn reset(&self) {
         let mut state = self.shared.state.lock().unwrap();
         for scope in state.scopes.values() {
-            scope.cancel.store(true, Ordering::Release);
+            scope.cancel();
         }
         Self::purge(&mut state);
         state.scopes.clear();
+        state.media_jobs.clear();
+    }
+    pub fn retire_media(&self, ids: &[String]) {
+        let mut state = self.shared.state.lock().unwrap();
+        for id in ids {
+            if let Some(jobs) = state.media_jobs.remove(id) {
+                for job in jobs {
+                    if let Some(cancel) = job.upgrade() {
+                        cancel.store(true, Ordering::Release);
+                    }
+                }
+            }
+        }
+        Self::purge(&mut state);
     }
     pub fn stats(&self) -> (usize, usize) {
         let state = self.shared.state.lock().unwrap();
@@ -278,5 +346,49 @@ mod lifetime_tests {
                 .unwrap(),
             1
         );
+    }
+}
+
+#[cfg(test)]
+mod retirement_tests {
+    use super::*;
+    #[test]
+    fn media_retirement_cancels_active_and_queued_a_but_preserves_b_and_view_lease() {
+        let scheduler = Scheduler::new(1, 32);
+        let view = scheduler.register_view().unwrap();
+        let (entered, arrival) = mpsc::channel();
+        let (release, wait) = mpsc::channel();
+        let a = scheduler
+            .submit_media(&view, 1, true, "a", move |_| {
+                entered.send(()).unwrap();
+                wait.recv().unwrap();
+                Ok(vec![1])
+            })
+            .unwrap();
+        arrival.recv().unwrap();
+        let queued_a = scheduler
+            .submit_media(&view, 1, true, "a", |_| Ok(vec![2]))
+            .unwrap();
+        let b = scheduler
+            .submit_media(&view, 1, true, "b", |_| Ok(vec![3]))
+            .unwrap();
+        scheduler.retire_media(&["a".into()]);
+        assert_eq!(
+            queued_a.recv().unwrap().unwrap_err().code,
+            ErrorCode::Cancelled
+        );
+        release.send(()).unwrap();
+        assert_eq!(a.recv().unwrap().unwrap_err().code, ErrorCode::Cancelled);
+        assert_eq!(b.recv().unwrap().unwrap(), vec![3]);
+        assert_eq!(
+            scheduler
+                .submit_media(&view, 1, true, "b", |_| Ok(vec![4]))
+                .unwrap()
+                .recv()
+                .unwrap()
+                .unwrap(),
+            vec![4]
+        );
+        assert_eq!(scheduler.live_views(), 1);
     }
 }

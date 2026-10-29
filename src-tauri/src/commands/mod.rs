@@ -10,6 +10,7 @@ pub mod source_import;
 
 pub mod profiles;
 
+pub mod purge;
 pub mod recycle;
 pub mod examples;
 pub mod inspection;

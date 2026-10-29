@@ -141,6 +141,41 @@ struct ExportCapture {
     organization_revision: Option<u64>,
     plan: exchange::ExportPathPlan,
     recycle_revision: Option<u64>,
+    authority: Option<exchange::SharedSourceAuthority>,
+}
+impl ExportCapture {
+    fn write(
+        &self,
+        target: &Path,
+        cancel: &AtomicBool,
+        progress: impl FnMut(&str, u64),
+    ) -> Result<()> {
+        // Build from the fixed accepted plan off-lock. Recheck exact authority
+        // only at publication so ordinary shared work can continue during I/O.
+        let before_publish = || self.authority.as_ref().map(|a| a.lock()).transpose();
+        if self.plan.bundle {
+            exchange::export_bundle_controlled(
+                &self.document,
+                &self.plan,
+                &self.root,
+                target,
+                cancel,
+                Limits::default(),
+                progress,
+                before_publish,
+            )
+        } else {
+            exchange::export_annotations_controlled(
+                &self.document,
+                &self.plan,
+                target,
+                cancel,
+                Limits::default(),
+                progress,
+                before_publish,
+            )
+        }
+    }
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -186,6 +221,35 @@ pub(crate) async fn preview(
 ) -> Result<ExportPreview> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let binding = {
+            let current = state
+                .0
+                .lock()
+                .map_err(|_| super::collaboration::runtime::unavailable())?;
+            check_current(&current, &Some(expected.clone()), false)?;
+            let p = current
+                .as_ref()
+                .ok_or_else(super::collaboration::runtime::stale)?;
+            super::collaboration::runtime::check_mutation(
+                p,
+                &state.6,
+                expected.runtime_nonce.as_deref(),
+            )?;
+            let r = state
+                .6
+                .current
+                .lock()
+                .map_err(|_| super::collaboration::runtime::unavailable())?;
+            p.is_shared()
+                .then(|| super::collaboration::runtime::Expected {
+                    runtime_nonce: r.nonce.clone(),
+                    project_id: expected.project_id.clone(),
+                    expected_revision: expected.expected_revision,
+                })
+        };
+        if let Some(binding) = binding {
+            super::collaboration::operations::converge_retirement(&state, &binding)?;
+        }
         // Capture immutable native context only; all head I/O and planning is outside state.0.
         let (private, root, manifest, repo, nonce) = {
             let current = state
@@ -248,6 +312,10 @@ pub(crate) async fn preview(
         let organization_revision = repo.as_ref().map(|_| organization.revision);
         let plan =
             exchange::ExportPathPlan::build(&document, &organization, bundle, preserve_folders)?;
+        let authority = repo
+            .as_ref()
+            .map(|r| exchange::SharedSourceAuthority::capture(r));
+        let _source_guard = authority.as_ref().map(|a| a.lock()).transpose()?;
         check_capture(&state, &expected, &nonce)?;
         let token = uuid::Uuid::new_v4().to_string();
         let result = ExportPreview {
@@ -271,6 +339,7 @@ pub(crate) async fn preview(
             organization_revision,
             plan,
             recycle_revision,
+            authority,
         });
         let mut tasks = state
             .4
@@ -318,6 +387,7 @@ fn accepted(
         capture.clone()
     };
     check_capture(state, expected, &capture.runtime_nonce)?;
+    let _source_guard = capture.authority.as_ref().map(|a| a.lock()).transpose()?;
     if let Some(repo) = &capture.repo {
         if Some(repo.read_organization()?.revision) != capture.organization_revision
             || Some(repo.read_recycle()?.revision) != capture.recycle_revision
@@ -370,26 +440,7 @@ async fn export(
                 }
             }
         };
-        let result = if bundle {
-            exchange::export_bundle_with_plan(
-                &capture.document,
-                &capture.plan,
-                &capture.root,
-                Path::new(&path),
-                &cancel,
-                Limits::default(),
-                progress,
-            )
-        } else {
-            exchange::export_annotations_with_plan(
-                &capture.document,
-                &capture.plan,
-                Path::new(&path),
-                &cancel,
-                Limits::default(),
-                progress,
-            )
-        };
+        let result = capture.write(Path::new(&path), &cancel, progress);
         drop(permit);
         finish(&state, &worker_id, result.map(|_| (path, None)), &on_event);
     });
@@ -550,6 +601,172 @@ pub fn cancel_exchange(state: State<'_, AppState>, task_id: String) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::collaboration::defaults::purge_tests::Fixture;
+    fn expected(f: &Fixture) -> ExpectedProject {
+        let e = f.expected();
+        ExpectedProject {
+            runtime_nonce: Some(e.runtime_nonce),
+            project_id: e.project_id,
+            expected_revision: e.expected_revision,
+        }
+    }
+    #[test]
+    fn export_converges_retirement_and_exports_only_survivors_from_pending_cleanup() {
+        let f = Fixture::new();
+        let old = expected(&f);
+        f.retire();
+        let error = tauri::async_runtime::block_on(preview(&f.state, old, true, true))
+            .err()
+            .unwrap();
+        assert_eq!(error.code, ErrorCode::RevisionConflict);
+        let e = expected(&f);
+        let p = tauri::async_runtime::block_on(preview(&f.state, e.clone(), true, true)).unwrap();
+        let capture = accepted(&f.state, &e, &p.token, true).unwrap();
+        let target = f.root.join("survivors.zip");
+        capture
+            .write(&target, &AtomicBool::new(false), |_, _| {})
+            .unwrap();
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&target).unwrap()).unwrap();
+        let paths: Vec<_> = archive.file_names().map(str::to_owned).collect();
+        assert_eq!(capture.document.media.len(), 1);
+        assert_eq!(capture.document.media[0].id, f.document.media[1].id);
+        assert!(!paths
+            .iter()
+            .any(|p| p.contains("maintenance") || p.contains("state/")));
+        assert!(paths.iter().any(|p| p == "audio/Empty/"));
+        let mut bytes = vec![];
+        std::io::Read::read_to_end(
+            &mut archive
+                .by_name(&capture.plan.media_paths[&f.document.media[1].id])
+                .unwrap(),
+            &mut bytes,
+        )
+        .unwrap();
+        assert_eq!(
+            bytes,
+            std::fs::read(f.root.join("source").join(&f.document.media[1].source_ref)).unwrap()
+        );
+        let mut manifest = String::new();
+        std::io::Read::read_to_string(
+            &mut archive.by_name("manifest.json").unwrap(),
+            &mut manifest,
+        )
+        .unwrap();
+        assert!(!manifest.contains(&f.document.media[0].id));
+        assert!(!manifest.contains("sourceRef"));
+        assert!(f
+            .root
+            .join("source")
+            .join(&f.document.media[0].source_ref)
+            .exists());
+    }
+    #[test]
+    fn accepted_export_rejects_generation_change_even_when_revisions_match() {
+        let f = Fixture::new();
+        // The captured export already excludes recycled A. Deliberately give
+        // the new generation the same valid mutable-head counters: those
+        // counters alone must never identify the source entry.
+        f.repo
+            .apply_recycle_controlled(
+                &f.actor,
+                0,
+                annotator_core::collaboration::recycle::RecycleOperation {
+                    operation_id: uuid::Uuid::new_v4().to_string(),
+                    media_ids: vec![f.document.media[0].id.clone()],
+                    trash: true,
+                },
+                &AtomicBool::new(false),
+                || Ok(()),
+            )
+            .unwrap();
+        let e = expected(&f);
+        let p = tauri::async_runtime::block_on(preview(&f.state, e.clone(), false, true)).unwrap();
+        let organization_revision = f.repo.read_organization().unwrap().revision;
+        let recycle_revision = f.repo.read_recycle().unwrap().revision;
+        let purge = f
+            .repo
+            .preview_purge(
+                &f.actor,
+                "test",
+                &uuid::Uuid::new_v4().to_string(),
+                annotator_core::collaboration::purge::transaction::PurgeSelection::All,
+            )
+            .unwrap();
+        f.repo
+            .commit_purge(&f.actor, "test", &purge, &AtomicBool::new(false))
+            .unwrap();
+        let entry: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(f.root.join("source/collaboration.json")).unwrap(),
+        )
+        .unwrap();
+        let generation = f
+            .root
+            .join("source/state")
+            .join(entry["metadataGeneration"].as_str().unwrap());
+        for (name, revision) in [
+            ("organization.json", organization_revision),
+            ("recycle.json", recycle_revision),
+        ] {
+            let path = generation.join(name);
+            let mut head: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            head["revision"] = serde_json::json!(revision);
+            std::fs::write(path, serde_json::to_vec(&head).unwrap()).unwrap();
+        }
+        let fresh =
+            annotator_core::collaboration::CollaborationRepository::open(&f.root.join("source"))
+                .unwrap();
+        assert_eq!(
+            fresh.read_organization().unwrap().revision,
+            organization_revision
+        );
+        assert_eq!(fresh.read_recycle().unwrap().revision, recycle_revision);
+        assert_eq!(
+            accepted(&f.state, &e, &p.token, false).err().unwrap().code,
+            ErrorCode::RevisionConflict
+        );
+    }
+    #[test]
+    fn export_worker_rejects_purge_after_acceptance_before_writing() {
+        let f = Fixture::new();
+        let e = expected(&f);
+        let p = tauri::async_runtime::block_on(preview(&f.state, e.clone(), true, true)).unwrap();
+        let capture = accepted(&f.state, &e, &p.token, true).unwrap();
+        f.retire();
+        let target = f.root.join("stale.zip");
+        assert_eq!(
+            capture
+                .write(&target, &AtomicBool::new(false), |_, _| {})
+                .unwrap_err()
+                .code,
+            ErrorCode::RevisionConflict
+        );
+        assert!(!target.exists());
+    }
+    #[test]
+    fn export_purge_during_archive_build_completes_and_prevents_final_publication() {
+        let f = Fixture::new();
+        let e = expected(&f);
+        let p = tauri::async_runtime::block_on(preview(&f.state, e.clone(), true, true)).unwrap();
+        let capture = accepted(&f.state, &e, &p.token, true).unwrap();
+        let target = f.root.join("racing.zip");
+        let mut retired = false;
+        let result = capture.write(&target, &AtomicBool::new(false), |phase, _| {
+            if phase == "复制原始媒体" && !retired {
+                // Real commit must progress while the ZIP is still being built.
+                f.retire();
+                retired = true;
+            }
+        });
+        assert!(retired);
+        assert_eq!(result.unwrap_err().code, ErrorCode::RevisionConflict);
+        assert!(!target.exists());
+        assert!(!std::fs::read_dir(&f.root).unwrap().any(|e| e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".exchange-")));
+    }
     #[test]
     fn authority_requires_saved_current_identity_and_revision() {
         let root = std::env::temp_dir().join(format!("exchange-host-{}", uuid::Uuid::new_v4()));

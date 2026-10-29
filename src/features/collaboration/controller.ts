@@ -56,7 +56,7 @@ export class CollaborationController {
   return !categories.some(c=>categoryIds.includes(c.id)&&this.hiddenCategoryNames.includes(c.name.trim()));
  }
  visible(authorId:string|null){const filter=this.filter;if(filter.mode==='custom')return authorId!==null&&filter.authorIds.includes(authorId);return filter.mode==='all'||authorId===(this.owner.collaboration?.actor?.authorId??null);}
- accept(status:CollaborationStatus,catalogAdopted=false){if(this.disposed||status.runtimeNonce!==this.owner.collaboration?.runtimeNonce)return;parseCollaborationStatus(status,this.owner.store.snapshot.document);this.status=status;this.error=null;if(catalogAdopted||!status.catalogPending)this.catalogError=null;this.notify();}
+ accept(status:CollaborationStatus,catalogAdopted=false){if(this.disposed||status.runtimeNonce!==this.owner.collaboration?.runtimeNonce||(status.actor?.authorId??null)!==(this.owner.collaboration?.actor?.authorId??null))return;parseCollaborationStatus(status,this.owner.store.snapshot.document);if(status.retirement)this.owner.store.retire(status.retirement.mediaIds,status.retirement.snapshot);this.status=status;this.error=null;if(catalogAdopted||!status.catalogPending)this.catalogError=null;this.notify();}
  catalogFailed(cause:unknown){
   if(this.disposed)return;
   const failure=normalizeError(cause),error={code:failure.code,message:failure.message.slice(0,1024),retryable:failure.retryable};
@@ -84,7 +84,7 @@ export class CollaborationController {
 export class PreferenceDraft {
  private readonly key='collaboration:playback-preferences';private unregister:()=>void;
  constructor(private owner:ActiveProject,private api:CollaborationCommands=collaborationClient){this.unregister=owner.lifecycle.registerDraft(this.key,()=>this.submit());}
- update(preferences:PlaybackPreferences){this.owner.store.setDraft(this.key,JSON.stringify(preferences));}
+ update(preferences:PlaybackPreferences){this.owner.store.setDraft(this.key,JSON.stringify({...preferences,mediaMonitorGainDb:Object.fromEntries(Object.entries(preferences.mediaMonitorGainDb).filter(([id])=>!this.owner.store.isRetired(id)))}));}
  private async submit(){const value=this.owner.store.drafts.get(this.key);if(value===undefined)return;await this.api.preferences(expectedProject(this.owner),JSON.parse(value) as PlaybackPreferences);this.owner.store.clearDraftIfUnchanged(this.key,value);}
  dispose(){this.unregister();}
 }

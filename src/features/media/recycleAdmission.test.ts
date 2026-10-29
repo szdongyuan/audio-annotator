@@ -4,6 +4,8 @@ import { registerSuspension } from '../collaboration/admission';
 import { collaborationClient, type CollaborationStatus } from '../../bridge/collaboration';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import type { RecycleCommands, RecycleSnapshot } from '../../bridge/recycle';
+import { PurgeController } from './purge';
+import type { PurgeCommands } from '../../bridge/purge';
 const id='11111111-1111-4111-8111-111111111111';
 afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers();});
 function setup(){
@@ -36,4 +38,9 @@ it('retiring the owner while waiting prevents a stale delete and resumes refresh
 it('keeps real revision conflicts explicit rather than auto-replaying the delete',async()=>{
  const s=setup(),resume=vi.fn(),unregister=registerSuspension(s.owner.lifecycle,async()=>resume);s.apply.mockRejectedValue({code:'RevisionConflict',message:'changed',retryable:true});
  expect(await s.controller.submit(s.draft)).toBe(false);expect(s.apply).toHaveBeenCalledTimes(1);expect(s.controller.error?.code).toBe('RevisionConflict');expect(resume).toHaveBeenCalledTimes(1);unregister();s.controller.dispose();
+});
+
+it('holds purge preview behind persisted admission and releases refresh when its owner retires',async()=>{
+ const s=setup(),resume=vi.fn();let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});const persisted=vi.fn(async(action:()=>Promise<unknown>)=>{await gate;return action();});Object.assign(s.owner.lifecycle,{enqueuePersistedEdit:persisted});const unregister=registerSuspension(s.owner.lifecycle,async()=>resume);
+ const preview=vi.fn<PurgeCommands['preview']>();const purge=new PurgeController(id,id,true,{preview,commit:vi.fn(),retryCleanup:vi.fn(),cleanupPage:vi.fn(),cancel:vi.fn(async()=>undefined)},s.owner,()=>id);const flight=purge.begin({kind:'all'});await vi.waitFor(()=>expect(persisted).toHaveBeenCalledOnce());expect(preview).not.toHaveBeenCalled();purge.dispose();release();expect(await flight).toBe(false);expect(preview).not.toHaveBeenCalled();expect(resume).toHaveBeenCalledOnce();unregister();s.controller.dispose();
 });

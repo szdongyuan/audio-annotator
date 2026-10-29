@@ -21,7 +21,7 @@ pub fn reset_resources(state: &AppState) -> Result<()> {
     state.3.reset();
     state.1.lock().map_err(|_| runtime::unavailable())?.reset();
     state.5.lock().map_err(|_| runtime::unavailable())?.reset();
-    state.2.scheduler.reset();
+    state.2.reset();
     Ok(())
 }
 
@@ -72,8 +72,9 @@ pub async fn open_mode(state: &AppState, path: String, view_only: bool) -> Resul
         };
         if view_only
             && repo.as_ref().is_none_or(|r| {
-                r.manifest().format_version
-                    != annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT
+                !annotator_core::collaboration::consts::supported_catalog_format(
+                    r.manifest().format_version,
+                )
             })
         {
             return Err(AppError::invalid(
@@ -83,13 +84,15 @@ pub async fn open_mode(state: &AppState, path: String, view_only: bool) -> Resul
         let identity = state.6.selected_profile()?;
         let project = match &repo {
             Some(repo)
-                if repo.manifest().format_version
-                    == annotator_core::collaboration::CURRENT_COLLABORATION_FORMAT =>
+                if annotator_core::collaboration::consts::supported_catalog_format(
+                    repo.manifest().format_version,
+                ) =>
             {
                 if view_only {
                     LocalProject::open_shared_view_only(repo.clone(), &state.6.local()?)?
                 } else {
                     let actor = Arc::new(repo.adopt(&identity)?);
+                    crate::commands::purge::resume_on_open(repo, &actor, &_permit.cancel)?;
                     LocalProject::open_shared(repo.clone(), Some(actor), &state.6.local()?)?
                 }
             }
@@ -108,6 +111,11 @@ pub async fn open_mode(state: &AppState, path: String, view_only: bool) -> Resul
                 LocalProject::open(root)?
             }
         };
+        let maintenance = repo
+            .as_ref()
+            .map(|repo| crate::commands::purge::maintenance(repo))
+            .transpose()?
+            .unwrap_or_default();
         let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
         check_cancel(&_permit.cancel)?;
         if current.is_some()
@@ -123,6 +131,12 @@ pub async fn open_mode(state: &AppState, path: String, view_only: bool) -> Resul
         }
         reset_resources(&state)?;
         state.6.install(repo)?;
+        state
+            .6
+            .current
+            .lock()
+            .map_err(|_| runtime::unavailable())?
+            .purge_maintenance = maintenance;
         let opened = info_shared(&project, &state.6)?;
         *current = Some(project);
         Ok(opened)
@@ -140,6 +154,67 @@ pub async fn status(state: &AppState) -> Result<Status> {
     state
         .run(move |s| runtime::status(s.as_ref(), &service))
         .await
+}
+
+// Capture only local authority under AppState. Preparation reads the share and
+// private proof candidates without holding either native owner mutex.
+pub(crate) fn converge_retirement(state: &AppState, expected: &Expected) -> Result<()> {
+    let (repo, source) = {
+        let current = state.0.lock().map_err(|_| runtime::unavailable())?;
+        let project = current.as_ref().ok_or_else(runtime::stale)?;
+        let r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
+        expected.check(project, &r, false)?;
+        (
+            r.repo.clone().ok_or_else(runtime::stale)?,
+            project.workspace()?.catalog_source(),
+        )
+    };
+    #[cfg(test)]
+    {
+        let hook = state.6.before_retirement_io.lock().unwrap().take();
+        if let Some(hook) = hook {
+            hook();
+        }
+    }
+    let fresh = CollaborationRepository::open(repo.root())?;
+    if fresh.manifest_identity() == repo.manifest_identity() {
+        return Ok(());
+    }
+    let prepared = source.prepare_retirement(fresh)?;
+    let next = prepared.repository();
+    let retired = prepared.retired_media_ids().clone();
+    let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
+    let p = current.as_mut().ok_or_else(runtime::stale)?;
+    let mut r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
+    expected.check(p, &r, false)?;
+    let mut layers = r.layers.clone().ok_or_else(runtime::stale)?;
+    layers.adopt_prepared_catalog(&prepared)?;
+    let before = p.snapshot()?.document;
+    let snapshot =
+        p.adopt_prepared_catalog(&expected.project_id, expected.expected_revision, prepared)?;
+    r.layers = Some(layers);
+    r.repo = Some(next);
+    state.retire_media_resources(&retired.iter().cloned().collect::<Vec<_>>())?;
+    r.retired_media_ids.extend(retired);
+    r.retired_media_ids.sort();
+    r.retired_media_ids.dedup();
+    state.3.changed(&before, &snapshot.document);
+    Ok(())
+}
+
+pub(crate) fn current_expected(state: &AppState, nonce: &str) -> Result<Expected> {
+    let current = state.0.lock().map_err(|_| runtime::unavailable())?;
+    let p = current.as_ref().ok_or_else(runtime::stale)?;
+    let r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
+    if r.nonce != nonce {
+        return Err(runtime::stale());
+    }
+    let document = p.snapshot()?.document;
+    Ok(Expected {
+        runtime_nonce: r.nonce.clone(),
+        project_id: document.project_id,
+        expected_revision: document.revision,
+    })
 }
 
 // All share I/O belongs to this blocking worker, including the read after publication.
@@ -165,13 +240,23 @@ pub async fn refresh(state: &AppState, expected: Expected) -> Result<Status> {
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let permit = permit;
+        if let Err(error) = converge_retirement(&state, &expected) {
+            let current = state.0.lock().map_err(|_| runtime::unavailable())?;
+            let mut r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
+            expected.check(current.as_ref().ok_or_else(runtime::stale)?, &r, false)?;
+            r.error = Some(error);
+            drop(r);
+            drop(permit);
+            return runtime::status(current.as_ref(), &state.6);
+        }
+        let expected = current_expected(&state, &expected.runtime_nonce)?;
         let (repo, actor, capture, prior_sync_error) = {
             let mut current = state.0.lock().map_err(|_| runtime::unavailable())?;
             let project = current.as_mut().ok_or_else(runtime::stale)?;
             let runtime = state.6.current.lock().map_err(|_| runtime::unavailable())?;
             expected.check(project, &runtime, false)?;
             let repo = runtime.repo.clone().ok_or_else(runtime::stale)?;
-            let actor = project.workspace()?.actor().cloned();
+            let actor = project.workspace()?.author_session();
             let prior_sync_error = project.workspace()?.sync_error().is_some();
             // An earlier sync error must not prevent the fresh read that can clear it.
             (
@@ -185,8 +270,33 @@ pub async fn refresh(state: &AppState, expected: Expected) -> Result<Status> {
         state.6.run_hook();
         check_cancel(&permit.cancel)?;
         let prepare_error = prior_sync_error && capture.is_err();
+        let publication_source = repo.manifest_identity().to_owned();
         let publication = capture.and_then(|c| c.map(PublicationCapture::publish).transpose());
+        // A purge can commit while the worker publishes. Adopt its authority
+        // before accepting an acknowledgement captured against the old source.
+        let binding = current_expected(&state, &expected.runtime_nonce)?;
+        converge_retirement(&state, &binding)?;
+        let repo = {
+            let r = state.6.current.lock().map_err(|_| runtime::unavailable())?;
+            r.repo.clone().ok_or_else(runtime::stale)?
+        };
+        let retired_during_publication = repo.manifest_identity() != publication_source;
         let remote = repo.snapshot_with_catalog();
+        // Only writable actors acknowledge their own drained legacy staging.
+        // This writes bounded progress but never unlinks files or holds AppState.
+        let drained = actor
+            .as_ref()
+            .map(|_| repo.purge_maintenance_operations())
+            .transpose()
+            .and_then(|operations| {
+                if let (Some(actor), Some(operations)) = (actor.as_ref(), operations) {
+                    for operation in operations.into_iter().filter(|o| o.committed) {
+                        repo.acknowledge_purge_staging_drained(actor, &operation.operation_id)?;
+                    }
+                }
+                Ok(())
+            });
+        let maintenance = crate::commands::purge::maintenance(&repo);
         #[cfg(test)]
         {
             let hook = state.6.after_io.lock().unwrap().take();
@@ -202,7 +312,17 @@ pub async fn refresh(state: &AppState, expected: Expected) -> Result<Status> {
         }
         check_cancel(&permit.cancel)?;
         runtime.error = None;
+        match maintenance {
+            Ok(inventory) => runtime.purge_maintenance = inventory,
+            Err(error) => runtime.error = Some(error),
+        }
+        if let Err(error) = drained {
+            runtime.error = Some(error);
+        }
         match publication {
+            // The old nonce intentionally cannot acknowledge the new generation.
+            // Its projected in-flight payload is reconciled by observe_remote below.
+            Ok(Some(_)) if retired_during_publication => (),
             Ok(Some(ack)) => {
                 if let Err(e) = project.workspace_mut()?.acknowledge(ack) {
                     runtime.error = Some(e);
@@ -225,7 +345,7 @@ pub async fn refresh(state: &AppState, expected: Expected) -> Result<Status> {
                     if let Some(own) = remote
                         .authors
                         .iter()
-                        .find(|a| a.identity.author_id == actor.author_id)
+                        .find(|a| a.identity.author_id == actor.identity().author_id)
                     {
                         if let Some(e) = &own.error {
                             runtime.error = Some(e.clone());
@@ -350,6 +470,8 @@ pub async fn load_shared(
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let permit = permit;
+        converge_retirement(&state, &expected)?;
+        let expected = current_expected(&state, &expected.runtime_nonce)?;
         let (repo, actor) = {
             let current = state.0.lock().map_err(|_| runtime::unavailable())?;
             let p = current.as_ref().ok_or_else(runtime::stale)?;

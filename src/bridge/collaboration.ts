@@ -3,7 +3,7 @@ import { Channel, invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { normalizeError } from './client';
 import { parseOpened, type OpenedProject } from './projects';
-import { parseAppError, parseChange, type Annotation, type AppError, type Category, type ProjectDocument } from './types';
+import { parseAppError, parseChange, parseProjectSnapshot, type Annotation, type AppError, type Category, type ProjectDocument, type ProjectSnapshot } from './types';
 
 export type AuthorIdentity = Profile;
 export interface PlaybackPreferences { monitorGainDb:number; mediaMonitorGainDb:Record<string,number|null>; volume:number; deviceId:string|null; loopEnabled:boolean; source:'original'|'processed' }
@@ -13,7 +13,8 @@ export interface MediaLabels { mediaId:string; note:string; channelNotes:string[
 export interface AuthorLayer { kind:'audio-annotator-author-layer'; formatVersion:2; projectId:string; authorId:string; revision:number; parent:{revision:number;hash:string}|null; payload:{categories:Category[];annotations:Annotation[];mediaLabels:MediaLabels[]};hash:string }
 export interface AuthorSnapshot { identity:AuthorIdentity; layer:AuthorLayer|null; error:AppError|null }
 export interface CollaborationSnapshot { projectId:string; authors:AuthorSnapshot[] }
-export interface CollaborationStatus extends SharedContext { formatVersion:1; projectId:string|null; shared:boolean; pending:boolean; recoveryRequired:boolean; busy:boolean; lastSuccessMs:number|null;error:AppError|null;snapshot:CollaborationSnapshot|null }
+export interface PurgeMaintenanceItem { operationId:string; status:'accepted'|'preparing'|'rollback-pending'|'committed-pending-cleanup'; committed:boolean; cleanupPendingCount:number|null; cleanupFailedCount:number|null; deletedAudioBytes:number|null }
+export interface CollaborationStatus extends SharedContext { formatVersion:1; projectId:string|null; shared:boolean; pending:boolean; recoveryRequired:boolean; busy:boolean; lastSuccessMs:number|null;error:AppError|null;snapshot:CollaborationSnapshot|null; retirement:{mediaIds:string[];snapshot:ProjectSnapshot}|null;purgeMaintenance:{total:number;items:PurgeMaintenanceItem[]} }
 export interface Expected { runtimeNonce:string; projectId:string; expectedRevision:number }
 export interface Transition { opened:OpenedProject; status:CollaborationStatus }
 export interface CopyProgress {operationId:string;phase:string;completed:number}
@@ -78,11 +79,23 @@ function layer(v:unknown,doc?:ProjectDocument){
  for(const m of p.mediaLabels){check(m.channelNotes.length===m.channelCategoryIds.length);for(const c of [m.categoryIds,...m.channelCategoryIds].flat())check(categories.has(c));if(doc)check(mediaById!.get(m.mediaId)?.channelCount===m.channelNotes.length);}
  return bytes;
 }
+function statusMaps(value:unknown):ReadonlySet<object>{
+ const maps=new Set(monitorMaps(value));
+ const doc=(value as CollaborationStatus|null)?.retirement?.snapshot?.document;
+ for(const map of [doc?.analysis,doc?.playbackMix,doc?.viewState?.media])if(map!==null&&typeof map==='object'&&!Array.isArray(map))maps.add(map);
+ return maps;
+}
+function maintenance(v:unknown){
+ shape(v,{total:integer,items:array(50,v=>shape(v,{operationId:uuid,status:v=>check(['accepted','preparing','rollback-pending','committed-pending-cleanup'].includes(v as string)),committed:bool,cleanupPendingCount:nullable(integer),cleanupFailedCount:nullable(integer),deletedAudioBytes:nullable(integer)}))});
+ const m=v as CollaborationStatus['purgeMaintenance'];check(m.items.length===Math.min(50,m.total));unique(m.items.map(i=>i.operationId));check(m.items.every((i,n)=>n===0||m.items[n-1].operationId<i.operationId));
+ for(const i of m.items){check(i.committed===(i.status==='committed-pending-cleanup'));if(i.committed)check(i.cleanupPendingCount!==null&&i.cleanupPendingCount>0&&i.cleanupFailedCount!==null&&i.cleanupFailedCount<=i.cleanupPendingCount&&i.deletedAudioBytes!==null);else check(i.cleanupPendingCount===null&&i.cleanupFailedCount===null&&i.deletedAudioBytes===null);}
+}
 export function parseCollaborationStatus(v:unknown,doc?:ProjectDocument):CollaborationStatus{
- boundedJson(v,64*1024*1024+1024*1024,monitorMaps(v));
+ boundedJson(v,128*1024*1024+1024*1024,statusMaps(v));
  let layerBytes=0;
- shape(v,{...capabilityFields,formatVersion:v=>check(v===1),runtimeNonce:uuid,projectId:nullable(uuid),shared:bool,actor:nullable(identity),preferences:nullable(parsePreferences),pending:bool,recoveryRequired:bool,busy:bool,lastSuccessMs:nullable(integer),error:nullable(error),snapshot:nullable(v=>shape(v,{projectId:uuid,authors:array(128,v=>shape(v,{identity,layer:nullable(v=>{layerBytes+=layer(v,doc);check(layerBytes<=64*1024*1024);}),error:nullable(error)}))}))});
+ shape(v,{...capabilityFields,formatVersion:v=>check(v===1),runtimeNonce:uuid,projectId:nullable(uuid),shared:bool,actor:nullable(identity),preferences:nullable(parsePreferences),pending:bool,recoveryRequired:bool,busy:bool,lastSuccessMs:nullable(integer),error:nullable(error),snapshot:nullable(v=>shape(v,{projectId:uuid,authors:array(128,v=>shape(v,{identity,layer:nullable(v=>{layerBytes+=layer(v,doc);check(layerBytes<=64*1024*1024);}),error:nullable(error)}))})),retirement:nullable(v=>shape(v,{mediaIds:array(10000,uuid),snapshot:v=>{parseProjectSnapshot(v);}})),purgeMaintenance:maintenance});
  const s=v as CollaborationStatus;capabilities(s,s.projectId!==null);check(s.shared===(s.projectFlavor!=='ordinary'));check(!s.pending||s.shared&&s.actor!==null);check(s.shared||s.actor===null&&s.preferences===null&&s.snapshot===null);
+ if(s.retirement){const r=s.retirement;check(s.shared&&r.snapshot.document.projectId===s.projectId);unique(r.mediaIds);check(r.mediaIds.every((id,n)=>n===0||r.mediaIds[n-1]<id));check(r.snapshot.document.media.every(m=>!r.mediaIds.includes(m.id)));}
  if(s.snapshot){check(s.snapshot.projectId===s.projectId);unique(s.snapshot.authors.map(a=>a.identity.authorId));for(const a of s.snapshot.authors)if(a.layer)check(a.layer.projectId===s.projectId&&a.layer.authorId===a.identity.authorId);}
  if(doc){validatePreferenceMedia(s.preferences,doc);check(s.projectId===doc.projectId);const media=new Set(doc.media.map(m=>m.id));check(s.hiddenMediaIds.every(id=>media.has(id)));}
  return s;

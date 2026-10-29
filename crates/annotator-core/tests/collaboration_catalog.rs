@@ -74,7 +74,7 @@ fn empty_default_stable_identity_and_strict_versions() {
     let bytes = fs::read(r.root().join("collaboration.json")).unwrap();
     assert!(parse_manifest(&bytes).is_err());
     let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    for version in [1, 2, 3, 4, 6] {
+    for version in [1, 2, 3, 4, 7] {
         value["formatVersion"] = version.into();
         fs::write(
             r.root().join("collaboration.json"),

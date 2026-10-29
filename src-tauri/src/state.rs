@@ -16,6 +16,28 @@ pub struct AppState(
     pub Arc<crate::commands::collaboration::runtime::Service>,
 );
 impl AppState {
+    /// Called with project authority held, only for verified retirement IDs.
+    /// Keep the runtime epoch and all unrelated jobs, imports and view leases.
+    pub fn retire_media_resources(&self, ids: &[String]) -> Result<()> {
+        self.1
+            .lock()
+            .map_err(|_| AppError::invalid("Media service unavailable"))?
+            .retire_media(ids);
+        self.2.retire_media(ids)?;
+        self.6.inspection.retire_media(ids);
+        self.3.retire_media(ids);
+        let mut prepared = self
+            .6
+            .prepared
+            .lock()
+            .map_err(|_| AppError::invalid("Media preparation unavailable"))?;
+        for id in ids {
+            if let Some(item) = prepared.remove(id) {
+                self.6.dispose(item);
+            }
+        }
+        Ok(())
+    }
     /// File I/O stays off the webview thread; the mutex serializes authority changes.
     pub async fn run<T: Send + 'static>(
         &self,

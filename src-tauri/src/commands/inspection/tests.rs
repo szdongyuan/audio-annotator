@@ -1367,3 +1367,89 @@ fn playback_source_and_output_failures_still_retire_the_owned_session() {
         std::fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[test]
+fn media_retirement_releases_only_the_deleted_inspection_and_preserves_new_main_output() {
+    for mode in ["selected", "unrelated", "new-main"] {
+        let (state, root, project, nonce, media) = setup();
+        let opened = open_owned(
+            &state,
+            &nonce,
+            &project,
+            &media,
+            Default::default(),
+            uuid::Uuid::new_v4().to_string(),
+        )
+        .unwrap();
+        let preview = state
+            .6
+            .inspection
+            .current
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .clone();
+        let view = preview.state.2.scheduler.register_view().unwrap();
+        let buffer = state.3.test_output(&opened.document.project_id, &media);
+        let main_buffer = (mode == "new-main").then(|| state.3.test_output(&project, "survivor"));
+        let before = state.3.status().unwrap();
+        let generation = state.1.lock().unwrap().generation();
+        let retired = if mode == "unrelated" {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            media.clone()
+        };
+        // The same resource boundary is called by local purge and incoming retirement,
+        // while parent authority is held. It must release the inspection without waiting
+        // for a subsequent renderer status request to notice its missing media.
+        {
+            let _authority = state.0.lock().unwrap();
+            state.retire_media_resources(&[retired]).unwrap();
+        }
+        let after = state.3.status().unwrap();
+        assert_eq!(state.1.lock().unwrap().generation(), generation);
+        if mode == "unrelated" {
+            assert!(state.6.inspection.current.lock().unwrap().is_some());
+            assert_eq!(after.generation, before.generation);
+            assert_eq!(after.state, before.state);
+            assert!(preview
+                .state
+                .2
+                .scheduler
+                .submit(&view, 1, true, |_| Ok(vec![]))
+                .unwrap()
+                .recv()
+                .unwrap()
+                .is_ok());
+        } else {
+            assert!(
+                state.6.inspection.current.lock().unwrap().is_none(),
+                "deleted inspection retained in {mode}"
+            );
+            assert!(preview.state.0.lock().unwrap().is_none());
+            assert!(preview
+                .state
+                .2
+                .scheduler
+                .submit(&view, 1, true, |_| Ok(vec![]))
+                .is_err());
+            if mode == "new-main" {
+                assert_eq!(after.generation, before.generation);
+                assert_eq!(after.state, before.state);
+                assert_eq!(after.project_id.as_deref(), Some(project.as_str()));
+            } else {
+                assert_eq!(
+                    after.state,
+                    annotator_core::audio::engine::TransportState::Stopped
+                );
+            }
+        }
+        state.6.inspection.invalidate();
+        drop(main_buffer);
+        drop(buffer);
+        drop(preview);
+        drop(state);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}

@@ -23,6 +23,14 @@ function setup() {
 }
 afterEach(() => vi.useRealTimers());
 
+it('persists an admitted action after drafts without self-wait or a playback-resetting transition',async()=>{
+ const {store,queue,lifecycle,persistence}=setup(),order:string[]=[];
+ store.setDraft('note','draft');lifecycle.registerDraft('note',async()=>{order.push('draft');await queue.enqueue({type:'updateMediaNote',mediaId:fixture.media[0].id,note:'accepted',mergeKey:null},{draftKey:'note'});});
+ const barriers:boolean[]=[];const unsubscribe=store.subscribe(()=>barriers.push(store.editingDisabled));
+ const result=await lifecycle.enqueuePersistedEdit(async()=>{order.push('action');expect(store.isDirty).toBe(false);return 7;});
+ expect(result).toBe(7);expect(order).toEqual(['draft','action']);expect(persistence.save).toHaveBeenCalledWith(fixture.projectId,fixture.revision+1);expect(barriers).not.toContain(true);unsubscribe();lifecycle.dispose();
+});
+
 it('debounces at 1 second and attempts by 5 seconds during continuous edits', async () => {
   vi.useFakeTimers();
   const { lifecycle, edit, persistence } = setup();

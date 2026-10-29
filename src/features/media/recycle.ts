@@ -3,12 +3,14 @@ import type { AppError } from '../../bridge/types';
 import type { Recycle, RecycleCommands, RecycleOperation, RecycleSnapshot } from '../../bridge/recycle';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import { admitted, suspendRefresh } from '../collaboration/admission';
+import { PurgeController } from './purge';
 export interface RecycleDraft {
     expectedRevision: number;
     operation: RecycleOperation;
 }
 /** Shared recycle metadata; writes coordinate with the owner lifecycle without editing personal content. */
 export class RecycleController {
+    readonly purge: PurgeController;
     snapshot: Recycle | null = null;
     error: AppError | null = null;
     private mutationError: AppError | null = null;
@@ -18,7 +20,7 @@ export class RecycleController {
     private reading: Promise<void> | null = null;
     private version = 0;
     private listeners = new Set<() => void>();
-    constructor(readonly projectId: string, readonly runtimeNonce: string, readonly writable: boolean, private api: RecycleCommands, private owner?: ActiveProject) { }
+    constructor(readonly projectId: string, readonly runtimeNonce: string, readonly writable: boolean, private api: RecycleCommands, private owner?: ActiveProject) { this.purge = new PurgeController(projectId, runtimeNonce, writable, undefined, owner); }
     subscribe = (f: () => void) => { this.listeners.add(f); return () => { this.listeners.delete(f); }; };
     getVersion = () => this.version;
     private notify() { this.version++; this.listeners.forEach(f => f()); }
@@ -88,5 +90,5 @@ export class RecycleController {
         if (!this.disposed)
             this.notify();
     } }
-    dispose() { this.disposed = true; this.generation++; this.listeners.clear(); }
+    dispose() { this.purge.dispose(); this.disposed = true; this.generation++; this.listeners.clear(); }
 }

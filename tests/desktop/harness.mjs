@@ -62,7 +62,7 @@ $taskRect=New-Object OwnedWindow+RECT
   const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',code],{encoding:'utf8',windowsHide:true});
   if(result.status!==0)throw Error(result.stderr);return JSON.parse(result.stdout);
 }
-export function testExecutable(executable, env = process.env) { return executable ?? env.ANNOTATOR_WORKSPACE_EXE ?? path.resolve('target/debug/annotator-desktop.exe'); }
+export function testExecutable(executable, env = process.env) { return executable ?? path.resolve(env.ANNOTATOR_WORKSPACE_EXE ?? 'target/debug/annotator-desktop.exe'); }
 export async function start(paths, output, executable, options = {}) {
   executable = testExecutable(executable);
   const {ports,localDataEnv,webviewDirectory}=instanceOptions(options),ownedPorts=Object.values(ports),port=ports.driver;

@@ -212,6 +212,34 @@ impl PlaybackRuntime {
         control.status.project_id = Some(project_id.into());
         control.status.state = TransportState::Playing;
     }
+    pub fn retire_media(&self, ids: &[String]) {
+        if let Ok(mut pending) = self.pending.lock() {
+            if pending
+                .as_ref()
+                .is_some_and(|work| ids.contains(&work.descriptor.id))
+            {
+                if let Some(work) = pending.take() {
+                    work.cancel.store(true, Ordering::Release);
+                }
+            }
+        }
+        if let Ok(mut c) = self.control.lock() {
+            if c.status
+                .media_id
+                .as_ref()
+                .is_some_and(|id| ids.contains(id))
+            {
+                c.cancel.store(true, Ordering::Release);
+                if let Some(buffer) = c.buffer.take() {
+                    buffer.set_playing(false);
+                }
+                c.transport = None;
+                c.status.media_id = None;
+                c.status.state = TransportState::Stopped;
+                c.status.generation = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+            }
+        }
+    }
     pub fn status(&self) -> Result<PlaybackStatus> {
         let mut c = self
             .control
@@ -1317,4 +1345,25 @@ mod source_ownership_tests {
         assert_eq!(after.project_id.as_deref(), Some("main"));
         assert_eq!(after.state, TransportState::Playing);
     }
+}
+#[test]
+fn retirement_preserves_survivor_transport_epoch_and_stops_only_the_target() {
+    let runtime = PlaybackRuntime::default();
+    let cancel = {
+        let mut c = runtime.control.lock().unwrap();
+        c.status.media_id = Some("b".into());
+        c.status.state = TransportState::Playing;
+        c.cancel.clone()
+    };
+    let before = runtime.status().unwrap();
+    runtime.retire_media(&["a".into()]);
+    let after = runtime.status().unwrap();
+    assert_eq!(after.media_id, before.media_id);
+    assert_eq!(after.generation, before.generation);
+    assert_eq!(after.state, TransportState::Playing);
+    assert!(!cancel.load(Ordering::Acquire));
+    runtime.retire_media(&["b".into()]);
+    assert!(cancel.load(Ordering::Acquire));
+    assert!(runtime.status().unwrap().media_id.is_none());
+    assert_eq!(runtime.status().unwrap().state, TransportState::Stopped);
 }

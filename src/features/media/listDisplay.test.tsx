@@ -10,7 +10,7 @@ import { readListDisplay, writeListDisplay } from './listDisplay';
 const a = '33333333-3333-4333-8333-333333333333', child = '44444444-4444-4444-8444-444444444444', b = '55555555-5555-4555-8555-555555555555';
 const actor = '66666666-6666-4666-8666-666666666666', other = '77777777-7777-4777-8777-777777777777';
 const files = [0, 1, 2, 3, 4].map(i => ({ ...fixture.media[0], id: `00000000-0000-4000-8000-00000000000${i}`, displayName: `audio-${i}.wav`, categoryIds: i === 0 ? ['tag'] : [], channelCategoryIds: [[]] }));
-function controller(projectId = fixture.projectId, nonce = 'test') {
+function controller(projectId = fixture.projectId, nonce = '11111111-1111-4111-8111-111111111111') {
   const c = new OrganizationController(projectId, nonce, true, { get: vi.fn(), apply: vi.fn() });
   c.snapshot = { kind: 'audio-annotator-organization', formatVersion: 1, projectId, revision: 0, layoutRevision: 0,
     folders: [{ id: a, parentId: null, name: 'A' }, { id: child, parentId: a, name: 'Child' }, { id: b, parentId: null, name: 'B' }],
@@ -85,8 +85,8 @@ it('retains saved scope and expansion while organization metadata is loading', a
   const preference = { mode: 'flat' as const, scope: a, expanded: [a, child] };
   writeListDisplay(fixture.projectId, actor, preference);
   const ready = controller().snapshot!;
-  const get = vi.fn(async () => ({ projectId: fixture.projectId, runtimeNonce: 'test', organization: ready }));
-  const loading = new OrganizationController(fixture.projectId, 'test', true, { get, apply: vi.fn() });
+  const get = vi.fn(async () => ({ projectId: fixture.projectId, runtimeNonce: '11111111-1111-4111-8111-111111111111', organization: ready }));
+  const loading = new OrganizationController(fixture.projectId, '11111111-1111-4111-8111-111111111111', true, { get, apply: vi.fn() });
   render(<MediaList {...props} organization={loading} actorId={actor} />);
   expect(readListDisplay(fixture.projectId, actor)).toEqual(preference);
   await act(() => loading.refresh());
@@ -104,7 +104,7 @@ it('returns focus to search if a flat context-menu target disappears', () => {
 });
 
 it('preserves search, classification, tags, hidden/recycle views, context copy and multiselect in flat mode', async () => {
-  const c = controller(), recycle = new RecycleController(fixture.projectId, 'test', true, {} as never);
+  const c = controller(), recycle = new RecycleController(fixture.projectId, '11111111-1111-4111-8111-111111111111', true, {} as never);
   recycle.snapshot = { kind: 'audio-annotator-recycle', formatVersion: 1, projectId: fixture.projectId, revision: 0, trashed: [{ mediaId: files[4].id, deletedBy: actor }], recentOperations: [] };
   const writeText = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
   render(<MediaList {...props} organization={c} actorId={actor} recycle={recycle} hiddenMediaIds={[files[3].id]} categories={[{ id: 'tag', name: 'Tag', color: '#ffffff' }]} />);

@@ -197,6 +197,88 @@ pub fn verify_lock_path(path: &Path, held: &File) -> Result<()> {
     };
     require(same, "Writer lock file authority changed")
 }
+/// Payload-free identity of the stable lease object. Reading the lock bytes is
+/// forbidden on Windows while another process holds its mandatory byte lock.
+pub(crate) fn lock_identity(path: &Path) -> Result<String> {
+    safe_existing(path)?;
+    let file = File::open(path).map_err(io)?;
+    file_identity(&file)
+}
+pub(crate) fn file_identity(file: &File) -> Result<String> {
+    #[cfg(windows)]
+    let identity = {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+        let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+        if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) } == 0 {
+            return Err(io(std::io::Error::last_os_error()));
+        }
+        format!(
+            "{}:{}:{}",
+            info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow
+        )
+    };
+    #[cfg(not(windows))]
+    let identity = {
+        use std::os::unix::fs::MetadataExt;
+        let metadata = file.metadata().map_err(io)?;
+        format!("{}:{}", metadata.dev(), metadata.ino())
+    };
+    Ok(super::validation::hash(identity.as_bytes()))
+}
+
+/// A Windows cleanup handle forbids replacement/writes until exact-object deletion.
+pub(crate) fn cleanup_handle(path: &Path) -> Result<File> {
+    safe_existing(path)?;
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options
+            .access_mode(0x80000000 | 0x00010000)
+            .share_mode(1)
+            .custom_flags(0x00200000);
+    }
+    let file = options.open(path).map_err(io)?;
+    let metadata = file.metadata().map_err(io)?;
+    require(
+        metadata.is_file() && !is_link(&metadata),
+        "Cleanup requires a regular file",
+    )?;
+    verify_lock_path(path, &file)?;
+    Ok(file)
+}
+pub(crate) fn unlink_held(path: &Path, file: &File) -> Result<()> {
+    verify_lock_path(path, file)?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FileDispositionInfo, SetFileInformationByHandle, FILE_DISPOSITION_INFO,
+        };
+        let info = FILE_DISPOSITION_INFO { DeleteFile: true };
+        // Deletes this exact held object. No pathname lookup can select a substitute.
+        if unsafe {
+            SetFileInformationByHandle(
+                file.as_raw_handle(),
+                FileDispositionInfo,
+                &info as *const _ as *const _,
+                std::mem::size_of_val(&info) as u32,
+            )
+        } == 0
+        {
+            return Err(io(std::io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        fs::remove_file(path).map_err(io)
+    }
+}
 fn check(
     fault: Option<PublishFault>,
     point: PublishFault,
@@ -221,6 +303,18 @@ pub fn publish_new(
     fault: Option<PublishFault>,
     cancel: Option<&AtomicBool>,
 ) -> Result<()> {
+    publish_new_owned(path, bytes, fault, cancel, |_, _| Ok(()), |_| Ok(()))
+}
+/// Persist exact empty staging-object ownership before writing any payload.
+/// The second callback observes partial write and sync, before rename.
+pub(crate) fn publish_new_owned(
+    path: &Path,
+    bytes: &[u8],
+    fault: Option<PublishFault>,
+    cancel: Option<&AtomicBool>,
+    before_write: impl FnOnce(&Path, &File) -> Result<()>,
+    mut after_write: impl FnMut(PublishFault) -> Result<()>,
+) -> Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| AppError::invalid("Missing publication parent"))?;
@@ -229,21 +323,24 @@ pub fn publish_new(
         return Err(AppError::new(ErrorCode::Cancelled, "Publication cancelled"));
     }
     let tmp = parent.join(format!(".{}.tmp", uuid::Uuid::new_v4()));
-    let mut owned = false;
+    let mut owned_identity = None;
     let result = (|| {
         let mut file = OpenOptions::new()
             .create_new(true)
             .write(true)
             .open(&tmp)
             .map_err(io)?;
-        owned = true;
+        owned_identity = Some(file_identity(&file)?);
+        before_write(&tmp, &file)?;
         let split = bytes.len() / 2;
         file.write_all(&bytes[..split]).map_err(io)?;
         check(fault, PublishFault::PartialWrite, cancel)?;
+        after_write(PublishFault::PartialWrite)?;
         file.write_all(&bytes[split..]).map_err(io)?;
         file.flush().map_err(io)?;
         check(fault, PublishFault::Sync, cancel)?;
         file.sync_all().map_err(io)?;
+        after_write(PublishFault::Sync)?;
         drop(file);
         check(fault, PublishFault::Rename, cancel)?;
         safe_existing(parent)?;
@@ -259,8 +356,15 @@ pub fn publish_new(
         })?;
         check(fault, PublishFault::AfterPublish, None)
     })();
-    if owned {
-        let _ = fs::remove_file(&tmp);
+    if let Some(identity) = owned_identity {
+        // A failed publication may leave our exact staged object. Never unlink
+        // a replacement at the temporary name. Owned callers retain durable
+        // intent if best-effort cleanup itself is unavailable after I/O failure.
+        if let Ok(held) = cleanup_handle(&tmp) {
+            if file_identity(&held).is_ok_and(|current| current == identity) {
+                let _ = unlink_held(&tmp, &held);
+            }
+        }
     }
     result
 }

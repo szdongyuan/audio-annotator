@@ -8,6 +8,21 @@ pub struct RememberedLayers {
     snapshot: CollaborationSnapshot,
 }
 impl RememberedLayers {
+    pub fn adopt_prepared_catalog(&mut self, prepared: &PreparedCatalogUpdate) -> Result<()> {
+        super::validation::require(
+            self.manifest == prepared.source.manifest,
+            "Remembered retirement source changed",
+        )?;
+        let mut snapshot = self.snapshot.clone();
+        for author in &mut snapshot.authors {
+            if let Some(layer) = &author.layer {
+                author.layer = Some(prepared.retirement.layer(layer)?);
+            }
+        }
+        self.manifest = prepared.repo.manifest().clone();
+        self.snapshot = snapshot;
+        Ok(())
+    }
     /// Extend validation authority only after explicit catalog adoption. Previously
     /// displayed layers remain intact; callers then install the fresh full snapshot.
     pub fn adopt_catalog(&mut self, manifest: CollaborationManifest) -> Result<()> {
@@ -104,6 +119,7 @@ pub struct PublicationCapture {
     pub(super) pending: PendingPayload,
 }
 pub struct PublicationAck {
+    pub(super) manifest_hash: String,
     pub(super) nonce: uuid::Uuid,
     pub(super) base: Option<Checkpoint>,
     pub(super) pending: PendingPayload,
@@ -120,7 +136,7 @@ impl PublicationCapture {
         self.publish_controlled(None)
     }
     pub fn publish_controlled(self, fault: Option<atomic::PublishFault>) -> Result<PublicationAck> {
-        let checkpoint = self.repo.publish_controlled(
+        let (checkpoint, manifest_hash) = self.repo.publish_with_source(
             &self.actor,
             self.base.as_ref(),
             &self.pending.payload,
@@ -128,6 +144,7 @@ impl PublicationCapture {
             None,
         )?;
         Ok(PublicationAck {
+            manifest_hash,
             nonce: self.nonce,
             base: self.base,
             pending: self.pending,

@@ -826,6 +826,9 @@ fn directory_entries_cannot_impersonate_ignored_control_files() {
     let (r, a) = CollaborationRepository::create_default(&root, "Test", &profile).unwrap();
     for name in [".foreign.tmp", ".commit.lock"] {
         let path = root.join("catalog").join(name);
+        if path.is_file() {
+            fs::remove_file(&path).unwrap();
+        }
         fs::create_dir(&path).unwrap();
         let result = CollaborationRepository::open(&root);
         fs::remove_dir(path).unwrap();

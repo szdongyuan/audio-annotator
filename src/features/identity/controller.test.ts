@@ -41,3 +41,17 @@ it.each(['SaveFailed','RevisionConflict'] as const)('does not retry native %s fa
  vi.useFakeTimers();const s=setup();try{await s.c.refresh();s.api.select.mockRejectedValueOnce({code,message:'保留明确失败',retryable:true});const work=s.c.select(b);await vi.runAllTimersAsync();await work;expect(s.api.select).toHaveBeenCalledOnce();expect(s.c.error?.message).toBe('保留明确失败');
  }finally{s.c.dispose();vi.useRealTimers();}
 });
+
+it('retries only busy create admission with stable operation ID and fresh guarded expectations',async()=>{
+ const s=setup();await s.c.refresh();s.api.list.mockResolvedValueOnce(snap()).mockResolvedValueOnce(snap([profile()],a,2)).mockResolvedValueOnce(snap([profile(),profile(b)],a,3));s.api.create.mockRejectedValueOnce(busy);
+ await s.c.create('new');expect(s.api.create).toHaveBeenCalledTimes(2);expect(s.api.create.mock.calls.map(c=>c[0].storeRevision)).toEqual([1,2]);const id=s.api.create.mock.calls[0][1];expect(s.api.create.mock.calls[1][1]).toBe(id);expect(s.api.select).toHaveBeenCalledWith(expect.objectContaining({storeRevision:3}),id,b);expect(s.c.error).toBeNull();s.c.dispose();
+});
+it('a busy select after successful create never replays creation',async()=>{
+ const s=setup();await s.c.refresh();s.api.select.mockRejectedValueOnce(busy);await s.c.create('new');expect(s.api.create).toHaveBeenCalledTimes(1);expect(s.api.select).toHaveBeenCalledTimes(2);expect(s.api.select.mock.calls[1][1]).toBe(s.api.select.mock.calls[0][1]);expect(s.c.selected?.authorId).toBe(b);expect(s.c.error).toBeNull();s.c.dispose();
+});
+for(const invalidation of ['cancel','owner'] as const)it(`does not retry an admitted busy mutation after ${invalidation}`,async()=>{
+ vi.useFakeTimers();const s=setup();try{await s.c.refresh();let entered!:()=>void;const admission=new Promise<void>(r=>{entered=r;});s.api.select.mockImplementationOnce(async()=>{entered();throw busy;});const work=s.c.select(b);await admission;if(invalidation==='cancel')s.c.cancel();else s.setOwner({} as never);await vi.advanceTimersByTimeAsync(100);await work;expect(s.api.select).toHaveBeenCalledTimes(1);expect(s.c.error?.code).toBe('Cancelled');}finally{s.c.dispose();vi.useRealTimers();}
+});
+it('busy import/export admission retains picker results and never reopens a picker',async()=>{
+ const s=setup();await s.c.refresh();s.api.import.mockRejectedValueOnce(busy);s.api.export.mockRejectedValueOnce(busy);await s.c.import();await s.c.export();expect(s.api.chooseImport).toHaveBeenCalledOnce();expect(s.api.chooseExport).toHaveBeenCalledOnce();expect(s.api.import).toHaveBeenCalledTimes(2);expect(s.api.export).toHaveBeenCalledTimes(2);expect(s.api.import.mock.calls.map(c=>c.slice(1))).toEqual([s.api.import.mock.calls[0].slice(1),s.api.import.mock.calls[0].slice(1)]);expect(s.c.error).toBeNull();s.c.dispose();
+});

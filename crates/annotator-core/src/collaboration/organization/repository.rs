@@ -23,7 +23,7 @@ impl CollaborationRepository {
     }
     pub fn read_organization(&self) -> Result<Organization> {
         self.authority()?;
-        read(&self.root, &self.manifest.project_id)
+        read(&self.metadata_root, &self.manifest.project_id)
     }
     pub fn apply_organization(
         &self,
@@ -50,7 +50,7 @@ impl CollaborationRepository {
         before_commit: impl FnOnce() -> Result<Guard>,
     ) -> Result<Organization> {
         crate::media::identity::check_cancel(cancel)?;
-        let _lock = atomic::short_lock(&self.root.join("catalog/.commit.lock"))?;
+        let _lock = self.commit_guard()?;
         self.session_authority(session)?;
         let current = self.reload_catalog()?;
         if current.organization.revision != expected_revision {
@@ -73,7 +73,7 @@ impl CollaborationRepository {
         let bytes = encode(&next)?;
         let _guard = before_commit()?;
         atomic::replace_metadata_controlled(
-            &self.root.join("organization.json"),
+            &self.metadata_root.join("organization.json"),
             &bytes,
             None,
             Some(cancel),
@@ -105,7 +105,7 @@ impl CollaborationRepository {
         source: &Organization,
     ) -> Result<Self> {
         source.validate()?;
-        let _lock = atomic::short_lock(&self.root.join("catalog/.commit.lock"))?;
+        let _lock = self.commit_guard()?;
         self.session_authority(session)?;
         let current = self.reload_catalog()?;
         if current.organization.revision != 0
@@ -117,7 +117,7 @@ impl CollaborationRepository {
         let mut head = Organization::empty(self.manifest.project_id.clone());
         head.folders = source.folders.clone();
         atomic::replace_metadata_controlled(
-            &self.root.join("organization.json"),
+            &self.metadata_root.join("organization.json"),
             &encode(&head)?,
             None,
             None,

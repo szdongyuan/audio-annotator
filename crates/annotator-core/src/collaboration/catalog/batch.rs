@@ -21,7 +21,7 @@ impl CollaborationRepository {
             require(ids.insert(&item.media.id), "Duplicate batch media")?;
         }
         // Acknowledged retry can succeed after the original source disappears.
-        let head = organization::read(&self.root, &self.manifest.project_id)?;
+        let head = organization::read(&self.metadata_root, &self.manifest.project_id)?;
         let committed: std::collections::HashSet<_> =
             head.media.iter().map(|m| &m.media_id).collect();
         if items.iter().all(|m| committed.contains(&m.media.id)) {
@@ -49,9 +49,10 @@ impl CollaborationRepository {
             )
             .map_err(|e| item.retained_error(e))?;
         }
-        let _lock = short_lock(&self.root.join("catalog/.commit.lock"))?;
+        let _lock = self.commit_guard()?;
         self.session_authority(session)?;
         let mut current = self.reload_catalog()?;
+        current.reject_retired_media(items.iter().map(|m| m.media.id.as_str()))?;
         let mut head = current.organization.clone();
         let mut records = Vec::new();
         let mut byte_length = current.catalog_revision.as_ref().unwrap().byte_length;
@@ -86,7 +87,7 @@ impl CollaborationRepository {
             return Ok(current);
         }
         let head_bytes = organization::encode(&head)?;
-        for (index, entry) in fs::read_dir(self.root.join("catalog"))
+        for (index, entry) in fs::read_dir(self.metadata_root.join("catalog"))
             .map_err(atomic::io)?
             .enumerate()
         {
@@ -107,7 +108,7 @@ impl CollaborationRepository {
                 return Err(atomic::io(std::io::Error::other("Injected before record")));
             }
             let path = self
-                .root
+                .metadata_root
                 .join("catalog")
                 .join(format!("{}.json", item.media.id));
             if path.try_exists().map_err(atomic::io)? {
@@ -135,7 +136,7 @@ impl CollaborationRepository {
         revision.byte_length = byte_length;
         revision.digest = record_digest(&current.catalog_record_hashes)?;
         atomic::replace_metadata_controlled(
-            &self.root.join("organization.json"),
+            &self.metadata_root.join("organization.json"),
             &head_bytes,
             fault,
             Some(cancel),

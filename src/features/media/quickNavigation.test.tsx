@@ -11,7 +11,7 @@ afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); });
 it('crosses a selected one-file leaf in tree order and reveals, focuses and scrolls the sibling audio', async () => {
  const files=[0,1].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`cross-${i}.wav`}));
  const a=crypto.randomUUID(),b=crypto.randomUUID(),leaf=crypto.randomUUID();
- const c=new OrganizationController(fixture.projectId,'test',true,{} as never);
+ const c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never);
  c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:0,layoutRevision:0,folders:[{id:a,parentId:null,name:'A'},{id:b,parentId:null,name:'B'},{id:leaf,parentId:b,name:'nested'}],media:files.map((m,i)=>({mediaId:m.id,folderId:i===0?a:leaf,originalFilename:m.displayName}))};
  const scroll=vi.fn();vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>setTimeout(()=>callback(0),0));
  function App(){const [id,setId]=useState<string>(files[0].id);return <MediaList organization={c} media={files} annotations={[]} statuses={[]} selectedId={id} disabled={false} onSelect={setId} onImport={vi.fn()} onRelink={vi.fn()}/>;}
@@ -29,7 +29,7 @@ it('crosses a selected one-file leaf in tree order and reveals, focuses and scro
 });
 it('keeps project-wide navigation filtered by search, classification, tags, hidden, trash and comparison', () => {
  const files=Array.from({length:8},(_,i)=>({...fixture.media[0],id:crypto.randomUUID(),displayName:i===6?'other.wav':`match-${i}.wav`,categoryIds:i===5?[]:['tag'],channelCategoryIds:[[]]}));
- const a=crypto.randomUUID(),b=crypto.randomUUID(),c=new OrganizationController(fixture.projectId,'test',true,{} as never),recycle=new RecycleController(fixture.projectId,'test',true,{} as never);
+ const a=crypto.randomUUID(),b=crypto.randomUUID(),c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never),recycle=new RecycleController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never);
  c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:0,layoutRevision:0,folders:[{id:a,parentId:null,name:'A'},{id:b,parentId:null,name:'B'}],media:files.map((m,i)=>({mediaId:m.id,folderId:i===0?a:b,originalFilename:m.displayName}))};
  recycle.snapshot={kind:'audio-annotator-recycle',formatVersion:1,projectId:fixture.projectId,revision:0,trashed:[{mediaId:files[3].id,deletedBy:'author'}],recentOperations:[]};
  const select=vi.fn();render(<MediaList organization={c} recycle={recycle} media={files} annotations={[]} statuses={[]} categories={[{id:'tag',name:'标签',color:'#ffffff'}]} hiddenMediaIds={[files[2].id]} navigationExcludedId={files[1].id} selectedId={files[0].id} disabled={false} onSelect={select} onImport={vi.fn()} onRelink={vi.fn()}/>);
@@ -43,7 +43,7 @@ it('keeps project-wide navigation filtered by search, classification, tags, hidd
 });
 it('keeps other folder totals stable when changing the selected folder',()=>{
  const files=[0,1,2].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`count-${i}.wav`})),a=crypto.randomUUID(),b=crypto.randomUUID();
- const c=new OrganizationController(fixture.projectId,'test',true,{} as never);
+ const c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never);
  c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:0,layoutRevision:0,folders:[{id:a,parentId:null,name:'A'},{id:b,parentId:null,name:'B'}],media:files.map((m,i)=>({mediaId:m.id,folderId:i===2?b:a,originalFilename:m.displayName}))};
  render(<MediaList organization={c} media={files} annotations={[]} statuses={[]} selectedId={null} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);
  fireEvent.click(screen.getByTitle('A'));expect(screen.getByTitle('A')).toHaveTextContent('2');expect(screen.getByTitle('B')).toHaveTextContent('1');expect(screen.getByRole('button',{name:/全部音频/})).toHaveTextContent('3');
@@ -96,7 +96,7 @@ it('allows preview navigation from a clicked row during import and multiselect w
 });
 it('navigates collapsed directory contents, skipping hidden and other-pane audio without hijacking inputs', () => {
   const files = Array.from({ length: 4 }, (_, i) => ({ ...fixture.media[0], id: crypto.randomUUID(), displayName: `音频${i}.wav` }));
-  const folder = crypto.randomUUID(), controller = new OrganizationController(fixture.projectId, 'test', true, {} as never);
+  const folder = crypto.randomUUID(), controller = new OrganizationController(fixture.projectId, '11111111-1111-4111-8111-111111111111', true, {} as never);
   controller.snapshot = { kind: 'audio-annotator-organization', formatVersion: 1, projectId: fixture.projectId, revision: 0, layoutRevision: 0, folders: [{ id: folder, parentId: null, name: '收音' }], media: files.map(m => ({ mediaId: m.id, folderId: folder, originalFilename: m.displayName })) };
   const select = vi.fn();
   function App() { const [id, setId] = useState<string>(files[0].id); return <MediaList organization={controller} media={files} annotations={[]} statuses={[]} selectedId={id} disabled={false} hiddenMediaIds={[files[2].id]} navigationExcludedId={files[1].id} onSelect={next => { select(next); setId(next); }} onImport={vi.fn()} onRelink={vi.fn()} />; }

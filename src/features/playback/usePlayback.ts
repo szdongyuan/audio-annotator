@@ -102,7 +102,15 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  const restoredMonitor={monitorGainDb:prefs?.monitorGainDb??0,mediaMonitorGainDb:{...prefs?.mediaMonitorGainDb}};monitorRef.current=restoredMonitor;setMonitor(restoredMonitor);setMonitorError(null);statusRef.current=emptyPlayback;const source=prefs?.source??'processed';const restored={mode:'processed' as const,selectionSource:'processed' as const,bypass:false,volume:prefs?.volume??.75,deviceId:prefs?.deviceId??null,looping:prefs?.loopEnabled??false};setOptions(restored);current.current.options=restored;setWorkspaceSource(source);current.current.workspaceSource=source;setCues({});setSourceId(selectedMediaId);current.current.sourceId=selectedMediaId;setDesired(false);setStatus(emptyPlayback);setError(null);if(api.available())control('reset');else{++sequence.current;pendingIntent.current=null;}},[active,api]);
  useEffect(()=>{if(selectedMediaId&&(!current.current.sourceId||!active?.store.snapshot.document.media.some(m=>m.id===current.current.sourceId)))selectSource(selectedMediaId);},[selectedMediaId,active?.store.snapshot.document.media]);
  const selectionSignature=JSON.stringify(selection);
- useEffect(()=>{if(cueDeactivation.current&&!selection){cueDeactivation.current=false;return;}cueDeactivation.current=false;if(activated.current)control('stop');else clearIntent();},[selectionSignature]);
+ const previousSelection=useRef({owner:active,region:selection});
+ useEffect(()=>{
+   const previous=previousSelection.current;previousSelection.current={owner:active,region:selection};
+   const resolvedMediaId=resolved().mediaId;
+   // Trusted retirement clears A's selection without changing an explicit B stream.
+   // Ordinary selection changes and retirement of the actual stream still stop it.
+   if(previous.owner===active&&previous.region&&!selection&&active?.store.isRetired(previous.region.mediaId)&&resolvedMediaId&&!active.store.isRetired(resolvedMediaId))return;
+   if(cueDeactivation.current&&!selection){cueDeactivation.current=false;return;}cueDeactivation.current=false;if(activated.current)control('stop');else clearIntent();
+ },[selectionSignature,active]);
  useEffect(()=>{if(!api.available())return;refreshDevices();let disposed=false,unlisten:(()=>void)|undefined;const owner=active;void api.listen(s=>{if(!disposed&&current.current.active===owner)progress(s);}).then(f=>{if(disposed)f();else unlisten=f;});return()=>{disposed=true;unlisten?.();};},[api,active]);
  // A failed Save As retains the owner, so active identity alone cannot reset its UI intent.
  const transitioning=active?.store.editingDisabled??false;

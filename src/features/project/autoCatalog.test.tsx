@@ -22,7 +22,7 @@ function opened(): OpenedProject {
  return { snapshot: { document: structuredClone(fixture) as never, canUndo: false, canRedo: false }, persistedRevision: 0, recovery: null, path: 'shared', collaboration: { projectFlavor: 'default', identityMode: 'profile', canWriteAnnotations: true, canImportMedia: true, hiddenMediaIds: [], catalogPending: false, runtimeNonce: nonce, actor: { authorId: nonce, displayName: 'Me', createdAt: '2026-10-26T00:00:00Z' }, preferences: { monitorGainDb: 0, mediaMonitorGainDb: {}, volume: .75, deviceId: null, loopEnabled: false, source: 'processed' } } };
 }
 function remote(o: OpenedProject): CollaborationStatus {
- return { formatVersion: 1, ...o.collaboration!, projectId: fixture.projectId, shared: true, pending: false, recoveryRequired: false, busy: false, lastSuccessMs: 1, error: null, snapshot: { projectId: fixture.projectId, authors: [] } };
+ return { retirement: null, purgeMaintenance: { total: 0, items: [] }, formatVersion: 1, ...o.collaboration!, projectId: fixture.projectId, shared: true, pending: false, recoveryRequired: false, busy: false, lastSuccessMs: 1, error: null, snapshot: { projectId: fixture.projectId, authors: [] } };
 }
 function setup(readOnly = false) {
  const initial = opened();

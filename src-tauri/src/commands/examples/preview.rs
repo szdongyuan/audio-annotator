@@ -187,6 +187,20 @@ impl Manager {
             drop(old);
         });
     }
+    /// Project retirement invalidates inspections of that source, while example
+    /// previews retain their independent copied audio and unrelated inspections live on.
+    pub(crate) fn retire_media(&self, ids: &[String]) {
+        if let Ok(mut current) = self.current.lock() {
+            if current
+                .as_ref()
+                .is_some_and(|p| p.source.is_some() && ids.contains(&p.media_id))
+            {
+                if let Some(old) = current.take() {
+                    Self::retire(old);
+                }
+            }
+        }
+    }
     pub fn invalidate(&self) {
         if let Ok(mut current) = self.current.lock() {
             if let Ok(mut opening) = self.opening.lock() {

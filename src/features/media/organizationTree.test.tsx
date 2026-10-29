@@ -10,7 +10,7 @@ afterEach(() => localStorage.clear());
 it('reserves one compact file disclosure slot at depths one through three with nesting as the only indentation owner', () => {
  const folders=[1,2,3].map(depth=>({id:`folder-${depth}`,parentId:depth===1?null:`folder-${depth-1}`,name:`Depth ${depth}`}));
  const media=folders.map((_,i)=>({...fixture.media[0],id:`media-${i}`,displayName:`depth-${i+1}.wav`}));
- const c=new OrganizationController(fixture.projectId,'test',true,{} as never);
+ const c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never);
  c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:0,layoutRevision:0,folders,media:media.map((m,i)=>({mediaId:m.id,folderId:folders[i].id,originalFilename:m.displayName}))};
  render(<MediaList organization={c} media={media} annotations={[]} statuses={[]} selectedId={null} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);
  folders.forEach(f=>fireEvent.click(screen.getByRole('button',{name:`展开文件夹 · ${f.name}`})));
@@ -28,9 +28,9 @@ it.each(['empty', 'parent', 'root'] as const)('confirms recursive %s removal, ca
  const parent=crypto.randomUUID(),file=fixture.media[0];
  const head={kind:'audio-annotator-organization' as const,formatVersion:1 as const,projectId:fixture.projectId,revision:3,layoutRevision:1,folders:[...(mode==='parent'?[{id:parent,parentId:null,name:'保留父目录'}]:[]),{id,parentId:mode==='parent'?parent:null,name:'待删除目录'},{id:child,parentId:id,name:'深层目录'}],media:mode==='empty'?[]:[{mediaId:file.id,folderId:child,originalFilename:'原名.wav'}]};
  const next={...head,revision:4,layoutRevision:2,folders:head.folders.filter(f=>f.id===parent),media:head.media.map(m=>({...m,folderId:mode==='parent'?parent:null}))};
- const api={get:vi.fn(),apply:vi.fn(async()=>({runtimeNonce:'test',projectId:fixture.projectId,organization:next}))};
- const c=new OrganizationController(fixture.projectId,'test',true,api);c.snapshot=head;c.selectedFolderId=child;
- const recycle=new RecycleController(fixture.projectId,'test',true,{} as never);
+ const api={get:vi.fn(),apply:vi.fn(async()=>({runtimeNonce:'11111111-1111-4111-8111-111111111111',projectId:fixture.projectId,organization:next}))};
+ const c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,api);c.snapshot=head;c.selectedFolderId=child;
+ const recycle=new RecycleController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never);
  recycle.snapshot={kind:'audio-annotator-recycle',formatVersion:1,projectId:fixture.projectId,revision:1,trashed:[{mediaId:file.id,deletedBy:'author'}],recentOperations:[]};
  render(<div className="app-root"><MediaList organization={c} recycle={recycle} media={[]} annotations={[]} statuses={[]} selectedId={null} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/></div>);
  if(mode==='parent')fireEvent.click(screen.getByRole('button',{name:'展开文件夹 · 保留父目录'}));
@@ -45,9 +45,9 @@ it.each(['empty', 'parent', 'root'] as const)('confirms recursive %s removal, ca
  expect(api.apply).toHaveBeenCalledWith(fixture.projectId,3,{type:'removeFolder',id});expect(screen.queryByRole('dialog')).toBeNull();expect(c.selectedFolderId).toBeNull();expect(trigger.isConnected).toBe(false);expect(screen.getByRole('button',{name:'根目录操作'})).toHaveFocus();
 });
 it.each(['mixed','unknown','unavailable','wrong-owner','readonly'] as const)('fails closed for %s descendant membership state', mode => {
- const file=fixture.media[0],other=crypto.randomUUID(),c=new OrganizationController(fixture.projectId,'test',mode!=='readonly',{} as never);
+ const file=fixture.media[0],other=crypto.randomUUID(),c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',mode!=='readonly',{} as never);
  c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:1,layoutRevision:1,folders:[{id,parentId:null,name:'阻止目录'},{id:child,parentId:id,name:'深层目录'}],media:[{mediaId:file.id,folderId:child,originalFilename:'a.wav'},...(mode==='mixed'?[{mediaId:other,folderId:child,originalFilename:'hidden.wav'}]:[])]};
- const recycle=new RecycleController(fixture.projectId,mode==='wrong-owner'?'old-owner':'test',true,{} as never);
+ const recycle=new RecycleController(fixture.projectId,mode==='wrong-owner'?'22222222-2222-4222-8222-222222222222':'11111111-1111-4111-8111-111111111111',true,{} as never);
  if(mode!=='unknown')recycle.snapshot={kind:'audio-annotator-recycle',formatVersion:1,projectId:fixture.projectId,revision:1,trashed:[{mediaId:file.id,deletedBy:'author'}],recentOperations:[]};
  if(mode==='unavailable')recycle.error={code:'SaveFailed',message:'offline',retryable:true};
  render(<MediaList organization={c} recycle={recycle} media={[]} hiddenMediaIds={[other]} annotations={[]} statuses={[]} selectedId={null} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);
@@ -58,17 +58,17 @@ it.each(['mixed','unknown','unavailable','wrong-owner','readonly'] as const)('fa
 });
 it('retains the removal dialog and draft after a restored-member rejection', async()=>{
  const file=fixture.media[0],api={get:vi.fn(),apply:vi.fn().mockRejectedValue({code:'InvalidInput',message:'音频已恢复，无法删除目录',retryable:false})};
- const c=new OrganizationController(fixture.projectId,'test',true,api);c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:8,layoutRevision:3,folders:[{id,parentId:null,name:'待删除目录'},{id:child,parentId:id,name:'子目录'}],media:[{mediaId:file.id,folderId:child,originalFilename:'a.wav'}]};
- const recycle=new RecycleController(fixture.projectId,'test',true,{} as never);recycle.snapshot={kind:'audio-annotator-recycle',formatVersion:1,projectId:fixture.projectId,revision:1,trashed:[{mediaId:file.id,deletedBy:'author'}],recentOperations:[]};
+ const c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,api);c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:8,layoutRevision:3,folders:[{id,parentId:null,name:'待删除目录'},{id:child,parentId:id,name:'子目录'}],media:[{mediaId:file.id,folderId:child,originalFilename:'a.wav'}]};
+ const recycle=new RecycleController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never);recycle.snapshot={kind:'audio-annotator-recycle',formatVersion:1,projectId:fixture.projectId,revision:1,trashed:[{mediaId:file.id,deletedBy:'author'}],recentOperations:[]};
  render(<MediaList organization={c} recycle={recycle} media={[]} annotations={[]} statuses={[]} selectedId={null} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);
  fireEvent.click(screen.getByRole('button',{name:'文件夹操作 · 待删除目录'}));fireEvent.click(screen.getByRole('menuitem',{name:'删除文件夹…'}));await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'确认'}));});
  expect(screen.getByRole('dialog')).toHaveTextContent('音频已恢复');expect(c.snapshot.folders).toHaveLength(2);expect(api.apply).toHaveBeenCalledWith(fixture.projectId,8,{type:'removeFolder',id});expect(screen.getByRole('button',{name:'确认'})).toBeEnabled();
 });
 it.each(['ctrl','shift','context','hidden','trash'])('keeps an explicitly chosen out-of-scope audio in batch selection via %s', entry => {
- const c=new OrganizationController(fixture.projectId,'test',true,{} as never),select=vi.fn();
+ const c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never),select=vi.fn();
  const files=[0,1,2,3].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`batch-entry-${i}.wav`}));
  c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:0,layoutRevision:0,folders:[{id,parentId:null,name:'A'},{id:child,parentId:null,name:'B'}],media:files.map((m,i)=>({mediaId:m.id,folderId:i===0?id:child,originalFilename:m.displayName}))};
- const recycle=new RecycleController(fixture.projectId,'test',true,{} as never);
+ const recycle=new RecycleController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never);
  recycle.snapshot={kind:'audio-annotator-recycle',formatVersion:1,projectId:fixture.projectId,revision:0,trashed:entry==='trash'?files.map(m=>({mediaId:m.id,deletedBy:'author'})):[],recentOperations:[]};
  render(<StrictMode><MediaList organization={c} recycle={recycle} hiddenMediaIds={entry==='hidden'?files.map(m=>m.id):[]} media={files} annotations={[]} statuses={[]} selectedId={files[0].id} disabled={false} onSelect={select} onImport={vi.fn()} onRelink={vi.fn()}/></StrictMode>);
  if(entry==='hidden'||entry==='trash')fireEvent.change(screen.getByLabelText('音频列表视图'),{target:{value:entry}});
@@ -80,7 +80,7 @@ it.each(['ctrl','shift','context','hidden','trash'])('keeps an explicitly chosen
  fireEvent.keyDown(screen.getByRole('button',{name:files[1].displayName}),{key:'a',ctrlKey:true});expect(screen.getByText('已选 3')).toBeVisible();
 });
 it('discloses audio in another nested folder without selecting its import target or audio', () => {
- const c=new OrganizationController(fixture.projectId,'test',true,{} as never),leaf=crypto.randomUUID(),select=vi.fn();
+ const c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never),leaf=crypto.randomUUID(),select=vi.fn();
  const files=[0,1].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`disclosure-${i}.wav`}));
  c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:0,layoutRevision:0,folders:[{id,parentId:null,name:'当前目录'},{id:child,parentId:null,name:'record000045'},{id:leaf,parentId:child,name:'audio'}],media:files.map((m,i)=>({mediaId:m.id,folderId:i===0?id:leaf,originalFilename:m.displayName}))};
  render(<MediaList organization={c} media={files} annotations={[]} statuses={[]} selectedId={files[0].id} disabled={false} onSelect={select} onImport={vi.fn()} onRelink={vi.fn()}/>);
@@ -91,7 +91,7 @@ it('discloses audio in another nested folder without selecting its import target
  fireEvent.click(screen.getByRole('button',{name:'展开文件夹 · audio'}));expect(screen.getByRole('button',{name:files[1].displayName})).toBeVisible();
 });
 it.each(['batch','search','classification','tag'])('retains selected-folder scope for %s while ordinary disclosure shows sibling and root audio', mode => {
- const c=new OrganizationController(fixture.projectId,'test',true,{} as never);
+ const c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never);
  const files=[0,1,2].map(i=>({...fixture.media[0],id:crypto.randomUUID(),displayName:`scope-${i}.wav`,categoryIds:['tag'],channelCategoryIds:[[]]}));
  c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:0,layoutRevision:0,folders:[{id,parentId:null,name:'A'},{id:child,parentId:null,name:'B'}],media:files.map((m,i)=>({mediaId:m.id,folderId:i===0?id:i===1?child:null,originalFilename:m.displayName}))};
  render(<MediaList organization={c} media={files} categories={[{id:'tag',name:'标签',color:'#ffffff'}]} annotations={[]} statuses={[]} selectedId={files[0].id} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);
@@ -108,7 +108,7 @@ it.each(['batch','search','classification','tag'])('retains selected-folder scop
  expect(c.selectedFolderId).toBe(id);
 });
 it.each(['hidden', 'unloaded'] as const)('explains why a zero-visible folder with %s content cannot be deleted', kind => {
- const c=new OrganizationController(fixture.projectId,'test',true,{} as never),recycle=new RecycleController(fixture.projectId,'test',true,{} as never),file=fixture.media[0];
+ const c=new OrganizationController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never),recycle=new RecycleController(fixture.projectId,'11111111-1111-4111-8111-111111111111',true,{} as never),file=fixture.media[0];
  c.snapshot={kind:'audio-annotator-organization',formatVersion:1,projectId:fixture.projectId,revision:0,layoutRevision:0,folders:[{id,parentId:null,name:'零可见目录'}],media:[{mediaId:file.id,folderId:id,originalFilename:'a.wav'}]};
  recycle.snapshot={kind:'audio-annotator-recycle',formatVersion:1,projectId:fixture.projectId,revision:0,trashed:[],recentOperations:[]};
  render(<MediaList organization={c} recycle={recycle} media={kind==='unloaded'?[]:[file]} hiddenMediaIds={kind==='hidden'?[file.id]:[]} annotations={[]} statuses={[]} selectedId={null} disabled={false} onSelect={vi.fn()} onImport={vi.fn()} onRelink={vi.fn()}/>);

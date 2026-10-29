@@ -84,7 +84,7 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<CollaborationManifest> {
 impl CollaborationManifest {
     pub fn validate(&self) -> Result<()> {
         require(self.kind == MANIFEST_KIND, "Invalid manifest kind")?;
-        if self.format_version != CURRENT_COLLABORATION_FORMAT {
+        if !super::consts::supported_catalog_format(self.format_version) {
             return Err(AppError::new(
                 ErrorCode::UnsupportedVersion,
                 "Unsupported collaboration version; use the prior app or exchange/export workflow",

@@ -44,7 +44,7 @@ describe('native profile boundary', () => {
  it('bounds malformed warning metadata independently from valid large annotation transitions',()=>{
   const document=structuredClone(fixture);document.annotations[0].note='n'.repeat(1048577);
   const context={runtimeNonce:b,actor:profile,preferences:null,projectFlavor:'default',identityMode:'profile',canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false};
-  const status={...context,formatVersion:1,projectId:document.projectId,shared:true,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:null,error:null,snapshot:null};
+  const status={...context,formatVersion:1,projectId:document.projectId,shared:true,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:null,error:null,retirement:null,purgeMaintenance:{total:0,items:[]},snapshot:null};
   const value={...response(),profiles:{...snapshot(),project:{projectId:document.projectId,expectedRevision:document.revision}},transition:{opened:{snapshot:{document,canUndo:true,canRedo:false},persistedRevision:document.revision,path:'shared',recovery:null,collaboration:context},status}};
   expect(parseProfileResponse(value).transition?.opened.snapshot?.document.annotations[0].note).toHaveLength(1048577);
   const details:Record<string,unknown>={};details.cycle=details;
