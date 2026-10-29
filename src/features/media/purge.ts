@@ -1,5 +1,5 @@
 import { createPurgeClient, parsePurgeCleanupPage, parsePurgePreview, parsePurgeResult, type PurgeCleanupPage, type PurgeCommands, type PurgePreview, type PurgeResult, type PurgeSelection } from '../../bridge/purge';
-import { collaborationClient, parseCollaborationStatus, type CollaborationStatus } from '../../bridge/collaboration';
+import { collaborationClient, createCollaborationStatusParser, type CollaborationStatus } from '../../bridge/collaboration';
 import { normalizeError } from '../../bridge/client';
 import type { AppError } from '../../bridge/types';
 import { admitted, suspendRefresh } from '../collaboration/admission';
@@ -24,6 +24,7 @@ export class PurgeController {
     private version = 0;
     private listeners = new Set<() => void>();
     private readonly actorId: string | null;
+    private readonly parseStatus=createCollaborationStatusParser();
     constructor(readonly projectId: string, readonly runtimeNonce: string, readonly writable: boolean, private api: PurgeCommands = createPurgeClient(runtimeNonce, projectId), private owner?: ActiveProject, private newId: () => string = () => crypto.randomUUID()) { this.actorId = owner?.collaboration?.actor?.authorId ?? null; }
     subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
     getVersion = () => this.version;
@@ -155,11 +156,12 @@ export class PurgeController {
     acceptStatus(status: CollaborationStatus) {
         if (!this.valid() || status.runtimeNonce !== this.runtimeNonce || status.projectId !== this.projectId || this.owner && (status.actor?.authorId ?? null) !== this.actorId)
             return;
-        parseCollaborationStatus(status, this.owner?.store.snapshot.document);
-        this.maintenance = structuredClone(status.purgeMaintenance);
+        this.parseStatus(status, this.owner?.store.snapshot.document);
+        const changed=JSON.stringify(this.maintenance)!==JSON.stringify(status.purgeMaintenance);
+        if(changed)this.maintenance = structuredClone(status.purgeMaintenance);
         if (status.retirement && this.owner)
             this.owner.store.retire(status.retirement.mediaIds, status.retirement.snapshot);
-        this.notify();
+        if(changed)this.notify();
     }
     viewOperation(operationId: string) {
         if (!this.valid() || this.pending || !this.maintenance.items.some(i => i.operationId === operationId && i.committed))

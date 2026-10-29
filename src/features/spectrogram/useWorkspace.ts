@@ -84,6 +84,8 @@ export function useWorkspace(active: ActiveProject | null,hidden:readonly string
     update(next); return true;
   };
   const media = active?.store.snapshot.document.media ?? [];
+  const hiddenForView=hiddenRef.current;
+  const visibleMedia=useMemo(()=>{const excluded=new Set(hiddenForView);return media.filter(m=>!excluded.has(m.id));},[media,hiddenForView]);
   const projectId = active?.store.snapshot.document.projectId ?? '';
   const view = (id: string) => ({ ...(state.media[id] ?? defaultView(media.find(m => m.id === id)!)), ...local?.value.display, ...local?.override(projectId,id).display });
   const analysis = (id: string) => local?.override(projectId,id).analysis ?? local?.value.analysis ?? active?.store.snapshot.document.analysis[id] ?? defaultSettings;
@@ -104,7 +106,7 @@ export function useWorkspace(active: ActiveProject | null,hidden:readonly string
     }
   },[active,analysisIntent,snapshot,active?.store.editingDisabled,local,submittedAnalysis]);
   return {
-    state, view, analysis, renderAnalysis, selectPane, duplicatePane,visibleMedia:media.filter(m=>!hiddenRef.current.includes(m.id)),
+    state, view, analysis, renderAnalysis, selectPane, duplicatePane,visibleMedia,
     hasGlobalSettings: !!local && (!!local.value.analysis || Object.keys(local.value.display).length > 0),
     followGlobal: (id: string) => { if (active && binding.current === active && !active.store.editingDisabled) local?.follow(projectId,id,['display','analysis']); },
     revealMedia:async(id:string)=>{if(!active||binding.current!==active)return false;if(hiddenRef.current.includes(id)){if(!reveal)return false;try{await reveal(id);}catch{return false;}if(binding.current!==active)return false;hiddenRef.current=hiddenRef.current.filter(hidden=>hidden!==id);}return true;},

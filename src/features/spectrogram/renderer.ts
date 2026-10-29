@@ -40,13 +40,22 @@ export function rasterize(pixels: Uint8ClampedArray, width: number, height: numb
   painter(width, height, view, hz, tiles)(pixels, 0, width, width);
 }
 export function drawSpectrogram(canvas: HTMLCanvasElement, view: MediaView, settings: AnalysisSettings, sampleRate: number, tiles: Iterable<TileResult>) {
+  const step=spectrogramDrawSteps(canvas,view,settings,sampleRate,tiles);
+  while(!step()) { /* Synchronous reference/export path. */ }
+}
+/** Same pixel arithmetic and shared bounded scratch, yielded between narrow strips. */
+export function spectrogramDrawSteps(canvas: HTMLCanvasElement, view: MediaView, settings: AnalysisSettings, sampleRate: number, tiles: Iterable<TileResult>) {
   const context = canvas.getContext('2d', { alpha: false });
-  if (!context || !canvas.width || !canvas.height) return;
-  const strip = scratchWidth(canvas.width), image = rasterBudget.image(context, strip, canvas.height);
-  const paint = painter(canvas.width, canvas.height, view, frequencyRows(view, sampleRate, settings, canvas.height), tiles);
-  for (let x = 0; x < canvas.width; x += strip) {
-    const count = Math.min(strip, canvas.width - x);
+  if (!context || !canvas.width || !canvas.height) return ()=>true;
+  const width=canvas.width,height=canvas.height,strip=scratchWidth(width);
+  const paint = painter(width,height,view,frequencyRows(view,sampleRate,settings,height),tiles);
+  let x=0;
+  return ()=>{
+    if(canvas.width!==width||canvas.height!==height||x>=width)return true;
+    // Acquire scratch per step: another channel can use it between our steps.
+    const image=rasterBudget.image(context,strip,height),count=Math.min(8,width-x);
     paint(image.data, x, count, strip);
-    context.putImageData(image, x, 0, 0, 0, count, canvas.height);
-  }
+    context.putImageData(image,x,0,0,0,count,height);x+=count;
+    return x>=width;
+  };
 }

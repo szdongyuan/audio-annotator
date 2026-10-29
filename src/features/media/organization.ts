@@ -25,7 +25,7 @@ export class OrganizationController {
     private notify() { this.version++; this.listeners.forEach(f => f()); }
     private install(value: OrganizationSnapshot) { if (value.projectId !== this.projectId || value.runtimeNonce !== this.runtimeNonce || value.organization.projectId !== this.projectId)
         return; if (this.snapshot && value.organization.revision < this.snapshot.revision)
-        return; this.snapshot = value.organization; if (this.selectedFolderId && !value.organization.folders.some(f => f.id === this.selectedFolderId))
+        return; if (!this.snapshot || JSON.stringify(this.snapshot) !== JSON.stringify(value.organization)) this.snapshot = value.organization; if (this.selectedFolderId && !value.organization.folders.some(f => f.id === this.selectedFolderId))
         this.selectedFolderId = null; this.error = this.mutationError; }
     select(id: string | null) { if (id !== null && !this.snapshot?.folders.some(f => f.id === id))
         return; this.selectedFolderId = id; this.notify(); }
@@ -33,6 +33,7 @@ export class OrganizationController {
         if (this.disposed) return Promise.resolve();
         if (this.reading && !force) return this.reading;
         const generation = ++this.generation;
+        const beforeSnapshot = this.snapshot, beforeError = JSON.stringify(this.error);
         const reading = (async () => {
             try {
                 const value = await this.api.get(this.projectId);
@@ -40,7 +41,7 @@ export class OrganizationController {
             } catch (error) {
                 if (!this.disposed && generation === this.generation) this.error = this.mutationError ?? normalizeError(error);
             } finally {
-                if (!this.disposed && generation === this.generation) this.notify();
+                if (!this.disposed && generation === this.generation && (this.snapshot !== beforeSnapshot || JSON.stringify(this.error) !== beforeError)) this.notify();
             }
         })();
         this.reading = reading;

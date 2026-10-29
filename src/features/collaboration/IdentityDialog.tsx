@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { CollaborationUI } from './useCollaboration';
 import { AuthorFilter } from './AuthorFilter';
 import { syncLabel,copyProgressText } from './CollaborationStatus';
 import '../../styles/collaboration.css';
+const noTimeSubscription=()=>()=>{},zeroTime=()=>0;
 export function IdentityDialog({ui}:{ui:CollaborationUI}){
  const ref=useRef<HTMLElement>(null);
+ useSyncExternalStore(ui.controller?.subscribeTime??noTimeSubscription,ui.controller?.getSuccessTime??zeroTime);
  const kind=ui.dialog?.kind;
  useEffect(()=>{const previous=document.activeElement as HTMLElement|null;ref.current?.focus();return()=>{previous?.focus();};},[kind]);
  if(!ui.dialog)return null;

@@ -1,7 +1,7 @@
 import { useMediaBatch, TriCheckbox, BatchActions, BatchConfirmation } from './MediaBatch';
 import type { RecycleController } from './recycle';
 import type { AuthorSnapshot } from '../../bridge/collaboration';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { FileAudio2, ListMusic, Plus, Search, MoreHorizontal, ListChecks, SlidersHorizontal } from 'lucide-react';
 import type { Annotation, Category, MediaDescriptor } from '../../bridge/types';
 import type { MediaStatus } from '../../bridge/media';
@@ -14,12 +14,8 @@ import { useMediaNavigation } from './useMediaNavigation';
 import { useListDisplay } from './listDisplay';
 import { PurgeDialog } from './PurgeDialog';
 import type { PurgeSelection } from '../../bridge/purge';
-export const statusLabel = { ready: '已校验', missing: '源文件缺失', changed: '源文件已改变', unverified: '等待校验' };
-function StructuredName({ name }: {
-    name: string;
-}) { const parts = name.split('/'); if (parts.length < 2)
-    return <>{name}</>; const filename = parts.pop()!; if (parts.at(-1)?.toLowerCase() === 'audio')
-    parts.pop(); return <><span className="media-record-name">{parts.at(-1) ?? ''}</span><span className="media-file-name">{filename}</span></>; }
+import {MediaRow,statusLabel,type MediaRowActions} from './MediaRow';
+export {statusLabel} from './MediaRow';
 const noop = () => () => { }, zero = () => 0;
 function FolderEdit({ controller: c, recycled, draft, trigger, resolveReturnFocus, onClose }: {
     controller: OrganizationController;
@@ -45,7 +41,8 @@ function FolderEdit({ controller: c, recycled, draft, trigger, resolveReturnFocu
     return <MediaDialog title={title} returnFocus={trigger} resolveReturnFocus={resolveReturnFocus} busy={c.pending} onClose={onClose}><header><h2>{title}</h2></header><div className="source-import-body">{naming && <label>文件夹名称<input aria-label="文件夹名称" maxLength={128} value={operation.name} onChange={e => setOperation({ ...operation, name: e.target.value })}/></label>}{!naming && !removing && <label>目标文件夹<select aria-label="移动目标文件夹" value={target ?? ''} onChange={e => setOperation(operation.type === 'moveFolder' ? { ...operation, parentId: e.target.value || null } : operation.type === 'moveMedia' ? { ...operation, folderId: e.target.value || null } : operation)}><option value="">全部音频</option>{[...index.paths].filter(([id]) => !excluded.has(id)).map(([id, path]) => <option key={id} value={id}>{path}</option>)}</select></label>}{removal && <><p>将删除此目录及其子目录，共 {removal.folderCount} 个文件夹。只移除目录记录，不会删除音频文件、原始文件名或标注数据。</p>{removal.trashed > 0 && <p>{removal.trashed} 个已在共享回收站的音频将保留在回收站，目录归属移至「{removal.parentPath}」，恢复后将在该目录显示。</p>}{removal.reason && <p role="alert">{removal.reason}{removal.blocked > 0 && recycled !== null ? `：${removal.blocked} 个未进入共享回收站的音频（包括隐藏或未加载的音频）。` : '，请刷新后核对。'}</p>}</>}{c.error && <p role="alert">{c.error.message}{c.error.code === 'RevisionConflict' ? ' · 已刷新目录，保留输入，请核对后重试。' : ''}</p>}</div><footer className="dialog-actions"><button className="button" disabled={c.pending} onClick={onClose}>取消</button><button className="button button-accent" disabled={c.pending || (naming && !operation.name.trim()) || !!removal && !removal.allowed} onClick={() => { draft.operation = operation; void c.submit(draft).then(ok => { if (ok)
         onClose(); }); }}>{c.error?.code === 'RevisionConflict' ? '核对并重试' : '确认'}</button></footer></MediaDialog>;
 }
-export function MediaList({ projectId, actorId = null, recycle, authors = [], onHideBatch, organization: c, hiddenMediaIds = [], onHide, onRestore, categories = [], catalogLocked = false, navigationExcludedId = null, navigationScope = null, media, annotations, statuses, selectedId, disabled, navigationDisabled = disabled, onSelect, onImport, onRelink }: {
+function MediaListBody({ projectId, actorId = null, recycle, authors = [], onHideBatch, organization: c, hiddenMediaIds = [], onHide, onRestore, categories = [], catalogLocked = false, navigationExcludedId = null, navigationScope = null, media, annotations, statuses, selectedId, disabled, navigationDisabled = disabled, onSelect, onImport, onRelink }: {
+    renderAuthority?: object;
     projectId?: string;
     actorId?: string | null;
     recycle?: RecycleController | null;
@@ -282,7 +279,13 @@ export function MediaList({ projectId, actorId = null, recycle, authors = [], on
         { id: 'remove', label: `删除文件夹…${removeReason ? `（${removeReason}）` : ''}`, title: removeTitle, disabled: !canEdit || !removal?.allowed, action: trigger => { const target = currentFolder(); if (target) begin({ type: 'removeFolder', id: target.id }, trigger); } }
     ];
     const mediaMap = new Map(media.map(m => [m.id, m]));
-    const card = (m: MediaDescriptor) => { const status = statusMap.get(m.id) ?? 'unverified'; const title = `${m.displayName}\n${m.channelCount} 通道 · ${(m.frameCount / m.sampleRate).toFixed(3)} 秒 · ${m.sampleRate / 1000} kHz\n${m.categoryIds.map(id => categoryMap.get(id)).filter(Boolean).join(' · ') || '未分类'} · ${annotationCounts.get(m.id) ?? 0} 个标注\n${statusLabel[status]}\n${JSON.stringify(m.sourceRef)}`; return <div key={m.id} className={`media-card ${selectedId === m.id ? 'is-selected' : ''} ${batch.selected.has(m.id)?'is-batch-selected':''}`} onContextMenu={e => openMenu(e, { media: m })}>{batch.mode&&<input type="checkbox" aria-label={`选择音频 · ${m.displayName}`} checked={batch.selected.has(m.id)} disabled={batch.busy} onClick={e=>{batch.pick(m.id,e);}} onChange={()=>{}}/>}<button className="media-select" data-media-id={m.id} onKeyDown={e => { if (e.key === 'ContextMenu' || e.key === 'F10' && e.shiftKey) openMenu(e, { media: m }); }} onClick={e=>{if(e.ctrlKey||e.metaKey||e.shiftKey||listView!=='normal')selectForBatch(m.id,e);else onSelect(m.id);}} aria-pressed={selectedId === m.id} title={title} aria-label={m.displayName}><span className="media-file-disclosure" aria-hidden="true"/><FileAudio2 size={14}/><strong className={m.displayName.includes('/') ? 'media-display-name' : undefined}><StructuredName name={m.displayName}/></strong><span className={`media-row-status ${status}`} aria-label={statusLabel[status]} title={statusLabel[status]}>{status === 'ready' ? '✓' : status === 'unverified' ? '·' : '!'}</span></button></div>; };
+    const row=useRef({mediaMap,openMenu,onSelect,selectForBatch,batch,listView});row.current={mediaMap,openMenu,onSelect,selectForBatch,batch,listView};
+    const rowActions=useMemo<MediaRowActions>(()=>({
+      menu:(event,id)=>{const m=row.current.mediaMap.get(id);if(m)row.current.openMenu(event,{media:m});},
+      select:(event,id)=>{const r=row.current;if(event.ctrlKey||event.metaKey||event.shiftKey||r.listView!=='normal')r.selectForBatch(id,event);else r.onSelect(id);},
+      pick:(event,id)=>row.current.batch.pick(id,event),
+    }),[]);
+    const card=(m:MediaDescriptor)=>{const status=statusMap.get(m.id)??'unverified';const title = `${m.displayName}\n${m.channelCount} 通道 · ${(m.frameCount / m.sampleRate).toFixed(3)} 秒 · ${m.sampleRate / 1000} kHz\n${m.categoryIds.map(id => categoryMap.get(id)).filter(Boolean).join(' · ') || '未分类'} · ${annotationCounts.get(m.id) ?? 0} 个标注\n${statusLabel[status]}\n${JSON.stringify(m.sourceRef)}`;return <MediaRow key={m.id} id={m.id} name={m.displayName} title={title} status={status} selected={selectedId===m.id} batchSelected={batch.selected.has(m.id)} batchMode={batch.mode} batchBusy={batch.busy} actions={rowActions}/>;};
     const renderFolder = (id: string): React.ReactNode => { if (query && !matched.has(id))
         return null; const folder = index.folders.get(id)!, open = query ? matched.has(id) : expanded.has(id); return <div className="media-folder" key={id}><div className={`media-folder-row ${selectedFolder === id ? 'is-selected' : ''}`}>{batch.mode&&<TriCheckbox ids={folderIds(id)} selected={batch.selected} onToggle={batch.toggle} label={`选择文件夹 · ${folder.name}`}/>}<button className="icon-button media-folder-disclosure" aria-label={`${open ? '折叠' : '展开'}文件夹 · ${folder.name}`} aria-expanded={open} onClick={() => setExpanded(old => { const next = new Set(old); if (next.has(id))
         next.delete(id);
@@ -318,4 +321,32 @@ export function MediaList({ projectId, actorId = null, recycle, authors = [], on
  {navigationMessage && <span className="media-copy-message" role="status" aria-live="polite">{navigationMessage}</span>}
  {copyMessage && <span className="media-copy-message" role={copyMessage.failed ? "alert" : "status"}>{copyMessage.text}</span>}
  {menu && <Menu anchor={menu} returnFocus={menuTargetExists ? menu.trigger : rootMenu.current ?? searchInput.current} onClose={() => setMenu(null)} items={items}/>}{edit && c && edit.owner === c && <FolderEdit controller={c} recycled={removalRecycle} draft={edit.draft} trigger={edit.trigger} resolveReturnFocus={previous => currentOrganization.current === c && previous?.isConnected ? previous : currentOrganization.current && rootMenu.current?.isConnected ? rootMenu.current : searchInput.current} onClose={() => setEdit(current => current === edit ? null : current)}/>}</div>;
+}
+
+// Transport state and no-op native acknowledgements must not reconcile thousands
+// of unchanged rows. Actions always read the latest owner, including when memoized.
+const StableMediaList=memo(MediaListBody);
+type MediaListProps=Omit<Parameters<typeof MediaListBody>[0],'renderAuthority'>;
+function useStableDto<T>(source:T):T{
+ const previous=useRef<{source:T;value:T;key:string|undefined}|null>(null);
+ if(!previous.current||previous.current.source!==source){
+  const key=JSON.stringify(source),value=previous.current&&previous.current.key===key?previous.current.value:source;
+  previous.current={source,value,key};
+ }
+ return previous.current.value;
+}
+export function MediaList(props:MediaListProps){
+ const latest=useRef(props);latest.current=props;
+ // Controllers also publish through subscriptions. Preserve parent-driven authority
+ // updates when a snapshot/permission changes without replacing the controller.
+ const renderAuthority=useMemo(()=>({}),[props.organization?.snapshot,props.organization?.pending,props.organization?.writable,props.recycle?.snapshot,props.recycle?.pending,props.recycle?.writable,props.recycle?.purge.maintenance]);
+ const actions=useMemo(()=>({
+  onSelect:(...args:Parameters<MediaListProps['onSelect']>)=>latest.current.onSelect(...args),
+  onImport:()=>latest.current.onImport(),onRelink:(media:MediaDescriptor)=>latest.current.onRelink(media),
+  onHide:props.onHide?(id:string)=>latest.current.onHide?.(id):undefined,
+  onRestore:props.onRestore?(id:string)=>latest.current.onRestore?.(id):undefined,
+  onHideBatch:props.onHideBatch?async(ids:string[],hidden:boolean)=>{await latest.current.onHideBatch?.(ids,hidden);}:undefined,
+ }),[!!props.onHide,!!props.onRestore,!!props.onHideBatch]);
+ const media=useStableDto(props.media),categories=useStableDto(props.categories),annotations=useStableDto(props.annotations),statuses=useStableDto(props.statuses),hiddenMediaIds=useStableDto(props.hiddenMediaIds),authors=useStableDto(props.authors);
+ return <StableMediaList {...props} {...actions} renderAuthority={renderAuthority} media={media} categories={categories} annotations={annotations} statuses={statuses} hiddenMediaIds={hiddenMediaIds} authors={authors}/>;
 }

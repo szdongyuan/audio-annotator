@@ -8,6 +8,14 @@ import { PurgeController } from './purge';
 import type { PurgeCommands } from '../../bridge/purge';
 const id='11111111-1111-4111-8111-111111111111';
 afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers();});
+it('keeps identical recycle polls from rerendering the workspace while still publishing read errors and recovery',async()=>{
+ const response:RecycleSnapshot={runtimeNonce:id,projectId:id,recycle:{kind:'audio-annotator-recycle',formatVersion:1,projectId:id,revision:1,trashed:[],recentOperations:[]}};
+ const api={get:vi.fn(async()=>structuredClone(response)),apply:vi.fn()} as unknown as RecycleCommands;
+ const c=new RecycleController(id,id,true,api),notify=vi.fn();c.subscribe(notify);await c.refresh();const original=c.snapshot;
+ await c.refresh();expect(c.snapshot).toBe(original);expect(notify).toHaveBeenCalledOnce();
+ vi.mocked(api.get).mockRejectedValueOnce({code:'SaveFailed',message:'offline',retryable:true});await c.refresh();expect(notify).toHaveBeenCalledTimes(2);
+ await c.refresh();expect(c.error).toBeNull();expect(notify).toHaveBeenCalledTimes(3);c.dispose();
+});
 function setup(){
  const owner={collaboration:{runtimeNonce:id},store:{snapshot:{document:{projectId:id}}},lifecycle:{admissionClosed:false,enqueueEdit:async(action:()=>Promise<unknown>)=>action()}} as unknown as ActiveProject;
  const response:RecycleSnapshot={runtimeNonce:id,projectId:id,recycle:{kind:'audio-annotator-recycle',formatVersion:1,projectId:id,revision:1,trashed:[],recentOperations:[]}};

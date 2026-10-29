@@ -1,5 +1,5 @@
 import { registerSuspension, admitted } from './admission';
-import { collaborationClient, parseCollaborationStatus, type CollaborationCommands, type CollaborationStatus, type Expected, type PlaybackPreferences } from '../../bridge/collaboration';
+import { collaborationClient, createCollaborationStatusParser, type CollaborationCommands, type CollaborationStatus, type Expected, type PlaybackPreferences } from '../../bridge/collaboration';
 import { normalizeError } from '../../bridge/client';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import type { AppError, Category } from '../../bridge/types';
@@ -15,6 +15,10 @@ export class CollaborationController {
  private unregister?:()=>void;
  private manualFlight:Promise<void>|null=null;
  private catalogPoll=0;
+ private parseStatus=createCollaborationStatusParser();
+ private statusKey='';private timeListeners=new Set<()=>void>();
+ subscribeTime=(f:()=>void)=>{this.timeListeners.add(f);return()=>{this.timeListeners.delete(f);};};
+ getSuccessTime=()=>this.status?.lastSuccessMs??0;
  private catalogStatus:CollaborationStatus|null=null;
  get catalogRefresh(){return this.catalogPoll;}
  get canAdoptCatalog(){
@@ -57,7 +61,20 @@ export class CollaborationController {
   return !categories.some(c=>categoryIds.includes(c.id)&&this.hiddenCategoryNames.includes(c.name.trim()));
  }
  visible(authorId:string|null){const filter=this.filter;if(filter.mode==='custom')return authorId!==null&&filter.authorIds.includes(authorId);return filter.mode==='all'||authorId===(this.owner.collaboration?.actor?.authorId??null);}
- accept(status:CollaborationStatus,catalogAdopted=false){if(this.disposed||status.runtimeNonce!==this.owner.collaboration?.runtimeNonce||(status.actor?.authorId??null)!==(this.owner.collaboration?.actor?.authorId??null))return;parseCollaborationStatus(status,this.owner.store.snapshot.document);if(status.retirement)this.owner.store.retire(status.retirement.mediaIds,status.retirement.snapshot);this.status=status;this.error=null;if(catalogAdopted||!status.catalogPending)this.catalogError=null;this.notify();}
+ accept(status:CollaborationStatus,catalogAdopted=false){
+  if(this.disposed||status.runtimeNonce!==this.owner.collaboration?.runtimeNonce||(status.actor?.authorId??null)!==(this.owner.collaboration?.actor?.authorId??null))return;
+  this.parseStatus(status,this.owner.store.snapshot.document);
+  if(status.retirement)this.owner.store.retire(status.retirement.mediaIds,status.retirement.snapshot);
+  // A successful periodic timestamp is not an edit to every list, overlay and canvas.
+  // Still compare actual payloads: a claimed revision/hash alone cannot hide changes.
+  const key=JSON.stringify({...status,lastSuccessMs:!!status.lastSuccessMs});
+  const changed=key!==this.statusKey||this.error!==null||!!this.catalogError&&(catalogAdopted||!status.catalogPending);
+  const beforeTime=this.getSuccessTime();
+  this.status=status;this.statusKey=key;this.error=null;
+  if(catalogAdopted||!status.catalogPending)this.catalogError=null;
+  if(changed)this.notify();
+  if(beforeTime!==this.getSuccessTime())this.timeListeners.forEach(f=>f());
+ }
  catalogFailed(cause:unknown){
   if(this.disposed)return;
   const failure=normalizeError(cause),error={code:failure.code,message:failure.message.slice(0,1024),retryable:failure.retryable};
@@ -73,13 +90,13 @@ export class CollaborationController {
     if(!this.disposed&&status===this.status){this.catalogStatus=status;this.catalogPoll++;}
    }catch(e){if(!this.disposed){this.error=normalizeError(e);this.notify();}}
    // Publication after release prevents adoption from recursively suspending this flight.
-   finally{this.flight=null;if(!this.disposed)this.notify();}
+   finally{this.flight=null;if(!this.disposed&&this.status?.catalogPending)this.notify();}
   })();return this.flight;
  }
  async suspend(includeManual=true){this.paused++;await this.flight;if(includeManual)await this.manualFlight;let done=false;return()=>{if(!done){done=true;this.paused--;}};}
  sync(){if(this.manualFlight)return this.manualFlight;this.manualFlight=this.performSync().finally(()=>{this.manualFlight=null;});return this.manualFlight;}
  private async performSync(){const resume=await this.suspend(false);try{if(this.disposed)return;await this.owner.lifecycle.save();if(!this.disposed)this.accept(await admitted(this.owner,()=>this.api.sync(expectedProject(this.owner)),()=>!this.disposed,this.api));}catch(e){if(!this.disposed){this.error=normalizeError(e);this.notify();}}finally{resume();}}
- dispose(){this.unregister?.();this.disposed=true;clearInterval(this.timer);this.listeners.clear();}
+ dispose(){this.unregister?.();this.disposed=true;clearInterval(this.timer);this.listeners.clear();this.timeListeners.clear();}
 }
 /** Preference failures remain lifecycle drafts; switching cannot silently lose them. */
 export class PreferenceDraft {

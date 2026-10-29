@@ -17,7 +17,7 @@ function setup(){
  const ui=()=>({status,options:{looping:false}});
  const tree=()=> <PlaybackContext.Provider value={ui() as never}><Playhead mediaId={media.id} view={view}/></PlaybackContext.Provider>;
  const rendered=render(tree());
- return {frame(at:number){now=at;act(()=>{const pending=[...frames.values()];frames.clear();for(const callback of pending)callback(now);});},status(patch:Partial<PlaybackStatus>){status={...status,...patch};rendered.rerender(tree());},seconds(){return parseFloat((document.querySelector('.audio-playhead') as HTMLElement).style.left)/10;}};
+ return {frame(at:number){now=at;act(()=>{const pending=[...frames.values()];frames.clear();for(const callback of pending)callback(now);});},status(patch:Partial<PlaybackStatus>){status={...status,...patch};rendered.rerender(tree());},seconds(){return parseFloat((document.querySelector('.audio-playhead') as HTMLElement).style.transform.slice(12))/10;}};
 }
 it('does not move backward when a quantized native progress event trails the displayed cursor',()=>{
  const p=setup();p.frame(50);const displayed=p.seconds();
@@ -29,7 +29,7 @@ it('retains linked-media visibility and recalculates cursor placement when the v
  const media=fixture.media[0],status={...emptyPlayback,mediaId:'other',positionSeconds:1.5,endSeconds:10,state:'paused' as const};
  const ui=(linkedTime:boolean)=>({status,options:{looping:false},active:{store:{snapshot:{document:{viewState:{linkedTime}}}}}});
  const tree=(startSeconds:number,linkedTime=true)=><PlaybackContext.Provider value={ui(linkedTime) as never}><Playhead mediaId={media.id} view={{...defaultView(media),startSeconds,endSeconds:2}}/></PlaybackContext.Provider>;
- const rendered=render(tree(0));expect(document.querySelector('.audio-playhead')).toHaveStyle({left:'75%'});
- rendered.rerender(tree(1));expect(document.querySelector('.audio-playhead')).toHaveStyle({left:'50%'});
+ const rendered=render(tree(0));expect(document.querySelector('.audio-playhead')).toHaveStyle({left:'0px',transform:'translate3d(75px,0,0)'});
+ rendered.rerender(tree(1));expect(document.querySelector('.audio-playhead')).toHaveStyle({left:'0px',transform:'translate3d(50px,0,0)'});
  rendered.rerender(tree(1,false));expect(document.querySelector('.audio-playhead')).toBeNull();
 });

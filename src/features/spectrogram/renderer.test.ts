@@ -1,7 +1,8 @@
 import { it, expect } from 'vitest';
-import { frequencyRows, rasterize } from './renderer';
+import { frequencyRows, rasterize, spectrogramDrawSteps } from './renderer';
 import { defaultSettings, defaultView } from './workspace';
 import fixture from '../../../tests/fixtures/document-v3.json';
+import {rasterBudget} from './rasterBudget';
 import type { TileResult } from './tileClient';
 const media = fixture.media[0];
 it('rasterizes raw dB with high frequency at top and blank short-file tail', () => {
@@ -28,4 +29,19 @@ it('interpolates physical frequency in the power domain before color mapping', (
   const pixels = new Uint8ClampedArray(4);
   rasterize(pixels, 1, 1, view, Float64Array.of(.5), [tile]);
   expect(pixels[0]).toBe(Math.round((10 * Math.log10(.00505) + 100) / 100 * 255));
+});
+
+it('yielded and interleaved strips reproduce every reference RGBA byte, including partial final strips',()=>{
+ const tile={request:{settings:{...defaultSettings,hopSize:48000,fftSize:48000},kind:'stft',startFrame:0,timeLod:0,frequencyStart:0,frequencyCount:2,frequencyLod:0},metadata:{rows:1,columns:2,sampleRate:48000,totalSamples:48000,sourceFrames:1},values:new Float32Array([-20,-40])} as TileResult;
+ const jobs=[{width:67,height:17},{width:73,height:23}].map(({width,height})=>{
+  const pixels=new Uint8ClampedArray(width*height*4),view={...defaultView(media),startSeconds:0,endSeconds:1.3,lowHz:0,highHz:1,frequencyMix:.65};
+  const context={createImageData:(w:number,h:number)=>({width:w,height:h,data:new Uint8ClampedArray(w*h*4)}),putImageData:(image:ImageData,dx:number,dy:number,sx:number,sy:number,sw:number,sh:number)=>{
+   for(let y=sy;y<sy+sh;y++){const source=(y*image.width+sx)*4;pixels.set(image.data.subarray(source,source+sw*4),((dy+y)*width+dx+sx)*4);}
+  }};
+  const canvas={width,height,getContext:()=>context} as unknown as HTMLCanvasElement;rasterBudget.reserve(canvas,width,height);
+  const expected=new Uint8ClampedArray(pixels.length);rasterize(expected,width,height,view,frequencyRows(view,48000,defaultSettings,height),[tile]);
+  return {canvas,pixels,expected,step:spectrogramDrawSteps(canvas,view,defaultSettings,48000,[tile]),done:false};
+ });
+ let turns=0;while(jobs.some(j=>!j.done)){for(const job of jobs)if(!job.done)job.done=job.step();expect(++turns).toBeLessThan(20);}
+ for(const job of jobs){expect(job.pixels).toEqual(job.expected);rasterBudget.release(job.canvas);}
 });
