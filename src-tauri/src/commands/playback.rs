@@ -11,17 +11,19 @@ use annotator_core::{
     model::{MediaDescriptor, PlaybackMix, ProjectDocument, SpectralEdit},
 };
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use std::time::Instant;
 use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc, Arc, Mutex,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tauri::{Emitter, State};
-#[path = "playback_source_check.rs"]
-mod source_check;
+#[path = "playback_background.rs"]
+mod background;
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -137,6 +139,8 @@ pub struct PlaybackRuntime {
     source_revision: AtomicU64,
     send: mpsc::SyncSender<()>,
     pending: Arc<Mutex<Option<Work>>>,
+    progress: background::PeriodicWorker,
+    source_checks: background::PeriodicWorker,
 }
 impl Default for PlaybackRuntime {
     fn default() -> Self {
@@ -159,20 +163,10 @@ impl Default for PlaybackRuntime {
                         continue;
                     }
                     if let Err(error) = run(&work, &worker_control, &worker_epoch) {
-                        if !work.cancel.load(Ordering::Acquire) {
-                            if let Ok(mut c) = worker_control.lock() {
-                                if c.status.generation == work.generation {
-                                    if let Some(b) = &c.buffer {
-                                        b.set_playing(false);
-                                    }
-                                    if let Some(t) = &mut c.transport {
-                                        t.state = TransportState::Error;
-                                    }
-                                    c.status.state = TransportState::Error;
-                                    c.status.error = Some(error);
-                                    let _ = work.app.emit("playback-progress", c.status.clone());
-                                }
-                            }
+                        if let Some(status) =
+                            fail_current(&worker_control, work.generation, &work.cancel, error)
+                        {
+                            emit_current(&work.app, &worker_control, status);
                         }
                     }
                 }
@@ -184,6 +178,11 @@ impl Default for PlaybackRuntime {
             source_revision: AtomicU64::new(0),
             send,
             pending,
+            progress: background::PeriodicWorker::new("audio-progress", Duration::from_millis(33)),
+            source_checks: background::PeriodicWorker::new(
+                "audio-source-check",
+                Duration::from_millis(250),
+            ),
         }
     }
 }
@@ -422,14 +421,189 @@ fn sample_clock(c: &mut Control) {
         }
     }
 }
-fn publish(work: &Work, control: &Mutex<Control>) {
-    if let Ok(mut c) = control.lock() {
-        if c.status.generation == work.generation {
-            sample_clock(&mut c);
-            let _ = work.app.emit("playback-progress", c.status.clone());
+fn fail_current(
+    control: &Mutex<Control>,
+    generation: u64,
+    cancel: &AtomicBool,
+    error: AppError,
+) -> Option<PlaybackStatus> {
+    let mut c = control.lock().ok()?;
+    if c.status.generation != generation || cancel.load(Ordering::Acquire) {
+        return None;
+    }
+    if let Some(buffer) = &c.buffer {
+        buffer.set_playing(false);
+    }
+    sample_clock(&mut c);
+    if let Some(t) = &mut c.transport {
+        t.state = TransportState::Error;
+    }
+    c.status.state = TransportState::Error;
+    c.status.error = Some(error);
+    cancel.store(true, Ordering::Release);
+    Some(c.status.clone())
+}
+// Serialize final state checks with emission: a captured Playing event must
+// never overtake a concurrent pause/error or a replacement generation.
+fn may_publish(c: &Control, status: &PlaybackStatus) -> bool {
+    c.status.generation == status.generation
+        && c.status.state == status.state
+        && c.status.media_id == status.media_id
+        && c.status.project_id == status.project_id
+        && c.status.consumed_frames <= status.consumed_frames
+}
+fn emit_current(app: &tauri::AppHandle, control: &Mutex<Control>, status: PlaybackStatus) {
+    if let Ok(c) = control.lock() {
+        if may_publish(&c, &status) {
+            let _ = app.emit("playback-progress", status);
         }
     }
 }
+
+#[cfg(test)]
+mod background_ownership_tests {
+    use super::*;
+    #[test]
+    fn delayed_failure_stops_its_buffer_and_cannot_cancel_a_replacement_source() {
+        let runtime = PlaybackRuntime::default();
+        let buffer = runtime.test_output("old", "audio");
+        let (generation, cancel) = {
+            let c = runtime.control.lock().unwrap();
+            (c.status.generation, c.cancel.clone())
+        };
+        let playing = runtime.status().unwrap();
+        let failed = fail_current(
+            &runtime.control,
+            generation,
+            &cancel,
+            device_error("source unavailable"),
+        )
+        .unwrap();
+        assert!(cancel.load(Ordering::Acquire));
+        assert_eq!(failed.state, TransportState::Error);
+        assert_eq!(buffer.consume(), [0.; 2]);
+        assert!(!may_publish(&runtime.control.lock().unwrap(), &playing));
+        runtime.reset();
+        runtime.test_output("replacement", "new-audio");
+        let fresh = runtime.status().unwrap();
+        assert!(fail_current(
+            &runtime.control,
+            generation,
+            &AtomicBool::new(false),
+            device_error("late old error")
+        )
+        .is_none());
+        let after = runtime.status().unwrap();
+        assert_eq!(after.generation, fresh.generation);
+        assert_eq!(after.media_id, fresh.media_id);
+        assert_eq!(after.state, TransportState::Playing);
+        assert!(!may_publish(&runtime.control.lock().unwrap(), &failed));
+    }
+    #[test]
+    fn releasing_the_watch_disarms_late_source_io_without_changing_the_audio_owner() {
+        let stopped = Arc::new(AtomicBool::new(false));
+        let lease = SourceWatchLease(stopped.clone());
+        assert!(!stopped.load(Ordering::Acquire));
+        drop(lease);
+        assert!(stopped.load(Ordering::Acquire));
+    }
+}
+fn publish(work: &Work, control: &Mutex<Control>) {
+    let status = control.lock().ok().and_then(|mut c| {
+        if c.status.generation != work.generation {
+            return None;
+        }
+        sample_clock(&mut c);
+        Some(c.status.clone())
+    });
+    if let Some(status) = status {
+        emit_current(&work.app, control, status);
+    }
+}
+struct SourceWatchLease(Arc<AtomicBool>);
+impl Drop for SourceWatchLease {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
+}
+impl PlaybackRuntime {
+    fn watch_source(
+        &self,
+        work: &Work,
+        media: &annotator_core::media::decode::DecodedMedia,
+    ) -> Result<SourceWatchLease> {
+        let done = Arc::new(AtomicBool::new(false));
+        let finished = done.clone();
+        let path = media.source_path.clone();
+        let stamp = media.stamp.clone();
+        let control = self.control.clone();
+        let cancel = work.cancel.clone();
+        let generation = work.generation;
+        let app = work.app.clone();
+        let submitted = self.source_checks.submit(move || {
+            if finished.load(Ordering::Acquire) || cancel.load(Ordering::Acquire) {
+                return false;
+            }
+            #[cfg(feature = "e2e")]
+            if let Some(ms) = std::env::var("ANNOTATOR_E2E_SOURCE_CHECK_DELAY_MS")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+            {
+                std::thread::sleep(Duration::from_millis(ms.min(2000)));
+            }
+            let result = stamp.verify(&path);
+            if finished.load(Ordering::Acquire) || cancel.load(Ordering::Acquire) {
+                return false;
+            }
+            if let Err(error) = result {
+                if let Some(status) = fail_current(&control, generation, &cancel, error) {
+                    emit_current(&app, &control, status);
+                }
+                return false;
+            }
+            true
+        });
+        if !submitted {
+            return Err(device_error("源文件检查服务不可用"));
+        }
+        Ok(SourceWatchLease(done))
+    }
+    fn start_progress(&self, work: &Work) -> Result<()> {
+        let control = self.control.clone();
+        let generation = work.generation;
+        let cancel = work.cancel.clone();
+        let app = work.app.clone();
+        let submitted = self.progress.submit(move || {
+            let status = {
+                let Ok(mut c) = control.try_lock() else {
+                    return true;
+                };
+                if c.status.generation != generation || cancel.load(Ordering::Acquire) {
+                    return false;
+                }
+                sample_clock(&mut c);
+                if !matches!(
+                    c.status.state,
+                    TransportState::Playing | TransportState::Buffering | TransportState::Ended
+                ) {
+                    return false;
+                }
+                c.status.clone()
+            };
+            let ongoing = matches!(
+                status.state,
+                TransportState::Playing | TransportState::Buffering
+            );
+            emit_current(&app, &control, status);
+            ongoing
+        });
+        if !submitted {
+            return Err(device_error("播放进度服务不可用"));
+        }
+        Ok(())
+    }
+}
+
 fn run(work: &Work, control: &Mutex<Control>, epoch: &Arc<AtomicU64>) -> Result<()> {
     // No project lock during source verification, hydration, PCM reads, FFT or device setup.
     let media = {
@@ -505,13 +679,11 @@ fn run(work: &Work, control: &Mutex<Control>, epoch: &Arc<AtomicU64>) -> Result<
     let mut pending = None;
     let mut offset = 0;
     let mut eof = false;
-    let mut source_check = source_check::SourceCheck::new();
+    let _source_watch = work.state.3.watch_source(work, &media)?;
     // At most ~2.7 seconds stereo at 48 kHz; never render a full long source.
     let mut fill = |buffer: &OutputBuffer| -> Result<()> {
-        source_check.verify(Instant::now(), || media.verify_source())?;
         while buffer.free() > 65536 && !eof && !work.cancel.load(Ordering::Acquire) {
             if pending.is_none() {
-                source_check.verify(Instant::now(), || media.verify_source())?;
                 pending =
                     renderer.next(|start, count| cache.read_frames(&media.pcm, start, count))?;
                 offset = 0;
@@ -552,16 +724,12 @@ fn run(work: &Work, control: &Mutex<Control>, epoch: &Arc<AtomicU64>) -> Result<
         c.ready();
     }
     let _stream = device.start(buffer.clone())?;
-    let mut last = Instant::now() - Duration::from_secs(1);
+    work.state.3.start_progress(work)?;
     while !work.cancel.load(Ordering::Acquire) {
         if buffer.device_failed.load(Ordering::Acquire) {
             return Err(device_error("设备已断开或输出流失效"));
         }
         fill(&buffer)?;
-        if last.elapsed() >= Duration::from_millis(33) {
-            publish(work, control);
-            last = Instant::now();
-        }
         if buffer.ended() {
             publish(work, control);
             break;

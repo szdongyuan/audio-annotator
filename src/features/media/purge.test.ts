@@ -201,3 +201,11 @@ it('rejects a changed global other-author count on subsequent preview pages', as
     expect(s.controller.previewOffset).toBe(0);
     expect(s.controller.error?.code).toBe('InvalidInput');
 });
+
+it('retains identical maintenance and skips idle status notifications without losing real changes',()=>{
+ const s=owned(),notify=vi.fn();s.controller.subscribe(notify);const original=s.controller.maintenance;
+ s.controller.acceptStatus(s.status());s.controller.acceptStatus({...s.status(),lastSuccessMs:2});expect(s.controller.maintenance).toBe(original);expect(notify).not.toHaveBeenCalled();
+ const status={...s.status(),purgeMaintenance:{total:1,items:[{operationId:id,status:'accepted' as const,committed:false,cleanupPendingCount:null,cleanupFailedCount:null,deletedAudioBytes:null}]}};
+ s.controller.acceptStatus(status);expect(notify).toHaveBeenCalledOnce();s.controller.acceptStatus(structuredClone(status));expect(notify).toHaveBeenCalledOnce();
+ s.controller.dispose();s.owner.lifecycle.dispose();
+});

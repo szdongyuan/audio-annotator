@@ -26,11 +26,12 @@ export class RecycleController {
     private notify() { this.version++; this.listeners.forEach(f => f()); }
     private install(value: RecycleSnapshot) { if (value.projectId !== this.projectId || value.runtimeNonce !== this.runtimeNonce || value.recycle.projectId !== this.projectId)
         return; if (this.snapshot && value.recycle.revision < this.snapshot.revision)
-        return; this.snapshot = value.recycle; this.error = this.mutationError; }
+        return; if (!this.snapshot || JSON.stringify(this.snapshot) !== JSON.stringify(value.recycle)) this.snapshot = value.recycle; this.error = this.mutationError; }
     refresh(force = false): Promise<void> {
         if (this.disposed) return Promise.resolve();
         if (this.reading && !force) return this.reading;
         const generation = ++this.generation;
+        const beforeSnapshot = this.snapshot, beforeError = JSON.stringify(this.error);
         const reading = (async () => {
             try {
                 const value = await this.api.get(this.projectId);
@@ -38,7 +39,7 @@ export class RecycleController {
             } catch (error) {
                 if (!this.disposed && generation === this.generation) this.error = this.mutationError ?? normalizeError(error);
             } finally {
-                if (!this.disposed && generation === this.generation) this.notify();
+                if (!this.disposed && generation === this.generation && (this.snapshot !== beforeSnapshot || JSON.stringify(this.error) !== beforeError)) this.notify();
             }
         })();
         this.reading = reading;

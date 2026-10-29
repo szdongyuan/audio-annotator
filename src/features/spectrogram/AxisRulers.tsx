@@ -14,7 +14,7 @@ export function AxisRulers({ view, nyquist, timeLimit, onView, disabled = false,
   const [sizes, setSizes] = useState({ time: 0, frequency: 0 });
   const [preview, setPreview] = useState<{ axis: Axis; start: number; end: number } | null>(null);
   const [menu, setMenu] = useState<{ axis: Axis; pointer: number; x: number; y: number } | null>(null);
-  const ticks = useMemo(() => ({ time: axisTicks(view, nyquist, 'time', sizes.time), frequency: axisTicks(view, nyquist, 'frequency', sizes.frequency) }), [view, nyquist, sizes]);
+  const ticks = useMemo(() => ({ time: axisTicks(view, nyquist, 'time', sizes.time), frequency: axisTicks(view, nyquist, 'frequency', sizes.frequency) }), [view.startSeconds,view.endSeconds,view.lowHz,view.highHz,view.frequencyMix,view.spectrumKind,nyquist,sizes.time,sizes.frequency]);
   const cancel = () => {
     const pending = drag.current; drag.current = null; setPreview(null);
     if (pending?.element.hasPointerCapture(pending.pointerId)) pending.element.releasePointerCapture(pending.pointerId);

@@ -4,6 +4,14 @@ import type { Organization, OrganizationCommands } from '../../bridge/organizati
 const nonce = '11111111-1111-4111-8111-111111111111', projectId = '22222222-2222-4222-8222-222222222222', folder = '33333333-3333-4333-8333-333333333333';
 const head = (revision = 0): Organization => ({ kind: 'audio-annotator-organization', formatVersion: 1, projectId, revision, layoutRevision: revision, folders: [{ id: folder, parentId: null, name: '记录' }], media: [{ mediaId: 'known', folderId: folder, originalFilename: 'a.wav' }, { mediaId: 'unknown', folderId: folder, originalFilename: 'b.wav' }] });
 const snap = (revision = 0) => ({ runtimeNonce: nonce, projectId, organization: head(revision) });
+it('retains identical directory snapshots and skips no-op refresh renders without hiding errors or changed data',async()=>{
+ const api={get:vi.fn(async()=>snap()),apply:vi.fn()},c=new OrganizationController(projectId,nonce,true,api),notify=vi.fn();c.subscribe(notify);
+ await c.refresh();const original=c.snapshot;await c.refresh();expect(c.snapshot).toBe(original);expect(notify).toHaveBeenCalledOnce();
+ api.get.mockRejectedValueOnce({code:'SaveFailed',message:'offline',retryable:true});await c.refresh();expect(notify).toHaveBeenCalledTimes(2);
+ await c.refresh();expect(c.error).toBeNull();expect(notify).toHaveBeenCalledTimes(3);
+ api.get.mockResolvedValueOnce({...snap(),organization:{...head(),folders:[{...head().folders[0],name:'changed without revision'}]}});await c.refresh();expect(c.snapshot?.folders[0].name).toBe('changed without revision');expect(notify).toHaveBeenCalledTimes(4);
+ c.dispose();
+});
 it.each(['RevisionConflict','SaveFailed'])('retains %s mutation feedback across successful and failed polls until explicit retry',async code=>{
  const failure={code,message:'mutation needs explicit retry',retryable:true};const api={get:vi.fn(async()=>snap()),apply:vi.fn(async()=>snap(3))};
  const c=new OrganizationController(projectId,nonce,true,api);await c.refresh();const draft=c.beginEdit({type:'renameFolder',id:folder,name:'保留草稿'});

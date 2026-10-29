@@ -10,6 +10,17 @@ import { syncLabel } from './CollaborationStatus';
 export function owner():ActiveProject{const store=new ProjectStore({document:structuredClone(fixture) as never,canUndo:false,canRedo:false});const queue=new CommandQueue(store,{getSnapshot:async()=>store.snapshot,applyChange:vi.fn(),undo:vi.fn(),redo:vi.fn()});return{store,queue,lifecycle:new ProjectLifecycle(store,queue,{save:async(_id,r)=>r,close:async()=>{}}),path:'shared',collaboration:{projectFlavor:'default' as const,identityMode:'profile' as const,canWriteAnnotations:true,canImportMedia:true,hiddenMediaIds:[],catalogPending:false,runtimeNonce:'11111111-1111-4111-8111-111111111111',actor:{authorId:'11111111-1111-4111-8111-111111111111',displayName:'本机身份',createdAt:'2026-10-26T00:00:00Z'},preferences:{monitorGainDb:0,mediaMonitorGainDb:{},volume:.75,deviceId:null,loopEnabled:false,source:'processed'}}};}
 export function status(o:ActiveProject):CollaborationStatus{return{formatVersion:1,...o.collaboration!,projectId:fixture.projectId,shared:true,pending:false,recoveryRequired:false,busy:false,lastSuccessMs:1,error:null,retirement:null,purgeMaintenance:{total:0,items:[]},snapshot:{projectId:fixture.projectId,authors:[]}};}
 afterEach(()=>vi.useRealTimers());
+it('keeps no-op polling out of workspace renders but updates time and publishes real payload changes',async()=>{
+ const o=owner(),api={refresh:vi.fn(async()=>status(o))} as unknown as CollaborationCommands,c=new CollaborationController(o,api);
+ const render=vi.fn(),time=vi.fn();c.subscribe(render);c.subscribeTime(time);
+ await c.refresh();const version=c.getVersion();expect(render).toHaveBeenCalledTimes(1);
+ vi.mocked(api.refresh).mockResolvedValueOnce({...status(o),lastSuccessMs:2});await c.refresh();
+ expect(c.getVersion()).toBe(version);expect(c.getSuccessTime()).toBe(2);expect(time).toHaveBeenCalledTimes(2);
+ const changed={...status(o),hiddenMediaIds:[fixture.media[0].id]};vi.mocked(api.refresh).mockResolvedValueOnce(changed);await c.refresh();expect(render).toHaveBeenCalledTimes(2);
+ const pending={...status(o),catalogPending:true};vi.mocked(api.refresh).mockResolvedValue(pending);await c.refresh();const firstPoll=c.catalogRefresh;await c.refresh();
+ expect(c.catalogRefresh).toBe(firstPoll+1);expect(c.canAdoptCatalog).toBe(true);expect(render.mock.calls.length).toBeGreaterThan(3);
+ c.dispose();o.lifecycle.dispose();
+});
 it.each(['chosen','default'] as const)('exposes per-author read errors in compact %s status and clears them after recovery',mode=>{
  const o=owner();if(mode==='chosen')Object.assign(o.collaboration!,{identityMode:'profile',actor:{authorId:'33333333-3333-4333-8333-333333333333',displayName:'Alice',createdAt:'2026-10-23T00:00:00Z'}});
  const c=new CollaborationController(o),remote=status(o);remote.snapshot!.authors=[{identity:{authorId:'22222222-2222-4222-8222-222222222222',displayName:'Bob',createdAt:'2026-10-23T00:00:00Z'},layer:null,error:{code:'InvalidInput',message:'corrupt author layer',retryable:true}}];

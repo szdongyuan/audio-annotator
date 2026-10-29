@@ -3,7 +3,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AnalysisSettings, MediaDescriptor, MediaView } from '../../bridge/types';
 import type { MediaStatus } from '../../bridge/media';
 import type { ActiveProject } from '../project/useProjectLifecycle';
-import { drawSpectrogram } from './renderer';
+import { spectrogramDrawSteps } from './renderer';
+import {scheduleRaster} from './rasterQueue';
 import { backingSize, rasterBudget } from './rasterBudget';
 import { useTiles } from './useTiles';
 import { tileCache } from './tileScheduler';
@@ -21,6 +22,7 @@ export function SpectrogramCanvas({ active, media, settings, view, channel, stat
   const [dpr, setDpr] = useState(window.devicePixelRatio || 1);
   const [visible, setVisible] = useState(typeof IntersectionObserver === 'undefined');
   const [rasterError, setRasterError] = useState<string | null>(null);
+  const [rasterBusy,setRasterBusy]=useState(false);
   const pixels = backingSize(size.width, size.height, dpr);
   const latest = useRef({ view, onView, timeLimit, disabled: active.store.editingDisabled }); latest.current = { view, onView, timeLimit, disabled: active.store.editingDisabled };
   const drag = useRef<{ pointerId: number; x: number; y: number; view: MediaView } | null>(null);
@@ -63,21 +65,23 @@ export function SpectrogramCanvas({ active, media, settings, view, channel, stat
   useEffect(() => {
     const target = canvas.current;
     if (!target) return;
-    if (status === 'missing' || status === 'changed' || !visible || !size.width || !size.height) { rasterBudget.release(target); target.width = 0; target.height = 0; return; }
-    const frame = requestAnimationFrame(() => {
+    if (status === 'missing' || status === 'changed' || !visible || !size.width || !size.height) { setRasterBusy(false);rasterBudget.release(target); target.width = 0; target.height = 0; return; }
+    setRasterBusy(true);
+    let step:(()=>boolean)|undefined;
+    return scheduleRaster(() => {
+     if(step){try{if(!step())return false;setRasterBusy(false);setRasterError(null);}catch(error){setRasterBusy(false);setRasterError(error instanceof Error?error.message:'频谱绘制失败');}return true;}
       const values = tiles.keys.map(k => tileCache.get(k)).filter(t => t !== undefined);
       // An explicit cache invalidation must never silently turn a completed
       // spectrum black. Keep its bitmap until the recovery state is published.
-      if (tiles.total > 0 && tiles.completed === tiles.total && !tiles.error && !tiles.cancelled && values.length !== tiles.keys.length) { tiles.recoverMissing(); return; }
+      if (tiles.total > 0 && tiles.completed === tiles.total && !tiles.error && !tiles.cancelled && values.length !== tiles.keys.length) { setRasterBusy(false);tiles.recoverMissing(); return true; }
       try {
         rasterBudget.reserve(target, pixels.width, pixels.height);
         if (target.width !== pixels.width) target.width = pixels.width;
         if (target.height !== pixels.height) target.height = pixels.height;
-        drawSpectrogram(target, view, settings, media.sampleRate, values);
-        setRasterError(null);
-      } catch (error) { setRasterError(error instanceof Error ? error.message : '频谱绘制失败'); }
+        step=spectrogramDrawSteps(target,view,settings,media.sampleRate,values);
+        return false;
+      } catch (error) { setRasterBusy(false);setRasterError(error instanceof Error ? error.message : '频谱绘制失败');return true; }
     });
-    return () => cancelAnimationFrame(frame);
   // Native snapshots recreate view/settings objects for unrelated panes too.
   // Depend on their visual values so an acknowledgement cannot repaint all HD canvases.
   }, [status, size, pixels.width, pixels.height, visible,
@@ -93,8 +97,8 @@ export function SpectrogramCanvas({ active, media, settings, view, channel, stat
     onKeyDown={event => { if (active.store.editingDisabled || menuIsOpen()) return; if (event.key === 'Escape' && drag.current) { event.preventDefault(); endPan(true); return; } const delta = event.key === 'ArrowLeft' ? -.1 : event.key === 'ArrowRight' ? .1 : 0; if (delta) { event.preventDefault(); onView(panViewport(view, timeLimit, media.sampleRate / 2, delta, 0)); } }}>
     <canvas ref={canvas} data-channel={channel} aria-label={`通道 ${channel + 1} ${view.spectrumKind === 'mel' ? '梅尔' : 'STFT'} 频谱`} />
     <div className="spectrogram-overlays">{children}</div>
-    {visible && (busy || rasterError || tiles.error || tiles.cancelled || !tiles.keys.length) && <div className="tile-status" onPointerDown={e => e.stopPropagation()}>
-      <span role={rasterError || tiles.error ? 'alert' : 'status'}>{rasterError ?? tiles.error ?? (tiles.cancelled ? '分析已取消' : tiles.total ? `${tiles.phase} · ${tiles.completed}/${tiles.total}` : tiles.phase)}</span>
+    {visible && (busy || rasterBusy || rasterError || tiles.error || tiles.cancelled || !tiles.keys.length) && <div className="tile-status" onPointerDown={e => e.stopPropagation()}>
+      <span role={rasterError || tiles.error ? 'alert' : 'status'}>{rasterError ?? tiles.error ?? (tiles.cancelled ? '分析已取消' : rasterBusy&&!busy?'正在绘制频谱…':tiles.total ? `${tiles.phase} · ${tiles.completed}/${tiles.total}` : tiles.phase)}</span>
       {busy && <button onClick={tiles.cancel}>取消</button>}{(tiles.error || tiles.cancelled) && <button onClick={tiles.retry}>重试</button>}
     </div>}
   </div>;

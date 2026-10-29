@@ -13,7 +13,7 @@ import { tileCache } from '../spectrogram/tileScheduler';
 import fixture from '../../../tests/fixtures/document-v3.json';
 const draw=vi.hoisted(()=>vi.fn());
 // jsdom has no bitmap implementation; Canvas interactions/useTiles stay real.
-vi.mock('../spectrogram/renderer',()=>({drawSpectrogram:draw}));
+vi.mock('../spectrogram/renderer',()=>({spectrogramDrawSteps:(...args:unknown[])=>{draw(...args);return()=>true;}}));
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();tileCache.clear();draw.mockReset();});
 it('analyzes, zooms and pans the real preview Canvas after StrictMode replay and retires its view on close',async()=>{
  vi.stubGlobal('crypto',webcrypto);vi.stubGlobal('PointerEvent',MouseEvent);

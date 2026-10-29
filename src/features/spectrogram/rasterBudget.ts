@@ -18,6 +18,9 @@ export class RasterBudget {
     if (this.scratch?.width !== scratchWidth(width) || this.scratch.height !== height) this.scratch = undefined;
   }
   image(context: CanvasRenderingContext2D, width: number, height: number) {
+    const bytes=width*height*4;
+    if(this.bytes-this.scratchBytes+bytes>this.limit)throw new Error('频谱栅格资源不足，请缩小窗口或减少可见通道后重试');
+    this.scratchBytes=bytes;
     if (!this.scratch || this.scratch.width !== width || this.scratch.height !== height) this.scratch = context.createImageData(width, height);
     return this.scratch;
   }

@@ -46,7 +46,15 @@ it('renders all twelve channels after gain, palette and mix changes without relo
   const images = new Map<HTMLCanvasElement, ImageData>();
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function(this: HTMLCanvasElement) {
     const canvas = this;
-    return { createImageData: (width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4), width, height }), putImageData: (image: ImageData) => images.set(canvas, image) } as unknown as CanvasRenderingContext2D;
+    return { createImageData: (width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4), width, height }), putImageData: (image: ImageData, dx:number, dy:number, sx=0, sy=0, sw=image.width, sh=image.height) => {
+      let backing=images.get(canvas);
+      if(!backing||backing.width!==canvas.width||backing.height!==canvas.height)backing={width:canvas.width,height:canvas.height,data:new Uint8ClampedArray(canvas.width*canvas.height*4)} as ImageData;
+      for(let y=sy;y<sy+sh;y++){
+        const source=(y*image.width+sx)*4,target=((dy+y)*canvas.width+dx+sx)*4;
+        backing.data.set(image.data.subarray(source,source+sw*4),target);
+      }
+      images.set(canvas,backing);
+    } } as unknown as CanvasRenderingContext2D;
   });
   vi.spyOn(mediaClient, 'status').mockResolvedValue(media.map(m => ({ mediaId: m.id, status: 'ready' })));
   const request = vi.spyOn(nativeTileTransport, 'request').mockImplementation(async r => packet(r));
@@ -68,7 +76,7 @@ it('renders all twelve channels after gain, palette and mix changes without relo
   for (let i = 0; i < 80; i++) tileCache.set(`historical-${i}`, retained, 1024 * 1024);
   for (const style of [[10, 'ember', .65], [10, 'ocean', .65], [10, 'ocean', .2]] as const) {
     images.clear(); screen.rerender(panes(style[0], style[1], style[2]));
-    await waitFor(() => expect(images.size).toBe(12));
+    await waitFor(() => {expect(images.size).toBe(12);expect(screen.container.querySelector('.tile-status')).toBeNull();},{timeout:10000});
     expect([...images.values()].every(image => image.data.every((n, i) => i % 4 !== 0 || n > 20))).toBe(true);
     expect(screen.container.querySelector('.tile-status')).toBeNull(); expect(request).toHaveBeenCalledTimes(before);
   }
@@ -79,7 +87,7 @@ it('renders all twelve channels after gain, palette and mix changes without relo
   await waitFor(() => expect(request.mock.calls.length).toBeGreaterThan(before));
   await waitFor(() => { expect(screen.container.querySelector('.tile-status')).toBeNull(); expect(images.size).toBe(12); expect([...images.values()].every(image => image.data.every((n, i) => i % 4 !== 0 || n > 20))).toBe(true); }, { timeout: 10000 });
   screen.unmount(); expect(tileCache.set('new-session', retained, tileCache.limit)).toBe(true);
-});
+},60000);
 
 it('allocates CSS pixels times DPR for 800x600 and responds to resize and DPR changes', async () => {
   vi.stubGlobal('crypto', webcrypto);

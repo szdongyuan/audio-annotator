@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCollaborationStatus, parseSharedContext, parseTransition } from './collaboration';
+import { createCollaborationStatusParser, parseCollaborationStatus, parseSharedContext, parseTransition } from './collaboration';
 import { parseProjectDocument, type ProjectDocument } from './types';
 import fixture from '../../tests/fixtures/document-v3.json';
 const id='11111111-1111-4111-8111-111111111111';
@@ -117,4 +117,24 @@ it('accepts legitimate personal document maps beyond 32 keys and rejects unknown
  document.analysis=Object.fromEntries(document.media.map(m=>[m.id,analysis]));document.playbackMix=Object.fromEntries(document.media.map(m=>[m.id,mix]));document.viewState={...document.viewState,media:Object.fromEntries(document.media.map(m=>[m.id,view])),activeMediaId:document.media[0].id,compareMediaId:null};
  const status={...statusFixture(),projectId:document.projectId,snapshot:null,retirement:{mediaIds:[source.id],snapshot:{document,canUndo:false,canRedo:false}}};
  expect(()=>parseCollaborationStatus(status)).not.toThrow();expect(()=>parseCollaborationStatus({...status,retirement:{...status.retirement,snapshot:{...status.retirement.snapshot,secret:true}}})).toThrow();
+});
+
+it('revalidates changes regardless of claimed revision and protects the cache from caller mutation',()=>{
+ const parse=createCollaborationStatusParser(),status=parseCollaborationStatus(statusFixture());parse(status);
+ const next={...structuredClone(status),lastSuccessMs:42};expect(parse(next)).toBe(next);
+ next.snapshot!.authors.push({identity:status.actor!,layer:null,error:null});expect(parse(next)).toBe(next);
+ next.snapshot!.authors.push({identity:status.actor!,layer:null,error:null});expect(()=>parse(next)).toThrow();
+ expect(()=>parse({...status,lastSuccessMs:-1})).toThrow();
+ expect(()=>parse({...status,unrecognized:true})).toThrow();
+});
+it('rejects cyclic, sparse and changed nested payloads after a warm cache',()=>{
+ const parse=createCollaborationStatusParser(),status=parseCollaborationStatus(statusFixture());parse(status);
+ const cyclic=structuredClone(status);Object.assign(cyclic.snapshot!,{authors:[cyclic]});expect(()=>parse(cyclic)).toThrow();
+ const sparse=structuredClone(status);sparse.hiddenMediaIds.length=1;expect(()=>parse(sparse)).toThrow();
+ const extra=structuredClone(status);Object.assign(extra.preferences!,{volume:NaN});expect(()=>parse(extra)).toThrow();
+});
+it('checks references against the current document on every cached response',()=>{
+ const parse=createCollaborationStatusParser(),doc=parseProjectDocument(structuredClone(fixture)),status={...statusFixture(),projectId:doc.projectId,snapshot:{projectId:doc.projectId,authors:[]},hiddenMediaIds:[doc.media[0].id]};
+ parse(status,doc);expect(()=>parse(structuredClone(status),{...doc,media:[]})).toThrow();
+ const annotated=documentStatus(doc);parse(annotated,doc);const shorter={...doc,media:doc.media.map(m=>({...m,frameCount:1}))};expect(()=>parse(structuredClone(annotated),shorter)).toThrow();
 });
