@@ -747,14 +747,15 @@ fn organization_worker() {
     );
     fs::write(
         root.join(format!("result-{name}")),
-        if result.is_ok() {
-            b"committed".as_slice()
-        } else {
-            assert_eq!(
-                result.unwrap_err().code,
-                annotator_core::error::ErrorCode::RevisionConflict
-            );
-            b"conflict".as_slice()
+        match result {
+            Ok(_) => b"committed".as_slice(),
+            Err(error) => {
+                assert_eq!(
+                    error.code,
+                    annotator_core::error::ErrorCode::RevisionConflict
+                );
+                b"conflict".as_slice()
+            }
         },
     )
     .unwrap();
@@ -1237,5 +1238,67 @@ fn opaque_layout_capture_seals_multiple_candidates_without_reopening_the_head() 
         .append_media(&actor, &prepared, &AtomicBool::new(false))
         .is_err());
     drop((two, prepared, capture, actor, repo));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn loaded_placement_capture_uses_one_validated_snapshot_and_publication_rechecks_layout() {
+    let root = std::env::temp_dir().join(format!("loaded-capture-{}", id()));
+    fs::create_dir(&root).unwrap();
+    let profile = profiles::Profile::new("capture").unwrap();
+    let (repo, actor) =
+        CollaborationRepository::create_default(&root, "capture", &profile).unwrap();
+    let target = id();
+    repo.apply_organization(
+        &actor,
+        0,
+        OrganizationOperation::CreateFolder {
+            id: target.clone(),
+            parent_id: None,
+            name: "old".into(),
+        },
+    )
+    .unwrap();
+    let current = repo.reload_catalog().unwrap();
+    repo.apply_organization(
+        &actor,
+        1,
+        OrganizationOperation::RenameFolder {
+            id: target.clone(),
+            name: "new".into(),
+        },
+    )
+    .unwrap();
+    let capture = current
+        .capture_loaded_media_placement(Some(target.clone()))
+        .unwrap();
+    assert_eq!(capture.target_path(), ["old"]);
+    assert_eq!(capture.layout_revision(), 1);
+    let fresh = current
+        .reload_catalog()
+        .unwrap()
+        .capture_loaded_media_placement(Some(target))
+        .unwrap();
+    assert_eq!(fresh.target_path(), ["new"]);
+    assert_eq!(fresh.layout_revision(), 2);
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/audio/mono16.wav");
+    let prepared = current
+        .prepare_media_with_placement(
+            &source,
+            &root.join("pcm"),
+            &AtomicBool::new(false),
+            capture.seal(vec![], "one.wav".into()).unwrap(),
+            |_, _| {},
+        )
+        .unwrap();
+    assert_eq!(
+        current
+            .append_media(&actor, &prepared, &AtomicBool::new(false))
+            .unwrap_err()
+            .code,
+        annotator_core::error::ErrorCode::RevisionConflict
+    );
+    drop((prepared, current, actor, repo));
     fs::remove_dir_all(root).unwrap();
 }

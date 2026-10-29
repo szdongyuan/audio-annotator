@@ -11,6 +11,7 @@ export interface SourceRules {
   include: string[];
   exclude: string[];
   includeSecond: boolean;
+  skipDuplicates: boolean;
 }
 export interface SourceOrganization {targetFolderId:string|null;mode:'sourcePath'|'flat'|'template';wrapSource:boolean;stripComponents:string[];template:string}
 export const defaultSourceOrganization = ():SourceOrganization => ({targetFolderId:null,mode:'flat',wrapSource:false,stripComponents:[],template:'{source}/{relativeDir}'});
@@ -29,6 +30,7 @@ export interface SourceCounts {
   checked: number;
   candidates: number;
   skipped: number;
+  duplicateSkipped: number;
   issues: number;
   selectedBytes: number;
 }
@@ -93,7 +95,11 @@ const relative: Check = v => {
   text(v);
   check(!(v as string).includes('\\') && !(v as string).includes(':') && !(v as string).split('/').some(p => !p || p === '.' || p === '..'));
 };
-const counts: Check = v => shape(v, { checked: integer(100000), candidates: integer(10000), skipped: integer(), issues: integer(), selectedBytes: integer(20 * 1024 ** 3) });
+const counts: Check = v => {
+  shape(v, { checked: integer(100000), candidates: integer(10000), skipped: integer(), duplicateSkipped: integer(), issues: integer(), selectedBytes: integer(20 * 1024 ** 3) });
+  const c = v as SourceCounts;
+  check(c.duplicateSkipped <= c.skipped);
+};
 const pattern: Check = v => {
   text(v);
   const p = v as string;
@@ -103,7 +109,7 @@ export function parseSourceRules(v: unknown): SourceRules {
   shape(v, { mode: oneOf('generic', 'jingcheng'), recursive: bool, extensions: array(x => {
       text(x);
       oneOf('wav', 'flac', 'mp3')((x as string).toLowerCase());
-    }, 3), include: array(pattern), exclude: array(pattern), includeSecond: bool });
+    }, 3), include: array(pattern), exclude: array(pattern), includeSecond: bool, skipDuplicates: bool });
   const r = v as SourceRules;
   check(r.extensions.length && r.include.length && r.include.length + r.exclude.length <= 256);
   return r;

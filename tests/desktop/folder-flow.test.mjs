@@ -27,6 +27,8 @@ const snap = async () => (await h.snapshot(id)).document;
 async function folder(recursive = false) {
   await h.menu('导入文件夹');
   await h.select('导入方案', '通用·平铺');
+  // Keep the lifecycle/retry fixtures able to append same-name audio from different source folders.
+  const duplicates=await h.driver.findElement(By.xpath("//label[normalize-space(.)='跳过重复音频']/input"));if(await duplicates.isSelected())await duplicates.click();
   await h.click('.source-rules summary'); const recursion=await h.driver.findElement(By.xpath("//label[contains(.,'包含子文件夹')]/input"));assert.equal(await recursion.isSelected(), true);
   if (!recursive) await recursion.click();
   await h.clickText('选择文件夹…');
@@ -43,7 +45,7 @@ async function create() { const expected = [project, cancelledProject, next][pro
 try {
   h = await start(paths, output, undefined, { exactOuter: true }); h.nativeRect({ width: 1280, height: 800 }); report.pid = h.nativePid;
   await create();
-  await h.evaluate(`window.__folderTest={calls:[],held:[],failNext:false,holdNext:false,holdScan:false};const original=window.fetch;window.fetch=function(resource,options){const s=window.__folderTest,command=decodeURIComponent(String(resource).split('/').at(-1)),args=typeof options?.body==='string'?JSON.parse(options.body):{};s.calls.push({command,args});if((command==='import_source_batch'&&s.holdNext)||(command==='scan_import_sources'&&s.holdScan)){const scan=command==='scan_import_sources';s.holdNext=false;s.holdScan=false;s.holdScanActive=scan;const id=Number(args.onEvent.split(':')[1]),callbacks=window.__TAURI_INTERNALS__.callbacks,receive=callbacks.get(id);callbacks.set(id,envelope=>{const event=envelope.message;if('end' in envelope||(scan?event?.type==='result':event?.type==='finished'||event?.type==='ready'&&event.index>0))s.held.push(()=>receive(envelope));else receive(envelope);});}if(command==='apply_change'&&args.change?.type==='importMedia'&&s.failNext){s.failNext=false;return Promise.resolve(new Response(JSON.stringify({code:'SaveFailed',message:'Injected folder publication failure',retryable:true}),{headers:{'Content-Type':'application/json','Tauri-Response':'error'}}));}return original.call(this,resource,options);};`);
+  await h.evaluate(`window.__folderTest={calls:[],held:[],failNext:false,holdNext:false,holdScan:false};const original=window.fetch;window.fetch=function(resource,options){const s=window.__folderTest,command=decodeURIComponent(String(resource).split('/').at(-1)),args=typeof options?.body==='string'?JSON.parse(options.body):{};s.calls.push({command,args});if((command==='import_source_batch'&&s.holdNext)||(command==='scan_import_sources'&&s.holdScan)){const scan=command==='scan_import_sources';s.holdNext=false;s.holdScan=false;s.holdScanActive=scan;const id=Number(args.onEvent.split(':')[1]),callbacks=window.__TAURI_INTERNALS__.callbacks,receive=callbacks.get(id);callbacks.set(id,envelope=>{const event=envelope.message;if('end' in envelope||(scan?event?.type==='result':event?.type==='finished'||event?.type==='ready'&&event.index>=64))s.held.push(()=>receive(envelope));else receive(envelope);});}if(command==='apply_change'&&args.change?.type==='importMediaBatch'&&s.failNext){s.failNext=false;(s.rejectedPublications??=[]).push(args.change.items.map(item=>item.id));return Promise.resolve(new Response(JSON.stringify({code:'SaveFailed',message:'Injected folder publication failure',retryable:true}),{headers:{'Content-Type':'application/json','Tauri-Response':'error'}}));}return original.call(this,resource,options);};`);
   await folder(); await finished();
   let doc = await snap(); assert.equal(doc.media.length, 257); assert.equal(new Set(doc.media.map(m => m.sourceRef.toLowerCase())).size, 257);
   assert.match(await resultText(), /成功 257 · 失败 1 · 跳过 1/);
@@ -58,11 +60,24 @@ try {
   await closeResult(); await folder(true); assert.equal((await snap()).media.length, 258); assert.match(await h.evaluate("return document.querySelector('.source-preview').textContent"), /0 个音频跳过 258/); await h.clickText('取消'); check('Scanning copied canonical public sources skips every already-present media path'); await closeResult();
 
   await h.evaluate('window.__folderTest.failNext=true'); await folder(); await h.until(`document.querySelector('.source-import-progress')?.textContent.includes('导入已暂停')`, 'publication pause', 900000);
-  assert.equal((await snap()).media.length, 513); // 258 + 255 committed, one retained prepared failure.
-  calls = await h.evaluate('return window.__folderTest.calls'); assert.equal(calls.filter(c => c.command === 'import_source_batch' && c.args.token.taskId === calls.filter(c=>c.command==='import_source_batch').at(-1).args.token.taskId).length, 1);
+  doc = await snap(); assert.equal(doc.media.length, 450); // 258 + 192 committed; the first 64 prepared media remain retained.
+  const rejectedIds = await h.evaluate('return window.__folderTest.rejectedPublications[0]'); assert.equal(rejectedIds.length, 64); assert.equal(new Set(rejectedIds).size, 64);
+  assert.ok(rejectedIds.every(mediaId=>!doc.media.some(media=>media.id===mediaId)), 'the failed publication group remains unpublished');
+  calls = await h.evaluate('return window.__folderTest.calls'); const pausedTaskId=calls.filter(c=>c.command==='import_source_batch').at(-1).args.token.taskId;
+  assert.deepEqual(calls.filter(c=>c.command==='import_source_batch'&&c.args.token.taskId===pausedTaskId).map(c=>c.args.indices.length),[256]);
+  assert.equal(calls.filter(c=>c.command==='release_media_import'&&rejectedIds.includes(c.args.mediaId)).length,0,'failed group retains every prepared PCM capability until retry');
   await h.screenshot('paused-owned-ledger'); await h.clickText('重试并继续导入'); await finished();
   assert.equal((await snap()).media.length, 515); assert.match(await resultText(), /成功 257 · 失败 0/); assert.equal(await h.evaluate(`return !!document.querySelector('.annotation-failure')`), false);
-  check('Injected one publication failure pauses before batch 2; explicit retry reuses original prepared PCM, resumes final item and corrects aggregate success'); await closeResult();
+  calls = await h.evaluate('return window.__folderTest.calls');
+  const repeatedGroups=calls.filter(c=>c.command==='apply_change'&&c.args.change?.type==='importMediaBatch'&&c.args.change.items.some(item=>rejectedIds.includes(item.id))).map(c=>c.args.change.items.map(item=>item.id));
+  assert.deepEqual(repeatedGroups,[rejectedIds,rejectedIds],'retry submits the same complete 64 prepared media IDs');
+  assert.deepEqual(calls.filter(c=>c.command==='import_source_batch'&&c.args.token.taskId===pausedTaskId).map(c=>c.args.indices.length),[256,1],'retry decodes only the final pending item');
+  doc=await snap();assert.ok(rejectedIds.every(mediaId=>doc.media.some(media=>media.id===mediaId)));
+  const releasedGroup=calls.filter(c=>c.command==='release_media_import'&&rejectedIds.includes(c.args.mediaId));
+  assert.ok(rejectedIds.every(mediaId=>releasedGroup.filter(c=>c.args.mediaId===mediaId).length===1),'retry acknowledges each retained PCM capability exactly once');
+  assert.equal(new Set(releasedGroup.map(c=>c.args.taskId)).size,1,'all retained capabilities belong to the same native decoder task');
+  report.publicationRetry={rejectedIds,pausedMediaCount:450,finalMediaCount:doc.media.length,decoderBatchSizes:[256,1],publicationAttempts:repeatedGroups,releaseTaskId:releasedGroup[0].args.taskId};
+  check('Injected one 64-item publication failure pauses before decoder batch 2; explicit retry reuses every original prepared ID and PCM, resumes only the final item and corrects aggregate success'); await closeResult();
   await h.evaluate('window.__folderTest.failNext=true'); await folder(); await h.until(`document.querySelector('.source-import-progress')?.textContent.includes('导入已暂停')`);
   await h.clickText('取消导入'); assert.ok(await h.evaluate(`return !!document.querySelector('.annotation-failure')`)); await h.clickText('结束并放弃失败项'); await h.until(`!document.querySelector('.annotation-failure')`);
   assert.equal((await snap()).media.length, 515); assert.ok(await h.evaluate(`return window.__folderTest.calls.some(c=>c.command==='release_media_import')`)); check('Cancel preserves failed edit; explicit End abandons only this failed import and releases native PCM'); await closeResult();
@@ -71,12 +86,16 @@ try {
   const frame = await h.evaluate(`const r=e=>e.getBoundingClientRect().toJSON();return {inner:[innerWidth,innerHeight],top:r(document.querySelector('.project-header')).height+r(document.querySelector('.workspace-toolbar')).height,bottom:r(document.querySelector('.playback-bar')).height,plots:[...document.querySelectorAll('.spectrogram-surface')].map(r),headers:[...document.querySelectorAll('.file-pane')].map(p=>r(p.querySelector('.file-heading')).height+r(p.querySelector('.file-controls')).height),feedback:r(document.querySelector('.workspace-feedback')).height};`);
   assert.equal(frame.top, 72); assert.equal(frame.bottom, 42); assert.ok(frame.headers.every(n => n === 54)); assert.ok(frame.plots.every(p => p.height === 239.5 && p.bottom <= frame.inner[1])); assert.equal(frame.feedback, 0); report.frames.push({ outer: h.nativeRect(), ...frame }); await h.screenshot('folder-results-dismissed-layout'); check('Dismissed folder results reserve no feedback height; exact 1280x800 outer window retains four 239.5px plots and 72/42/54 budgets');
 
-  await create(); await h.evaluate('window.__folderTest.holdNext=true'); await folder(); await h.until(`window.__folderTest.held.length>=2&&document.querySelector('.source-import-progress')?.textContent.includes('成功 1')`, 'first accepted and late native results held');
+  await create(); await h.evaluate('window.__folderTest.holdNext=true'); await folder(); await h.until(`window.__folderTest.held.length>=2&&document.querySelector('.source-import-progress')?.textContent.includes('成功 64')`, 'first publication group accepted and late native results held');
+  const acceptedPrefix=(await snap()).media.map(media=>media.id);assert.equal(acceptedPrefix.length,64);
+  const acceptedPublication=await h.evaluate(`return window.__folderTest.calls.filter(call=>call.command==='apply_change'&&call.args.change?.type==='importMediaBatch').at(-1).args.change.items.map(media=>media.id)`);
+  assert.deepEqual(new Set(acceptedPrefix),new Set(acceptedPublication),'the first real 64-item publication is the retained accepted prefix');
   const before = Date.now(); await h.clickText('取消导入'); assert.match(await resultText(), /音频导入已取消/); report.cancelVisibleMs = Date.now() - before; assert.ok(report.cancelVisibleMs < 500);
-  assert.equal((await snap()).media.length, 1); await create(); assert.equal((await snap()).media.length, 0);
+  assert.deepEqual(new Set((await snap()).media.map(media=>media.id)),new Set(acceptedPrefix)); await create(); assert.equal((await snap()).media.length, 0);
   await h.evaluate('window.__folderTest.held.splice(0).forEach(deliver=>deliver())'); await wait(350); assert.equal((await snap()).media.length, 0);
   calls = await h.evaluate('return window.__folderTest.calls'); assert.ok(calls.some(c => c.command === 'cancel_media_import')); assert.ok(calls.filter(c => c.command === 'release_media_import').length > 1);
-  check('Injected delayed native ready/finished: cancellation visible under 500ms retains accepted media; new project remains empty and old PCM releases');
+  report.acceptedCancellationPrefix={ids:acceptedPrefix,publicationIds:acceptedPublication};
+  check('Injected delayed native ready/finished: cancellation visible under 500ms retains the first 64 accepted media; new project remains empty and old PCM releases');
   await h.evaluate('window.__folderTest.holdScan=true'); await folder(); await h.until('window.__folderTest.held.length>0', 'scan result held'); const importsBefore = await h.evaluate(`return window.__folderTest.calls.filter(c=>c.command==='import_source_batch').length`);
   await h.clickText('取消'); await h.evaluate('window.__folderTest.held.splice(0).forEach(deliver=>deliver());window.__folderTest.holdScanActive=false'); await wait(150); assert.equal(await h.evaluate(`return window.__folderTest.calls.filter(c=>c.command==='import_source_batch').length`), importsBefore); assert.equal((await snap()).media.length, 0); check('Injected delayed scan terminal: cancel calls scan cancellation/release and late result cannot start a decoder'); await closeResult();
   await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`); assert.equal((await snap()).media.length, 1); check('Direct multi-select audio import still works after folder cancellation');

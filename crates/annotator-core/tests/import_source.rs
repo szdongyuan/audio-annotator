@@ -1,5 +1,5 @@
 use annotator_core::media::import_source::*;
-use std::{fs, io::Write, path::PathBuf, sync::atomic::AtomicBool};
+use std::{collections::HashSet, fs, io::Write, path::PathBuf, sync::atomic::AtomicBool};
 
 struct Tree(PathBuf);
 impl Tree {
@@ -931,4 +931,330 @@ fn reused_zip_session_reads_distinct_entries_and_rejects_changed_source() {
     drop(file);
     assert!(session.stage(1, &t.0, &cancel, |_| {}).is_err());
     drop((session, first, second));
+}
+
+#[test]
+fn import_path_keys_respect_components_and_unicode_lowercase() {
+    assert_eq!(
+        ImportPathKey::new(&["日期".into(), "Ä".into()], "CH1.WAV"),
+        ImportPathKey::new(&["日期".into(), "ä".into()], "ch1.wav")
+    );
+    assert_eq!(
+        ImportPathKey::new(&["İ".into()], "Ä.WAV"),
+        ImportPathKey::new(&["i\u{307}".into()], "ä.wav")
+    );
+    for (folders, filename) in [
+        (vec!["a".into(), "bc".into()], "x.wav"),
+        (vec!["ab".into()], "cx.wav"),
+        (vec!["ab".into(), "c".into()], "x.flac"),
+    ] {
+        assert_ne!(
+            ImportPathKey::new(&["ab".into(), "c".into()], "x.wav"),
+            ImportPathKey::new(&folders, filename)
+        );
+    }
+    assert_ne!(
+        ImportPathKey::new(&[], "x.wav"),
+        ImportPathKey::new(&["x".into()], "x.wav")
+    );
+    assert_ne!(
+        ImportPathKey::new(&["ä".into()], "x.wav"),
+        ImportPathKey::new(&["a\u{308}".into()], "x.wav")
+    );
+    assert_ne!(
+        ImportPathKey::new(&[], "x.wav"),
+        ImportPathKey::new(&[], " x.wav")
+    );
+}
+
+#[test]
+fn occupied_paths_ignore_case_but_preserve_other_directories_and_extensions() {
+    let tree = Tree::new();
+    let entries = vec![
+        ("Ä/CH1.WAV", b"new content".to_vec()),
+        ("Ä/CH1.flac", b"flac".to_vec()),
+        ("Other/CH1.WAV", b"other".to_vec()),
+        ("CH1.WAV", b"root".to_vec()),
+    ];
+    for (name, bytes) in &entries {
+        tree.file(name, bytes);
+    }
+    let archive = tree.zip("source.zip", &entries);
+    let occupied = HashSet::from([
+        ImportPathKey::new(&["ä".into()], "ch1.wav"),
+        ImportPathKey::new(&[], "ch1.wav"),
+    ]);
+    for (kind, path) in [
+        (SourceKind::Folder, tree.0.clone()),
+        (SourceKind::Zip, archive),
+    ] {
+        let mut cfg = generic(kind, vec![path]);
+        cfg.organization.mode = OrganizationMode::SourcePath;
+        let mut result = discover(&cfg);
+        let skipped = result.counts.skipped;
+        result.exclude_duplicate_paths(&occupied).unwrap();
+        assert_eq!(result.counts.candidates, 2);
+        assert_eq!(result.counts.duplicate_skipped, 2);
+        assert_eq!(result.counts.skipped, skipped + 2);
+        assert_eq!(result.counts.selected_bytes, 9);
+        assert_eq!(
+            result
+                .candidates()
+                .iter()
+                .map(|c| c.relative_path.as_str())
+                .collect::<Vec<_>>(),
+            ["Other/CH1.WAV", "Ä/CH1.flac"]
+        );
+    }
+    assert_eq!(occupied.len(), 2);
+}
+
+#[test]
+fn duplicate_keys_use_completed_layout_and_target_prefix() {
+    let tree = Tree::new();
+    tree.file("Source/Day/audio/CH1.WAV", b"audio");
+    let archive = tree.zip("Source.zip", &[("Day/audio/CH1.WAV", b"audio".to_vec())]);
+    for (kind, path) in [
+        (SourceKind::Folder, tree.0.join("Source")),
+        (SourceKind::Zip, archive),
+    ] {
+        for (mode, wrap, strip, template, prefix, expected) in [
+            (
+                OrganizationMode::Flat,
+                false,
+                false,
+                "{source}",
+                vec![],
+                vec![],
+            ),
+            (
+                OrganizationMode::Flat,
+                false,
+                false,
+                "{source}",
+                vec!["Target"],
+                vec!["Target"],
+            ),
+            (
+                OrganizationMode::SourcePath,
+                false,
+                false,
+                "{source}",
+                vec!["Target"],
+                vec!["Target", "Day", "audio"],
+            ),
+            (
+                OrganizationMode::SourcePath,
+                true,
+                true,
+                "{source}",
+                vec!["Target"],
+                vec!["Target", "Source", "Day"],
+            ),
+            (
+                OrganizationMode::Template,
+                false,
+                true,
+                "Chosen/{source}/{relativeDir}",
+                vec!["Target"],
+                vec!["Target", "Chosen", "Source", "Day"],
+            ),
+        ] {
+            let mut cfg = generic(kind, vec![path.clone()]);
+            cfg.organization.mode = mode;
+            cfg.organization.wrap_source = wrap;
+            cfg.organization.template = template.into();
+            if strip {
+                cfg.organization.strip_components = vec!["AUDIO".into()];
+            }
+            let prefix: Vec<String> = prefix.into_iter().map(String::from).collect();
+            let expected: Vec<String> = expected.into_iter().map(String::from).collect();
+            let mut result = discover(&cfg);
+            result.bind_target_path(&prefix).unwrap();
+            assert_eq!(result.candidates()[0].resulting_folder_path, expected);
+            // A source-relative key must not replace the completed placement key.
+            let raw = ImportPathKey::new(&["Day".into(), "audio".into()], "CH1.WAV");
+            result
+                .exclude_duplicate_paths(&HashSet::from([raw]))
+                .unwrap();
+            assert_eq!(result.counts.candidates, 1);
+            let occupied = HashSet::from([ImportPathKey::new(&expected, "ch1.wav")]);
+            result.exclude_duplicate_paths(&occupied).unwrap();
+            assert_eq!(result.counts.candidates, 0);
+            assert_eq!(result.counts.duplicate_skipped, 1);
+            assert_eq!(result.counts.skipped, 1);
+            assert_eq!(result.counts.selected_bytes, 0);
+            assert!(result.folder_summary().is_empty());
+        }
+    }
+}
+
+#[test]
+fn duplicate_destinations_keep_first_scanned_source_and_its_original_bytes() {
+    let tree = Tree::new();
+    let staging = Tree::new();
+    let first = tree.zip("z-first.zip", &[("first/CH1.WAV", b"first".to_vec())]);
+    let second = tree.zip(
+        "a-second.zip",
+        &[("second/ch1.wav", b"different bytes".to_vec())],
+    );
+    for paths in [vec![first.clone(), second.clone()], vec![second, first]] {
+        let mut result = discover(&generic(SourceKind::Zip, paths.clone()));
+        let expected = fs::File::open(&paths[0]).unwrap();
+        let mut archive = zip::ZipArchive::new(expected).unwrap();
+        let mut expected = vec![];
+        std::io::Read::read_to_end(&mut archive.by_index(0).unwrap(), &mut expected).unwrap();
+        result.exclude_duplicate_paths(&HashSet::new()).unwrap();
+        assert_eq!(result.counts.candidates, 1);
+        assert_eq!(result.counts.skipped, 1);
+        assert_eq!(result.counts.duplicate_skipped, 1);
+        assert_eq!(result.counts.selected_bytes, expected.len() as u64);
+        assert_eq!(result.candidates()[0].source_index, 0);
+        let audio = result
+            .stage(0, &staging.0, &AtomicBool::new(false), |_| {})
+            .unwrap();
+        assert_eq!(fs::read(audio.path()).unwrap(), expected);
+    }
+}
+
+#[test]
+fn duplicate_filter_preserves_all_pages_summary_entry_pairs_and_staged_bytes() {
+    let tree = Tree::new();
+    let staging = Tree::new();
+    let entries: Vec<_> = (0..63)
+        .map(|i| (format!("record{i:03}/original.wav"), vec![i as u8; i + 1]))
+        .collect();
+    for (name, bytes) in &entries {
+        tree.file(name, bytes);
+    }
+    let zip_entries: Vec<_> = entries
+        .iter()
+        .map(|(name, bytes)| (name.as_str(), bytes.clone()))
+        .collect();
+    let archive = tree.zip("pages.zip", &zip_entries);
+    for (kind, path) in [
+        (SourceKind::Folder, tree.0.clone()),
+        (SourceKind::Zip, archive),
+    ] {
+        let mut cfg = generic(kind, vec![path]);
+        cfg.organization.mode = OrganizationMode::SourcePath;
+        let mut result = discover(&cfg);
+        result.bind_target_path(&["Target".into()]).unwrap();
+        let skipped = result.counts.skipped;
+        let checked = result.counts.checked;
+        let mut expected: Vec<_> = result
+            .candidates()
+            .iter()
+            .filter(|c| {
+                !["record000/original.wav", "record030/original.wav"]
+                    .contains(&c.relative_path.as_str())
+            })
+            .cloned()
+            .collect();
+        for (index, c) in expected.iter_mut().enumerate() {
+            c.index = index;
+        }
+        let occupied = HashSet::from([0, 30].map(|i| {
+            ImportPathKey::new(&["target".into(), format!("RECORD{i:03}")], "ORIGINAL.WAV")
+        }));
+        result.exclude_duplicate_paths(&occupied).unwrap();
+        assert_eq!(result.counts.candidates, 61);
+        assert_eq!(result.counts.checked, checked);
+        assert_eq!(result.counts.skipped, skipped + 2);
+        assert_eq!(result.counts.duplicate_skipped, 2);
+        assert_eq!(
+            result.counts.selected_bytes,
+            expected.iter().map(|c| c.byte_length).sum::<u64>()
+        );
+        assert_eq!(result.page(0, 50).unwrap(), &expected[..50]);
+        assert_eq!(result.page(50, 50).unwrap(), &expected[50..]);
+        assert!(result.page(61, 50).unwrap().is_empty());
+        assert_eq!(result.folder_summary().len(), 62);
+        let root = &result.folder_summary()[0];
+        assert_eq!(root.name, "Target");
+        assert_eq!(root.media_count, 61);
+        assert_eq!(root.parent_index, None);
+        for (index, node) in result.folder_summary().iter().enumerate().skip(1) {
+            assert_eq!(node.index, index);
+            assert_eq!(node.parent_index, Some(0));
+            assert_eq!(node.media_count, 1);
+            assert!(!["record000", "record030"].contains(&node.name.as_str()));
+        }
+        let mut session = result.staging_session();
+        for c in result
+            .page(0, 50)
+            .unwrap()
+            .iter()
+            .chain(result.page(50, 50).unwrap())
+        {
+            let bytes = &entries
+                .iter()
+                .find(|(name, _)| name == &c.relative_path)
+                .unwrap()
+                .1;
+            let audio = session
+                .stage(c.index, &staging.0, &AtomicBool::new(false), |_| {})
+                .unwrap();
+            assert_eq!(&fs::read(audio.path()).unwrap(), bytes);
+        }
+    }
+}
+
+#[test]
+fn duplicate_and_existing_filters_count_each_removed_candidate_once() {
+    let tree = Tree::new();
+    let staging = Tree::new();
+    for (path, bytes) in [
+        ("a/same.wav", &b"a"[..]),
+        ("b/same.wav", &b"bb"[..]),
+        ("c/same.wav", &b"ccc"[..]),
+        ("d/same.wav", &b"dddd"[..]),
+    ] {
+        tree.file(path, bytes);
+    }
+    let cfg = generic(SourceKind::Folder, vec![tree.0.clone()]);
+    let known = vec![tree.0.join("a/same.wav").canonicalize().unwrap()];
+    let mut result = discover(&cfg);
+    result.exclude_folder_paths(&known);
+    result.exclude_folder_paths(&known);
+    result
+        .validate_placements(|c| {
+            if c.relative_path == "b/same.wav" {
+                Err(annotator_core::error::AppError::invalid(
+                    "invalid test placement",
+                ))
+            } else {
+                Ok(())
+            }
+        })
+        .unwrap();
+    result.exclude_duplicate_paths(&HashSet::new()).unwrap();
+    result.exclude_duplicate_paths(&HashSet::new()).unwrap();
+    assert_eq!(result.counts.candidates, 1);
+    assert_eq!(result.counts.skipped, 3);
+    assert_eq!(result.counts.duplicate_skipped, 1);
+    assert_eq!(result.counts.issues, 1);
+    assert_eq!(result.counts.selected_bytes, 3);
+    assert_eq!(result.candidates()[0].relative_path, "c/same.wav");
+    let audio = result
+        .stage(0, &staging.0, &AtomicBool::new(false), |_| {})
+        .unwrap();
+    assert_eq!(fs::read(audio.path()).unwrap(), b"ccc");
+    result
+        .exclude_duplicate_paths(&HashSet::from([ImportPathKey::new(&[], "SAME.WAV")]))
+        .unwrap();
+    assert_eq!(result.counts.skipped, 4);
+    assert_eq!(result.counts.duplicate_skipped, 2);
+    assert_eq!(result.counts.selected_bytes, 0);
+    assert_eq!(result.counts.candidates, 0);
+    result.exclude_folder_paths(&known);
+    assert_eq!(result.counts.skipped, 4);
+
+    let mut result = discover(&cfg);
+    result.exclude_duplicate_paths(&HashSet::new()).unwrap();
+    result.exclude_folder_paths(&known);
+    assert_eq!(result.counts.skipped, 4);
+    assert_eq!(result.counts.duplicate_skipped, 3);
+    assert_eq!(result.counts.selected_bytes, 0);
+    assert!(result.candidates().is_empty());
 }

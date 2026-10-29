@@ -121,6 +121,7 @@ try{
   await a.menu('标注列表','标注');await a.driver.findElement(By.xpath('//button[contains(@class,"annotation-row") and .//small[contains(.,"区域")]]')).click();await a.until("document.querySelector('.inspection-viewer')");await a.clickText('跳转到音频');await a.until(`document.querySelector('[role=tab][aria-selected=true]')?.textContent==='列表'&&document.querySelector('[data-annotation-id].is-selected')`);await tab(a,'区域');
   await a.until(`document.querySelector('.annotation-inspector')`);await a.input('区域备注','Alice durable offline note');await a.menu('保存并同步','协作');
   await a.driver.wait(async()=>{const s=await status(a);return s.pending&&!s.busy&&!!s.error;},30000);
+  await a.until(`document.querySelector('.collaboration-status')?.textContent.includes('同步异常')`,'native offline failure reaches collaboration status');
   assert.ok(await a.evaluate(`return document.querySelector('.collaboration-status').textContent.includes('同步异常')`));
   assert.equal((await snapshot(a)).document.annotations[0].note,'Alice durable offline note');
   assert.equal((await snapshot(b)).document.annotations[0].note,restoredB.annotations[0].note);

@@ -40,6 +40,7 @@ pub struct Page {
     pub counts: Counts,
     pub folder_summary: Vec<FolderSummary>,
 }
+mod dedup;
 mod placement;
 use placement::CapturedLayout;
 pub(crate) use placement::{prepare_batch, PreparedBatch};
@@ -49,6 +50,7 @@ struct Entry {
     cancel: Arc<AtomicBool>,
     result: Option<Arc<ScanResult>>,
     layout: Option<CapturedLayout>,
+    skip_duplicates: bool,
 }
 #[derive(Default)]
 pub struct Registry {
@@ -123,6 +125,7 @@ pub(crate) async fn start(
     let s = state.clone();
     let t = token.clone();
     let target = config.organization.target_folder_id.clone();
+    let skip_duplicates = config.rules.skip_duplicates;
     let (cancel, existing, repo) = state
         .run(move |p| {
             check(
@@ -163,6 +166,7 @@ pub(crate) async fn start(
                 cancel: cancel.clone(),
                 result: None,
                 layout: None,
+                skip_duplicates,
             });
             Ok((cancel, existing, repo))
         })
@@ -174,10 +178,22 @@ pub(crate) async fn start(
         s.6.run_hook();
         let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
         let result = (|| -> Result<(ScanResult, CapturedLayout)> {
-            let capture = repo.capture_media_placement(target.clone())?;
+            let (capture, active) = if skip_duplicates {
+                let current = repo.reload_catalog()?;
+                let active = dedup::ActiveImportPaths::read(&current)?;
+                (
+                    current.capture_loaded_media_placement(target.clone())?,
+                    Some(active),
+                )
+            } else {
+                (repo.capture_media_placement(target.clone())?, None)
+            };
             let layout = CapturedLayout::from_capture(&capture, target);
-            let existing = existing
-                .into_iter()
+            let existing = active
+                .as_ref()
+                .map(|a| &a.source_paths)
+                .unwrap_or(&existing)
+                .iter()
                 .take_while(|_| {
                     config.kind == import_source::SourceKind::Folder
                         && !cancel.load(Ordering::Relaxed)
@@ -207,6 +223,9 @@ pub(crate) async fn start(
                         .map(|_| ())
                 })?;
                 result.bind_target_path(&layout.target_path)?;
+                if let Some(active) = &active {
+                    result.exclude_duplicate_paths(&active.keys)?;
+                }
                 Ok((result, layout))
             })
         })();

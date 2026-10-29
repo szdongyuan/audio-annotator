@@ -186,7 +186,7 @@ fn overlap_is_max_union_and_channels_are_isolated() {
     );
     let double = render(&x, 2, PlaybackMode::Processed, &[e.clone(), e], 1003);
     assert_eq!(single, double);
-    let right: Vec<_> = single.chunks_exact(2).map(|f| f[1]).collect();
+    let right: Vec<_> = single.as_chunks::<2>().0.iter().map(|f| f[1]).collect();
     let expected = tone(16001, 1500.);
     assert!(
         rms(&right
@@ -365,9 +365,9 @@ fn rubato_block_resampling_duration_frequency_delay_tail_and_partition_invarianc
             assert_eq!(out.len(), expected * 2);
             assert_eq!(out, run(71));
             assert!(out.iter().all(|v| v.is_finite()));
-            assert!(out.chunks_exact(2).all(|p| p[1] == 0.));
+            assert!(out.as_chunks::<2>().0.iter().all(|p| p[1] == 0.));
             if frames > from as usize {
-                let left: Vec<_> = out.chunks_exact(2).map(|p| p[0]).collect();
+                let left: Vec<_> = out.as_chunks::<2>().0.iter().map(|p| p[0]).collect();
                 let mid = &left[to as usize / 10..to as usize * 9 / 10];
                 let db = 20. * (amplitude(mid, 1000., to as f64) / 0.25).log10();
                 println!("resample {from}->{to} frames={expected} 1kHz amplitude={db:.6}dB");
@@ -493,7 +493,7 @@ fn ten_minute_six_channel_source_renders_a_seek_without_full_file_reads() {
         .unwrap();
     assert_eq!(out.len(), 777 * 6);
     assert!(total_read < 16384);
-    for (i, frame) in out.chunks_exact(6).enumerate() {
+    for (i, frame) in out.as_chunks::<6>().0.iter().enumerate() {
         for (ch, v) in frame.iter().enumerate() {
             let expected = (((start + i as u64) as f64 * 0.07 + ch as f64).sin() * 0.3) as f32;
             assert!((v - expected).abs() < 1e-6);
@@ -600,7 +600,9 @@ fn regional_gain_measured_sum_repetition_mask_and_channel_isolation() {
     let stereo: Vec<_> = x.iter().flat_map(|v| [*v, *v]).collect();
     let out = render(&stereo, 2, PlaybackMode::Processed, &[gain(6.0)], 511);
     assert!(out
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .zip(&x)
         .all(|(f, v)| (f[1] - v).abs() < 1e-6));
 }
@@ -623,7 +625,7 @@ fn regional_plus24_then_monitor_minus24_recovers_clean_interior_before_conversio
     let frames = resampler.push(&mixed).unwrap();
     let buffer = OutputBuffer::new(3000, Arc::new(AtomicU64::new(1)), 1, 0);
     buffer.set_monitor_gain_db(-24.0).unwrap();
-    for (i, frame) in frames.chunks_exact(2).enumerate() {
+    for (i, frame) in frames.as_chunks::<2>().0.iter().enumerate() {
         buffer.push([frame[0], frame[1]], i as u64);
     }
     buffer.set_playing(true);
