@@ -124,6 +124,14 @@ impl CollaborationRepository {
         )?;
         self.reload_catalog()
     }
+    /// Capture this already-validated loaded head; publication still checks current layout.
+    pub fn capture_loaded_media_placement(
+        &self,
+        target_folder_id: Option<String>,
+    ) -> Result<NativePlacementCapture> {
+        self.authority()?;
+        NativePlacementCapture::new(self.organization.clone(), target_folder_id)
+    }
     pub fn capture_media_placement(
         &self,
         target_folder_id: Option<String>,

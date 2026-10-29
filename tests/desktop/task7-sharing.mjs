@@ -16,9 +16,7 @@ const semantics = document => {
   return d;
 };
 async function bitmap(h) {
-  await h.until(`document.querySelector('canvas')&&!document.querySelector('.tile-status')`);
-  await wait(200);
-  return h.evaluate(`return [...document.querySelectorAll('canvas')].map(c=>{const data=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let hash=2166136261;for(const v of data)hash=Math.imul(hash^v,16777619);return {hash:hash>>>0,width:c.width,height:c.height};})`);
+  return h.driver.wait(async()=>h.evaluate(`const canvases=[...document.querySelectorAll('canvas')];if(!canvases.length||document.querySelector('.tile-status'))return false;const frames=canvases.map(c=>{const data=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let hash=2166136261,painted=false;for(let index=0;index<data.length;index++){const value=data[index];hash=Math.imul(hash^value,16777619);if(index%4!==3&&value!==0)painted=true;}return {hash:hash>>>0,width:c.width,height:c.height,painted};});return frames.every(frame=>frame.painted)?frames.map(({painted,...frame})=>frame):false;`),60000,'known-tone canvases finish painting',50);
 }
 async function save(h) {
   await h.clickText('保存');

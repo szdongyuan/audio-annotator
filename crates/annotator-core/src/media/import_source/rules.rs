@@ -17,6 +17,11 @@ pub struct Rules {
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub include_second: bool,
+    #[serde(default = "default_skip_duplicates")]
+    pub skip_duplicates: bool,
+}
+fn default_skip_duplicates() -> bool {
+    true
 }
 impl Default for Rules {
     fn default() -> Self {
@@ -27,6 +32,7 @@ impl Default for Rules {
             include: vec!["**/*".into()],
             exclude: vec![],
             include_second: true,
+            skip_duplicates: true,
         }
     }
 }

@@ -7,7 +7,7 @@ import { MediaImportController, type ImportItem } from './imports';
 import { ImportPlanStore } from './importPlans';
 import { splitPatterns } from './importRules';
 export type SourceState = 'idle' | 'choosing' | 'scanning' | 'preview' | 'importing' | 'paused' | 'finished' | 'cancelled' | 'failed';
-const emptyCounts = (): SourceCounts => ({ checked: 0, candidates: 0, skipped: 0, issues: 0, selectedBytes: 0 });
+const emptyCounts = (): SourceCounts => ({ checked: 0, candidates: 0, skipped: 0, duplicateSkipped: 0, issues: 0, selectedBytes: 0 });
 /** One preview owns the media reservation until its native capability is released. */
 export class SourceImportController {
   state: SourceState = 'idle';

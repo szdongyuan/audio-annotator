@@ -397,7 +397,7 @@ fn real_selection_renderer_loops_both_sources_on_original_channel_and_exact_boun
         assert_eq!(a.positions, b.positions);
         assert_eq!(a.positions.len(), 960);
         assert_eq!(a.positions.last(), Some(&1440));
-        assert!(a.samples.chunks_exact(2).all(|f| f[0] == f[1]));
+        assert!(a.samples.as_chunks::<2>().0.iter().all(|f| f[0] == f[1]));
         energies.push(a.samples.iter().map(|v| v * v).sum::<f32>());
     }
     assert!(energies[0] > 1.0);

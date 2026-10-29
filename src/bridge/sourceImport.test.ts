@@ -3,7 +3,7 @@ const invoked=vi.hoisted(()=>vi.fn());
 vi.mock('@tauri-apps/api/core',()=>({invoke:invoked,Channel:class{onmessage=(_v:unknown)=>{};}}));
 import { createSourceClient, parseSourceEvent, parseSourcePage, parseSourceToken, parseSourceRules, parseSourceMediaEvent, defaultSourceOrganization } from './sourceImport';
 export const token = { runtimeNonce: '11111111-1111-4111-8111-111111111111', projectId: '22222222-2222-4222-8222-222222222222', taskId: '33333333-3333-4333-8333-333333333333' };
-const counts = { checked: 1, candidates: 1, skipped: 0, issues: 0, selectedBytes: 20 };
+const counts = { checked: 1, candidates: 1, skipped: 0, duplicateSkipped: 0, issues: 0, selectedBytes: 20 };
 it('validates exact native scan payloads including runtime ownership and nullable position', () => {
  expect(parseSourceToken(token)).toEqual(token);
  expect(parseSourceEvent({ type: 'result', token, counts }).type).toBe('result');
@@ -15,7 +15,7 @@ it('validates exact native scan payloads including runtime ownership and nullabl
  expect(() => parseSourcePage({ candidates: [{ ...candidate, relativePath: '../CH2.wav' }], issues: [], folderSummary:[], counts })).toThrow();
 });
 it('binds scan and token operations to the captured runtime, and delivers events before acknowledgement',async()=>{
- const rules={mode:'generic' as const,recursive:true,extensions:['wav'],include:['*/CH1'],exclude:[],includeSecond:true};
+ const rules={mode:'generic' as const,recursive:true,extensions:['wav'],include:['*/CH1'],exclude:[],includeSecond:true,skipDuplicates:true};
  const events:unknown[]=[];invoked.mockImplementation(async(command,args)=>{if(command==='scan_import_sources'){args.onEvent.onmessage({type:'result',token,counts});expect(events).toHaveLength(1);return token;}return null;});
  const client=createSourceClient(token.runtimeNonce);await client.start(token.projectId,{kind:'zip',paths:['D:/a.zip'],rules,organization:defaultSourceOrganization()},e=>events.push(e));
  expect(invoked).toHaveBeenCalledWith('scan_import_sources',expect.objectContaining({runtimeNonce:token.runtimeNonce,projectId:token.projectId}),undefined);
@@ -25,11 +25,27 @@ it('binds scan and token operations to the captured runtime, and delivers events
  expect(()=>parseSourceMediaEvent({type:'progress',taskId:token.taskId,index:256,path:'x',phase:'extract',completed:1})).toThrow();
 });
 it('accepts shorthand rules and rejects unsupported or excessive rules', () => {
- const rules = { mode: 'generic', recursive: true, extensions: ['wav'], include: ['*/CH1','*/CH2'], exclude: [], includeSecond: true };
+ const rules = { mode: 'generic', recursive: true, extensions: ['wav'], include: ['*/CH1','*/CH2'], exclude: [], includeSecond: true, skipDuplicates: true };
  expect(parseSourceRules(rules)).toEqual(rules);
  expect(() => parseSourceRules({ ...rules, include: ['[abc]'] })).toThrow();
  expect(() => parseSourceRules({ ...rules, extensions: [] })).toThrow();
  expect(() => parseSourceRules({ ...rules, include: Array(257).fill('*') })).toThrow();
+});
+
+it('requires a boolean duplicate policy and bounded duplicate counts on every scan payload', () => {
+ const rules = { mode: 'generic', recursive: true, extensions: ['wav'], include: ['**/*'], exclude: [], includeSecond: true, skipDuplicates: false };
+ expect(parseSourceRules(rules).skipDuplicates).toBe(false);
+ expect(parseSourceRules({...rules,skipDuplicates:true}).skipDuplicates).toBe(true);
+ const {skipDuplicates: _policy,...missingPolicy}=rules;
+ for(const invalid of [missingPolicy,{...rules,skipDuplicates:'false'},{...rules,skipDuplicates:null},{...rules,extra:true}])expect(()=>parseSourceRules(invalid)).toThrow();
+ const validCounts={...counts,skipped:3,duplicateSkipped:2};
+ expect(parseSourceEvent({type:'result',token,counts:validCounts})).toMatchObject({counts:validCounts});
+ expect(parseSourcePage({candidates:[],issues:[],folderSummary:[],counts:validCounts}).counts).toEqual(validCounts);
+ const {duplicateSkipped: _count,...missingCount}=validCounts;
+ for(const invalid of [missingCount,{...validCounts,duplicateSkipped:-1},{...validCounts,duplicateSkipped:1.5},{...validCounts,duplicateSkipped:'2'},{...validCounts,duplicateSkipped:4},{...validCounts,extra:0}]){
+  expect(()=>parseSourceEvent({type:'progress',token,counts:invalid})).toThrow();
+  expect(()=>parseSourcePage({candidates:[],issues:[],folderSummary:[],counts:invalid})).toThrow();
+ }
 });
 
 it('requires bounded native organization and full-tree preview contracts',async()=>{

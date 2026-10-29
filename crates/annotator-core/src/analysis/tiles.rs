@@ -305,8 +305,10 @@ pub fn decode_cached(bytes: &[u8]) -> Option<Tile> {
         return None;
     }
     tile.values = bytes[offset..]
-        .chunks_exact(4)
-        .map(|b| f32::from_le_bytes(b.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f32::from_le_bytes(*b))
         .collect();
     if tile.values.iter().any(|v| !v.is_finite()) {
         return None;

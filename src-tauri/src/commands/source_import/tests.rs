@@ -365,7 +365,7 @@ fn scan_channel_failure_cancels_and_releases_preview() {
 #[test]
 fn batches_over_256_keep_preview_indices_and_release_each_pending_capability() {
     let f = Fixture::new();
-    let token = scan_config(&f, zip_config(&f, 257));
+    let token = scan_config(&f, distinct_zip_config(&f, 257));
     assert_eq!(page(&f.state, &token, 0, 50).unwrap().candidates.len(), 50);
     assert_eq!(
         page(&f.state, &token, 256, 50).unwrap().candidates[0].index,
@@ -609,7 +609,9 @@ fn folder_preview_skips_only_existing_project_media_paths() {
     assert!(page.candidates.is_empty());
     assert_eq!(page.counts.skipped, 1);
     cancel(&f.state, &token, true).unwrap();
-    let original = f.scan();
+    let mut legacy = f.config();
+    legacy.rules.skip_duplicates = false;
+    let original = scan_config(&f, legacy);
     assert_eq!(
         super::page(&f.state, &original, 0, 1)
             .unwrap()
@@ -618,7 +620,9 @@ fn folder_preview_skips_only_existing_project_media_paths() {
         1
     );
     cancel(&f.state, &original, true).unwrap();
-    let zip = scan_config(&f, zip_config(&f, 2));
+    let mut legacy_zip = zip_config(&f, 2);
+    legacy_zip.rules.skip_duplicates = false;
+    let zip = scan_config(&f, legacy_zip);
     assert_eq!(
         super::page(&f.state, &zip, 0, 50).unwrap().candidates.len(),
         2
@@ -705,6 +709,7 @@ fn native_preview_seals_target_paths_original_names_and_manual_layout_revision()
     config.organization.target_folder_id = Some(target.clone());
     config.organization.mode = import_source::OrganizationMode::Template;
     config.organization.template = "共同".into();
+    config.rules.skip_duplicates = false;
     let token = scan_config(&f, config);
     let preview = page(&f.state, &token, 0, 1).unwrap();
     assert_eq!(
@@ -913,7 +918,7 @@ fn scan_preflight_excludes_paths_that_exceed_existing_project_folder_capacity() 
 fn batch_publication_adopts_prepared_sources_once_and_rejects_forgery() {
     use crate::commands::collaboration::catalog;
     let f = Fixture::new();
-    let token = scan_config(&f, zip_config(&f, 65));
+    let token = scan_config(&f, distinct_zip_config(&f, 65));
     let (ch, rx) = channel();
     let task =
         tauri::async_runtime::block_on(batch(&f.state, token, (0..65).collect(), ch)).unwrap();
@@ -948,5 +953,403 @@ fn batch_publication_adopts_prepared_sources_once_and_rejects_forgery() {
     assert_eq!(retry.document, first.document);
     for media in ready {
         catalog::release(&f.state.6, &task, &media.id).unwrap();
+    }
+}
+
+fn distinct_zip_config(f: &Fixture, count: usize) -> Config {
+    let mut config = zip_config(f, count);
+    config.organization.mode = import_source::OrganizationMode::SourcePath;
+    config
+}
+fn publish_batch(f: &Fixture, token: &Token, indices: Vec<usize>) -> Vec<String> {
+    let (ch, rx) = channel();
+    let task = tauri::async_runtime::block_on(batch(&f.state, token.clone(), indices, ch)).unwrap();
+    let events = wait_media(&rx);
+    assert!(events.iter().all(|e| e["type"] != "failed"), "{events:?}");
+    let media = events
+        .iter()
+        .filter(|e| e["type"] == "ready")
+        .map(|e| {
+            serde_json::from_value::<annotator_core::model::MediaDescriptor>(e["media"].clone())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    tauri::async_runtime::block_on(crate::commands::collaboration::catalog::import_batch(
+        &f.state,
+        f.expected(),
+        media.clone(),
+    ))
+    .unwrap();
+    for m in &media {
+        crate::commands::collaboration::catalog::release(&f.state.6, &task, &m.id).unwrap();
+    }
+    let until = std::time::Instant::now() + Duration::from_secs(10);
+    while f.state.6.prepared_count.load(Ordering::Acquire) != 0 && std::time::Instant::now() < until
+    {
+        std::thread::yield_now();
+    }
+    assert_eq!(f.state.6.prepared_count.load(Ordering::Acquire), 0);
+    media.into_iter().map(|m| m.id).collect()
+}
+#[test]
+fn repeated_zip_rescans_only_unpublished_destinations() {
+    let f = Fixture::new();
+    let config = distinct_zip_config(&f, 100);
+    let first = scan_config(&f, config.clone());
+    assert_eq!(
+        page(&f.state, &first, 0, 50).unwrap().counts.candidates,
+        100
+    );
+    publish_batch(&f, &first, (0..60).collect());
+    cancel(&f.state, &first, true).unwrap();
+    let second = scan_config(&f, config.clone());
+    let counts = page(&f.state, &second, 0, 50).unwrap().counts;
+    assert_eq!(
+        (counts.candidates, counts.skipped, counts.duplicate_skipped),
+        (40, 60, 60)
+    );
+    publish_batch(&f, &second, (0..40).collect());
+    cancel(&f.state, &second, true).unwrap();
+    let third = scan_config(&f, config);
+    let counts = page(&f.state, &third, 0, 50).unwrap().counts;
+    assert_eq!(
+        (counts.candidates, counts.skipped, counts.duplicate_skipped),
+        (0, 100, 100)
+    );
+    assert_eq!(
+        f.state
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .snapshot()
+            .unwrap()
+            .document
+            .media
+            .len(),
+        100
+    );
+}
+fn apply_folder(
+    f: &Fixture,
+    operation: annotator_core::collaboration::organization::OrganizationOperation,
+) {
+    let e = f.expected();
+    let repo = f.state.6.current.lock().unwrap().repo.clone().unwrap();
+    let revision = repo.read_organization().unwrap().revision;
+    tauri::async_runtime::block_on(crate::commands::organization::apply(
+        &f.state,
+        crate::commands::organization::Binding {
+            runtime_nonce: e.runtime_nonce,
+            project_id: e.project_id,
+        },
+        revision,
+        operation,
+    ))
+    .unwrap();
+}
+fn recycle(f: &Fixture, ids: Vec<String>) {
+    let repo = f.state.6.current.lock().unwrap().repo.clone().unwrap();
+    let actor = f
+        .state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .workspace()
+        .unwrap()
+        .author_session()
+        .unwrap();
+    repo.apply_recycle_controlled(
+        &actor,
+        repo.read_recycle().unwrap().revision,
+        annotator_core::collaboration::recycle::RecycleOperation {
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            media_ids: ids,
+            trash: true,
+        },
+        &AtomicBool::new(false),
+        || Ok(()),
+    )
+    .unwrap();
+}
+#[test]
+fn repeated_zip_default_skips_existing_and_hidden_but_other_target_is_free() {
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    let f = Fixture::new();
+    let config = zip_config(&f, 1);
+    let first = scan_config(&f, config.clone());
+    let ids = publish_batch(&f, &first, vec![0]);
+    cancel(&f.state, &first, true).unwrap();
+    f.state
+        .0
+        .lock()
+        .unwrap()
+        .as_mut()
+        .unwrap()
+        .workspace_mut()
+        .unwrap()
+        .set_media_hidden(&ids[0], true)
+        .unwrap();
+    let again = scan_config(&f, config.clone());
+    let counts = page(&f.state, &again, 0, 50).unwrap().counts;
+    assert_eq!((counts.candidates, counts.duplicate_skipped), (0, 1));
+    cancel(&f.state, &again, true).unwrap();
+    let target = uuid::Uuid::new_v4().to_string();
+    apply_folder(
+        &f,
+        OrganizationOperation::CreateFolder {
+            id: target.clone(),
+            parent_id: None,
+            name: "other".into(),
+        },
+    );
+    let mut elsewhere = config;
+    elsewhere.organization.target_folder_id = Some(target);
+    let again = scan_config(&f, elsewhere);
+    assert_eq!(page(&f.state, &again, 0, 50).unwrap().counts.candidates, 1);
+}
+#[test]
+fn historical_duplicate_paths_remain_occupied_until_all_records_recycled() {
+    let f = Fixture::new();
+    let mut config = zip_config(&f, 2);
+    config.rules.skip_duplicates = false;
+    let first = scan_config(&f, config.clone());
+    let ids = publish_batch(&f, &first, vec![0, 1]);
+    cancel(&f.state, &first, true).unwrap();
+    recycle(&f, vec![ids[0].clone()]);
+    config.rules.skip_duplicates = true;
+    let second = scan_config(&f, config.clone());
+    assert_eq!(
+        page(&f.state, &second, 0, 50)
+            .unwrap()
+            .counts
+            .duplicate_skipped,
+        2
+    );
+    cancel(&f.state, &second, true).unwrap();
+    recycle(&f, vec![ids[1].clone()]);
+    let third = scan_config(&f, config);
+    let counts = page(&f.state, &third, 0, 50).unwrap().counts;
+    assert_eq!((counts.candidates, counts.duplicate_skipped), (1, 1));
+}
+#[test]
+fn recycled_exact_folder_sources_only_excluded_when_duplicate_policy_is_disabled() {
+    let f = Fixture::new();
+    let first = f.scan();
+    let ids = publish_batch(&f, &first, vec![0]);
+    cancel(&f.state, &first, true).unwrap();
+    recycle(&f, ids);
+    for skip_duplicates in [true, false] {
+        let mut config = f.config();
+        config.paths = vec![f.root.join("project/media").to_string_lossy().into()];
+        config.rules.skip_duplicates = skip_duplicates;
+        let token = scan_config(&f, config);
+        let counts = page(&f.state, &token, 0, 50).unwrap().counts;
+        assert_eq!(counts.candidates, if skip_duplicates { 1 } else { 0 });
+        assert_eq!(counts.duplicate_skipped, 0);
+        cancel(&f.state, &token, true).unwrap();
+    }
+}
+
+// Publish through another valid native repository operation without adopting it
+// into the local editor, so duplicate checks must read shared authority.
+fn publish_external(f: &Fixture, candidate: &Candidate) -> String {
+    let repo = f
+        .state
+        .6
+        .current
+        .lock()
+        .unwrap()
+        .repo
+        .clone()
+        .unwrap()
+        .reload_catalog()
+        .unwrap();
+    let actor = f
+        .state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .workspace()
+        .unwrap()
+        .author_session()
+        .unwrap();
+    let capture = repo.capture_loaded_media_placement(None).unwrap();
+    let plan = capture
+        .seal(
+            candidate.resulting_folder_path.clone(),
+            candidate.original_filename.clone(),
+        )
+        .unwrap();
+    let prepared = repo
+        .prepare_media_with_placement(
+            &f.root.join("audio/CH1.wav"),
+            &f.root.join("external-pcm"),
+            &AtomicBool::new(false),
+            plan,
+            |_, _| {},
+        )
+        .unwrap();
+    repo.append_media(&actor, &prepared, &AtomicBool::new(false))
+        .unwrap()
+        .id
+}
+#[test]
+fn new_shared_occupancy_rejects_batch_before_task_or_ready() {
+    let f = Fixture::new();
+    let token = scan_config(&f, distinct_zip_config(&f, 3));
+    publish_batch(&f, &token, vec![0]);
+    let candidate = page(&f.state, &token, 1, 1).unwrap().candidates.remove(0);
+    publish_external(&f, &candidate);
+    let (ch, rx) = channel();
+    let error = tauri::async_runtime::block_on(batch(&f.state, token, vec![1, 2], ch)).unwrap_err();
+    assert_eq!(
+        error.code,
+        annotator_core::error::ErrorCode::RevisionConflict
+    );
+    assert!(!error.retryable);
+    assert_eq!(error.message, "项目音频已变化，请重新扫描");
+    assert_eq!(
+        error.details,
+        Some(serde_json::json!({"sourceImportRescanRequired": true}))
+    );
+    assert!(rx.try_recv().is_err());
+    assert_eq!(f.state.6.prepared_count.load(Ordering::Acquire), 0);
+    let count = f
+        .state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .snapshot()
+        .unwrap()
+        .document
+        .media
+        .len();
+    assert_eq!(
+        count, 1,
+        "the earlier published batch remains in the local editor"
+    );
+    let mut tasks = f.state.1.lock().unwrap();
+    tasks.begin("probe-no-task".into()).unwrap();
+    tasks.finish("probe-no-task");
+}
+#[test]
+fn batch_recheck_ignores_prior_successful_indices_and_recycled_new_occupancy() {
+    let f = Fixture::new();
+    let token = scan_config(&f, distinct_zip_config(&f, 3));
+    publish_batch(&f, &token, vec![0]);
+    let candidate = page(&f.state, &token, 1, 1).unwrap().candidates.remove(0);
+    let id = publish_external(&f, &candidate);
+    recycle(&f, vec![id]);
+    publish_batch(&f, &token, vec![1, 2]);
+    let count = f
+        .state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .snapshot()
+        .unwrap()
+        .document
+        .media
+        .len();
+    // Catalog descriptors include the external recycled record as well as our three imports.
+    assert_eq!(count, 4);
+}
+#[test]
+fn disabled_policy_does_not_read_recycle_or_recheck_new_occupancy() {
+    let f = Fixture::new();
+    let mut config = zip_config(&f, 1);
+    config.rules.skip_duplicates = false;
+    fs::write(f.root.join("project/recycle.json"), b"invalid").unwrap();
+    let token = scan_config(&f, config);
+    let candidate = page(&f.state, &token, 0, 1).unwrap().candidates.remove(0);
+    publish_external(&f, &candidate);
+    let (ch, rx) = channel();
+    let task = tauri::async_runtime::block_on(batch(&f.state, token, vec![0], ch)).unwrap();
+    let events = wait_media(&rx);
+    assert!(events.iter().any(|e| e["type"] == "ready"), "{events:?}");
+    for e in events.iter().filter(|e| e["type"] == "ready") {
+        crate::commands::collaboration::catalog::release(
+            &f.state.6,
+            &task,
+            e["media"]["id"].as_str().unwrap(),
+        )
+        .unwrap();
+    }
+}
+#[test]
+fn corrupt_shared_authority_never_creates_scan_result_or_batch_task() {
+    for (name, directory) in [
+        ("recycle.json", false),
+        ("organization.json", false),
+        ("recycle.json", true),
+        ("organization.json", true),
+    ] {
+        let f = Fixture::new();
+        let config = zip_config(&f, 1);
+        let token = scan_config(&f, config.clone());
+        let path = f.root.join("project").join(name);
+        if directory {
+            if path.exists() {
+                fs::remove_file(&path).unwrap();
+            }
+            fs::create_dir(&path).unwrap();
+        } else {
+            fs::write(&path, b"invalid").unwrap();
+        }
+        let (ch, rx) = channel();
+        assert!(
+            tauri::async_runtime::block_on(batch(&f.state, token.clone(), vec![0], ch)).is_err()
+        );
+        assert!(rx.try_recv().is_err());
+        assert_eq!(f.state.6.prepared_count.load(Ordering::Acquire), 0);
+        cancel(&f.state, &token, true).unwrap();
+        let e = f.expected();
+        let (ch, rx) = channel();
+        let token = tauri::async_runtime::block_on(start(
+            &f.state,
+            e.runtime_nonce,
+            e.project_id,
+            config,
+            ch,
+        ))
+        .unwrap();
+        loop {
+            let event = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+            if event["type"] == "progress" {
+                continue;
+            }
+            assert_eq!(event["type"], "failed", "{event}");
+            break;
+        }
+        assert!(f.state.6.sources.lock().unwrap().result(&token).is_err());
+    }
+}
+
+#[test]
+fn repeated_original_folder_paths_use_destination_dedup_only_when_enabled() {
+    let f = Fixture::new();
+    let first = f.scan();
+    publish_batch(&f, &first, vec![0]);
+    cancel(&f.state, &first, true).unwrap();
+    for skip_duplicates in [true, false] {
+        let mut config = f.config();
+        config.rules.skip_duplicates = skip_duplicates;
+        let token = scan_config(&f, config);
+        let counts = page(&f.state, &token, 0, 50).unwrap().counts;
+        assert_eq!(
+            (counts.candidates, counts.duplicate_skipped),
+            if skip_duplicates { (0, 1) } else { (1, 0) }
+        );
+        cancel(&f.state, &token, true).unwrap();
     }
 }
