@@ -42,6 +42,26 @@ it('source deletion stops owned preview and leaves a focused unavailable modal',
  ui.rerender(<InspectionViewer {...p} value={null}/>); await waitFor(()=>expect(inspectionClient.close).toHaveBeenCalledOnce());
  expect(screen.getByRole('dialog')).toHaveTextContent('不可用'); expect(screen.getByRole('button',{name:'跳转到音频'})).toBeDisabled();
 });
+it('separates successful completion from cancellation and waits for the live jump exactly once', async () => {
+ const p = setup(), onJumpComplete = vi.fn(); let resolve!: (value: boolean) => void;
+ p.onJump.mockResolvedValueOnce(false).mockRejectedValueOnce({ code: 'InvalidInput', message: 'jump rejected', retryable: false }).mockImplementationOnce(() => new Promise<boolean>(r => { resolve = r; }));
+ render(<InspectionViewer {...p} onJumpComplete={onJumpComplete}/>); await screen.findByTestId('spectrum');
+ fireEvent.click(screen.getByRole('button', { name: '跳转到音频' })); await act(async () => {});
+ expect(onJumpComplete).not.toHaveBeenCalled(); expect(p.onClose).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button', { name: '跳转到音频' })); await act(async () => {});
+ expect(screen.getByRole('alert')).toHaveTextContent('jump rejected'); expect(onJumpComplete).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button', { name: '跳转到音频' })); fireEvent.click(screen.getByRole('button', { name: '跳转到音频' }));
+ expect(p.onJump).toHaveBeenCalledTimes(3); expect(onJumpComplete).not.toHaveBeenCalled();
+ await act(async () => resolve(true)); expect(onJumpComplete).toHaveBeenCalledOnce(); expect(p.onClose).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button', { name: '关闭查看' })); expect(p.onClose).toHaveBeenCalledOnce();
+});
+it('does not complete a jump after the viewer unmounts', async () => {
+ const p = setup(), onJumpComplete = vi.fn(); let resolve!: (value: boolean) => void;
+ p.onJump.mockImplementation(() => new Promise<boolean>(r => { resolve = r; }));
+ const ui = render(<InspectionViewer {...p} onJumpComplete={onJumpComplete}/>); await screen.findByTestId('spectrum');
+ fireEvent.click(screen.getByRole('button', { name: '跳转到音频' })); ui.unmount();
+ await act(async () => resolve(true)); expect(onJumpComplete).not.toHaveBeenCalled(); expect(p.onClose).not.toHaveBeenCalled();
+});
 it('keeps whole-file audition when seeking and uses live scalar gain without configuring', async () => {
  const p=setup(); render(<InspectionViewer {...p} value={{...p.value,annotation:undefined}}/>); await screen.findByTestId('spectrum');
  fireEvent.click(screen.getByRole('button',{name:'播放音频'})); await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledOnce());

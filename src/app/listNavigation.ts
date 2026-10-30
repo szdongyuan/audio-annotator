@@ -1,7 +1,7 @@
 import type { ClassificationTarget } from '../features/annotations/classification';
 import type { Selection, SelectionState } from '../features/selection/state';
 
-export type NavigationScope = { owner: object | null; authorId: string | null; state: SelectionState };
+export type NavigationScope = { owner: object | null; authorId: string | null; runtimeNonce?: string; state: SelectionState };
 type NavigationSnapshot = NavigationScope & { intent: number; signature: string; context: ClassificationTarget | null; mediaId?: string };
 
 function signature(state: SelectionState) {
@@ -13,7 +13,7 @@ function capture(scope: NavigationScope): NavigationSnapshot {
   return { ...scope, intent: scope.state.intentVersion, signature: signature(scope.state), context: scope.state.getContext() };
 }
 function sameScope(a: NavigationScope, b: NavigationScope) {
-  return a.owner === b.owner && a.authorId === b.authorId && a.state === b.state;
+  return a.owner === b.owner && a.authorId === b.authorId && a.runtimeNonce === b.runtimeNonce && a.state === b.state;
 }
 function matches(snapshot: NavigationSnapshot, scope: NavigationScope) {
   return sameScope(snapshot, scope) && snapshot.intent === scope.state.intentVersion && snapshot.signature === signature(scope.state);

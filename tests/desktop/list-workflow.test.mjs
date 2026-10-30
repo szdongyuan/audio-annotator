@@ -41,7 +41,7 @@ async function locate(note, expected, count) {
   await row.click();
   await h.until("document.querySelector('.inspection-viewer')");
   assert.deepEqual(await snapshot(h), before, 'opening List viewer leaves main workspace unchanged');
-  await h.clickText('跳转到音频');
+  await h.label('跳转到音频');
   await h.until("!document.querySelector('.inspection-viewer')");
   const name = note.endsWith('a') ? 'list-a.wav' : 'list-b.wav';
   await h.until(`document.querySelector('.file-pane h2')?.textContent===${JSON.stringify(name)}&&!document.querySelector('.tile-status')`);
