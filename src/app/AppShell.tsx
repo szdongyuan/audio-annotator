@@ -1,10 +1,13 @@
 import { InspectionViewer } from '../features/inspection/InspectionViewer';
 import { isResetViewShortcut } from '../features/spectrogram/viewShortcut';
 import { inspectionBinding, inspectionTargetKey, resolveOwnInspection, type OwnInspectionTarget } from '../features/inspection/targets';
+import type { Region } from '../bridge/types';
+import { normalizeError } from '../bridge/client';
+import { reconcileContext } from '../features/annotations/classification';
 import type { ClassificationResult } from '../features/annotations/classification';
 import type { IdentityController } from '../features/identity/controller';
 import { CollaborationStatus } from '../features/collaboration/CollaborationStatus';
-import { RemoteContext, useRemoteInspection } from '../features/collaboration/remote';
+import { RemoteContext, resolveRemote, useRemoteInspection, type RemoteTarget } from '../features/collaboration/remote';
 import { RemoteList } from '../features/collaboration/RemoteInspector';
 import type { CollaborationUI } from '../features/collaboration/useCollaboration';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ButtonHTMLAttributes } from 'react';
@@ -113,14 +116,14 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   const authorId = project?.active?.collaboration?.actor?.authorId ?? identity?.selected?.authorId ?? null;
   const mediaNavigationScope = useMemo(() => ({}), [project?.active, authorId]);
   const listFilters = useAnnotationListFilters(doc, authorId);
-  const navigationScope = { owner: project?.active ?? null, authorId, state: selection.state };
-  const latestNavigation = useRef({ scope: navigationScope, workspace: projectWorkspace });
-  latestNavigation.current = { scope: navigationScope, workspace: projectWorkspace };
+  const navigationScope = { owner: project?.active ?? null, authorId, runtimeNonce: project?.active?.collaboration?.runtimeNonce ?? identity?.snapshot?.runtimeNonce, state: selection.state };
+  const latestNavigation = useRef({ scope: navigationScope, workspace: projectWorkspace, collaboration });
+  latestNavigation.current = { scope: navigationScope, workspace: projectWorkspace, collaboration };
   const selectionIntent = useSyncExternalStore(selection.state.subscribe, () => selection.state.intentVersion);
   // Cancel at gesture start, before the first onView patch, and keep the
   // request cancelled after the gesture ends.
   useEffect(() => selection.state.subscribe(() => { if (selection.state.getGesture()) listNavigation.cancel(); }), [selection.state, listNavigation]);
-  useEffect(() => { listNavigation.cancel(); return () => listNavigation.cancel(); }, [listNavigation, project?.active, authorId, selection.state]);
+  useEffect(() => { listNavigation.cancel(); return () => listNavigation.cancel(); }, [listNavigation, project?.active, authorId, navigationScope.runtimeNonce, selection.state]);
   const openInspector = (tab: string) => { listNavigation.cancel(); setInspectorTab(tab); };
   const selectedAnnotation = doc?.annotations.find(a => a.id === annotations.selectedId);
   const masks = useMasks(project?.active ?? null, selection);
@@ -133,31 +136,73 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   const runtime = project?.active ? inspectionBinding(project.active, identity?.snapshot?.runtimeNonce) : null;
   const inspectionActor = `${runtime?.runtimeNonce}:${authorId}`;
   useEffect(() => { setOwnInspection(null); remote.close(); }, [project?.active, inspectionActor]);
-  const locateList = async (result: ClassificationResult) => {
-    if (!project?.active || project.active.store.editingDisabled) return false;
-    const request = listNavigation.begin(navigationScope, result.mediaId);
-    const revealed = await projectWorkspace.revealMedia(result.mediaId);
-    const latest = latestNavigation.current, owner = project?.active;
-    if (!revealed || !owner || owner.store.editingDisabled || !listNavigation.current(request, latest.scope)) { listNavigation.finish(request); return false; }
-    const currentDoc = owner.store.snapshot.document;
-    const annotation = result.scope === 'region' ? currentDoc.annotations.find(a => a.id === result.annotation.id) : null;
-    const mediaId = annotation?.region.mediaId ?? result.mediaId;
-    const media = currentDoc.media.find(m => m.id === mediaId);
-    const channelIndex = result.scope === 'region' ? annotation?.region.channelIndex : result.scope === 'channel' ? result.channelIndex : null;
-    if (!media || result.scope === 'region' && (!annotation || !validRegion(currentDoc, annotation.region) || mediaId !== result.mediaId) || channelIndex !== null && (channelIndex === undefined || !Number.isInteger(channelIndex) || channelIndex < 0 || channelIndex >= media.channelCount)) { listNavigation.finish(request); return false; }
-    const currentWorkspace = latest.workspace;
-    if (mediaId !== currentWorkspace.state.activeMediaId && mediaId !== currentWorkspace.state.compareMediaId && !currentWorkspace.selectPane('primary', mediaId)) { listNavigation.finish(request); return false; }
-    if (annotation) {
-      latest.scope.state.endGesture();
-      latest.scope.state.select({ region: annotation.region, object: { kind: 'annotation', id: annotation.id } });
-      currentWorkspace.locate(annotation.region);
-    } else {
-      latest.scope.state.select(null);
-      if (channelIndex !== null && channelIndex !== undefined) currentWorkspace.patch(mediaId, { visibleChannels: [...new Set([...currentWorkspace.view(mediaId).visibleChannels, channelIndex])].sort((a, b) => a - b) });
-      latest.scope.state.interact({ mediaId, channelIndex: channelIndex ?? null });
+  type NavigationTarget = { region?: Region; channelIndex?: number | null; own: boolean; annotationId?: string };
+  const navigateList = async (mediaId: string, resolve: () => NavigationTarget | null) => {
+    const owner = project?.active;
+    if (!owner || owner.store.editingDisabled) return false;
+    const request = listNavigation.begin(navigationScope, mediaId);
+    try {
+      const revealed = await projectWorkspace.revealMedia(mediaId);
+      const latest = latestNavigation.current;
+      if (!revealed || owner.store.editingDisabled || !listNavigation.current(request, latest.scope)) return false;
+      const target = resolve(), currentDoc = owner.store.snapshot.document;
+      const media = currentDoc.media.find(m => m.id === mediaId);
+      if (!target || !media || target.region && (!validRegion(currentDoc, target.region) || target.region.mediaId !== mediaId)) return false;
+      const channelIndex = target.region?.channelIndex ?? target.channelIndex;
+      if (channelIndex != null && (!Number.isInteger(channelIndex) || channelIndex < 0 || channelIndex >= media.channelCount)) return false;
+      const currentWorkspace = latest.workspace, state = latest.scope.state;
+      const replacesPrimary = mediaId !== currentWorkspace.state.activeMediaId && mediaId !== currentWorkspace.state.compareMediaId;
+      if (replacesPrimary && !currentWorkspace.selectPane('primary', mediaId)) return false;
+      let channels = currentWorkspace.view(mediaId).visibleChannels;
+      if (target.region) {
+        currentWorkspace.locate(target.region);
+        channels = [target.region.channelIndex];
+      } else if (channelIndex != null) {
+        channels = [...new Set([...channels, channelIndex])].sort((a, b) => a - b);
+        currentWorkspace.patch(mediaId, { visibleChannels: channels });
+      }
+      if (target.own) {
+        state.endGesture();
+        state.select(target.region && target.annotationId ? { region: target.region, object: { kind: 'annotation', id: target.annotationId } } : null);
+        if (!target.region) state.interact({ mediaId, channelIndex: channelIndex ?? null });
+      }
+      // Reconcile the panes produced by this action before capturing protection.
+      // React's useSelection effect will then observe the same stable state.
+      const panes = [replacesPrimary ? mediaId : currentWorkspace.state.activeMediaId, currentWorkspace.state.compareMediaId]
+        .filter((id): id is string => !!id && currentDoc.media.some(m => m.id === id))
+        .map(id => ({ mediaId: id, channels: id === mediaId ? channels : currentWorkspace.view(id).visibleChannels }));
+      const candidate = state.getCandidate();
+      if (candidate && !panes.some(p => p.mediaId === candidate.region.mediaId && p.channels.includes(candidate.region.channelIndex))) {
+        state.endGesture(); state.select(null);
+      }
+      state.interact(reconcileContext(currentDoc, state.getContext(), panes));
+      listNavigation.applied(request, latest.scope);
+      return true;
+    } finally {
+      // Also release requests if the external reveal boundary rejects. The caller
+      // remains responsible for presenting that error to the user.
+      listNavigation.finish(request);
     }
-    listNavigation.applied(request, latest.scope);
-    return true;
+  };
+  const locateList = (result: ClassificationResult) => navigateList(result.mediaId, () => {
+    if (result.scope !== 'region') return { own: true, channelIndex: result.scope === 'channel' ? result.channelIndex : null };
+    const annotation = project?.active?.store.snapshot.document.annotations.find(a => a.id === result.annotation.id);
+    return annotation ? { own: true, region: annotation.region, annotationId: annotation.id } : null;
+  });
+  const locateRemote = (target: RemoteTarget) => {
+    const before = resolveRemote(latestNavigation.current.collaboration, target);
+    if (!before) return Promise.resolve(false);
+    return navigateList(before.media.id, () => {
+      const value = resolveRemote(latestNavigation.current.collaboration, target);
+      return value && value.media.id === before.media.id ? { own: false, region: value.annotation?.region, channelIndex: value.channelIndex } : null;
+    });
+  };
+  const locateProcessing = (id: string, mediaId: string) => {
+    const owner = project?.active;
+    void navigateList(mediaId, () => {
+      const edit = owner?.store.snapshot.document.edits.find(edit => edit.id === id);
+      return edit ? { own: false, region: edit.region } : null;
+    }).catch(error => owner?.store.setError(normalizeError(error)));
   };
   const [noteFocusId, setNoteFocusId] = useState<string | null>(null);
   useEffect(() => { setNoteFocusId(null); setInspectorTab('region'); }, [project?.active]);
@@ -174,7 +219,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
     toggleMedia: () => setMediaOpen(v => !v), toggleProperties: () => setPropertiesOpen(v => !v), settings: setSettingsId, globalSettings:localSettings?()=>{setSettingsId(null);setGlobalSettingsOpen(true);}:undefined,
     inspector: tab => { setPropertiesOpen(true); openInspector(tab); }, devices:trigger=>setDeviceDialog({trigger}), help: setHelpTopic, focusNote });
 
-  return <RemoteContext.Provider value={{...remote,inspect:inspectRemote}}><SelectionContext.Provider value={selection}><AnnotationContext.Provider value={annotations}><MaskContext.Provider value={masks}><PlaybackContext.Provider value={playback}><div className="app-shell">
+  return <RemoteContext.Provider value={{...remote,inspect:inspectRemote,locate:locateRemote}}><SelectionContext.Provider value={selection}><AnnotationContext.Provider value={annotations}><MaskContext.Provider value={masks}><PlaybackContext.Provider value={playback}><div className="app-shell">
     <header className="project-header">
       <AppMenu menus={menus} owner={project?.active ?? null} contextKey={`${selection.context?.mediaId}:${selection.context?.channelIndex}:${selection.state.intentVersion}`} />
       <div className="project-identity" title={project?.active?.path}><span>{doc?.name ?? '音频标注'}</span>{project?.active && <SaveIndicator lifecycle={project.active.lifecycle} shared={!!project.active.collaboration} />}</div>{collaboration && <CollaborationStatus ui={collaboration} />}
@@ -247,7 +292,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
             setOwnInspection({ target: result.scope === 'region' ? { owner, scope: 'region', annotationId: result.annotation.id } : result.scope === 'channel' ? { owner, scope: 'channel', mediaId: result.mediaId, channelIndex: result.channelIndex } : { owner, scope: 'file', mediaId: result.mediaId }, result });
           }} />}
           {inspectorTab === 'notes' && <NotesEditor ui={annotations} media={doc?.media.find(m => m.id === selection.context?.mediaId) ?? selected ?? null} channelIndex={selection.context?.channelIndex ?? null} />}
-          {inspectorTab === 'masks' && <EditList ui={masks} onLocate={async edit => { if(!await workspace.revealMedia(edit.region.mediaId))return; if (edit.region.mediaId !== selected?.id && edit.region.mediaId !== workspace.state.compareMediaId) workspace.selectPane('primary', edit.region.mediaId); workspace.locate(edit.region); }} />}
+          {inspectorTab === 'masks' && <EditList ui={masks} onLocate={edit => locateProcessing(edit.id, edit.region.mediaId)} />}
           {inspectorTab === 'mix' && playback.media && <ChannelMixer media={playback.media} mix={playback.mix} disabled={project?.active?.store.editingDisabled ?? true} onChange={playback.updateMix} />}
           <ExampleLibrary active={project?.active??null} identity={identity} selected={selected} playback={playback} visible={inspectorTab==='examples'} authors={collaboration?.controller?.status?.snapshot?.authors.map(a=>a.identity)??[]}/>
           {inspectorTab === 'categories' && <CategoryManager key={project?.active?.collaboration?.runtimeNonce ?? project?.active?.path} ui={annotations} />}
@@ -263,12 +308,12 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
     {mediaUI?.source?.open && <SourceImportDialog controller={mediaUI.source} organization={mediaUI.organization} />}
     {helpTopic && <HelpDialog topic={helpTopic} onClose={() => setHelpTopic(null)} />}
     <RegionMenu ui={selection} playback={playback} workspace={workspace} statuses={mediaUI?.statuses ?? []} focusNote={focusNote} />
-    {(inspection || remote.selected) && <InspectionViewer key={`${inspectionActor}:${inspectionTargetKey(inspection?.target ?? remote.selected!)}`} target={inspection?.target ?? remote.selected!} value={inspection ? resolveOwnInspection(inspection.target) : remote.value} binding={runtime} playback={playback} onClose={() => { listNavigation.cancel(); setOwnInspection(null); remote.close(); }} onJump={async () => {
+    {(inspection || remote.selected) && <InspectionViewer key={`${inspectionActor}:${inspectionTargetKey(inspection?.target ?? remote.selected!)}`} target={inspection?.target ?? remote.selected!} value={inspection ? resolveOwnInspection(inspection.target) : remote.value} binding={runtime} playback={playback} onJumpComplete={() => { setOwnInspection(null); remote.close(); }} onClose={() => { listNavigation.cancel(); setOwnInspection(null); remote.close(); }} onJump={async () => {
       if (inspection) return locateList(inspection.result);
       const target = remote.selected, value = remote.value;
       if (!target || !value) return false;
       if (target.authorId === authorId) return locateList(value.annotation ? { scope: 'region', mediaId: value.media.id, annotation: value.annotation, categoryIds: value.annotation.categoryIds, note: value.note } : value.channelIndex !== undefined ? { scope: 'channel', mediaId: value.media.id, channelIndex: value.channelIndex, categoryIds: [], note: value.note } : { scope: 'file', mediaId: value.media.id, categoryIds: [], note: value.note });
-      return remote.locate(target);
+      return locateRemote(target);
     }} />}
   </div></PlaybackContext.Provider></MaskContext.Provider></AnnotationContext.Provider></SelectionContext.Provider></RemoteContext.Provider>;
 }

@@ -29,13 +29,13 @@ function regionView(r: Region, media: MediaDescriptor) {
  return { startSeconds: Math.max(0,r.startSeconds-timeMargin), endSeconds: Math.min(duration(media),r.endSeconds+timeMargin), lowHz: Math.max(0,r.lowHz-frequencyMargin), highHz: Math.min(media.sampleRate/2,r.highHz+frequencyMargin) };
 }
 
-export function InspectionViewer({ target, value, binding, playback, onJump, onClose }: {
+export function InspectionViewer({ target, value, binding, playback, onJump, onClose, onJumpComplete }: {
  target: InspectionTarget; value: RemoteValue | null; binding: InspectionBinding | null; playback: PlaybackUI;
- onJump: () => Promise<boolean>; onClose: () => void;
+ onJump: () => Promise<boolean>; onClose: () => void; onJumpComplete?: () => void;
 }) {
  const [session] = useState(() => binding ? new InspectionSession(binding) : null);
  useSyncExternalStore(session?.subscribe ?? (() => () => {}), session?.getVersion ?? (() => 0));
- const latest = useRef({ playback, onJump, onClose, value }); latest.current = { playback, onJump, onClose, value };
+ const latest = useRef({ playback, onJump, onClose, onJumpComplete, value }); latest.current = { playback, onJump, onClose, onJumpComplete, value };
  const [jumping, setJumping] = useState(false), [jumpError, setJumpError] = useState<string | null>(null);
  const jumpingRef = useRef(false), alive = useRef(true);
  const dialog = useRef<HTMLDivElement>(null);
@@ -86,7 +86,7 @@ export function InspectionViewer({ target, value, binding, playback, onJump, onC
  const jump = async () => {
   if (jumpingRef.current || !latest.current.value) return;
   jumpingRef.current = true; setJumping(true); setJumpError(null);
-  try { if (await latest.current.onJump() && alive.current) latest.current.onClose(); }
+  try { if (await latest.current.onJump() && alive.current) (latest.current.onJumpComplete ?? latest.current.onClose)(); }
   catch (e) { if (alive.current) setJumpError(normalizeError(e).message); }
   finally { jumpingRef.current = false; if (alive.current) setJumping(false); }
  };

@@ -13,6 +13,7 @@ it('only the newest request in the same runtime, identity and live intent remain
   expect(navigation.current(old, scope)).toBe(false); expect(navigation.current(next, scope)).toBe(true);
   expect(navigation.current(next, { ...scope, owner: {} })).toBe(false);
   expect(navigation.current(next, { ...scope, authorId: 'other' })).toBe(false);
+  expect(navigation.current(next, { ...scope, runtimeNonce: 'new-runtime' })).toBe(false);
   expect(navigation.current(next, { ...scope, state: new SelectionState() })).toBe(false);
   state.select(null); expect(navigation.current(next, scope)).toBe(false);
 });
