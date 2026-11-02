@@ -385,3 +385,112 @@ it('blank cue plus selection deactivation during playback does not interrupt the
 it('a retained reset-mask command cannot cross a runtime replacement',async()=>{
  const first=activeProject(),second=activeProject(),hook=renderHook(({owner})=>useMasks(owner),{initialProps:{owner:first.active}}),command=hook.result.current.command;hook.rerender({owner:second.active});act(()=>command({type:'resetMediaMasks',mediaId:first.active.store.snapshot.document.media[0].id}));await act(async()=>{});expect(first.applyChange).not.toHaveBeenCalled();expect(second.applyChange).not.toHaveBeenCalled();hook.unmount();first.active.lifecycle.dispose();second.active.lifecycle.dispose();
 });
+
+function arrowSeekRig(selection?:Region){
+ const s=activeProject(),doc=s.active.store.snapshot.document,id=doc.media[0].id;
+ doc.media[0].frameCount=doc.media[0].sampleRate*10;
+ let generation=0,stream={...emptyPlayback},emit!:(status:PlaybackStatus)=>void,renders=0;
+ const configured=(r:PlaybackRequest):PlaybackStatus=>{
+  stream={...emptyPlayback,generation:++generation,projectId:r.projectId,mediaId:r.mediaId,state:r.play?'playing':'paused',positionSeconds:r.seekSeconds??stream.positionSeconds,firstSeconds:r.mode.mode==='selection'?r.mode.region.startSeconds:0,endSeconds:r.mode.mode==='selection'?r.mode.region.endSeconds:10};
+  return stream;
+ };
+ const api={available:()=>true,devices:async()=>[],listen:async(cb:typeof emit)=>{emit=cb;return()=>{};},control:vi.fn(async(action:string)=>{stream={...stream,generation:++generation,state:action==='pause'?'paused':'stopped',...(action==='reset'?{projectId:null,mediaId:null,positionSeconds:0}:{})};return stream;}),configure:vi.fn(async(r:PlaybackRequest)=>configured(r))};
+ const hook=renderHook(({owner,selection}:{owner:ActiveProject;selection:Region|undefined})=>{renders++;return usePlayback(owner,id,selection,api);},{initialProps:{owner:s.active,selection}});
+ const arrow=(key='ArrowRight')=>{let accepted=false;act(()=>{accepted=hook.result.current.seekShortcut({key,target:document.body});});return accepted;};
+ const waitCalls=async(n:number)=>{await waitFor(()=>expect(api.configure).toHaveBeenCalledTimes(n));await act(async()=>{});};
+ const publish=(patch:Partial<PlaybackStatus>)=>act(()=>{stream={...stream,...patch};emit(stream);});
+ const hold=()=>{let release!:()=>void,reject!:(reason:unknown)=>void;api.configure.mockImplementationOnce(async r=>new Promise<PlaybackStatus>((resolve,fail)=>{release=()=>resolve(configured(r));reject=fail;}));return{release:()=>release(),reject:(reason:unknown)=>reject(reason)};};
+ const dispose=()=>{hook.unmount();s.active.lifecycle.dispose();};
+ return{s,doc,id,api,hook,arrow,waitCalls,publish,hold,dispose,renders:()=>renders,last:()=>api.configure.mock.calls.at(-1)![0]};
+}
+it('arrow seek reads latest native progress without workspace renders and preserves playing intent',async()=>{
+ const r=arrowSeekRig();act(()=>r.hook.result.current.playFile());await r.waitCalls(1);
+ const before=r.renders();r.publish({positionSeconds:4.25,consumedFrames:204000});expect(r.renders()).toBe(before);
+ expect(r.arrow()).toBe(true);await r.waitCalls(2);expect(r.last()).toMatchObject({seekSeconds:6.25,play:true,mode:{mode:'processed'}});
+ r.arrow('ArrowLeft');await r.waitCalls(3);expect(r.last()).toMatchObject({seekSeconds:4.25,play:true});r.dispose();
+});
+it('arrow seek preserves paused, stopped and both buffering playback intentions',async()=>{
+ const r=arrowSeekRig();r.arrow();await r.waitCalls(1);expect(r.last().play).toBe(false);
+ r.publish({state:'buffering',positionSeconds:3});r.arrow();await r.waitCalls(2);expect(r.last()).toMatchObject({play:false,seekSeconds:5});
+ act(()=>r.hook.result.current.toggle());await r.waitCalls(3);r.publish({state:'buffering',positionSeconds:4});r.arrow();await r.waitCalls(4);expect(r.last()).toMatchObject({play:true,seekSeconds:6});
+ act(()=>r.hook.result.current.toggle());await waitFor(()=>expect(r.hook.result.current.status.state).toBe('paused'));
+ r.arrow('ArrowLeft');await r.waitCalls(5);expect(r.last()).toMatchObject({play:false,seekSeconds:4});
+ act(()=>r.hook.result.current.stop());await waitFor(()=>expect(r.hook.result.current.status.state).toBe('stopped'));
+ r.arrow();await r.waitCalls(6);expect(r.last()).toMatchObject({play:false,seekSeconds:6});r.dispose();
+});
+it('arrow seek uses valid cues without a stream and ignores invalid or out of file cues',async()=>{
+ for(const [cue,target] of [[3,5],[10,2],[12,2],[NaN,2],[-1,2]]){
+  const r=arrowSeekRig();act(()=>r.hook.result.current.setCue(r.s.active,r.id,cue));r.arrow();await r.waitCalls(1);expect(r.last()).toMatchObject({seekSeconds:target,play:false});r.dispose();
+ }
+});
+it('arrow seek accumulates repeated and reversed arrows before configure acknowledgement',async()=>{
+ for(const [keys,target] of [[['ArrowRight','ArrowRight'],9],[['ArrowRight','ArrowLeft'],5]] as const){
+  const r=arrowSeekRig(),held=r.hold();act(()=>r.hook.result.current.setCue(r.s.active,r.id,3));r.arrow();await r.waitCalls(1);
+  for(const key of keys)r.arrow(key);
+  await act(async()=>held.release());await r.waitCalls(2);expect(r.last()).toMatchObject({seekSeconds:target,play:false});r.dispose();
+ }
+});
+it('arrow seek clamps file, selection and short audio boundaries without wrapping when looping',async()=>{
+ const r=arrowSeekRig();act(()=>{r.hook.result.current.update({looping:true});r.hook.result.current.setCue(r.s.active,r.id,9);});r.arrow();await r.waitCalls(1);expect(r.last()).toMatchObject({seekSeconds:10,looping:true,play:false});
+ r.arrow('ArrowLeft');await r.waitCalls(2);expect(r.last().seekSeconds).toBe(8);r.publish({positionSeconds:0});r.arrow('ArrowLeft');await r.waitCalls(3);expect(r.last().seekSeconds).toBe(0);r.dispose();
+ const region={...fixture.annotations[0].region,startSeconds:3,endSeconds:4};const selection=arrowSeekRig(region);selection.arrow();await selection.waitCalls(1);expect(selection.last()).toMatchObject({seekSeconds:4,mode:{mode:'selection',region}});selection.arrow('ArrowLeft');await selection.waitCalls(2);expect(selection.last().seekSeconds).toBe(3);selection.dispose();
+ const short=arrowSeekRig();short.doc.media[0].frameCount=short.doc.media[0].sampleRate*.5;short.hook.rerender({owner:short.s.active,selection:undefined});short.arrow();await short.waitCalls(1);expect(short.last().seekSeconds).toBe(.5);short.dispose();
+});
+it('arrow seek retains explicit file and selection ranges and sound versions',async()=>{
+ const region={...fixture.annotations[0].region,startSeconds:3,endSeconds:4};const r=arrowSeekRig(region);
+ act(()=>{r.hook.result.current.updateWorkspaceSource('original');r.hook.result.current.playFile();});await r.waitCalls(1);r.publish({positionSeconds:6});r.arrow();await r.waitCalls(2);expect(r.last()).toMatchObject({seekSeconds:8,play:true,mode:{mode:'original'}});
+ act(()=>r.hook.result.current.playSelection(region,'processed'));await r.waitCalls(3);r.arrow();await r.waitCalls(4);expect(r.last()).toMatchObject({seekSeconds:4,mode:{mode:'selection',selectionSource:'processed',region}});
+ // Natural looping progress after a clamped request is the next valid starting point.
+ r.publish({positionSeconds:3.1});r.arrow('ArrowLeft');await r.waitCalls(5);expect(r.last().seekSeconds).toBe(3);r.dispose();
+});
+it('arrow seek clears pending targets after success and failure',async()=>{
+ const r=arrowSeekRig();r.arrow();await r.waitCalls(1);r.publish({positionSeconds:5});r.arrow();await r.waitCalls(2);expect(r.last().seekSeconds).toBe(7);
+ const held=r.hold();r.arrow();await r.waitCalls(3);await act(async()=>held.reject({code:'DeviceFailed',message:'seek failed',retryable:true}));await waitFor(()=>expect(r.hook.result.current.error?.message).toBe('seek failed'));
+ r.arrow('ArrowLeft');await r.waitCalls(4);expect(r.last()).toMatchObject({seekSeconds:5,play:false});r.dispose();
+});
+it('arrow seek ignores stale configure failures without losing the newer accumulated target',async()=>{
+ const r=arrowSeekRig(),held=r.hold();act(()=>r.hook.result.current.setCue(r.s.active,r.id,3));r.arrow();await r.waitCalls(1);
+ r.arrow();await act(async()=>held.reject({code:'DeviceFailed',message:'obsolete seek',retryable:true}));await r.waitCalls(2);
+ expect(r.last()).toMatchObject({seekSeconds:7,play:false});expect(r.hook.result.current.error).toBeNull();
+ r.publish({positionSeconds:4});r.arrow();await r.waitCalls(3);expect(r.last().seekSeconds).toBe(6);r.dispose();
+});
+it('arrow seek replaces pending targets on pause, stop and a new paused cue, ignoring stale acknowledgements',async()=>{
+ for(const action of ['pause','stop','cue'] as const){
+  const r=arrowSeekRig();act(()=>r.hook.result.current.playFile());await r.waitCalls(1);r.publish({positionSeconds:3});
+  if(action==='cue'){act(()=>r.hook.result.current.toggle());await waitFor(()=>expect(r.hook.result.current.status.state).toBe('paused'));}
+  const held=r.hold();r.arrow();await r.waitCalls(2);r.arrow();
+  act(()=>{if(action==='pause')r.hook.result.current.toggle();else if(action==='stop')r.hook.result.current.stop();else r.hook.result.current.setCue(r.s.active,r.id,1);});
+  r.arrow('ArrowLeft');await act(async()=>held.release());await r.waitCalls(3);
+  expect(r.last()).toMatchObject({seekSeconds:action==='cue'?0:1,play:false});r.dispose();
+ }
+});
+it('arrow seek invalidates pending targets on source and project replacement',async()=>{
+ const r=arrowSeekRig(),other={...r.doc.media[0],id:'22222222-2222-4222-8222-222222222222'};r.doc.media.push(other);r.hook.rerender({owner:r.s.active,selection:undefined});
+ const held=r.hold();act(()=>r.hook.result.current.setCue(r.s.active,r.id,3));r.arrow();await r.waitCalls(1);r.arrow();act(()=>r.hook.result.current.selectSource(other.id));r.arrow();
+ await act(async()=>held.release());await r.waitCalls(2);expect(r.last()).toMatchObject({mediaId:other.id,seekSeconds:2,play:false});
+ const pending=r.hold();r.arrow();await r.waitCalls(3);r.arrow();const old=r.hook.result.current,replacement=activeProject();replacement.active.store.snapshot.document.media[0].frameCount=replacement.active.store.snapshot.document.media[0].sampleRate*10;
+ act(()=>r.hook.rerender({owner:replacement.active,selection:undefined}));expect(old.seekShortcut({key:'ArrowRight',target:document.body})).toBe(false);r.arrow();
+ await act(async()=>pending.release());await r.waitCalls(4);expect(r.last()).toMatchObject({projectId:replacement.active.store.snapshot.document.projectId,mediaId:r.id,seekSeconds:2,play:false});r.dispose();replacement.active.lifecycle.dispose();
+});
+it('arrow seek rejects blocked workspaces, absent media and invalid actual selections',()=>{
+ const r=arrowSeekRig();expect(r.arrow('Home')).toBe(false);const endTransition=r.s.active.store.beginTransition();expect(r.arrow()).toBe(false);endTransition();
+ r.doc.media=[];expect(r.arrow()).toBe(false);r.dispose();
+ const invalid=arrowSeekRig({...fixture.annotations[0].region,startSeconds:3,endSeconds:11});expect(invalid.arrow()).toBe(false);invalid.dispose();
+ const unavailableApi={available:()=>false,devices:async()=>[],listen:async()=>()=>{},control:async()=>emptyPlayback,configure:vi.fn(async()=>emptyPlayback)};
+ const noProject=renderHook(()=>usePlayback(null,null,undefined,unavailableApi));expect(noProject.result.current.seekShortcut({key:'ArrowRight',target:document.body})).toBe(false);noProject.unmount();
+});
+it('arrow seek starts from reset position after a source round trip before reset acknowledgements',async()=>{
+ for(const action of ['play','arrow'] as const){
+  const r=arrowSeekRig(),other={...r.doc.media[0],id:'22222222-2222-4222-8222-222222222222'};r.doc.media.push(other);r.hook.rerender({owner:r.s.active,selection:undefined});
+  try{
+   act(()=>r.hook.result.current.playFile());await r.waitCalls(1);r.publish({positionSeconds:4.25});
+   let releaseReset!:()=>void;
+   r.api.control.mockImplementationOnce(async()=>{await new Promise<void>(resolve=>releaseReset=resolve);return{...emptyPlayback,generation:2};});
+   act(()=>r.hook.result.current.selectSource(other.id));await waitFor(()=>expect(releaseReset).toBeTypeOf('function'));
+   act(()=>r.hook.result.current.selectSource(r.id));expect(r.hook.result.current.status).toMatchObject({mediaId:null,state:'stopped',positionSeconds:0});
+   if(action==='play')act(()=>r.hook.result.current.toggle());else expect(r.arrow()).toBe(true);
+   await act(async()=>releaseReset());await r.waitCalls(2);
+   expect(r.last()).toMatchObject({mediaId:r.id,seekSeconds:action==='play'?0:2,play:action==='play'});
+  }finally{r.dispose();}
+ }
+});

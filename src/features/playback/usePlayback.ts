@@ -9,6 +9,7 @@ import { validRegion } from '../selection/state';
 import { useLocalSettings } from '../settings/localSettings';
 import { validSessionCues } from '../project/session';
 import {PlaybackStatusStore,samePlaybackControl} from './statusStore';
+import {seekKeyDelta,type SeekKeyEvent} from './keyboardSeek';
 export function audioSignature(doc:ProjectDocument|undefined,id:string|null){const m=doc?.media.find(m=>m.id===id);return JSON.stringify(m&&[m.id,m.sha256,m.sourceRef,m.sampleRate,m.frameCount,m.channelCount,doc?.edits.filter(e=>e.region.mediaId===id),doc?.playbackMix[m.id]]);}
 export function actualSource(mode:PlaybackOptions['mode'],source:PlaybackOptions['selectionSource'],bypass:boolean){return mode==='selection'?(source==='original'||bypass?'原始选区':'处理后选区'):mode==='original'||bypass?'原音':'处理后';}
 export function playbackShortcut(e:{key:string;target:EventTarget|null;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean}){return !menuIsOpen()&&e.key===' '&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!(e.target instanceof Element&&(e.target.closest('input,textarea,select,[role="dialog"],[role="alertdialog"],[contenteditable]:not([contenteditable="false"])') || e.target.closest('button') && !e.target.closest('button.media-select[data-media-id]')));}
@@ -33,12 +34,13 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  const cueDeactivation=useRef(false);
  const acceptedGeneration=useRef(0);
  const pendingIntent=useRef<{serial:number;event:PlaybackStatus|null}|null>(null);
+ const pendingSeek=useRef<{serial:number;owner:ActiveProject;mediaId:string;seconds:number}|null>(null);
  const configuredKey=useRef('');
  const desired=useRef(false),activated=useRef(false),sequence=useRef(0),tail=useRef<Promise<unknown>>(Promise.resolve()),current=useRef({active,sourceId,selection,options,workspaceSource});current.current={active,sourceId,selection,options,workspaceSource};
  useEffect(()=>active?.lifecycle.registerBackgroundGuard(()=>!desired.current&&!activated.current&&!resumable.current&&!pendingIntent.current&&!liveStream(statusRef.current)),[active]);
  const resolved=()=>{const n=current.current;return resolveIntent(intent.current,n.sourceId,n.selection,n.workspaceSource);};
  const configurationKey=()=>{const n=current.current;return JSON.stringify([audioSignature(n.active?.store.snapshot.document,resolved().mediaId),n.options,resolved()]);};
- const clearIntent=()=>{intent.current={kind:'automatic'};resumable.current=false;activated.current=false;configuredKey.current='';};
+ const clearIntent=()=>{intent.current={kind:'automatic'};resumable.current=false;activated.current=false;configuredKey.current='';pendingSeek.current=null;};
  const setDesired=(value:boolean)=>{desired.current=value;setPlaying(value);};
  const matchesSource=(s:PlaybackStatus)=>s.generation>=acceptedGeneration.current&&(!s.projectId||s.projectId===current.current.active?.store.snapshot.document.projectId)&&(!s.mediaId||s.mediaId===current.current.sourceId);
  const accept=(s:PlaybackStatus)=>{
@@ -57,6 +59,7 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  };
  const acknowledge=(serial:number,s:PlaybackStatus,replayProgress:boolean)=>{
    if(serial!==sequence.current)return;
+   if(pendingSeek.current?.serial===serial)pendingSeek.current=null;
    const event=pendingIntent.current?.serial===serial?pendingIntent.current.event:null;pendingIntent.current=null;
    accept(s);
    // A configure returns its initial buffering snapshot. Its worker may already
@@ -66,6 +69,7 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  };
  const rejectIntent=(serial:number,cause:unknown)=>{
    if(serial!==sequence.current)return;
+   if(pendingSeek.current?.serial===serial)pendingSeek.current=null;
    const event=pendingIntent.current?.event;
    pendingIntent.current=null;setDesired(false);
    // A rejection does not prove that a previously acknowledged stream stopped.
@@ -81,13 +85,14 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
    if(!media||r.region&&!validRegion(doc,r.region))return;
    if(now.sourceId!==r.mediaId){current.current={...now,sourceId:r.mediaId};setSourceId(r.mediaId);}
    const serial=++sequence.current;pendingIntent.current={serial,event:null};activated.current=true;resumable.current=true;setError(null);
+   pendingSeek.current=seekSeconds===null?null:{serial,owner:now.active,mediaId:r.mediaId,seconds:seekSeconds};
    configuredKey.current=configurationKey();
    const request={projectId:doc.projectId,mediaId:r.mediaId,mode:r.region?{mode:'selection' as const,region:r.region,selectionSource:r.source}:{mode:r.source},bypass:false,looping:now.options.looping,volume:now.options.volume,deviceId:now.options.deviceId,seekSeconds,play:desired.current,monitorGainDb:effectiveMonitor(r.mediaId)};
    const owner=now.active,capturedApi=api;
    tail.current=tail.current.catch(()=>{}).then(async()=>{if(serial!==sequence.current||current.current.active!==owner)return;const result=await capturedApi.configure({...request,monitorGainDb:effectiveMonitor(request.mediaId)});if(current.current.active===owner)acknowledge(serial,result,true);}).catch(e=>{if(current.current.active===owner)rejectIntent(serial,e);});
  };
- const control=(action:'pause'|'stop'|'reset')=>{const capturedApi=api,owner=active;if(current.current.active!==owner)return;setDesired(false);const serial=++sequence.current;pendingIntent.current={serial,event:null};if(action!=='pause')clearIntent();tail.current=tail.current.catch(()=>{}).then(async()=>{if(current.current.active!==owner)return;const result=await capturedApi.control(action);if(current.current.active===owner)acknowledge(serial,result,false);}).catch(e=>{if(current.current.active===owner)rejectIntent(serial,e);});return tail.current;};
- const selectSource=(id:string|null)=>{if(current.current.active!==active||id===current.current.sourceId)return;control('reset');current.current={...current.current,sourceId:id};setSourceId(id);setStatus(emptyPlayback);};
+ const control=(action:'pause'|'stop'|'reset')=>{const capturedApi=api,owner=active;if(current.current.active!==owner)return;setDesired(false);pendingSeek.current=null;const serial=++sequence.current;pendingIntent.current={serial,event:null};if(action!=='pause')clearIntent();tail.current=tail.current.catch(()=>{}).then(async()=>{if(current.current.active!==owner)return;const result=await capturedApi.control(action);if(current.current.active===owner)acknowledge(serial,result,false);}).catch(e=>{if(current.current.active===owner)rejectIntent(serial,e);});return tail.current;};
+ const selectSource=(id:string|null)=>{if(current.current.active!==active||id===current.current.sourceId)return;control('reset');current.current={...current.current,sourceId:id};setSourceId(id);statusRef.current=emptyPlayback;setStatus(emptyPlayback);};
  const startIntent=(next:PlaybackIntent)=>{if(current.current.active!==active)return;if(activated.current)control('stop');intent.current=next;setDesired(true);configure(resolved().start);};
  const playSelection=(region:Region,sourceOverride?:WorkspaceSoundVersion)=>{
    const owner=current.current.active;if(!owner||owner.store.editingDisabled||!validRegion(owner.store.snapshot.document,region))return;
@@ -96,7 +101,25 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  const playFile=()=>{const id=current.current.sourceId;if(id)startIntent({kind:'explicit-file',mediaId:id});};
  const validCue=(owner:ActiveProject,id:string,seconds:number)=>{const m=owner.store.snapshot.document.media.find(m=>m.id===id);return owner===current.current.active&&!owner.store.editingDisabled&&!!m&&Number.isFinite(seconds)&&seconds>=0&&seconds*m.sampleRate<m.frameCount;};
  const playFrom=(owner:ActiveProject,id:string,seconds:number)=>{if(validCue(owner,id,seconds))startIntent({kind:'explicit-cue',mediaId:id,seconds});};
- const setCue=(owner:ActiveProject,id:string,seconds:number)=>{if(owner===current.current.active&&!owner.store.editingDisabled&&owner.store.snapshot.document.media.some(m=>m.id===id)&&Number.isFinite(seconds)&&seconds>=0){setCues(c=>({...c,[id]:seconds}));resumable.current=false;if(desired.current&&current.current.selection)cueDeactivation.current=true;if(!desired.current)intent.current={kind:'automatic'};}};
+ const setCue=(owner:ActiveProject,id:string,seconds:number)=>{if(owner===current.current.active&&!owner.store.editingDisabled&&owner.store.snapshot.document.media.some(m=>m.id===id)&&Number.isFinite(seconds)&&seconds>=0){setCues(c=>({...c,[id]:seconds}));resumable.current=false;if(desired.current&&current.current.selection)cueDeactivation.current=true;if(!desired.current){intent.current={kind:'automatic'};if(pendingSeek.current){pendingSeek.current=null;++sequence.current;pendingIntent.current=null;}}}};
+ const seekShortcut=(event:SeekKeyEvent):boolean=>{
+   const delta=seekKeyDelta(event),now=current.current;
+   if(delta===null||now.active!==active||!active||active.store.editingDisabled)return false;
+   const r=resolved(),document=active.store.snapshot.document,source=document.media.find(m=>m.id===r.mediaId);
+   if(!source||r.region&&!validRegion(document,r.region))return false;
+   const first=r.region?.startSeconds??0,end=r.region?.endSeconds??source.frameCount/source.sampleRate;
+   const pending=pendingSeek.current,stream=statusRef.current;
+   const sameSource=stream.projectId===document.projectId&&stream.mediaId===r.mediaId;
+   let position=r.start;
+   if(pending&&pending.serial===sequence.current&&pending.owner===active&&pending.mediaId===r.mediaId)position=pending.seconds;
+   else if((desired.current||resumable.current)&&sameSource)position=stream.positionSeconds;
+   else if(!r.region){
+     if(r.mediaId&&validCue(active,r.mediaId,cues[r.mediaId]))position=cues[r.mediaId];
+     else if(sameSource)position=stream.positionSeconds;
+   }
+   configure(Math.max(first,Math.min(end,position+delta)));
+   return true;
+ };
  const restoreCues=(owner:ActiveProject,value:Record<string,number>)=>{if(owner===current.current.active)setCues(validSessionCues(value,owner.store.snapshot.document,owner.collaboration?.hiddenMediaIds));};
  useEffect(()=>{clearIntent();const prefs=active?.collaboration?.preferences;
  const restoredMonitor={monitorGainDb:prefs?.monitorGainDb??0,mediaMonitorGainDb:{...prefs?.mediaMonitorGainDb}};monitorRef.current=restoredMonitor;setMonitor(restoredMonitor);setMonitorError(null);statusRef.current=emptyPlayback;const source=prefs?.source??'processed';const restored={mode:'processed' as const,selectionSource:'processed' as const,bypass:false,volume:prefs?.volume??.75,deviceId:prefs?.deviceId??null,looping:prefs?.loopEnabled??false};setOptions(restored);current.current.options=restored;setWorkspaceSource(source);current.current.workspaceSource=source;setCues({});setSourceId(selectedMediaId);current.current.sourceId=selectedMediaId;setDesired(false);setStatus(emptyPlayback);setError(null);if(api.available())control('reset');else{++sequence.current;pendingIntent.current=null;}},[active,api]);
@@ -121,7 +144,7 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
  // A cue invalidates resumption, but the current stream keeps its explicit
  // range/source until the next start. A normal pause retains both unchanged.
  const toggle=()=>{if(current.current.active!==active||!active||!media||active.store.editingDisabled)return;if(desired.current)control('pause');else{const resume=resumable.current;if(!resume&&activated.current)control('stop');if(!resume)intent.current={kind:'automatic'};const r=resolved();setDesired(true);configure(resume?null:r.region?r.start:(r.mediaId&&validCue(active,r.mediaId,cues[r.mediaId])?cues[r.mediaId]:status.mediaId===r.mediaId&&status.state==='stopped'?status.positionSeconds:r.start));}};
- useEffect(()=>{const handler=(e:KeyboardEvent)=>{if(!e.defaultPrevented&&playbackShortcut(e)&&active&&!active.store.editingDisabled&&media){e.preventDefault();toggle();}};window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);});
+ useEffect(()=>{const handler=(e:KeyboardEvent)=>{if(e.defaultPrevented||!active||active.store.editingDisabled||!media)return;if(playbackShortcut(e)){e.preventDefault();toggle();return;}if(seekShortcut(e))e.preventDefault();};window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);});
  const persistOptions=()=>{const n=current.current;if(n.active?.store.editingDisabled)return;n.active?.preferences?.update({volume:n.options.volume,deviceId:n.options.deviceId,loopEnabled:n.options.looping,source:n.workspaceSource,...monitorRef.current});};
  // Realtime requests share the command tail. Read the latest desired gain only
  // after any configure acknowledgement, so buffering changes reach its new generation.
@@ -171,7 +194,7 @@ export function usePlayback(active:ActiveProject|null,selectedMediaId:string|nul
    }).catch(e=>owner.store.setError(normalizeError(e)));
  };
  const visibleMonitor=local?.value.playback.monitorGainDb!==undefined?{monitorGainDb:local.value.playback.monitorGainDb,mediaMonitorGainDb:Object.fromEntries((doc?.media??[]).map(m=>[m.id,local.override(doc!.projectId,m.id).monitorGainDb??null]))}:monitor;
- return{playing,active,monitor:visibleMonitor,monitorError,effectiveMonitorGainDb:effectiveMonitor(sourceId),setGlobalMonitorGain,setMediaMonitorGain,retryMonitor:applyMonitor,media,sourceId,selectSource,playSelection,playFile,playFrom,setCue,restoreCues,cues,validCue,workspaceSource,updateWorkspaceSource,options,update,get status(){return statusStore.getSnapshot();},statusStore,devices,error,refreshDevices,toggle,stop:()=>{void control('stop');},stopAndWait:()=>control('stop'),seek:(seconds:number)=>configure(seconds),retry:()=>{if(current.current.active!==active)return;setDesired(true);configure();},mix:media?doc?.playbackMix[media.id]??{soloChannels:[],mutedChannels:[]}: {soloChannels:[],mutedChannels:[]},updateMix,selection:resolved().region};
+ return{playing,active,monitor:visibleMonitor,monitorError,effectiveMonitorGainDb:effectiveMonitor(sourceId),setGlobalMonitorGain,setMediaMonitorGain,retryMonitor:applyMonitor,media,sourceId,selectSource,playSelection,playFile,playFrom,setCue,restoreCues,cues,validCue,workspaceSource,updateWorkspaceSource,options,update,get status(){return statusStore.getSnapshot();},statusStore,devices,error,refreshDevices,toggle,stop:()=>{void control('stop');},stopAndWait:()=>control('stop'),seek:(seconds:number)=>configure(seconds),seekShortcut,retry:()=>{if(current.current.active!==active)return;setDesired(true);configure();},mix:media?doc?.playbackMix[media.id]??{soloChannels:[],mutedChannels:[]}: {soloChannels:[],mutedChannels:[]},updateMix,selection:resolved().region};
 }
 export type PlaybackUI=ReturnType<typeof usePlayback>;
 export const PlaybackContext=createContext<PlaybackUI|null>(null);
