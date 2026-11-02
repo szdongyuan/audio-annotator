@@ -1,4 +1,5 @@
 import { useSelectionContext } from '../selection/useSelection';
+import { usePlaybackContext } from '../playback/usePlayback';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AnalysisSettings, MediaDescriptor, MediaView } from '../../bridge/types';
 import type { MediaStatus } from '../../bridge/media';
@@ -17,6 +18,7 @@ export function SpectrogramCanvas({ active, media, settings, view, channel, stat
   active: ActiveProject; media: MediaDescriptor; settings: AnalysisSettings; view: MediaView; channel: number; status: MediaStatus['status']; timeLimit: number; onView: (patch: Partial<MediaView>) => void; children?: ReactNode;
 }) {
   const selection = useSelectionContext();
+  const playback = usePlaybackContext();
   const canvas = useRef<HTMLCanvasElement>(null), host = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [dpr, setDpr] = useState(window.devicePixelRatio || 1);
@@ -94,7 +96,7 @@ export function SpectrogramCanvas({ active, media, settings, view, channel, stat
     onPointerDown={event => { if (active.store.editingDisabled || menuIsOpen() || !(event.button === 1 || event.button === 0 && event.altKey)) return; event.preventDefault(); event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId); selection?.state.beginGesture(); drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, view }; }}
     onPointerMove={event => { if (!drag.current || drag.current.pointerId !== event.pointerId || active.store.editingDisabled) return; onView(panViewport(drag.current.view, timeLimit, media.sampleRate / 2, (drag.current.x - event.clientX) / size.width, (drag.current.y - event.clientY) / size.height)); }}
     onPointerUp={() => endPan()} onPointerCancel={() => endPan(true)} onLostPointerCapture={() => endPan(true)}
-    onKeyDown={event => { if (active.store.editingDisabled || menuIsOpen()) return; if (event.key === 'Escape' && drag.current) { event.preventDefault(); endPan(true); return; } const delta = event.key === 'ArrowLeft' ? -.1 : event.key === 'ArrowRight' ? .1 : 0; if (delta) { event.preventDefault(); onView(panViewport(view, timeLimit, media.sampleRate / 2, delta, 0)); } }}>
+    onKeyDown={event => { if (active.store.editingDisabled || menuIsOpen()) return; if (event.key === 'Escape' && drag.current) { event.preventDefault(); endPan(true); return; } const delta = event.key === 'ArrowLeft' ? -.1 : event.key === 'ArrowRight' ? .1 : 0; if (delta) { if (playback?.active === active) playback.seekShortcut(event); event.preventDefault(); onView(panViewport(view, timeLimit, media.sampleRate / 2, delta, 0)); } }}>
     <canvas ref={canvas} data-channel={channel} aria-label={`通道 ${channel + 1} ${view.spectrumKind === 'mel' ? '梅尔' : 'STFT'} 频谱`} />
     <div className="spectrogram-overlays">{children}</div>
     {visible && (busy || rasterBusy || rasterError || tiles.error || tiles.cancelled || !tiles.keys.length) && <div className="tile-status" onPointerDown={e => e.stopPropagation()}>
