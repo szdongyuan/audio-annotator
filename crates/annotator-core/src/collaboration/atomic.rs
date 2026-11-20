@@ -27,6 +27,15 @@ pub(crate) fn io(error: std::io::Error) -> AppError {
     error.retryable = true;
     error
 }
+/// Preserve the OS code and exact failed operation for remote filesystem diagnostics.
+pub(crate) fn io_at(path: &Path, operation: &str, source: std::io::Error) -> AppError {
+    let os_code = source.raw_os_error();
+    let mut error = io(source);
+    error.message = format!("{} [{}: {}]", error.message, operation, path.display());
+    error.details =
+        Some(serde_json::json!({"operation": operation, "path": path, "osCode": os_code}));
+    error
+}
 pub(crate) fn is_link(metadata: &fs::Metadata) -> bool {
     #[cfg(windows)]
     {
@@ -88,9 +97,10 @@ pub fn safe_existing(path: &Path) -> Result<()> {
         let link = reparse_attribute(part)
             .map(Ok)
             .unwrap_or_else(|| fs::symlink_metadata(part).map(|metadata| is_link(&metadata)))
-            .map_err(io)?;
+            .map_err(|e| io_at(part, "inspect path", e))?;
         #[cfg(not(windows))]
-        let link = is_link(&fs::symlink_metadata(part).map_err(io)?);
+        let link =
+            is_link(&fs::symlink_metadata(part).map_err(|e| io_at(part, "inspect path", e))?);
         require(!link, "Symlink/reparse paths are forbidden")?;
     }
     Ok(())
@@ -120,8 +130,12 @@ pub(crate) fn read(path: &Path, max: usize) -> Result<Vec<u8>> {
         use std::os::windows::fs::OpenOptionsExt;
         options.custom_flags(0x00200000);
     }
-    let file = options.open(path).map_err(io)?;
-    let metadata = file.metadata().map_err(io)?;
+    let file = options
+        .open(path)
+        .map_err(|e| io_at(path, "open file", e))?;
+    let metadata = file
+        .metadata()
+        .map_err(|e| io_at(path, "read file metadata", e))?;
     require(
         metadata.is_file() && !is_link(&metadata),
         "Expected regular collaboration file",
@@ -130,7 +144,7 @@ pub(crate) fn read(path: &Path, max: usize) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     file.take(max as u64 + 1)
         .read_to_end(&mut bytes)
-        .map_err(io)?;
+        .map_err(|e| io_at(path, "read file bytes", e))?;
     limit(bytes.len() <= max)?;
     safe_existing(path)?;
     Ok(bytes)
@@ -140,7 +154,10 @@ pub(crate) fn lock(path: &Path) -> Result<File> {
         path.parent()
             .ok_or_else(|| AppError::invalid("Missing lock parent"))?,
     )?;
-    if path.try_exists().map_err(io)? {
+    if path
+        .try_exists()
+        .map_err(|e| io_at(path, "inspect lock path", e))?
+    {
         safe_existing(path)?;
     }
     let mut options = OpenOptions::new();
@@ -150,9 +167,18 @@ pub(crate) fn lock(path: &Path) -> Result<File> {
         use std::os::windows::fs::OpenOptionsExt;
         options.custom_flags(0x00200000).share_mode(0x1 | 0x2);
     }
-    let file = options.open(path).map_err(io)?;
+    let file = options
+        .open(path)
+        .map_err(|e| io_at(path, "open file", e))?;
     require(
-        file.metadata().map_err(io)?.is_file() && !is_link(&file.metadata().map_err(io)?),
+        file.metadata()
+            .map_err(|e| io_at(path, "read file metadata", e))?
+            .is_file()
+            && !is_link(
+                &file
+                    .metadata()
+                    .map_err(|e| io_at(path, "read file metadata", e))?,
+            ),
         "Invalid lock file",
     )?;
     file.try_lock().map_err(|_| {
@@ -649,5 +675,32 @@ mod metadata_retry_tests {
         assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
         fs::remove_file(path).unwrap();
         fs::remove_dir(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod io_context_tests {
+    use super::*;
+    #[test]
+    fn missing_read_preserves_failed_path_and_os_code() {
+        let path = std::env::temp_dir().join(format!("missing-read-{}", uuid::Uuid::new_v4()));
+        let error = read(&path, 64).unwrap_err();
+        let details = error.details.unwrap();
+        assert_eq!(details["path"], path.to_string_lossy().as_ref());
+        assert_eq!(details["operation"], "inspect path");
+        assert!(details["osCode"].is_number());
+        assert!(error.retryable);
+    }
+    #[test]
+    fn resource_failure_preserves_raw_code_without_changing_retry_contract() {
+        let error = io_at(
+            Path::new("catalog/item.json"),
+            "open file",
+            std::io::Error::from_raw_os_error(4),
+        );
+        assert_eq!(error.code, ErrorCode::SaveFailed);
+        assert!(error.retryable);
+        assert_eq!(error.details.unwrap()["osCode"], 4);
+        assert!(error.message.contains("catalog/item.json"));
     }
 }

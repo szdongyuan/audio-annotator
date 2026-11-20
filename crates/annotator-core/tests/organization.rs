@@ -1302,3 +1302,395 @@ fn loaded_placement_capture_uses_one_validated_snapshot_and_publication_rechecks
     drop((prepared, current, actor, repo));
     fs::remove_dir_all(root).unwrap();
 }
+
+fn batch_operation(media_ids: Vec<String>, folder_id: Option<String>) -> OrganizationOperation {
+    serde_json::from_value(serde_json::json!({
+        "type": "moveMediaBatch", "mediaIds": media_ids, "folderId": folder_id,
+    }))
+    .unwrap()
+}
+
+fn batch_fixture() -> (std::path::PathBuf, CollaborationRepository, AuthorSession) {
+    let root = std::env::temp_dir().join(format!("organization-batch-{}", id()));
+    fs::create_dir(&root).unwrap();
+    let (repo, actor) = CollaborationRepository::create_default(
+        &root,
+        "batch",
+        &profiles::Profile::new("Alice").unwrap(),
+    )
+    .unwrap();
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/audio/mono16.wav");
+    let cancel = AtomicBool::new(false);
+    for (index, folder) in ["source", "other", "target"].iter().enumerate() {
+        let plan = repo
+            .seal_media_placement(0, None, vec![(*folder).into()], format!("{folder}.wav"))
+            .unwrap();
+        let prepared = repo
+            .prepare_media(&source, &root.join(format!("pcm-{index}")), &cancel)
+            .unwrap()
+            .with_placement(plan)
+            .unwrap();
+        repo.append_media(&actor, &prepared, &cancel).unwrap();
+    }
+    (root, repo, actor)
+}
+
+fn batch_ids(head: &Organization) -> Vec<String> {
+    ["source.wav", "other.wav", "target.wav"]
+        .iter()
+        .map(|name| {
+            head.media
+                .iter()
+                .find(|media| media.original_filename == *name)
+                .unwrap()
+                .media_id
+                .clone()
+        })
+        .collect()
+}
+
+fn batch_target(head: &Organization) -> String {
+    head.folders
+        .iter()
+        .find(|f| f.name == "target")
+        .unwrap()
+        .id
+        .clone()
+}
+
+#[test]
+fn batch_moves_atomically_across_folders_and_returns_validated_noop() {
+    use std::cell::Cell;
+    let (root, repo, actor) = batch_fixture();
+    let before = repo.read_organization().unwrap();
+    let ids = batch_ids(&before);
+    let target = batch_target(&before);
+    let files = removal_files(&root);
+    let moved = repo
+        .apply_organization(
+            &actor,
+            before.revision,
+            batch_operation(ids.clone(), Some(target.clone())),
+        )
+        .unwrap();
+    assert_eq!(
+        (moved.revision, moved.layout_revision),
+        (before.revision + 1, before.layout_revision + 1)
+    );
+    for (old, new) in before.media.iter().zip(&moved.media) {
+        assert_eq!(
+            (&new.media_id, &new.original_filename),
+            (&old.media_id, &old.original_filename)
+        );
+        assert_eq!(new.folder_id.as_deref(), Some(target.as_str()));
+    }
+    assert_eq!(removal_files(&root), files);
+    let bytes = fs::read(root.join("organization.json")).unwrap();
+    let guard_called = Cell::new(false);
+    let noop = repo
+        .apply_organization_controlled(
+            &actor,
+            moved.revision,
+            batch_operation(ids.clone(), Some(target)),
+            &AtomicBool::new(false),
+            || {
+                guard_called.set(true);
+                Ok(())
+            },
+        )
+        .unwrap();
+    assert!(guard_called.get(), "a no-op must still verify the owner");
+    assert_eq!(noop, moved);
+    assert_eq!(fs::read(root.join("organization.json")).unwrap(), bytes);
+    let root_move = repo
+        .apply_organization(
+            &actor,
+            moved.revision,
+            batch_operation(ids[..2].to_vec(), None),
+        )
+        .unwrap();
+    assert_eq!(
+        (root_move.revision, root_move.layout_revision),
+        (moved.revision + 1, moved.layout_revision + 1)
+    );
+    for media in &root_move.media {
+        if ids[..2].contains(&media.media_id) {
+            assert_eq!(media.folder_id, None);
+        } else {
+            assert_eq!(
+                media.folder_id,
+                moved
+                    .media
+                    .iter()
+                    .find(|m| m.media_id == media.media_id)
+                    .unwrap()
+                    .folder_id
+            );
+        }
+    }
+    drop((actor, repo));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn batch_rejects_invalid_requests_stale_heads_and_failed_guards_without_writing() {
+    use annotator_core::error::{AppError, ErrorCode};
+    let (root, repo, actor) = batch_fixture();
+    let head = repo.read_organization().unwrap();
+    let ids = batch_ids(&head);
+    let target = batch_target(&head);
+    let before = fs::read(root.join("organization.json")).unwrap();
+    let invalid = [
+        batch_operation(vec![], None),
+        batch_operation(vec![ids[0].clone(), ids[0].clone()], None),
+        batch_operation(vec![ids[0].clone(), "bad".into()], None),
+        batch_operation(
+            vec![
+                ids[0].clone(),
+                "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA".into(),
+            ],
+            None,
+        ),
+        batch_operation(vec![ids[0].clone(), uuid::Uuid::nil().to_string()], None),
+        batch_operation(vec![ids[0].clone(), id()], None),
+        batch_operation(vec![ids[0].clone()], Some("bad".into())),
+        batch_operation(vec![ids[0].clone()], Some(id())),
+        batch_operation(vec![ids[0].clone(); 10_001], None),
+    ];
+    for operation in invalid {
+        assert!(repo
+            .apply_organization(&actor, head.revision, operation)
+            .is_err());
+        assert_eq!(fs::read(root.join("organization.json")).unwrap(), before);
+        assert_eq!(repo.read_organization().unwrap(), head);
+    }
+    let stale = repo
+        .apply_organization(
+            &actor,
+            head.revision - 1,
+            batch_operation(vec![ids[2].clone()], Some(target.clone())),
+        )
+        .unwrap_err();
+    assert_eq!(
+        stale.code,
+        ErrorCode::RevisionConflict,
+        "even a no-op checks the captured revision"
+    );
+    for operation in [
+        batch_operation(ids, Some(target.clone())),
+        batch_operation(vec![batch_ids(&head)[2].clone()], Some(target)),
+    ] {
+        assert!(repo
+            .apply_organization_controlled(
+                &actor,
+                head.revision,
+                operation,
+                &AtomicBool::new(false),
+                || Err::<(), _>(AppError::invalid("owner replaced"))
+            )
+            .is_err());
+        assert_eq!(fs::read(root.join("organization.json")).unwrap(), before);
+        assert_eq!(repo.read_organization().unwrap(), head);
+    }
+    let cancelled = AtomicBool::new(false);
+    assert!(repo
+        .apply_organization_controlled(
+            &actor,
+            head.revision,
+            batch_operation(vec![batch_ids(&head)[2].clone()], Some(batch_target(&head))),
+            &cancelled,
+            || {
+                cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+                Ok(())
+            },
+        )
+        .is_err());
+    assert_eq!(fs::read(root.join("organization.json")).unwrap(), before);
+    drop((actor, repo));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn batch_reads_latest_recycle_even_for_noop_but_legacy_single_move_is_unchanged() {
+    use recycle::RecycleOperation;
+    let (root, repo, actor) = batch_fixture();
+    let head = repo.read_organization().unwrap();
+    let ids = batch_ids(&head);
+    let target = batch_target(&head);
+    let before = fs::read(root.join("organization.json")).unwrap();
+    let cancel = AtomicBool::new(false);
+    let other = CollaborationRepository::open(&root).unwrap();
+    let other_actor = other
+        .adopt(&profiles::Profile::new("Bob").unwrap())
+        .unwrap();
+    other
+        .apply_recycle_controlled(
+            &other_actor,
+            0,
+            RecycleOperation {
+                operation_id: id(),
+                media_ids: vec![ids[2].clone()],
+                trash: true,
+            },
+            &cancel,
+            || Ok(()),
+        )
+        .unwrap();
+    assert_eq!(
+        repo.read_organization().unwrap(),
+        head,
+        "recycling does not advance organization revision"
+    );
+    for operation in [
+        batch_operation(ids.clone(), Some(target.clone())),
+        batch_operation(vec![ids[2].clone()], Some(target.clone())),
+    ] {
+        assert!(repo
+            .apply_organization(&actor, head.revision, operation)
+            .is_err());
+        assert_eq!(fs::read(root.join("organization.json")).unwrap(), before);
+    }
+    let recycle = fs::read(root.join("recycle.json")).unwrap();
+    fs::write(root.join("recycle.json"), b"invalid recycle state").unwrap();
+    assert!(repo
+        .apply_organization(
+            &actor,
+            head.revision,
+            batch_operation(vec![ids[2].clone()], Some(target.clone()))
+        )
+        .is_err());
+    assert_eq!(fs::read(root.join("organization.json")).unwrap(), before);
+    fs::write(root.join("recycle.json"), recycle).unwrap();
+    // Menu moves retain their historical behavior, including moving recycled records and same-folder moves.
+    let single = repo
+        .apply_organization(
+            &actor,
+            head.revision,
+            OrganizationOperation::MoveMedia {
+                media_id: ids[2].clone(),
+                folder_id: Some(target),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        (single.revision, single.layout_revision),
+        (head.revision + 1, head.layout_revision + 1)
+    );
+    assert_eq!(single.media, head.media);
+    let single = repo
+        .apply_organization(
+            &actor,
+            single.revision,
+            OrganizationOperation::MoveMedia {
+                media_id: ids[2].clone(),
+                folder_id: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        single
+            .media
+            .iter()
+            .find(|m| m.media_id == ids[2])
+            .unwrap()
+            .folder_id,
+        None
+    );
+    assert_eq!(
+        (single.revision, single.layout_revision),
+        (head.revision + 2, head.layout_revision + 2)
+    );
+    drop((other_actor, other, actor, repo));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn batch_wire_shape_is_strict() {
+    let valid = serde_json::json!({"type":"moveMediaBatch", "mediaIds":[id()], "folderId":null});
+    let operation: OrganizationOperation = serde_json::from_value(valid.clone()).unwrap();
+    assert_eq!(serde_json::to_value(operation).unwrap(), valid);
+    for bad in [
+        serde_json::json!({"type":"moveMediaBatch", "mediaIds":[id()]}),
+        serde_json::json!({"type":"moveMediaBatch", "mediaIds":[id()], "folderId":null, "extra":true}),
+        serde_json::json!({"type":"moveMediaBatch", "mediaId":id(), "folderId":null}),
+        serde_json::json!({"type":"moveMediaBatch", "mediaIds":null, "folderId":null}),
+    ] {
+        assert!(serde_json::from_value::<OrganizationOperation>(bad).is_err());
+    }
+}
+
+#[test]
+fn batch_accepts_ten_thousand_ids_and_noop_at_the_revision_limit() {
+    let mut head = Organization::empty(id());
+    let folder = id();
+    head.folders.push(Folder {
+        id: folder.clone(),
+        parent_id: None,
+        name: "target".into(),
+    });
+    for value in 1..=10_000 {
+        head.media.push(MediaMembership {
+            media_id: uuid::Uuid::from_u128(value).to_string(),
+            folder_id: None,
+            original_filename: "track.wav".into(),
+        });
+    }
+    let ids = head
+        .media
+        .iter()
+        .map(|media| media.media_id.clone())
+        .collect::<Vec<_>>();
+    let mut moved = head
+        .apply(batch_operation(ids.clone(), Some(folder.clone())))
+        .unwrap();
+    assert_eq!((moved.revision, moved.layout_revision), (1, 1));
+    assert!(moved
+        .media
+        .iter()
+        .all(|media| media.folder_id.as_ref() == Some(&folder)));
+    moved.revision = 9_007_199_254_740_991;
+    moved.layout_revision = moved.revision;
+    assert_eq!(
+        moved
+            .apply(batch_operation(ids.clone(), Some(folder)))
+            .unwrap(),
+        moved
+    );
+    assert!(moved.apply(batch_operation(ids, None)).is_err());
+}
+
+#[cfg(windows)]
+#[test]
+fn batch_failed_head_replacement_is_atomic_and_noop_needs_no_write() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let (root, repo, actor) = batch_fixture();
+    let head = repo.read_organization().unwrap();
+    let ids = batch_ids(&head);
+    let target = batch_target(&head);
+    let before = fs::read(root.join("organization.json")).unwrap();
+    let blocker = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1 | 2)
+        .open(root.join("organization.json"))
+        .unwrap();
+    assert!(repo
+        .apply_organization(
+            &actor,
+            head.revision,
+            batch_operation(ids.clone(), Some(target.clone()))
+        )
+        .is_err());
+    assert_eq!(fs::read(root.join("organization.json")).unwrap(), before);
+    let noop = repo
+        .apply_organization(
+            &actor,
+            head.revision,
+            batch_operation(vec![ids[2].clone()], Some(target)),
+        )
+        .unwrap();
+    assert_eq!(noop, head);
+    assert_eq!(fs::read(root.join("organization.json")).unwrap(), before);
+    drop((blocker, actor, repo));
+    fs::remove_dir_all(root).unwrap();
+}

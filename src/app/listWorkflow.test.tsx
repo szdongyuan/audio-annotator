@@ -100,7 +100,7 @@ it.each([['self', 'file'], ['self', 'channel'], ['self', 'region'], ['foreign', 
   const s = authorSetup(), ui = render(<AppShell {...ready(s.active)} collaboration={s.collaboration} />);
   for (const compare of [false, true]) {
     if (compare) {
-      fireEvent.change(screen.getByRole('combobox', { name: '主面板音频' }), { target: { value: s.a.id } });
+      fireEvent.click(document.querySelector(`.media-select[data-media-id="${s.a.id}"]`)!);
       fireEvent.click(screen.getByRole('button', { name: '双文件对比' }));
     }
     for (let repeat = 0; repeat < 2; repeat++) {
@@ -109,8 +109,8 @@ it.each([['self', 'file'], ['self', 'channel'], ['self', 'region'], ['foreign', 
       expect(s.privateView()).toEqual(before);
       s.open(source, scope); jump(); await settle();
       expect(screen.queryByRole('dialog', { name: '音频查看（只读）' })).toBeNull(); expectTab('作者');
-      expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(compare ? s.a.id : s.b.id);
-      if (compare) expect(screen.getByRole('combobox', { name: '对比面板音频' })).toHaveValue(s.b.id);
+      expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', compare ? s.a.id : s.b.id);
+      if (compare) expect(document.querySelector('[data-pane="compare"]')).toHaveAttribute('data-media-id', s.b.id);
       if (scope !== 'file') expect(ui.container.querySelector(`[data-testid="canvas-${s.b.id}-1"]`)).toBeInTheDocument();
       const selected = JSON.parse(ui.container.querySelector('[data-selection]')!.getAttribute('data-selection')!);
       if (source === 'self' && scope === 'region') expect(selected.object.id).toBe(s.doc.annotations[1].id);
@@ -145,7 +145,7 @@ it.each(['self', 'foreign'] as const)('cancels delayed %s author requests for us
     s.open(source, 'region'); jump(); const request = pending.at(-1)!;
     if (action === 'close viewer') fireEvent.click(screen.getByRole('button', { name: '关闭查看' }));
     if (action === 'tab') fireEvent.click(screen.getByRole('tab', { name: '类别' }));
-    if (action === 'primary') fireEvent.change(screen.getByRole('combobox', { name: '主面板音频' }), { target: { value: s.a.id } });
+    if (action === 'primary') fireEvent.click(document.querySelector(`.media-select[data-media-id="${s.a.id}"]`)!);
     if (action === 'channel context') fireEvent(ui.container.querySelector('[data-pane="primary"] .channel-pane[aria-label="通道 2"]')!, new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
     if (action === 'same selection') fireEvent.click(ui.container.querySelector('.file-heading h2')!);
     if (action === 'gesture') fireEvent.click(screen.getByRole('button', { name: '开始手势 A.wav 1' }));
@@ -159,7 +159,7 @@ it.each(['self', 'foreign'] as const)('cancels delayed %s author requests for us
     await release(request);
     expect(screen.getAllByRole('tab').find(t => t.getAttribute('aria-selected') === 'true')!.textContent).toBe(tab);
     expect(ui.container.querySelector('[data-context]')).toHaveAttribute('data-context', before!);
-    expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(s.a.id);
+    expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', s.a.id);
     // Restore the fixture owner only after proving the old completion was inert.
     s.active.collaboration!.actor = { ...s.active.collaboration!.actor!, authorId: '00000000-0000-4000-8000-000000000021' };
     ui.rerender(<AppShell {...ready(s.active)} collaboration={s.collaboration} />);
@@ -197,7 +197,7 @@ it.each(['self', 'foreign'] as const)('uses only current %s author geometry and 
       fireEvent.click(screen.getByRole('button', { name: '关闭查看' }));
     }
     accept(s.active, { media: [s.a, s.b] });
-    fireEvent.change(screen.getByRole('combobox', { name: '主面板音频' }), { target: { value: s.a.id } });
+    fireEvent.click(document.querySelector(`.media-select[data-media-id="${s.a.id}"]`)!);
     fireEvent.click(ui.container.querySelector('.file-heading h2')!); await settle(); expectTab('文件/通道');
   }
 });
@@ -217,11 +217,11 @@ it.each(['older first', 'newer first', 'newer failed'] as const)('only applies t
   const pending = pauseReveal(), s = authorSetup(), ui = render(<AppShell {...ready(s.active)} collaboration={s.collaboration} />);
   s.open('self', 'region'); jump(); s.open('foreign', 'region'); jump();
   if (order === 'older first') {
-    await release(pending[0]); expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(s.a.id);
+    await release(pending[0]); expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', s.a.id);
     await release(pending[1]);
   } else { await release(pending[1], order !== 'newer failed'); await release(pending[0]); }
   expectTab('作者'); expect(ui.container.querySelector('[data-selection]')).toHaveAttribute('data-selection', 'null');
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(order === 'newer failed' ? s.a.id : s.b.id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', order === 'newer failed' ? s.a.id : s.b.id);
   if (order !== 'newer failed') expect(screen.queryByRole('dialog', { name: '音频查看（只读）' })).toBeNull();
   fireEvent.click(ui.container.querySelector('.file-heading h2')!); await settle(); expectTab('文件/通道');
 });
@@ -232,7 +232,7 @@ it.each(['self', 'foreign'] as const)('rejects %s author channel removed while r
   const before = ui.container.querySelector('[data-view]')!.getAttribute('data-view');
   await release(pending[0]); expectTab('作者');
   expect(screen.getByRole('dialog', { name: '音频查看（只读）' })).toBeInTheDocument();
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(s.a.id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', s.a.id);
   expect(ui.container.querySelector('[data-view]')).toHaveAttribute('data-view', before!);
   expect(ui.container.querySelector('[data-selection]')).toHaveAttribute('data-selection', 'null');
   fireEvent.click(screen.getByRole('button', { name: '关闭查看' }));
@@ -243,7 +243,7 @@ it.each(['self', 'foreign'] as const)('reports a rejected %s author reveal once 
   s.open(source, 'region'); jump();
   await act(async () => pending[0].reject({ code: 'InvalidInput', message: 'reveal rejected', retryable: false }));
   expect(within(screen.getByRole('dialog', { name: '音频查看（只读）' })).getByRole('alert')).toHaveTextContent('reveal rejected'); expectTab('作者');
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(s.a.id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', s.a.id);
   fireEvent.click(ui.container.querySelector('.file-heading h2')!); await settle(); expectTab('文件/通道');
   fireEvent.click(screen.getByRole('tab', { name: '作者' })); jump(); await release(pending[1]); expectTab('作者');
   expect(screen.queryByRole('dialog', { name: '音频查看（只读）' })).toBeNull();
@@ -258,7 +258,7 @@ it('invalidates a pending own-list jump when the global identity runtime changes
   identity.snapshot = { ...identity.snapshot, runtimeNonce: crypto.randomUUID() };
   ui.rerender(<AppShell {...ready(active)} identity={identity} />);
   await release(pending[0]);
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(active.store.snapshot.document.media[0].id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', active.store.snapshot.document.media[0].id);
   expectTab('列表'); identity.dispose();
 });
 function filters(category: string, channel: string, query: string) {
@@ -479,10 +479,10 @@ it.each(['geometry', 'deleted', 'moved media', 'invalid geometry', 'channel remo
   if (mutation === 'geometry') {
     const view = JSON.parse(ui.container.querySelector('[data-view]')!.getAttribute('data-view')!);
     expect(view.startSeconds).toBeCloseTo(.45); expect(view.endSeconds).toBeCloseTo(.75);
-    expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(s.b.id);
+    expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', s.b.id);
   } else {
     expect(ui.container.querySelector('[data-view]')).toHaveAttribute('data-view', before!);
-    expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(s.a.id);
+    expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', s.a.id);
   }
   expect(ui.container.querySelector('[data-selection]')).toHaveAttribute('data-selection', 'null');
   expect(ui.container.querySelector('[data-edit-id]')).toBeNull();
@@ -492,7 +492,7 @@ it.each(['tab', 'primary', 'gesture', 'same selection', 'reopen'] as const)('can
   const pending = pauseReveal(), s = processingSetup(), ui = render(<AppShell {...ready(s.active)} />);
   locateProcessing();
   if (action === 'tab') fireEvent.click(screen.getByRole('tab', { name: '类别' }));
-  if (action === 'primary') fireEvent.change(screen.getByRole('combobox', { name: '主面板音频' }), { target: { value: s.a.id } });
+  if (action === 'primary') fireEvent.click(document.querySelector(`.media-select[data-media-id="${s.a.id}"]`)!);
   if (action === 'gesture') fireEvent.click(screen.getByRole('button', { name: '开始手势 A.wav 1' }));
   if (action === 'same selection') fireEvent.click(ui.container.querySelector('.file-heading h2')!);
   if (action === 'reopen') { ui.rerender(<AppShell {...props(null)} />); ui.rerender(<AppShell {...ready(setup().active)} />); }
@@ -500,7 +500,7 @@ it.each(['tab', 'primary', 'gesture', 'same selection', 'reopen'] as const)('can
   const selectedTab = screen.getAllByRole('tab').find(tab => tab.getAttribute('aria-selected') === 'true')!;
   await release(pending[0]); expect(selectedTab).toHaveAttribute('aria-selected', 'true');
   expect(ui.container.querySelector('[data-view]')).toHaveAttribute('data-view', before!);
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(s.a.id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', s.a.id);
   fireEvent.click(screen.getByRole('button', { name: '结束手势 A.wav 1' }));
   fireEvent.click(screen.getByRole('button', { name: '选择频谱 A.wav 1' })); await settle(); expectTab('区域');
 });
@@ -512,7 +512,7 @@ it.each(['older first', 'newer first', 'newer failed'] as const)('only applies t
   await release(pending[1], order !== 'newer failed');
   const before = ui.container.querySelector('[data-view]')!.getAttribute('data-view');
   if (order !== 'older first') await release(pending[0]);
-  expectTab('处理'); expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(s.a.id);
+  expectTab('处理'); expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', s.a.id);
   expect(ui.container.querySelector('[data-view]')).toHaveAttribute('data-view', before!);
   if (order !== 'newer failed') expect(JSON.parse(before!).startSeconds).toBeCloseTo(.45);
   expect(ui.container.querySelector('[data-selection]')).toHaveAttribute('data-selection', 'null');
@@ -524,7 +524,7 @@ it('keeps processing selected through sequential mask/gain navigation across med
   fireEvent.click(screen.getByRole('button', { name: '选择频谱 A.wav 1' })); await settle(); expectTab('区域');
   for (const kind of ['mask', 'gain', 'mask'] as const) {
     locateProcessing(kind); await settle(); expectTab('处理');
-    expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(kind === 'mask' ? s.b.id : s.a.id);
+    expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', kind === 'mask' ? s.b.id : s.a.id);
     expect(ui.container.querySelector('[data-selection]')).toHaveAttribute('data-selection', 'null');
     expect(ui.container.querySelector('[data-edit-id]')).toBeNull();
   }
@@ -536,15 +536,15 @@ it('reports a processing reveal rejection once and permits retry and normal navi
   expect(report).toHaveBeenCalledOnce(); expect(s.active.store.error?.message).toContain('processing reveal rejected'); expectTab('处理');
   fireEvent.click(ui.container.querySelector('.file-heading h2')!); await settle(); expectTab('文件/通道');
   locateProcessing(); await release(pending[1]); expectTab('处理');
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(s.b.id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', s.b.id);
 });
 it.each([['mask', false], ['gain', false], ['mask', true], ['gain', true]] as const)('keeps processing %s navigation in its tab with comparison=%s and reveals hidden channels', async (kind, compare) => {
   const s = processingSetup(); if (compare) s.doc.viewState.compareMediaId = s.b.id;
   const ui = render(<AppShell {...ready(s.active)} />);
   for (let repeat = 0; repeat < 2; repeat++) {
     locateProcessing(kind); await settle(); expectTab('处理');
-    expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(compare ? s.a.id : s.b.id);
-    if (compare) expect(screen.getByRole('combobox', { name: '对比面板音频' })).toHaveValue(s.b.id);
+    expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', compare ? s.a.id : s.b.id);
+    if (compare) expect(document.querySelector('[data-pane="compare"]')).toHaveAttribute('data-media-id', s.b.id);
     const canvas = ui.container.querySelector(`[data-testid="canvas-${s.b.id}-1"]`)!;
     const view = JSON.parse(canvas.getAttribute('data-view')!);
     expect(view.startSeconds).toBeCloseTo(.35); expect(view.endSeconds).toBeCloseTo(.65);
@@ -617,8 +617,8 @@ it('keeps comparison panes stable through same-file and cross-file list clicks, 
   const before = applyChange.mock.calls.length;
   for (const note of ['bird file', 'bird right', 'bird region', 'other file', 'other region', 'bird region']) {
     fireEvent.click(row(note)); jump(); await settle(); expectTab('列表');
-    expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(a.id);
-    expect(screen.getByRole('combobox', { name: '对比面板音频' })).toHaveValue(b.id);
+    expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', a.id);
+    expect(document.querySelector('[data-pane="compare"]')).toHaveAttribute('data-media-id', b.id);
   }
   expect(ui.container.querySelector('[data-edit-id]')).toBeNull();
   expect(applyChange.mock.calls.slice(before).every(call => call[2].type === 'updateViewState')).toBe(true);
@@ -634,7 +634,7 @@ it.each(['file', 'channel', 'region'] as const)('opens a cross-file %s result in
   active.store.snapshot.document.annotations.push({ ...active.store.snapshot.document.annotations[0], id: '00000000-0000-4000-8000-000000000045', region: { ...active.store.snapshot.document.annotations[0].region, mediaId: b.id, channelIndex: 0 }, note: 'other region' });
   render(<AppShell {...ready(active)} />); list();
   fireEvent.click(row(`other ${scope}`)); jump(); await settle(); expectTab('列表');
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(b.id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', b.id);
 });
 
 it.each(['tab', 'menu', 'newer', 'close', 'project', 'identity'] as const)('invalidates delayed location on %s', async action => {
@@ -649,7 +649,7 @@ it.each(['tab', 'menu', 'newer', 'close', 'project', 'identity'] as const)('inva
   if (action === 'identity') { a.active.collaboration!.actor = { ...a.active.collaboration!.actor!, authorId: 'author-b' }; ui.rerender(<AppShell {...ready(a.active)} />); list(); filters('*', '*', 'other'); }
   await release(pending[0]);
   expectTab(action === 'tab' || action === 'menu' ? '类别' : '列表');
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(a.active.store.snapshot.document.media[0].id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', a.active.store.snapshot.document.media[0].id);
   if (action === 'project' || action === 'identity') expectFilters('*', '*', 'other');
 });
 
@@ -669,7 +669,7 @@ it('applies only the latest request when two delayed reveals settle in reverse o
   fireEvent.click(row('other file')); jump(); fireEvent.click(row('bird right')); jump();
   await release(pending[1]); expectTab('列表');
   await release(pending[0]); expectTab('列表');
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(active.store.snapshot.document.media[0].id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', active.store.snapshot.document.media[0].id);
   fireEvent.click(screen.getByRole('tab', { name: '文件/通道' })); expect(screen.getByLabelText('通道 2 备注')).toHaveValue('bird right');
 });
 
@@ -702,7 +702,7 @@ it.each([true, false])('runs the real hidden-media reveal boundary, success=%s, 
   const ui = render(<AppShell {...ready(active)} collaboration={collaboration} />); list();
   fireEvent.click(row('other file')); jump(); expect(hideMedia).toHaveBeenCalledWith(b.id, false);
   await act(async () => { complete(); await wait; }); expectTab('列表');
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(success ? b.id : active.store.snapshot.document.media[0].id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', success ? b.id : active.store.snapshot.document.media[0].id);
   fireEvent.click(ui.container.querySelector('.file-heading h2')!); await settle(); expectTab('文件/通道');
 });
 
@@ -721,7 +721,7 @@ it('reveals a result when every media was hidden and passive workspace context a
   await settle();
   await act(async () => { complete(); await wait; });
   expectTab('列表');
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(media.id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', media.id);
   expect(JSON.parse(ui.container.querySelector('[data-context]')!.getAttribute('data-context')!)).toEqual({ mediaId: media.id, channelIndex: null });
 });
 
@@ -731,32 +731,32 @@ it.each(['pane', 'channel'] as const)('context-only %s interaction supersedes a 
   doc.media.push(c); doc.viewState.compareMediaId = c.id;
   const ui = render(<AppShell {...ready(active)} />); list(); filters('*', '*', 'other');
   fireEvent.click(row('other file')); jump(); expect(pending).toHaveLength(1);
-  if (target === 'pane') fireEvent.focus(screen.getByRole('combobox', { name: '对比面板音频' }));
+  if (target === 'pane') fireEvent.focus(ui.container.querySelector('[data-pane="compare"] .file-heading .text-button')!);
   else fireEvent(ui.container.querySelector('[data-pane="primary"] .channel-pane[aria-label="通道 2"]')!, new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
   await settle(); expectTab('文件/通道');
   const expected = { mediaId: target === 'pane' ? c.id : a.id, channelIndex: target === 'pane' ? 0 : 1 };
   expect(JSON.parse(ui.container.querySelector('[data-context]')!.getAttribute('data-context')!)).toEqual(expected);
   expect(JSON.parse(ui.container.querySelector('[data-selection]')!.getAttribute('data-selection')!)).toBeNull();
   await release(pending[0]); expectTab('文件/通道');
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(a.id);
-  expect(screen.getByRole('combobox', { name: '对比面板音频' })).toHaveValue(c.id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', a.id);
+  expect(document.querySelector('[data-pane="compare"]')).toHaveAttribute('data-media-id', c.id);
   expect(JSON.parse(ui.container.querySelector('[data-context]')!.getAttribute('data-context')!)).toEqual(expected);
   list(); expectFilters('*', '*', 'other');
 });
 
-it.each(['sidebar', 'same sidebar', 'primary selector', 'compare selector', 'workspace menu', 'single-file mode'] as const)('explicit %s navigation supersedes a pending list reveal even when context stays in the other pane', async entry => {
+it.each(['sidebar', 'same sidebar', 'compare sidebar', 'workspace menu', 'single-file mode'] as const)('explicit %s navigation supersedes a pending list reveal even when context stays in the other pane', async entry => {
   const pending = pauseReveal(), { active } = setup(), doc = active.store.snapshot.document, [a, b] = doc.media;
   const c = { ...b, id: '00000000-0000-4000-8000-000000000047', displayName: 'C.wav', note: 'third file' };
   const d = { ...b, id: '00000000-0000-4000-8000-000000000048', displayName: 'D.wav', note: 'fourth file' };
   doc.media.push(c, d); doc.viewState.compareMediaId = b.id;
   const ui = render(<AppShell {...ready(active)} />);
-  const changesPrimary = entry === 'sidebar' || entry === 'primary selector';
-  if (changesPrimary) fireEvent.click(ui.container.querySelector('[data-pane="compare"] .file-heading h2')!);
+  const changesPrimary = entry === 'sidebar';
+  if (entry === 'compare sidebar') fireEvent.click(ui.container.querySelector('[data-pane="compare"] .file-heading h2')!);
+  if (changesPrimary) fireEvent.focus(ui.container.querySelector('[data-pane="compare"] .file-heading .text-button')!);
   list(); filters('*', '*', 'third'); fireEvent.click(row('third file')); jump(); expect(pending).toHaveLength(1);
   const before = ui.container.querySelector('[data-context]')!.getAttribute('data-context');
   if (entry === 'same sidebar') fireEvent.click(screen.getByRole('button', { name: 'A.wav' }));
-  if (entry === 'sidebar') fireEvent.click(screen.getByRole('button', { name: 'D.wav' }));
-  if (entry === 'primary selector' || entry === 'compare selector') fireEvent.change(screen.getByRole('combobox', { name: changesPrimary ? '主面板音频' : '对比面板音频' }), { target: { value: d.id } });
+  if (entry === 'sidebar' || entry === 'compare sidebar') fireEvent.click(screen.getByRole('button', { name: 'D.wav' }));
   if (entry === 'workspace menu') {
     fireEvent.click(screen.getByRole('menuitem', { name: '视图' }));
     fireEvent.click(screen.getByRole('menuitem', { name: '双文件对比' }));
@@ -764,13 +764,14 @@ it.each(['sidebar', 'same sidebar', 'primary selector', 'compare selector', 'wor
   }
   if (entry === 'single-file mode') fireEvent.click(screen.getByRole('button', { name: '单文件' }));
   await settle();
-  expect(ui.container.querySelector('[data-context]')!.getAttribute('data-context')).toBe(before);
+  const after = ui.container.querySelector('[data-context]')!.getAttribute('data-context');
+  if (entry !== 'compare sidebar' && !changesPrimary) expect(after).toBe(before);
   await release(pending[0]);
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(changesPrimary ? d.id : a.id);
-  if (entry === 'single-file mode') expect(screen.queryByRole('combobox', { name: '对比面板音频' })).not.toBeInTheDocument();
-  else expect(screen.getByRole('combobox', { name: '对比面板音频' })).toHaveValue(entry === 'compare selector' || entry === 'workspace menu' ? d.id : b.id);
-  expect(ui.container.querySelector('[data-context]')!.getAttribute('data-context')).toBe(before);
-  expectTab('列表'); expectFilters('*', '*', 'third');
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', changesPrimary ? d.id : a.id);
+  if (entry === 'single-file mode') expect(document.querySelector('[data-pane="compare"]')).not.toBeInTheDocument();
+  else expect(document.querySelector('[data-pane="compare"]')).toHaveAttribute('data-media-id', entry === 'compare sidebar' || entry === 'workspace menu' ? d.id : b.id);
+  expect(ui.container.querySelector('[data-context]')!.getAttribute('data-context')).toBe(after);
+  list(); expectFilters('*', '*', 'third');
 });
 
 function realViewport(collaborate?: (active: ActiveProject) => CollaborationUI) {
@@ -799,7 +800,7 @@ it.each(['bird region', 'other file'])('real arrow-key viewport pan supersedes d
   const panned = viewport.view(); expect(panned.startSeconds).toBeGreaterThan(before.startSeconds);
   expect(viewport.canvas().getAttribute('data-context')).toBe(context);
   await release(pending[0]);
-  expect(screen.getByRole('combobox', { name: '主面板音频' })).toHaveValue(viewport.media.id);
+  expect(document.querySelector('[data-pane="primary"]')).toHaveAttribute('data-media-id', viewport.media.id);
   expect(viewport.view()).toEqual(panned); expect(viewport.canvas().getAttribute('data-context')).toBe(context); expectTab('列表');
 });
 

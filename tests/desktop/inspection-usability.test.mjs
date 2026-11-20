@@ -63,6 +63,35 @@ try {
  await h.until("document.querySelector('.file-pane canvas')&&!document.querySelector('.tile-status')");
  await authorFixtures('foreign'); await h.selectMedia('reference.wav');
  await w.expectDocument(h, d => d.annotations.some(a => a.categoryIds.length), 'annotated source'); await w.saved(h);
+ // Set real global defaults, then deliberately override the main audio. Both
+ // inspection entry points must still start from the globals without writing back.
+ await h.label('全局播放与显示设置'); await h.input('全局监听增益（dB）','20');
+ await h.select('全局频谱类型','梅尔频谱'); await h.click('.global-analysis-details summary');
+ await h.input('全局步长','256'); await h.clickText('应用到全部音频'); await w.escape(h);
+ await h.select('reference.wav 频谱类型','STFT 频谱');
+ await w.monitor(h,'此音频 · reference.wav','-10');
+ await h.until("!document.querySelector('.tile-status')"); await w.saved(h);
+ const globalBefore = await h.evaluate('return localStorage.getItem("audio-annotator.global-settings.v1")');
+ const viewBefore = (await w.snapshot(h)).viewState;
+ await observeInspection(h); await tab('列表'); await h.click('.annotation-row:last-child');
+ await h.until("document.querySelector('.inspection-region')&&!document.querySelector('.inspection-viewer .tile-status')");
+ check('list inspection inherits global Mel and +20 dB rather than main STFT and -10 dB',await h.evaluate("return document.querySelector('[aria-label=查看频谱类型]').value==='mel'&&document.querySelector('[aria-label=查看监听增益]').value==='20'"));
+ check('native inspection analysis follows global hop size',await h.evaluate("return window.__desktopInspectionCalls.find(c=>c.command==='inspection_open').args.analysisSettings.hopSize===256"));
+ await h.select('查看范围','完整音频'); await h.label('锁定查看方式');
+ await h.select('查看频谱类型','STFT'); await h.input('查看监听增益','-6');
+ await h.label('播放音频'); await h.driver.wait(async()=>(await inspectionStatus(h)).state==='playing',30000);
+ check('individual inspection gain reaches native playback',await h.evaluate("return [...window.__desktopInspectionCalls].reverse().find(c=>c.command==='inspection_playback_configure').args.request.monitorGainDb===-6"));
+ await h.label('分析与显示设置'); await h.clickText('恢复全局设置');
+ check('restore applies global Mel and +20 dB',await h.evaluate("return document.querySelector('[aria-label=查看频谱类型]').value==='mel'&&document.querySelector('[aria-label=查看监听增益]').value==='20'"));
+ await h.label('关闭查看'); await tab('作者'); await h.click('.remote-list-entry');
+ await h.until("document.querySelector('.inspection-region')&&!document.querySelector('.inspection-viewer .tile-status')");
+ check('author entry reuses locked whole-audio mode and fresh globals',await h.evaluate("return document.querySelector('[aria-label=查看范围]').value==='audio'&&document.querySelector('[aria-label=锁定查看方式]').getAttribute('aria-pressed')==='true'&&document.querySelector('[aria-label=查看频谱类型]').value==='mel'&&document.querySelector('[aria-label=查看监听增益]').value==='20'"));
+ await h.select('查看范围','聚焦标注框'); await h.screenshot('locked-global-inspection');
+ await h.label('关闭查看'); await tab('列表'); await h.click('.annotation-row:last-child');
+ await h.until("document.querySelector('.inspection-region')&&!document.querySelector('.inspection-viewer .tile-status')");
+ check('list entry reuses locked annotation focus',await h.evaluate("return document.querySelector('[aria-label=查看范围]').value==='annotation'"));
+ await h.label('关闭查看');
+ check('inspection never writes global settings or the main saved view',globalBefore===await h.evaluate('return localStorage.getItem("audio-annotator.global-settings.v1")')&&JSON.stringify(viewBefore)===JSON.stringify((await w.snapshot(h)).viewState));
  await h.menu('保存并同步', '协作'); await h.driver.wait(async () => !(await w.status(h)).pending, 30000);
  const actor = (await w.status(h)).actor.authorId;
  await w.cleanOwnedShutdown(h); h = null;
@@ -138,7 +167,7 @@ try {
   await h.clickText('关闭');
  }
  await w.saved(h); await retained('作者'); await h.screenshot('author-cross-file-retained');
- await h.clickText('双文件对比'); await h.select('对比面板音频', 'reference-b.wav');
+ await h.clickText('双文件对比'); await h.menu('双文件对比', '视图'); await h.label('reference-b.wav');
  for (const [id, prefix] of [[actor, 'foreign'], [self, 'self']]) await jumpAuthor(id, prefix, 'region', 'reference-b.wav', 'compare');
  check('Author compare jump preserves primary', await h.evaluate("return document.querySelector('.file-pane[data-pane=primary] h2').textContent==='reference.wav'"));
  await h.screenshot('author-compare-retained'); await h.clickText('单文件');

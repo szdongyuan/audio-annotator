@@ -18,7 +18,9 @@ pub(crate) fn encode(
     plan: &ExportPathPlan,
     limits: Limits,
 ) -> Result<Vec<u8>> {
-    let manifest = Manifest::capture_with_plan(doc, plan)?;
+    encode_manifest(&Manifest::capture_with_plan(doc, plan)?, limits)
+}
+pub(crate) fn encode_manifest(manifest: &Manifest, limits: Limits) -> Result<Vec<u8>> {
     // Serialize through a bounded writer, not an unbounded allocation for huge notes.
     struct Bounded {
         bytes: Vec<u8>,
@@ -189,13 +191,50 @@ pub fn export_bundle_controlled<Guard>(
     target: &Path,
     cancel: &AtomicBool,
     limits: Limits,
+    progress: impl FnMut(&str, u64),
+    before_publish: impl FnOnce() -> Result<Guard>,
+) -> Result<()> {
+    export_selected_controlled(
+        doc,
+        plan,
+        root,
+        target,
+        cancel,
+        limits,
+        &[],
+        false,
+        progress,
+        before_publish,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub fn export_selected_controlled<Guard>(
+    doc: &ProjectDocument,
+    plan: &ExportPathPlan,
+    root: &Path,
+    target: &Path,
+    cancel: &AtomicBool,
+    limits: Limits,
+    authors: &[super::PortableAuthor],
+    audio_only: bool,
     mut progress: impl FnMut(&str, u64),
     before_publish: impl FnOnce() -> Result<Guard>,
 ) -> Result<()> {
     if !plan.bundle {
         return Err(super::invalid("Expected bundle plan"));
     }
-    let manifest = encode(doc, plan, limits)?;
+    plan.validate_document(doc)?;
+    let manifest = if audio_only {
+        vec![]
+    } else {
+        let mut manifest = Manifest::capture_with_plan(doc, plan)?;
+        if !authors.is_empty() {
+            manifest.format_version = 5;
+            manifest.authors = authors.to_vec();
+            manifest.validate_authors()?;
+        }
+        encode_manifest(&manifest, limits)?
+    };
     if doc.media.len() as u64 + plan.directories.len() as u64 + 1 > limits.entries {
         return Err(limit());
     }
@@ -211,9 +250,11 @@ pub fn export_bundle_controlled<Guard>(
             let options = SimpleFileOptions::default()
                 .compression_method(CompressionMethod::Stored)
                 .unix_permissions(0o644);
-            zip.start_file("manifest.json", options)
-                .map_err(zip_error)?;
-            zip.write_all(&manifest).map_err(io)?;
+            if !audio_only {
+                zip.start_file("manifest.json", options)
+                    .map_err(zip_error)?;
+                zip.write_all(&manifest).map_err(io)?;
+            }
             for directory in &plan.directories {
                 zip.add_directory(
                     directory,

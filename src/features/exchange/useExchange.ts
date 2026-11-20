@@ -1,16 +1,20 @@
+import { awaitPreview } from './previewRequest';
 import { mediaDialogs } from '../../bridge/media';
 import { useEffect, useRef, useState } from 'react';
-import { exchangeClient, exchangeDialogs, type ExchangeEvent, type ExchangeRequest, type ExportPreview } from '../../bridge/exchange';
+import { exchangeClient, exchangeDialogs, type ExchangeEvent, type ExchangeRequest, type ExportPreview, type ExportSelection } from '../../bridge/exchange';
 import type { OpenedProject } from '../../bridge/projects';
 import { normalizeError } from '../../bridge/client';
 import type { AppError } from '../../bridge/types';
 import type { ProjectLifecycleUI } from '../project/useProjectLifecycle';
 export function useExchange(project: ProjectLifecycleUI) {
+    const [selection, setSelection] = useState<ExportSelection|null>(null);
+    const [mergeImport, setMergeImport] = useState(false);
+    const canMerge = !!project.active?.collaboration?.canImportMedia;
     const [previewBusy, setPreviewBusy] = useState(false);
-    const previewTail = useRef<Promise<void>>(Promise.resolve());
+    const previewAbort = useRef<AbortController|null>(null), exportAbort = useRef<AbortController|null>(null);
     const [preview, setPreview] = useState<ExportPreview | null>(null);
-    const previewGeneration = useRef(0), acceptedPreview = useRef<ExportPreview | null>(null);
-    const invalidatePreview = () => { previewGeneration.current++; acceptedPreview.current = null; setPreview(null); setPreviewBusy(false); };
+    const previewGeneration = useRef(0);
+    const invalidatePreview = () => { previewAbort.current?.abort(); previewAbort.current=null; previewGeneration.current++; setPreview(null); setPreviewBusy(false); };
     const [dialog, setDialog] = useState<'export' | 'import' | null>(null);
     const [busy, setBusy] = useState(false);
     const running = useRef(false);
@@ -33,7 +37,7 @@ export function useExchange(project: ProjectLifecycleUI) {
     const current = useRef(project.active);
     current.current = project.active;
     const mounted = useRef(true), generation = useRef(0);
-    useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; if (task.current)
+    useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; previewAbort.current?.abort(); exportAbort.current?.abort(); if (task.current)
         void exchangeClient.cancel(task.current).catch(() => { }); }; }, []);
     useEffect(() => { invalidatePreview(); if (pending.current && pending.current.owner !== project.active) {
         pending.current = null;
@@ -87,47 +91,37 @@ export function useExchange(project: ProjectLifecycleUI) {
     const prepareExport = (kind: 'annotations' | 'bundle', preserveFolders = true) => {
         if (running.current)
             return Promise.resolve();
+        invalidatePreview();
+        const abort = new AbortController(); previewAbort.current = abort;
         const owner = current.current, g = ++previewGeneration.current;
         const valid = () => mounted.current && g === previewGeneration.current && owner === current.current;
-        acceptedPreview.current = null;
+
         setPreview(null);
         setPreviewBusy(true);
         setError(null);
         setResult(null);
         setCancelled(false);
-        // Native retains one preview slot: serialize requests even after dismissal.
-        const pendingPreview = previewTail.current.catch(() => { }).then(async () => {
-            if (!valid())
-                return;
-            if (!owner)
-                throw { code: 'InvalidInput', message: '请先打开项目', retryable: false };
-            await owner.queue.flush();
-            if (!valid())
-                return;
-            await owner.lifecycle.submitDrafts();
-            if (!valid())
-                return;
+        const pendingPreview = (async () => {
+            if (!owner) throw { code:'InvalidInput',message:'请先打开项目',retryable:false };
             const doc = owner.store.snapshot.document;
             const expected = { projectId: doc.projectId, expectedRevision: doc.revision, ...(owner.collaboration ? { runtimeNonce: owner.collaboration.runtimeNonce } : {}) };
-            const value = await exchangeClient.preview(expected, kind === 'bundle', preserveFolders);
+            const value = await awaitPreview(exchangeClient.preview(expected, kind === 'bundle', preserveFolders, selection ?? undefined), abort.signal);
             if (!valid())
                 return;
             if (owner.store.snapshot.document.revision !== value.documentRevision)
                 throw { code: 'RevisionConflict', message: '项目已改变，请刷新导出预览', retryable: true };
-            acceptedPreview.current = value;
             setPreview(value);
-        }).catch(cause => { if (valid())
+        })().catch(cause => { if (valid())
             setError(normalizeError(cause)); }).finally(() => { if (valid())
             setPreviewBusy(false); });
-        previewTail.current = pendingPreview;
         return pendingPreview;
     };
-    const start = async (kind: 'annotations' | 'bundle' | 'import') => {
+    const start = async (kind: 'annotations' | 'bundle' | 'import', preserveFolders = true) => {
         if (running.current)
             return;
-        const owner = current.current, accepted = acceptedPreview.current;
-        if (kind !== 'import' && (!accepted || accepted.bundle !== (kind === 'bundle')))
-            return;
+        const owner = current.current;
+        invalidatePreview();
+        const abort = new AbortController(); exportAbort.current=abort;
         running.current = true;
         setBusy(true);
         reset();
@@ -140,17 +134,17 @@ export function useExchange(project: ProjectLifecycleUI) {
                 const source = await exchangeDialogs.source();
                 if (typeof source !== 'string' || cancelRequested.current)
                     return;
-                const parent = await exchangeDialogs.parent();
-                if (typeof parent !== 'string' || cancelRequested.current)
-                    return;
-                request = { kind, source, parent };
+                if (mergeImport && !canMerge) throw {code:'InvalidInput',message:'请先打开可写的目标项目',retryable:false};
+                const parent = mergeImport ? undefined : await exchangeDialogs.parent();
+                if ((!mergeImport && typeof parent !== 'string') || cancelRequested.current) return;
+                request = { kind, source, ...(typeof parent === 'string' ? {parent} : {}), ...(mergeImport ? {merge:true} : {}) };
                 pending.current = { request, owner: current.current };
             }
             else {
-                const path = await exchangeDialogs.save(kind);
+                const path = await exchangeDialogs.save(kind, selection?.audioOnly ?? false);
                 if (!path || cancelRequested.current || owner !== current.current)
                     return;
-                request = { kind, path, previewToken: accepted!.token, preserveFolders: accepted!.preserveFolders };
+                request = { kind, path, preserveFolders };
             }
             await project.performExchange(async (expected) => {
                 if (cancelRequested.current)
@@ -159,12 +153,14 @@ export function useExchange(project: ProjectLifecycleUI) {
                     throw { code: 'InvalidInput', message: '请先打开项目', retryable: false };
                 if (owner !== current.current)
                     throw { code: 'Cancelled', message: '项目已切换', retryable: true };
-                if (kind !== 'import' && accepted && (accepted.projectId !== expected!.projectId || accepted.documentRevision !== expected!.expectedRevision || (expected!.runtimeNonce && accepted.runtimeNonce !== expected!.runtimeNonce))) {
-                    invalidatePreview();
-                    throw { code: 'RevisionConflict', message: '项目已改变，请刷新导出预览', retryable: true };
+                if (kind !== 'import') {
+                    setPhase('准备导出目录');
+                    const plan = await awaitPreview(exchangeClient.preview(expected!, kind === 'bundle', preserveFolders, selection ?? undefined), abort.signal);
+                    if (cancelRequested.current || owner !== current.current) throw {code:'Cancelled',message:'任务已取消',retryable:true};
+                    request = {...request, previewToken:plan.token};
                 }
                 return startNative({ ...request, expected });
-            });
+            }, {exportOnly:kind !== 'import',signal:abort.signal,onPhase:setPhase});
         }
         catch (cause) {
             const e = normalizeError(cause);
@@ -179,6 +175,7 @@ export function useExchange(project: ProjectLifecycleUI) {
         finally {
             setBusy(false);
             running.current = false;
+            if(exportAbort.current===abort)exportAbort.current=null;
             task.current = null;
         }
     };
@@ -209,13 +206,16 @@ export function useExchange(project: ProjectLifecycleUI) {
             task.current = null;
         }
     };
-    return { dialog, returnFocus:returnFocus.current, previewBusy, preview, prepareExport, invalidatePreview, busy, phase, completed, result, error, cancelled, sources, bindings, continueImport,
+    return { dialog, selection, canMerge, mergeImport, setMergeImport, updateSelection:(value:ExportSelection)=>{setSelection(value);invalidatePreview();},
+        showSelected:(mediaIds:string[],trigger?:HTMLElement|null)=>{if(running.current||!current.current)return;returnFocus.current=trigger??null;reset();invalidatePreview();setSources(null);setBindings({});pending.current=null;setSelection({mediaIds:[...mediaIds],authorIds:current.current.collaboration?.actor?[current.current.collaboration.actor.authorId]:[],audioOnly:false});setDialog('export');},
+        returnFocus:returnFocus.current, previewBusy, preview, prepareExport, invalidatePreview, busy, phase, completed, result, error, cancelled, sources, bindings, continueImport,
         chooseSource: async (mediaId: string) => { const saved = pending.current; if (running.current || !sources?.media.some(m => m.id === mediaId) || !saved)
             return; const path = await mediaDialogs.choose(false); if (typeof path === 'string' && pending.current === saved && saved.owner === current.current)
             setBindings(old => ({ ...old, [mediaId]: path })); },
         show: (kind: 'export' | 'import',trigger?:HTMLElement|null) => { if (!running.current) {
             returnFocus.current=trigger??(document.activeElement instanceof HTMLElement?document.activeElement:null);
             reset();
+            setSelection(null);
             invalidatePreview();
             setSources(null);
             setBindings({});
@@ -227,7 +227,7 @@ export function useExchange(project: ProjectLifecycleUI) {
             setDialog(null);
             setSources(null);
             pending.current = null;
-        } }, onCancel: () => { cancelRequested.current = true; if (!running.current) {
+        } }, onCancel: () => { cancelRequested.current = true; exportAbort.current?.abort(); if (!running.current) {
             invalidatePreview();
             setSources(null);
             pending.current = null;
@@ -235,7 +235,7 @@ export function useExchange(project: ProjectLifecycleUI) {
             setCancelled(true);
         } setPhase('正在取消'); if (task.current)
             void exchangeClient.cancel(task.current).catch(e => setError(normalizeError(e))); },
-        startExport: (kind: 'annotations' | 'bundle') => void start(kind), startImport: () => void start('import'),
+        startExport: (kind: 'annotations' | 'bundle', preserveFolders=true) => void start(kind,preserveFolders), startImport: () => void start('import'),
     };
 }
 export type ExchangeUI = ReturnType<typeof useExchange>;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { cueUI } from './task5-ui.mjs';
-import { start, Key, wait } from './harness.mjs';
+import { start, Key, wait, revealMedia } from './harness.mjs';
 
 const output = path.resolve(process.env.ANNOTATOR_INTERACTION_OUTPUT ?? process.env.ANNOTATOR_SUITE_OUTPUT ?? '.test-output/fidelity-task6/interaction');
 await fs.mkdir(output, { recursive: true });
@@ -18,10 +18,15 @@ let h, id;
 const check = (name, details = {}) => { report.checks.push({ name, passed: true, ...details }); console.log('PASS ' + name); };
 const pane = side => `.file-pane[data-pane="${side}"]`;
 async function pair(a, b) {
-  await h.until(`document.querySelector('select[aria-label="主面板音频"]')?.selectedOptions[0]?.textContent === ${JSON.stringify(a)} && document.querySelector('select[aria-label="对比面板音频"]')?.selectedOptions[0]?.textContent === ${JSON.stringify(b)}`);
+  await h.until(`document.querySelector('${pane('primary')} h2')?.textContent === ${JSON.stringify(a)} && document.querySelector('${pane('compare')} h2')?.textContent === ${JSON.stringify(b)}`);
 }
 async function state() {
-  return h.evaluate(`return {pair:[...document.querySelectorAll('.pane-file-select')].map(e=>e.value),source:document.querySelector('.is-playback-source')?.getAttribute('aria-label'),selection:document.querySelector('.is-temporary')?.outerHTML??null};`);
+  return h.evaluate(`return {pair:[...document.querySelectorAll('.file-pane[data-pane]')].map(e=>e.dataset.mediaId),source:document.querySelector('.is-playback-source')?.getAttribute('aria-label'),selection:document.querySelector('.is-temporary')?.outerHTML??null};`);
+}
+const activate = side => h.click(`${pane(side)} button[title="设为播放源"]`);
+async function choose(side, name) {
+  await activate(side);
+  await revealMedia(h, name);
 }
 async function duplicate(action, side, screenshot) {
   await wait(250); const before = await state(), saved = await h.snapshot(id);
@@ -40,7 +45,7 @@ try {
   await h.menu('新建项目'); await h.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);
   id = JSON.parse(await fs.readFile(path.join(project, 'collaboration.json'), 'utf8')).projectId;
   await h.clickText('导入音频'); await h.until(`document.querySelector('.import-progress')?.textContent.includes('导入完成')`); await h.clickText('关闭导入结果');
-  await h.selectMedia(names[0]);await h.clickText('双文件对比');await h.select('对比面板音频',names[1]); await pair(names[0], names[1]);
+  await h.selectMedia(names[0]);await h.clickText('双文件对比');await choose('compare', names[1]); await pair(names[0], names[1]);
   await h.until(`document.querySelectorAll('canvas').length===4&&!document.querySelector('.tile-status')`);
   h.nativeRect({ width: 1280, height: 800 }); await wait(250);
   const frame = await h.evaluate(`return {dpr:devicePixelRatio,inner:[innerWidth,innerHeight],plots:[...document.querySelectorAll('.spectrogram-surface')].map(e=>e.getBoundingClientRect().toJSON()),headers:[...document.querySelectorAll('.file-pane')].map(e=>e.querySelector('.file-heading').getBoundingClientRect().height+e.querySelector('.file-controls').getBoundingClientRect().height),backing:[...document.querySelectorAll('canvas')].map(e=>({width:e.width,height:e.height,css:e.getBoundingClientRect().toJSON()}))};`);
@@ -49,15 +54,19 @@ try {
 
   await h.drag(`${pane('compare')} .annotation-overlay`, [.2, .25], [.5, .65]);
   const selection = (await state()).selection; assert.ok(selection);
-  await duplicate(() => h.driver.findElement({xpath:`//button[contains(@class,'media-select') and .//strong[.='${names[1]}']]`}).click(), 'compare', 'sidebar-duplicate-compare-highlight');
-  await duplicate(() => h.select('对比面板音频', names[0]), 'primary', 'header-duplicate-primary-highlight');
+  await duplicate(() => revealMedia(h, names[0]), 'primary', 'sidebar-duplicate-primary-highlight');
   await duplicate(async () => { await h.menu('双文件对比', '视图'); await h.label(names[0]); }, 'primary', 'menu-duplicate-primary-highlight');
-  await duplicate(() => h.select('主面板音频', names[1]), 'compare', 'header-duplicate-compare-highlight');
+  await activate('primary');
+  await duplicate(() => revealMedia(h, names[1]), 'compare', 'sidebar-duplicate-compare-highlight');
   await h.selectMedia(names[2]); await pair(names[2], names[1]);
   assert.equal((await state()).selection, selection); check('sidebar A/B to C/B retains comparison selection');
-  await h.select('主面板音频', names[0]); await pair(names[0], names[1]);
-  await h.select('对比面板音频', names[2]); await pair(names[0], names[2]);
-  assert.equal((await state()).selection, null); check('comparison title A/B to A/C clears only replaced selection');
+  await h.label('主面板返回上一条音频'); await pair(names[0], names[1]);
+  await h.click(`${pane('compare')} h2`);
+  assert.equal(await h.evaluate(`return document.querySelector('${pane('compare')}').classList.contains('is-current-pane')`), true);
+  await revealMedia(h, names[2]); await pair(names[0], names[2]);
+  assert.equal((await state()).selection, null); check('comparison title routes sidebar to A/C and clears only replaced selection');
+  await h.label('对比面板返回上一条音频'); await pair(names[0], names[1]);
+  check('each back button restores its own previous audio');
   await h.menu('双文件对比', '视图'); await h.label(names[1]); await pair(names[0], names[1]);
   check('top comparison menu changes only comparison identity');
 
@@ -94,11 +103,11 @@ try {
   assert.equal(await h.evaluate(`return !!document.querySelector('.analysis-popover')`), false);
   assert.equal(await h.evaluate(`return document.querySelector('.playback-position span').textContent`), '已停止'); check('outside closing play-button click is consumed');
   await h.label(`${names[1]} 分析设置`); await escape();
-  await h.select('对比面板音频', names[2]); await pair(names[0], names[2]);
-  await h.select('对比面板音频', names[1]); await pair(names[0], names[1]);
+  await choose('compare', names[2]); await pair(names[0], names[2]);
+  await choose('compare', names[1]); await pair(names[0], names[1]);
   assert.equal(await h.evaluate(`return !!document.querySelector('.analysis-popover')`), false);
 
-  await h.menu('联动时间轴', '视图'); await h.select('主面板音频', names[2]); await pair(names[2], names[1]);
+  await h.menu('联动时间轴', '视图'); await choose('primary', names[2]); await pair(names[2], names[1]);
   await h.clickText('保存'); await h.until(`document.querySelector('.project-identity')?.textContent.match(/已保存|已存本机/)`);
   const saved = await h.snapshot(id); assert.equal(saved.document.viewState.linkedTime, true);
   assert.equal(saved.document.viewState.media[saved.document.viewState.activeMediaId].endSeconds, saved.document.viewState.media[saved.document.viewState.compareMediaId].endSeconds);

@@ -481,6 +481,80 @@ mod guard_tests {
         }
     }
     #[test]
+    fn batch_noop_checks_final_owner_after_waiting_under_the_catalog_lock() {
+        use std::{
+            sync::{atomic::AtomicBool, mpsc},
+            time::Duration,
+        };
+        for mode in ["same", "reopened", "cancel"] {
+            let (state, root, binding) = fixture();
+            let repo = state.6.current.lock().unwrap().repo.clone().unwrap();
+            let actor = state
+                .0
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .workspace()
+                .unwrap()
+                .author_session()
+                .unwrap();
+            let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../tests/fixtures/audio/mono16.wav");
+            let prepared = repo
+                .prepare_media(&source, &root.join("pcm"), &AtomicBool::new(false))
+                .unwrap();
+            repo.append_media(&actor, &prepared, &AtomicBool::new(false))
+                .unwrap();
+            let media_id = prepared.media().id.clone();
+            let before = fs::read(root.join("project/organization.json")).unwrap();
+            let operation = serde_json::from_value(serde_json::json!({
+                "type": "moveMediaBatch", "mediaIds": [media_id], "folderId": null
+            }))
+            .unwrap();
+            let (entered, wait_entered) = mpsc::channel();
+            let (resume, wait_resume) = mpsc::channel();
+            *state.6.hook.lock().unwrap() = Some(Box::new(move || {
+                entered.send(()).unwrap();
+                wait_resume.recv().unwrap();
+            }));
+            let worker_state = state.clone();
+            let worker = std::thread::spawn(move || {
+                tauri::async_runtime::block_on(apply(&worker_state, binding, 1, operation))
+            });
+            wait_entered.recv_timeout(Duration::from_secs(10)).unwrap();
+            let lock = fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(root.join("project/catalog/.commit.lock"))
+                .unwrap();
+            assert!(
+                lock.try_lock().is_err(),
+                "the owner check must run under the catalog lock"
+            );
+            drop(lock);
+            assert!(state.0.try_lock().is_ok());
+            if mode == "reopened" {
+                // The same project is reinstalled with a new runtime nonce while the request waits.
+                state.6.install(Some(repo.clone())).unwrap();
+            } else if mode == "cancel" {
+                state.6.retire();
+            }
+            resume.send(()).unwrap();
+            let result = worker.join().unwrap();
+            if mode == "same" {
+                let head = result.unwrap().organization;
+                assert_eq!((head.revision, head.layout_revision), (1, 0));
+            } else {
+                assert!(result.is_err(), "{mode} must reject the stale no-op");
+            }
+            assert_eq!(
+                fs::read(root.join("project/organization.json")).unwrap(),
+                before
+            );
+        }
+    }
+    #[test]
     fn interprocess_lock_wait_does_not_block_the_private_editor() {
         use std::{
             sync::mpsc,

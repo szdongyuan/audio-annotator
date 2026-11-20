@@ -81,7 +81,7 @@ it('materializes analysis defaults lazily and renders accepted native settings u
  expect(active.store.snapshot.document.analysis[a.id].hopSize).toBe(256);await act(()=>active.lifecycle.save());hook.unmount();active.lifecycle.dispose();
 });
 it('global controls commit +20 dB, mel and linear zero together without requiring a project',()=>{
- const store=new LocalSettingsStore(memory());render(<GlobalSettings store={store} initialDisplay={defaultView(fixture.media[0] as never)} onClose={()=>{}}/>);
+ const store=new LocalSettingsStore(memory());render(<GlobalSettings store={store} onClose={()=>{}}/>);
  fireEvent.change(screen.getByLabelText('全局监听增益（dB）'),{target:{value:'20'}});fireEvent.change(screen.getByLabelText('全局频谱类型'),{target:{value:'mel'}});fireEvent.change(screen.getByLabelText('全局线性对数混合'),{target:{value:'0'}});
  fireEvent.click(screen.getByText('应用到全部音频'));expect(store.value.display).toMatchObject({frequencyMix:0,spectrumKind:'mel'});expect(store.value.playback.monitorGainDb).toBe(20);expect(screen.getByRole('status')).toHaveTextContent('已保存');
 });

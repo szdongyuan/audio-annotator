@@ -1,4 +1,26 @@
 use super::*;
+
+#[test]
+fn source_import_config_accepts_bridge_length_unicode_and_existing_native_allowance() {
+    for kind in [
+        import_source::SourceKind::Folder,
+        import_source::SourceKind::Zip,
+    ] {
+        let mut config = Config {
+            kind,
+            paths: vec!["界".repeat(16_384)],
+            rules: Default::default(),
+            organization: Default::default(),
+        };
+        assert!(config.validate().is_ok());
+        config.paths = vec!["😀".repeat(8_192)];
+        assert!(config.validate().is_ok());
+        config.paths = vec!["a".repeat(32_768)];
+        assert!(config.validate().is_ok());
+        config.paths = vec!["a".repeat(32_769)];
+        assert!(config.validate().is_err());
+    }
+}
 use crate::commands::collaboration::{defaults, runtime::Expected};
 use std::{fs, sync::mpsc, time::Duration};
 use tauri::ipc::InvokeResponseBody;
@@ -770,6 +792,430 @@ fn native_preview_seals_target_paths_original_names_and_manual_layout_revision()
     for descriptor in &ready {
         crate::commands::media::release(&f.state, &task, &descriptor.id).unwrap();
     }
+}
+
+#[test]
+fn dropped_initial_scan_checks_actual_captured_layout_and_rescan_uses_fresh_layout() {
+    use crate::commands::organization;
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    let f = Fixture::new();
+    let e = f.expected();
+    let binding = organization::Binding {
+        runtime_nonce: e.runtime_nonce.clone(),
+        project_id: e.project_id.clone(),
+    };
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (resume_tx, resume_rx) = mpsc::channel();
+    *f.state.6.hook.lock().unwrap() = Some(Box::new(move || {
+        entered_tx.send(()).unwrap();
+        resume_rx.recv().unwrap();
+    }));
+    let (ch, rx) = channel();
+    let token = tauri::async_runtime::block_on(start_with_layout(
+        &f.state,
+        e.runtime_nonce.clone(),
+        e.project_id.clone(),
+        f.config(),
+        Some(0),
+        ch,
+    ))
+    .unwrap();
+    entered_rx.recv_timeout(Duration::from_secs(20)).unwrap();
+    tauri::async_runtime::block_on(organization::apply(
+        &f.state,
+        binding,
+        0,
+        OrganizationOperation::CreateFolder {
+            id: uuid::Uuid::new_v4().to_string(),
+            parent_id: None,
+            name: "changed".into(),
+        },
+    ))
+    .unwrap();
+    resume_tx.send(()).unwrap();
+    let event = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+    assert_eq!(event["type"], "failed");
+    assert_eq!(event["error"]["code"], "RevisionConflict");
+    assert_eq!(event["error"]["details"]["droppedLayoutConflict"], true);
+    assert!(event["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("重新扫描"));
+    assert!(page(&f.state, &token, 0, 1).is_err());
+    cancel(&f.state, &token, true).unwrap();
+    let fresh = scan_config(&f, f.config());
+    assert_eq!(page(&f.state, &fresh, 0, 1).unwrap().candidates.len(), 1);
+    cancel(&f.state, &fresh, true).unwrap();
+    assert!(f
+        .state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .snapshot()
+        .unwrap()
+        .document
+        .media
+        .is_empty());
+}
+
+#[test]
+fn released_initial_drop_scan_sends_no_conflict_but_retry_with_original_revision_rejects() {
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    let f = Fixture::new();
+    let e = f.expected();
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (resume_tx, resume_rx) = mpsc::channel();
+    *f.state.6.hook.lock().unwrap() = Some(Box::new(move || {
+        entered_tx.send(()).unwrap();
+        resume_rx.recv().unwrap();
+    }));
+    let (ch, rx) = channel();
+    let token = tauri::async_runtime::block_on(start_with_layout(
+        &f.state,
+        e.runtime_nonce.clone(),
+        e.project_id.clone(),
+        f.config(),
+        Some(0),
+        ch,
+    ))
+    .unwrap();
+    entered_rx.recv_timeout(Duration::from_secs(20)).unwrap();
+    cancel(&f.state, &token, true).unwrap();
+    apply_folder(
+        &f,
+        OrganizationOperation::CreateFolder {
+            id: uuid::Uuid::new_v4().to_string(),
+            parent_id: None,
+            name: "changed".into(),
+        },
+    );
+    resume_tx.send(()).unwrap();
+    assert!(
+        rx.recv_timeout(Duration::from_secs(20)).is_err(),
+        "released entry must not deliver the old worker result"
+    );
+    let (ch, rx) = channel();
+    let retry = tauri::async_runtime::block_on(start_with_layout(
+        &f.state,
+        e.runtime_nonce,
+        e.project_id,
+        f.config(),
+        Some(0),
+        ch,
+    ))
+    .unwrap();
+    let event = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+    assert_eq!(event["type"], "failed");
+    assert_eq!(event["error"]["details"]["droppedLayoutConflict"], true);
+    cancel(&f.state, &retry, true).unwrap();
+}
+
+#[test]
+fn dropped_scan_reports_target_changes_after_capture_before_result() {
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    for remove in [false, true] {
+        let f = Fixture::new();
+        let target = uuid::Uuid::new_v4().to_string();
+        apply_folder(
+            &f,
+            OrganizationOperation::CreateFolder {
+                id: target.clone(),
+                parent_id: None,
+                name: "target".into(),
+            },
+        );
+        let mut config = f.config();
+        config.organization.target_folder_id = Some(target.clone());
+        let e = f.expected();
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        *f.state.6.after_io.lock().unwrap() = Some(Box::new(move || {
+            entered_tx.send(()).unwrap();
+            resume_rx.recv().unwrap();
+        }));
+        let (ch, rx) = channel();
+        let token = tauri::async_runtime::block_on(start_with_layout(
+            &f.state,
+            e.runtime_nonce,
+            e.project_id,
+            config,
+            Some(1),
+            ch,
+        ))
+        .unwrap();
+        entered_rx.recv_timeout(Duration::from_secs(20)).unwrap();
+        let operation = if remove {
+            OrganizationOperation::RemoveFolder { id: target }
+        } else {
+            OrganizationOperation::RenameFolder {
+                id: target,
+                name: "renamed".into(),
+            }
+        };
+        apply_folder(&f, operation);
+        resume_tx.send(()).unwrap();
+        loop {
+            let event = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+            if event["type"] == "failed" {
+                assert_eq!(event["error"]["details"]["droppedLayoutConflict"], true);
+                break;
+            }
+            assert_ne!(
+                event["type"], "result",
+                "stale capture must not become a result"
+            );
+        }
+        cancel(&f.state, &token, true).unwrap();
+    }
+}
+
+#[test]
+fn dropped_page_rechecks_layout_and_target_while_legacy_scan_keeps_existing_errors() {
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    for drop_origin in [false, true] {
+        for remove in [false, true] {
+            let f = Fixture::new();
+            let target = uuid::Uuid::new_v4().to_string();
+            apply_folder(
+                &f,
+                OrganizationOperation::CreateFolder {
+                    id: target.clone(),
+                    parent_id: None,
+                    name: "target".into(),
+                },
+            );
+            let mut config = f.config();
+            config.organization.target_folder_id = Some(target.clone());
+            let scan = |config: Config, revision: Option<u64>| {
+                let e = f.expected();
+                let (ch, rx) = channel();
+                let token = tauri::async_runtime::block_on(start_with_layout(
+                    &f.state,
+                    e.runtime_nonce,
+                    e.project_id,
+                    config,
+                    revision,
+                    ch,
+                ))
+                .unwrap();
+                loop {
+                    let event = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+                    if event["type"] == "result" {
+                        break;
+                    }
+                    assert_ne!(event["type"], "failed", "{event}");
+                }
+                token
+            };
+            let token = scan(config.clone(), drop_origin.then_some(1));
+            apply_folder(
+                &f,
+                if remove {
+                    OrganizationOperation::RemoveFolder { id: target.clone() }
+                } else {
+                    OrganizationOperation::RenameFolder {
+                        id: target.clone(),
+                        name: "renamed".into(),
+                    }
+                },
+            );
+            let error = page(&f.state, &token, 0, 1).err().unwrap();
+            assert_eq!(
+                error
+                    .details
+                    .as_ref()
+                    .and_then(|v| v.get("droppedLayoutConflict"))
+                    .and_then(|v| v.as_bool()),
+                drop_origin.then_some(true)
+            );
+            if !drop_origin {
+                assert_eq!(
+                    error.message,
+                    if remove {
+                        "Target folder no longer exists"
+                    } else {
+                        "Project or collaboration identity changed"
+                    }
+                );
+            }
+            cancel(&f.state, &token, true).unwrap();
+            if drop_origin {
+                if remove {
+                    config.organization.target_folder_id = None;
+                }
+                let reviewed = scan(config, Some(2));
+                apply_folder(
+                    &f,
+                    OrganizationOperation::CreateFolder {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        parent_id: None,
+                        name: "changed again".into(),
+                    },
+                );
+                let error = page(&f.state, &reviewed, 0, 1).err().unwrap();
+                assert_eq!(error.details.unwrap()["droppedLayoutConflict"], true);
+                cancel(&f.state, &reviewed, true).unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn dropped_rescans_keep_verified_revision_after_rule_changes_and_reject_remote_target_changes() {
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    for change in ["rename", "move", "delete"] {
+        let f = Fixture::new();
+        let target = uuid::Uuid::new_v4().to_string();
+        let parent = uuid::Uuid::new_v4().to_string();
+        apply_folder(
+            &f,
+            OrganizationOperation::CreateFolder {
+                id: target.clone(),
+                parent_id: None,
+                name: "target".into(),
+            },
+        );
+        apply_folder(
+            &f,
+            OrganizationOperation::CreateFolder {
+                id: parent.clone(),
+                parent_id: None,
+                name: "parent".into(),
+            },
+        );
+        let mut config = f.config();
+        config.organization.target_folder_id = Some(target.clone());
+        let scan = |config: Config, expected: Option<u64>| {
+            let e = f.expected();
+            let (ch, rx) = channel();
+            let token = tauri::async_runtime::block_on(start_with_layout(
+                &f.state,
+                e.runtime_nonce,
+                e.project_id,
+                config,
+                expected,
+                ch,
+            ))
+            .unwrap();
+            loop {
+                let event = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+                if event["type"] == "result" || event["type"] == "failed" {
+                    return (token, event);
+                }
+            }
+        };
+        let (initial, event) = scan(config.clone(), Some(2));
+        assert_eq!(event["type"], "result");
+        assert_eq!(page(&f.state, &initial, 0, 1).unwrap().candidates.len(), 1);
+        cancel(&f.state, &initial, true).unwrap();
+        config.rules.recursive = false;
+        let (same_revision, event) = scan(config.clone(), Some(2));
+        assert_eq!(event["type"], "result");
+        assert_eq!(
+            page(&f.state, &same_revision, 0, 1)
+                .unwrap()
+                .candidates
+                .len(),
+            1
+        );
+        cancel(&f.state, &same_revision, true).unwrap();
+        apply_folder(
+            &f,
+            match change {
+                "rename" => OrganizationOperation::RenameFolder {
+                    id: target.clone(),
+                    name: "renamed".into(),
+                },
+                "move" => OrganizationOperation::MoveFolder {
+                    id: target.clone(),
+                    parent_id: Some(parent),
+                },
+                _ => OrganizationOperation::RemoveFolder { id: target.clone() },
+            },
+        );
+        let (stale, event) = scan(config.clone(), Some(2));
+        assert_eq!(event["type"], "failed", "{change}");
+        assert_eq!(
+            event["error"]["details"]["droppedLayoutConflict"], true,
+            "{change}"
+        );
+        cancel(&f.state, &stale, true).unwrap();
+        if change == "delete" {
+            config.organization.target_folder_id = None;
+        }
+        let (legacy, event) = scan(config, None);
+        assert_eq!(event["type"], "result", "{change}");
+        cancel(&f.state, &legacy, true).unwrap();
+    }
+}
+
+#[test]
+fn dropped_scan_rejects_a_removed_target_and_allows_rescan_after_retargeting() {
+    use crate::commands::organization;
+    use annotator_core::collaboration::organization::OrganizationOperation;
+    let f = Fixture::new();
+    let e = f.expected();
+    let binding = organization::Binding {
+        runtime_nonce: e.runtime_nonce.clone(),
+        project_id: e.project_id.clone(),
+    };
+    let id = uuid::Uuid::new_v4().to_string();
+    tauri::async_runtime::block_on(organization::apply(
+        &f.state,
+        binding.clone(),
+        0,
+        OrganizationOperation::CreateFolder {
+            id: id.clone(),
+            parent_id: None,
+            name: "target".into(),
+        },
+    ))
+    .unwrap();
+    let mut config = f.config();
+    config.organization.target_folder_id = Some(id.clone());
+    tauri::async_runtime::block_on(organization::apply(
+        &f.state,
+        binding,
+        1,
+        OrganizationOperation::RemoveFolder { id },
+    ))
+    .unwrap();
+    let (ch, rx) = channel();
+    let token = tauri::async_runtime::block_on(start_with_layout(
+        &f.state,
+        e.runtime_nonce,
+        e.project_id,
+        config.clone(),
+        Some(1),
+        ch,
+    ))
+    .unwrap();
+    let event = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+    assert_eq!(event["type"], "failed");
+    assert!(event["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("目标文件夹"));
+    assert_eq!(event["error"]["details"]["droppedLayoutConflict"], true);
+    cancel(&f.state, &token, true).unwrap();
+    config.organization.target_folder_id = None;
+    let fresh = scan_config(&f, config);
+    assert_eq!(page(&f.state, &fresh, 0, 1).unwrap().candidates.len(), 1);
+    cancel(&f.state, &fresh, true).unwrap();
+    assert!(f
+        .state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .snapshot()
+        .unwrap()
+        .document
+        .media
+        .is_empty());
 }
 #[test]
 fn native_prepared_placement_rejects_manual_changes_before_publication() {

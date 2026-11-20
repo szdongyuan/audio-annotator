@@ -14,24 +14,40 @@ pub(crate) struct CapturedLayout {
     pub layout_revision: u64,
     pub target_folder_id: Option<String>,
     pub target_path: Vec<String>,
+    drop_origin: bool,
 }
 impl CapturedLayout {
     pub(crate) fn from_capture(
         capture: &NativePlacementCapture,
         target_folder_id: Option<String>,
+        drop_origin: bool,
     ) -> Self {
         Self {
             layout_revision: capture.layout_revision(),
             target_folder_id,
             target_path: capture.target_path().to_vec(),
+            drop_origin,
         }
     }
-    fn fresh(&self, repo: &CollaborationRepository) -> Result<NativePlacementCapture> {
-        let capture = repo.capture_media_placement(self.target_folder_id.clone())?;
+    fn verify(&self, result: Result<NativePlacementCapture>) -> Result<NativePlacementCapture> {
+        let capture = result.map_err(|error| {
+            if self.drop_origin {
+                super::super::drag_drop::target_error(error)
+            } else {
+                error
+            }
+        })?;
         if capture.layout_revision() != self.layout_revision {
-            return Err(runtime::stale());
+            return Err(if self.drop_origin {
+                super::super::drag_drop::layout_conflict()
+            } else {
+                runtime::stale()
+            });
         }
         Ok(capture)
+    }
+    fn fresh(&self, repo: &CollaborationRepository) -> Result<NativePlacementCapture> {
+        self.verify(repo.capture_media_placement(self.target_folder_id.clone()))
     }
     pub(crate) fn check(&self, repo: &CollaborationRepository) -> Result<()> {
         self.fresh(repo).map(|_| ())
@@ -86,11 +102,8 @@ pub(crate) async fn prepare_batch(
         let capture = if skip_duplicates {
             let current = repo.reload_catalog()?;
             let active = super::dedup::ActiveImportPaths::read(&current)?;
-            let capture =
-                current.capture_loaded_media_placement(layout.target_folder_id.clone())?;
-            if capture.layout_revision() != layout.layout_revision {
-                return Err(runtime::stale());
-            }
+            let capture = layout
+                .verify(current.capture_loaded_media_placement(layout.target_folder_id.clone()))?;
             // Earlier successful batches now occupy their own keys. Only this
             // batch's selected indices must still be free.
             if indices.iter().any(|i| {

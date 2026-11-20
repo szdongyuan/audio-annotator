@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    collaboration::validation::{decode, limit, require, uuid},
+    collaboration::validation::{decode, limit, require, uuid, MAX_MEDIA},
     error::{AppError, Result},
     model::validation::MAX_SAFE_INTEGER,
 };
@@ -19,6 +19,17 @@ pub(super) fn basename(name: &str, folder: bool) -> Result<()> {
             && (!folder || name.trim() == name),
         "Invalid organization name",
     )
+}
+fn membership_indices(media: &[MediaMembership], ids: &HashSet<&str>) -> Result<Vec<usize>> {
+    let indices: Vec<_> = media
+        .iter()
+        .enumerate()
+        .filter_map(|(index, membership)| {
+            ids.contains(membership.media_id.as_str()).then_some(index)
+        })
+        .collect();
+    require(indices.len() == ids.len(), "Unknown media")?;
+    Ok(indices)
 }
 impl Organization {
     pub fn parse(bytes: &[u8], project_id: &str) -> Result<Self> {
@@ -88,7 +99,7 @@ impl Organization {
     pub fn apply(&self, operation: OrganizationOperation) -> Result<Self> {
         self.apply_with_recycled(operation, || Ok(HashSet::new()))
     }
-    /// Only the repository may authorize recycled memberships using its under-lock read.
+    /// The repository supplies recycle authority from its under-lock read when publishing.
     pub(super) fn apply_with_recycled(
         &self,
         operation: OrganizationOperation,
@@ -180,11 +191,40 @@ impl Organization {
                 media_id,
                 folder_id,
             } => {
-                next.media
-                    .iter_mut()
-                    .find(|m| m.media_id == media_id)
-                    .ok_or_else(|| AppError::invalid("Unknown media"))?
-                    .folder_id = folder_id
+                let indices = membership_indices(&next.media, &HashSet::from([media_id.as_str()]))?;
+                next.media[indices[0]].folder_id = folder_id;
+            }
+            OrganizationOperation::MoveMediaBatch {
+                media_ids,
+                folder_id,
+            } => {
+                limit(!media_ids.is_empty() && media_ids.len() <= MAX_MEDIA)?;
+                let mut ids = HashSet::with_capacity(media_ids.len());
+                for id in &media_ids {
+                    uuid(id)?;
+                    require(ids.insert(id.as_str()), "Duplicate media ID")?;
+                }
+                if let Some(id) = &folder_id {
+                    uuid(id)?;
+                    require(next.folders.iter().any(|f| &f.id == id), "Unknown folder")?;
+                }
+                let indices = membership_indices(&next.media, &ids)?;
+                let recycled = recycled()?;
+                require(
+                    ids.iter().all(|id| !recycled.contains(*id)),
+                    "Recycled media cannot be moved",
+                )?;
+                let mut changed = false;
+                for index in indices {
+                    let membership = &mut next.media[index];
+                    if membership.folder_id != folder_id {
+                        membership.folder_id.clone_from(&folder_id);
+                        changed = true;
+                    }
+                }
+                if !changed {
+                    return Ok(next);
+                }
             }
         }
         next.revision += 1;

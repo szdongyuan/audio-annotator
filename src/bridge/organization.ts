@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { normalizeError } from './client';
+import { parseAppError } from './types';
 export interface OrganizationFolder {
     id: string;
     parentId: string | null;
@@ -44,6 +45,10 @@ export type OrganizationOperation = {
     type: 'moveMedia';
     mediaId: string;
     folderId: string | null;
+} | {
+    type: 'moveMediaBatch';
+    mediaIds: string[];
+    folderId: string | null;
 };
 export function organizationCheck(v: unknown): asserts v { if (!v)
     throw new Error('无效的共享目录数据'); }
@@ -58,6 +63,11 @@ const nullable = (f: Check): Check => v => { if (v !== null)
     f(v); };
 export const organizationName = (folder: boolean): Check => v => { organizationCheck(typeof v === 'string' && v.length > 0 && [...v].length <= (folder ? 128 : 255) && new TextEncoder().encode(v).length <= (folder ? 512 : 1024) && !/[/\\\x00-\x1f\x7f-\x9f]/.test(v) && v !== '.' && v !== '..' && (!folder || v.trim() === v)); };
 const array = (f: Check): Check => v => { organizationCheck(Array.isArray(v) && v.length <= 10000); v.forEach(f); };
+const batchMediaIds: Check = v => {
+    organizationCheck(Array.isArray(v) && v.length > 0 && v.length <= 10000);
+    for (const id of v) organizationUuid(id);
+    organizationCheck(new Set(v).size === v.length);
+};
 export function parseOrganization(v: unknown): Organization {
     organizationShape(v, { kind: v => organizationCheck(v === 'audio-annotator-organization'), formatVersion: v => organizationCheck(v === 1), projectId: organizationUuid, revision: integer, layoutRevision: integer, folders: array(v => organizationShape(v, { id: organizationUuid, parentId: nullable(organizationUuid), name: organizationName(true) })), media: array(v => organizationShape(v, { mediaId: organizationUuid, folderId: nullable(organizationUuid), originalFilename: organizationName(false) })) });
     const head = v as Organization;
@@ -104,6 +114,9 @@ export function parseOrganizationOperation(v: unknown): OrganizationOperation { 
     case 'moveMedia':
         organizationShape(v, { type: exact(type), mediaId: organizationUuid, folderId: nullable(organizationUuid) });
         break;
+    case 'moveMediaBatch':
+        organizationShape(v, { type: exact(type), mediaIds: batchMediaIds, folderId: nullable(organizationUuid) });
+        break;
     default: throw new Error('无效的共享目录操作');
 } return v as OrganizationOperation; }
 export function createOrganizationClient(runtimeNonce: string) { organizationUuid(runtimeNonce); const binding = (projectId: string) => { organizationUuid(projectId); return { runtimeNonce, projectId }; }; const call = async (name: string, args: Record<string, unknown>, projectId: string) => { try {
@@ -112,6 +125,13 @@ export function createOrganizationClient(runtimeNonce: string) { organizationUui
     return result;
 }
 catch (e) {
+    // A transport failure after a write has an unknown outcome. Do not turn it
+    // into a fabricated InvalidInput that looks like a native rejection.
+    if (name === 'organization_apply') {
+        let nativeError;
+        try { nativeError = parseAppError(e); } catch { throw e; }
+        throw nativeError;
+    }
     throw normalizeError(e);
 } }; return { get: (projectId: string) => call('organization_get', { binding: binding(projectId) }, projectId), apply: (projectId: string, expectedRevision: number, operation: OrganizationOperation) => { integer(expectedRevision); parseOrganizationOperation(operation); return call('organization_apply', { binding: binding(projectId), expectedRevision, operation }, projectId); } }; }
 export type OrganizationCommands = ReturnType<typeof createOrganizationClient>;

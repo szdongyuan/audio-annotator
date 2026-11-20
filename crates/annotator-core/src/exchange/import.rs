@@ -15,6 +15,8 @@ use std::{
 #[derive(Debug)]
 pub struct ImportedProject {
     pub document: ProjectDocument,
+    pub source_project_id: String,
+    pub authors: Vec<super::PortableAuthor>,
     pub path: PathBuf,
     pub organization: crate::collaboration::organization::Organization,
 }
@@ -223,6 +225,8 @@ pub fn import_exchange(
     // Only an ownership marker is removed after publication; media and project are now durable.
     let _ = fs::remove_file(path.join(stage.marker()));
     Ok(ImportedProject {
+        source_project_id: manifest.project_id,
+        authors: manifest.authors,
         document,
         path,
         organization,

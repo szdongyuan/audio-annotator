@@ -40,7 +40,7 @@ impl CollaborationRepository {
         )
     }
     /// Complete bounded catalog I/O before acquiring the native owner's final guard.
-    /// The returned guard is held only across cancellable atomic head replacement.
+    /// The returned guard is held across a cancellable replacement or validated no-op.
     pub fn apply_organization_controlled<Guard>(
         &self,
         session: &AuthorSession,
@@ -58,7 +58,12 @@ impl CollaborationRepository {
             e.details = Some(serde_json::json!({"currentRevision":current.organization.revision}));
             return Err(e);
         }
-        let next = if matches!(&operation, OrganizationOperation::RemoveFolder { .. }) {
+        let batch = matches!(&operation, OrganizationOperation::MoveMediaBatch { .. });
+        let next = if matches!(
+            &operation,
+            OrganizationOperation::RemoveFolder { .. }
+                | OrganizationOperation::MoveMediaBatch { .. }
+        ) {
             current.organization.apply_with_recycled(operation, || {
                 Ok(current
                     .read_recycle()?
@@ -70,6 +75,11 @@ impl CollaborationRepository {
         } else {
             current.organization.apply(operation)?
         };
+        if batch && next == current.organization {
+            let _guard = before_commit()?;
+            crate::media::identity::check_cancel(cancel)?;
+            return Ok(next);
+        }
         let bytes = encode(&next)?;
         let _guard = before_commit()?;
         atomic::replace_metadata_controlled(

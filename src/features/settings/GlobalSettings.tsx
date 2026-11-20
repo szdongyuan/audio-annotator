@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { DismissibleLayer } from '../../components/popover/DismissibleLayer';
-import { analysisError, defaultSettings } from '../spectrogram/workspace';
+import { analysisError } from '../spectrogram/workspace';
 import type { AnalysisSettings } from '../../bridge/types';
-import { displayPatch, type DisplayPreferences, type GlobalPlayback, type LocalSettingsStore } from './localSettings';
+import { globalPreferences, type DisplayPreferences, type GlobalPlayback, type LocalSettingsStore } from './localSettings';
 
-export function GlobalSettings({ store, onClose, initialDisplay, initialPlayback, initialAnalysis }: { store: LocalSettingsStore; onClose: () => void; initialDisplay?: DisplayPreferences; initialPlayback?: GlobalPlayback; initialAnalysis?: AnalysisSettings }) {
-  const [display,setDisplay] = useState<DisplayPreferences>({ spectrumKind:'stft',frequencyMix:.65,gainDb:0,dynamicRangeDb:100,palette:'ember',...displayPatch(initialDisplay ?? {}),...store.value.display });
-  const [playback,setPlayback] = useState<GlobalPlayback>({ monitorGainDb:0,volume:.75,looping:false,source:'processed',...initialPlayback,...store.value.playback });
-  const [analysis,setAnalysis] = useState<AnalysisSettings>(store.value.analysis ?? initialAnalysis ?? defaultSettings);
+export function GlobalSettings({ store, onClose }: { store: LocalSettingsStore; onClose: () => void }) {
+  const [display,setDisplay] = useState<DisplayPreferences>(() => globalPreferences(store.value).display);
+  const [playback,setPlayback] = useState<GlobalPlayback>(() => globalPreferences(store.value).playback);
+  const [analysis,setAnalysis] = useState<AnalysisSettings>(() => globalPreferences(store.value).analysis);
   const [saved,setSaved] = useState(false);
   const valid = Number.isFinite(playback.monitorGainDb) && playback.monitorGainDb >= -60 && playback.monitorGainDb <= 24 && Number.isFinite(display.gainDb) && display.gainDb >= -60 && display.gainDb <= 60 && !analysisError(analysis);
   return <DismissibleLayer onClose={onClose} triggerSelector="[data-global-settings-trigger]" role="dialog" aria-label="全局播放与显示设置" className="analysis-popover global-settings-dialog">

@@ -65,6 +65,35 @@ try {
   await key(Key.ARROW_UP);
   await selected('first.wav');
   check('ArrowDown leaves a one-file selected leaf, opens sibling ancestors, selects the main audio and focuses/scrolls its row; ArrowUp returns');
+
+  const beforeContextFlat = await organization(h);
+  const targetButton = await h.element('.media-folder-select[title="B"]');
+  await h.evaluate('arguments[0].scrollIntoView({block:"nearest"})', targetButton);
+  await h.context('.media-folder-select[title="B"]');
+  await h.label('平铺此文件夹（含子文件夹）');
+  assert.equal(await (await h.element('[aria-label="音频显示方式"]')).getAttribute('value'), 'tree');
+  assert.equal(await h.evaluate("return !!document.querySelector('.media-folder-select[title=\"A/A leaf\"]')"), true);
+  assert.equal(await h.evaluate("return !!document.querySelector('.media-folder-select[title=\"B/B leaf\"]')"), false);
+  assert.deepEqual(await h.evaluate("return [...document.querySelectorAll('.media-select')].map(e=>e.getAttribute('aria-label'))"), ['first.wav','second.wav']);
+  assert.equal(await (await h.element(row('second.wav'))).getAttribute('aria-description'), '目录内路径：B leaf/second.wav');
+  assert.equal(await h.evaluate("return document.querySelector('.file-pane h2')?.textContent"), 'first.wav');
+  assert.equal(await h.evaluate("return document.querySelector('.media-folder-select[title=\"A/A leaf\"]')?.getAttribute('aria-pressed')"), 'true');
+  await h.screenshot('folder-local-flat');
+  await h.click('.media-folder-row[data-drop-folder=""] .media-folder-select');
+  await h.input('搜索音频','B leaf/second.wav');
+  assert.deepEqual(await h.evaluate("return [...document.querySelectorAll('.media-select')].map(e=>e.getAttribute('aria-label'))"), ['second.wav']);
+  await h.input('搜索音频','');await clickFolder('A/A leaf');
+  await h.context('.media-folder-select[title="B"]');
+  await h.label('恢复子文件夹显示');
+  assert.equal(await h.evaluate("return !!document.querySelector('.media-folder-select[title=\"B/B leaf\"]')"), true);
+  assert.equal(await (await h.element(row('second.wav'))).getAttribute('aria-description'), null);
+  await h.context('[aria-label="根目录操作"]');
+  await h.label('平铺全部音频');
+  assert.equal(await (await h.element('[aria-label="平铺显示范围"]')).getAttribute('value'), '');
+  assert.equal(await h.evaluate("return document.querySelectorAll('.media-select').length"), 2);
+  await h.select('音频显示方式', '目录树');
+  assert.deepEqual(await organization(h), beforeContextFlat);
+  check('Folder flattening retains sibling tree, shows relative audio paths, and restores descendants without changing audio or import target');
   await h.screenshot('cross-folder-navigation');
 
   const beforeGain = await snapshot(h);
@@ -196,9 +225,14 @@ try {
   assert.deepEqual(await h.evaluate("return [...document.querySelectorAll('.media-select')].map(e=>e.getAttribute('aria-label'));"), ['depth-three-with-a-long-name.wav']);
   await h.click(row('depth-three-with-a-long-name.wav'));
   await key(Key.ARROW_DOWN);
+  await selected('depth-three-with-a-long-name.wav');
+  assert.equal(await (await h.element('[aria-label="平铺显示范围"]')).getAttribute('value'), deepFolder);
+  await h.select('平铺显示范围', '全部音频');
+  await h.click(row('depth-three-with-a-long-name.wav'));
+  await key(Key.ARROW_UP);
   await selected('second.wav');
   assert.equal(await (await h.element('[aria-label="平铺显示范围"]')).getAttribute('value'), '');
-  await key(Key.ARROW_UP);
+  await key(Key.ARROW_DOWN);
   await selected('depth-three-with-a-long-name.wav');
   const flatGeometry = await h.evaluate("return [...document.querySelectorAll('.media-select')].map(e=>({name:e.getAttribute('aria-label'),left:e.getBoundingClientRect().left,height:e.getBoundingClientRect().height,scroll:e.scrollWidth,width:e.clientWidth}));");
   assert.equal(flatGeometry.length, 3);
@@ -207,7 +241,7 @@ try {
   await h.label('多选音频'); await h.label('全选筛选结果');
   assert.match(await h.evaluate("return document.querySelector('.media-batch-actions').textContent"), /已选 1/);
   await h.select('音频显示方式', '目录树');
-  assert.equal(await h.evaluate(`return document.querySelector('.media-folder-select[title="B/B leaf/B deep"]').getAttribute('aria-pressed');`), 'true', 'flat reveal preserves the import destination');
+  assert.equal(await h.evaluate(`return document.querySelector('.media-folder-select[title="B/B leaf/B deep"]').getAttribute('aria-pressed');`), 'true', 'flat navigation preserves the import destination');
   assert.deepEqual(await h.evaluate("return [...document.querySelectorAll('.media-folder-disclosure')].map(e=>[e.getAttribute('aria-label'),e.getAttribute('aria-expanded')]);"), expansion);
   assert.match(await h.evaluate("return document.querySelector('.media-batch-actions').textContent"), /已选 1/);
   await h.select('音频显示方式', '平铺');
@@ -218,7 +252,7 @@ try {
   for (const field of ['media', 'annotations', 'categories', 'edits']) assert.deepEqual(afterDisplay[field], beforeDisplay[field]);
   for (const media of afterDisplay.media) assert.equal(hash(await fs.readFile(path.join(project, media.sourceRef))), displayHashes.get(media.id));
   await h.screenshot('flat-scope-focus-geometry');
-  check('Tree/flat scope, global arrows, focus/scroll, flat geometry and multiselect preserve import selection, tree expansion, organization and audio bytes');
+  check('Flat arrows follow path and filename order within scope; focus/scroll, geometry and multiselect preserve import selection, tree expansion, organization and audio bytes');
   report.passed = true;
 } catch (error) {
   report.error = error.stack;

@@ -37,7 +37,7 @@ export async function toolbarUI(h, projectId, report) {
     return h.evaluate(`return [...document.querySelectorAll('canvas')].map(c=>{let hash=2166136261;for(const v of c.getContext('2d').getImageData(0,0,c.width,c.height).data)hash=Math.imul(hash^v,16777619);return {hash:hash>>>0,width:c.width,height:c.height};})`);
   }
   await h.menu('联动时间轴', '视图');
-  await h.select('主面板音频', 'stereo24.wav'); await h.select('对比面板音频', 'cue-long.wav');
+  await h.click('.file-pane[data-pane=primary] .file-heading h2'); await h.selectMedia('stereo24.wav'); await h.menu('双文件对比', '视图'); await h.label('cue-long.wav');
   await h.until(`!document.querySelector('.tile-status')`);
   await h.clickText('类别'); await h.input('类别名称', '工具条测试'); await h.clickText('添加类别'); await h.until(`document.querySelector('.category-row')`);
   const plot = `${compare} .annotation-overlay`;
@@ -56,8 +56,9 @@ export async function toolbarUI(h, projectId, report) {
   await h.click('.selection-toolbar [aria-label="标注"]'); await h.driver.actions().sendKeys(Key.ESCAPE).perform();
   assert.equal(await h.evaluate(`return document.activeElement?.getAttribute('aria-label')`), '标注');
   await h.driver.actions().keyDown(Key.SHIFT).sendKeys(Key.TAB).keyUp(Key.SHIFT).perform();
-  assert.equal(await h.evaluate(`return document.activeElement?.getAttribute('aria-label')`), '应用区域增益');await h.driver.actions().keyDown(Key.SHIFT).sendKeys(Key.TAB).keyUp(Key.SHIFT).perform();assert.equal(await h.evaluate(`return document.activeElement?.getAttribute('aria-label')`), '试听选区版本');
+  assert.equal(await h.evaluate(`return document.activeElement?.getAttribute('aria-label')`), '试听选区版本');
   await h.driver.actions().sendKeys(Key.TAB).perform();
+  assert.equal(await h.evaluate(`return document.activeElement?.getAttribute('aria-label')`), '标注');
   assert.ok(await h.evaluate(`return !!document.querySelector('.annotation-rect.is-selected')`));
   await heldDrag('.annotation-rect.is-selected', [.5, .6], [.64, .6]);
   await h.driver.wait(async () => (await documentState()).annotations.find(a => a.id === id).region.startSeconds > created.region.startSeconds, 30000);
@@ -83,7 +84,7 @@ export async function toolbarUI(h, projectId, report) {
   await h.screenshot('toolbar-tiny-top-right');
   await heldDrag(`${compare} .spectrogram-surface`, [.6, .75], [.6, .75], 1);
   await heldDrag(`${compare} .spectrogram-surface`, [.6, .75], [.6, .75], 0, true);
-  await h.select('主面板音频', 'six32.wav'); await h.click(`${primary} .channel-select button`); await h.until(`document.querySelectorAll('${primary} canvas').length===6`);
+  await h.click('.file-pane[data-pane=primary] .file-heading h2'); await h.selectMedia('six32.wav'); await h.click(`${primary} .channel-select button`); await h.until(`document.querySelectorAll('${primary} canvas').length===6`);
   const sixth = `${primary} .channel-pane:nth-child(6) .annotation-overlay`;
   await draw(sixth, [.15, .3], [.4, .65]); await h.screenshot('toolbar-sixth-channel-scrolled');
   // Native DOM scrolling fires real scroll events and changes the clipping rectangle.

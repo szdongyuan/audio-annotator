@@ -1,5 +1,5 @@
 import { admitted, suspendRefresh } from '../collaboration/admission';
-import { retryAdmission } from '../../bridge/admission';
+import { admissionCancelled, retryAdmission } from '../../bridge/admission';
 import { collaborationClient, type CopyProgress } from '../../bridge/collaboration';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CommandQueue, type ProjectCommands } from '../../app/commands';
@@ -128,11 +128,14 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
   });
   const close = () => operation(() => finishCurrent(async () => { session.forget(); setRestorePrompt(null); }));
   /** Exchange keeps the current native session alive until the replacement is fully published. */
-  const performExchange = async (action: (expected: ExpectedProject | null) => Promise<OpenedProject | null>) => {
+  const performExchange = async (action: (expected: ExpectedProject | null) => Promise<OpenedProject | null>, options: { exportOnly?: boolean; signal?: AbortSignal; onPhase?: (phase:string)=>void } = {}) => {
     if (occupied.current || pendingRecovery.current) throw { code: 'InvalidInput', message: '请先完成当前项目操作', retryable: true } satisfies AppError;
     occupied.current = true; setBusy(true);
-    const resume=await suspendRefresh(current.current?.lifecycle);
+    let resume:(()=>void)|undefined;
     try {
+      options.onPhase?.('等待共享同步完成');
+      resume=await suspendRefresh(current.current?.lifecycle,options.signal);
+      if(options.signal?.aborted)throw admissionCancelled();
       const project = current.current;
       const acknowledgedError = project?.lifecycle.error;
       let exchangeError: unknown;
@@ -141,11 +144,15 @@ export function useProjectLifecycle(api: LocalProjectCommands = localProjects, c
         // The lifecycle has acknowledged this save; dismiss only the same error mirrored outside it.
         setError(previous => previous === acknowledgedError ? null : previous);
         try {
-          const opened = await admitted(project,()=>action(doc ? { projectId: doc.projectId, expectedRevision: doc.revision, ...(project?.collaboration ? { runtimeNonce: project.collaboration.runtimeNonce } : {}) } : null),()=>mounted.current&&current.current===project);
+          options.onPhase?.('等待共享任务完成');
+          const opened = await admitted(project,()=>action(doc ? { projectId: doc.projectId, expectedRevision: doc.revision, ...(project?.collaboration ? { runtimeNonce: project.collaboration.runtimeNonce } : {}) } : null),()=>mounted.current&&current.current===project&&!options.signal?.aborted,undefined,options.exportOnly?{waitMs:120000,attempts:1200}:undefined);
           if (opened) adopt(opened);
         } catch (cause) { exchangeError = cause; }
       };
-      if (project) await project.lifecycle.transitionAfterSave(run); else await run();
+      if (project) {
+        options.onPhase?.('保存项目');
+        if(options.exportOnly)await project.lifecycle.transitionForExport(run);else await project.lifecycle.transitionAfterSave(run);
+      } else await run();
       // Archive/cancellation failures belong to the exchange dialog, not the saved project's ledger.
       if (exchangeError) throw exchangeError;
     } finally {

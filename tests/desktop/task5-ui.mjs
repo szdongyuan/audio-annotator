@@ -68,7 +68,7 @@ export async function processedUI(h,projectId,report) {
 export async function cueUI(h,projectId,report) {
  const primary='.file-pane[data-pane="primary"]',compare='.file-pane[data-pane="compare"]';
  const escape=()=>h.driver.actions().sendKeys(Key.ESCAPE).perform();
- await h.select('主面板音频','cue-long.wav');await h.select('对比面板音频','float32.wav');
+ await h.click('.file-pane[data-pane=primary] .file-heading h2'); await h.selectMedia('cue-long.wav');await h.menu('双文件对比', '视图'); await h.label('float32.wav');
  await h.until(`!document.querySelector('.tile-status')`);
  await h.drag(`${primary} .annotation-overlay`,[.2,.3],[.5,.65]);
  await h.label('循环播放');await h.label('播放 · 空格');const auto=await outputAfter(h,0);

@@ -3,11 +3,13 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { App } from './App';
 
 const { project } = vi.hoisted(() => ({ project: { error: { message: '保存失败' } as {message:string}|null, closePending: false, recovery: null, active: {} as object|null, busy: false, saveAs: vi.fn(), restorePrompt:null as unknown, restoreLast:vi.fn(),startEmpty:vi.fn(),forgetSession:vi.fn(),open:vi.fn() } }));
+const { dropState } = vi.hoisted(() => ({ dropState: { target: null, message: '' } }));
+vi.mock('../features/media/useNativeDrop', () => ({ useNativeDrop: () => dropState }));
 vi.mock('../features/project/useProjectLifecycle', () => ({ useProjectLifecycle: () => project }));
 vi.mock('../features/media/useMedia', () => ({ useMedia: () => ({ relink: null }) }));
 vi.mock('../features/exchange/useExchange', () => ({ useExchange: () => ({ dialog: null }) }));
 vi.mock('./AppShell', () => ({ AppShell: () => null }));
-beforeEach(() => { vi.clearAllMocks(); project.busy=false; project.closePending = false; project.restorePrompt=null; project.active={}; project.error={message:'保存失败'}; });
+beforeEach(() => { vi.clearAllMocks(); dropState.message=''; project.busy=false; project.closePending = false; project.restorePrompt=null; project.active={}; project.error={message:'保存失败'}; });
 
 it.each([false, true])('uses the same local-copy label and action for save failure (closing: %s)', closing => {
   project.closePending = closing;
@@ -35,4 +37,9 @@ it('keeps the welcome screen inert, traps modal focus and suppresses global shor
   fireEvent.click(screen.getByRole('button',{name:'暂不打开'})); expect(project.startEmpty).toHaveBeenCalledOnce();
   fireEvent.click(forget); expect(project.forgetSession).toHaveBeenCalledOnce();
   window.removeEventListener('keydown',global);
+});
+it('keeps a drop refusal noninteractive while the restore modal owns focus',()=>{
+  project.active=null;project.error=null;project.restorePrompt={path:'C:/project/project.json'};dropState.message='请先关闭当前窗口';
+  const view=render(<App/>),dialog=screen.getByRole('dialog',{name:'继续上次的项目？'}),notice=view.container.querySelector('.drop-notice')!;
+  expect(notice).toHaveTextContent('请先关闭当前窗口');expect(notice.querySelector('button, input, [tabindex], a')).toBeNull();expect(dialog).toHaveFocus();
 });

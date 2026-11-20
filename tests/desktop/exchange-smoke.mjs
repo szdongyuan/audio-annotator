@@ -24,7 +24,7 @@ let currentId;
 const snapshot=()=>invoke('get_project_snapshot',{projectId:currentId});
 const openedPath=()=>evaluate(`document.querySelector('.project-identity').title`);
 const dialogDone=()=>until(`document.querySelector('.exchange-result') && !document.querySelector('.exchange-progress')`,'exchange completion');
-const exportUI=async(kind,file)=>{await menu('分享项目');await evaluate(`(async()=>{const {exchangeDialogs}=await import('/src/bridge/exchange.ts');exchangeDialogs.save=async()=>${JSON.stringify(file)};document.querySelector('input[aria-label="${kind==='bundle'?'完整项目包（含音频）':'仅标注（不含音频）'}"]').click();})()`);await click('选择保存位置…');await dialogDone();await click('关闭');};
+const exportUI=async(kind,file)=>{await menu('分享项目');await evaluate(`(async()=>{const {exchangeDialogs}=await import('/src/bridge/exchange.ts');exchangeDialogs.save=async()=>${JSON.stringify(file)};document.querySelector('input[aria-label="${kind==='bundle'?'完整项目包（含音频）':'仅标注（不含音频）'}"]').click();})()`);await click('导出…');await dialogDone();await click('关闭');};
 const importUI=async(file,parent=root)=>{await menu('导入分享文件');await evaluate(`(async()=>{const {exchangeDialogs}=await import('/src/bridge/exchange.ts');exchangeDialogs.source=async()=>${JSON.stringify(file)};exchangeDialogs.parent=async()=>${JSON.stringify(parent)};})()`);await click('选择交换文件…');};
 try{
  await send('Runtime.enable');check('fresh native window',await evaluate('!!window.__TAURI_INTERNALS__ && innerWidth===1280 && innerHeight===800'));
@@ -53,8 +53,8 @@ try{
  check('native normal Save failure is visible',await evaluate(`!!document.querySelector('.save-failed')`));await restoreSave();
  await exportUI('annotations',path.join(root,'after-save-failure.annotations.json'));
  check('successful export clears normal Save error and status without replacing project',(await snapshot()).document.projectId===currentId&&await evaluate(`!!document.querySelector('.save-saved')&&!document.querySelector('.project-notice')`));
- await blockSave();const retryExport=path.join(root,'retry.annotations.json');await menu('分享项目');await evaluate(`(async()=>{const {exchangeDialogs}=await import('/src/bridge/exchange.ts');exchangeDialogs.save=async()=>${JSON.stringify(retryExport)};})()`);await click('选择保存位置…');await until(`document.querySelector('.exchange-dialog [role="alert"]')`,'export save failure');
- check('export waits for a successful native save',!(await fs.stat(retryExport).catch(()=>null)));await restoreSave();await click('重试 · 选择保存位置…');await dialogDone();await click('关闭');
+ await blockSave();const retryExport=path.join(root,'retry.annotations.json');await menu('分享项目');await evaluate(`(async()=>{const {exchangeDialogs}=await import('/src/bridge/exchange.ts');exchangeDialogs.save=async()=>${JSON.stringify(retryExport)};})()`);await click('导出…');await until(`document.querySelector('.exchange-dialog [role="alert"]')`,'export save failure');
+ check('export waits for a successful native save',!(await fs.stat(retryExport).catch(()=>null)));await restoreSave();await click('导出…');await dialogDone();await click('关闭');
  check('successful export retry clears lifecycle failure on same project',(await snapshot()).document.projectId===currentId&&await evaluate(`!!document.querySelector('.save-saved')&&!document.querySelector('.project-notice')`));
  await click('备注');await setValue('textarea[aria-label="音频备注"]','尚未失焦的分享草稿');
  const json=path.join(root,'handoff.annotations.json'),zip=path.join(root,'handoff.audioproj.zip');

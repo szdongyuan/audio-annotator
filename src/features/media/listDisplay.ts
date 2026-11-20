@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export const listDisplayKey = 'audio-annotator.list-display.v1';
-export interface ListDisplay { mode: 'tree' | 'flat'; scope: string | null; expanded: string[] }
+export interface ListDisplay { mode: 'tree' | 'flat'; scope: string | null; expanded: string[]; flattenedFolders?: string[]; folderSort?: 'asc' | 'desc' }
 type LocalStorage = Pick<Storage, 'getItem' | 'setItem'>;
 interface Entry extends ListDisplay { projectId: string; actorId: string | null }
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(v);
@@ -9,7 +9,11 @@ const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v ===
 function storage(): LocalStorage | undefined { try { return window.localStorage; } catch { return undefined; } }
 function sanitize(v: unknown): ListDisplay | null {
   if (!object(v) || v.mode !== 'tree' && v.mode !== 'flat' || v.scope !== null && !uuid(v.scope) || !Array.isArray(v.expanded)) return null;
-  return { mode: v.mode, scope: v.scope as string | null, expanded: [...new Set(v.expanded.slice(0, 512).filter(uuid))] };
+  const folderSort = v.folderSort;
+  const flattenedFolders = Array.isArray(v.flattenedFolders) ? [...new Set(v.flattenedFolders.slice(0, 512).filter(uuid))] : [];
+  return { mode: v.mode, scope: v.scope as string | null, expanded: [...new Set(v.expanded.slice(0, 512).filter(uuid))],
+    ...(flattenedFolders.length ? { flattenedFolders } : {}),
+    ...(folderSort === 'asc' || folderSort === 'desc' ? { folderSort } : {}) };
 }
 function entries(target: LocalStorage | undefined): Entry[] {
   try {
@@ -26,7 +30,7 @@ function entries(target: LocalStorage | undefined): Entry[] {
 }
 export function readListDisplay(projectId: string, actorId: string | null, target = storage()): ListDisplay | null {
   const entry = entries(target).find(e => e.projectId === projectId && e.actorId === actorId);
-  return entry ? { mode: entry.mode, scope: entry.scope, expanded: entry.expanded } : null;
+  return entry ? sanitize(entry) : null;
 }
 export function writeListDisplay(projectId: string, actorId: string | null, value: ListDisplay, target = storage()): void {
   if (!uuid(projectId) || actorId !== null && !uuid(actorId)) return;

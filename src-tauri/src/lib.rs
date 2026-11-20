@@ -86,6 +86,8 @@ pub fn run() {
             commands::exchange::import_exchange,
             commands::exchange::cancel_exchange,
             commands::media::import_media,
+            commands::drag_drop::capture_drop_session,
+            commands::drag_drop::preflight_drop,
             commands::organization::organization_get,
             commands::recycle::recycle_get,
             commands::recycle::recycle_apply,

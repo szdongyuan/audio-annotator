@@ -3,7 +3,7 @@
 mod archive;
 mod rules;
 mod staging;
-pub use staging::{StagedAudio, StagingSession};
+pub use staging::{safe_ancestors as validate_source_ancestors, StagedAudio, StagingSession};
 mod dedup;
 mod discovery;
 mod jingcheng;
@@ -45,7 +45,7 @@ impl Config {
             || self
                 .paths
                 .iter()
-                .any(|p| p.is_empty() || p.len() > 32768 || p.contains('\0'))
+                .any(|p| p.is_empty() || p.encode_utf16().count() > 32768 || p.contains('\0'))
         {
             return Err(AppError::invalid("请选择一个文件夹或最多 32 个 ZIP"));
         }

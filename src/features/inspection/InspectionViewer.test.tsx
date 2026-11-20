@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import fixture from '../../../tests/fixtures/document-v3.json';
 import { inspectionClient } from '../../bridge/inspection';
 import { emptyPlayback, playbackClient } from '../../bridge/playback';
@@ -8,6 +8,10 @@ import type { ActiveProject } from '../project/useProjectLifecycle';
 import { InspectionViewer } from './InspectionViewer';
 import { resolveOwnInspection } from './targets';
 import * as adapter from './adapter';
+import { LocalSettingsProvider, LocalSettingsStore } from '../settings/localSettings';
+import { defaultSettings } from '../spectrogram/workspace';
+import { inspectionViewPreferenceKey } from './viewPreference';
+beforeEach(() => localStorage.removeItem(inspectionViewPreferenceKey));
 vi.mock('../spectrogram/SpectrogramCanvas', () => ({ SpectrogramCanvas: ({ settings, view, active, analysisSource, children }: any) => <div className="spectrogram-surface" tabIndex={0}><output data-testid="spectrum" data-owner={active.store.snapshot.document.projectId}>{JSON.stringify({settings,view,analysisSource})}</output>{children}</div> }));
 function setup() {
  vi.restoreAllMocks();
@@ -15,7 +19,10 @@ function setup() {
  const target = { owner, scope: 'region' as const, annotationId: fixture.annotations[0].id }, value = resolveOwnInspection(target)!;
  const binding = { runtimeNonce: crypto.randomUUID(), projectId: fixture.projectId }, previewId = crypto.randomUUID();
  const snapshot = structuredClone(owner.store.snapshot); snapshot.document.projectId = previewId; snapshot.document.annotations = []; snapshot.document.media = [snapshot.document.media[0]];
- vi.spyOn(inspectionClient, 'open').mockResolvedValue({ previewId, snapshot }); vi.spyOn(inspectionClient,'close').mockResolvedValue();
+ vi.spyOn(inspectionClient, 'open').mockImplementation(async (_binding,_media,settings) => {
+  const opened=structuredClone(snapshot);opened.document.analysis[value.media.id]=settings;
+  return { previewId, snapshot:opened };
+ }); vi.spyOn(inspectionClient,'close').mockResolvedValue();
  vi.spyOn(inspectionClient,'status').mockResolvedValue([{mediaId:value.media.id,status:'ready'}]);
  vi.spyOn(inspectionClient,'configure').mockResolvedValue({...emptyPlayback,projectId:previewId,mediaId:value.media.id,generation:1,state:'playing'});
  vi.spyOn(playbackClient,'available').mockReturnValue(false);
@@ -138,4 +145,71 @@ it('allows an empty numeric gain draft and applies a valid negative gain only to
  fireEvent.change(field,{target:{value:'-12.5'}}); fireEvent.click(screen.getByRole('button',{name:'播放音频'}));
  await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledOnce());expect(vi.mocked(inspectionClient.configure).mock.lastCall?.[2].monitorGainDb).toBe(-12.5);
  expect(p.playback.monitor.monitorGainDb).toBe(0);
+});
+
+it('both entry scopes inherit global settings rather than saved main views and per-media exceptions; edits stay transient', async () => {
+ const p = setup(), saved = p.owner.store.snapshot.document;
+ saved.viewState.media[p.value.media.id] = { ...saved.viewState.media[p.value.media.id], spectrumKind:'stft', gainDb:-35, frequencyMix:.9 };
+ saved.analysis[p.value.media.id] = { ...defaultSettings, hopSize:128 };
+ p.playback.monitor.mediaMonitorGainDb = { [p.value.media.id]:-20 };
+ const storage = new Map<string,string>();
+ const local = new LocalSettingsStore({ getItem:k=>storage.get(k)??null, setItem:(k,v)=>{storage.set(k,v);} });
+ local.applyGlobal({ display:{spectrumKind:'mel',frequencyMix:0,gainDb:8,palette:'ocean'}, analysis:{...defaultSettings,hopSize:256}, playback:{monitorGainDb:20,volume:.3,looping:true} });
+ local.patchMedia(saved.projectId,p.value.media.id,{display:{spectrumKind:'stft',gainDb:-40},monitorGainDb:-30,analysis:{...defaultSettings,hopSize:64}});
+ const before = structuredClone(saved), prefs = structuredClone(local.value);
+ const mount = (props=p) => render(<LocalSettingsProvider store={local}><InspectionViewer {...props}/></LocalSettingsProvider>);
+ const ui = mount(); await screen.findByTestId('spectrum');
+ expect(inspectionClient.open).toHaveBeenLastCalledWith(p.binding,p.value.media.id,expect.objectContaining({hopSize:256}),expect.any(String));
+ expect(JSON.parse(screen.getByTestId('spectrum').textContent!).view).toMatchObject({spectrumKind:'mel',gainDb:8,frequencyMix:0,palette:'ocean'});
+ expect(screen.getByLabelText('查看监听增益')).toHaveValue(20);
+ fireEvent.change(screen.getByLabelText('查看频谱类型'),{target:{value:'stft'}});
+ fireEvent.change(screen.getByLabelText('查看监听增益'),{target:{value:'-6'}});
+ fireEvent.click(screen.getByRole('button',{name:'播放音频'}));
+ await waitFor(()=>expect(inspectionClient.configure).toHaveBeenCalledOnce());
+ expect(vi.mocked(inspectionClient.configure).mock.lastCall![2]).toMatchObject({monitorGainDb:-6,volume:.3,looping:true});
+ fireEvent.click(screen.getByRole('button',{name:'恢复全局设置'}));
+ expect(screen.getByLabelText('查看监听增益')).toHaveValue(20);
+ expect(screen.getByLabelText('查看频谱类型')).toHaveValue('mel');
+ expect(local.value).toEqual(prefs); expect(saved).toEqual(before);
+ ui.unmount();
+ const target = { owner:p.owner, scope:'file' as const, mediaId:p.value.media.id };
+ const second = mount({...p,target:target as never,value:resolveOwnInspection(target)!});
+ await screen.findByTestId('spectrum');
+ expect(screen.getByLabelText('查看频谱类型')).toHaveValue('mel');
+ expect(screen.getByLabelText('查看监听增益')).toHaveValue(20);
+ expect(JSON.parse(screen.getByTestId('spectrum').textContent!).view).toMatchObject({startSeconds:0,endSeconds:p.value.media.frameCount/p.value.media.sampleRate,lowHz:0});
+ expect(local.value).toEqual(prefs); expect(saved).toEqual(before); second.unmount();
+});
+
+it('locks opening mode across author and list scopes, falls back for whole-file entries, and does not persist coordinates',async()=>{
+ const p=setup(),foreign={...p.target,authorId:'other-author'};
+ let ui=render(<InspectionViewer {...p} target={foreign}/>);await screen.findByTestId('spectrum');
+ expect(screen.getByLabelText('查看范围')).toHaveValue('annotation');
+ fireEvent.change(screen.getByLabelText('查看范围'),{target:{value:'audio'}});
+ fireEvent.click(screen.getByRole('button',{name:'锁定查看方式'}));
+ expect(screen.getByRole('button',{name:'锁定查看方式'})).toHaveAttribute('aria-pressed','true');ui.unmount();
+ ui=render(<InspectionViewer {...p}/>);await screen.findByTestId('spectrum');
+ expect(screen.getByLabelText('查看范围')).toHaveValue('audio');
+ expect(JSON.parse(screen.getByTestId('spectrum').textContent!).view.startSeconds).toBe(0);
+ fireEvent.change(screen.getByLabelText('查看范围'),{target:{value:'annotation'}});ui.unmount();
+ const file={owner:p.owner,scope:'file' as const,mediaId:p.value.media.id};
+ ui=render(<InspectionViewer {...p} target={file} value={resolveOwnInspection(file)!}/>);await screen.findByTestId('spectrum');
+ expect(screen.getByLabelText('查看范围')).toHaveValue('audio');
+ expect(screen.getByRole('option',{name:'聚焦标注框'})).toBeDisabled();ui.unmount();
+ ui=render(<InspectionViewer {...p} target={foreign}/>);await screen.findByTestId('spectrum');
+ expect(screen.getByLabelText('查看范围')).toHaveValue('annotation');
+ expect(JSON.parse(screen.getByTestId('spectrum').textContent!).view.startSeconds).toBeGreaterThan(0);
+ fireEvent.click(screen.getByRole('button',{name:'锁定查看方式'}));
+ fireEvent.change(screen.getByLabelText('查看范围'),{target:{value:'audio'}});ui.unmount();
+ ui=render(<InspectionViewer {...p}/>);await screen.findByTestId('spectrum');
+ expect(screen.getByLabelText('查看范围')).toHaveValue('annotation');ui.unmount();
+});
+
+it('failed local preference writes leave inspection usable and report persistence failure',async()=>{
+ const p=setup();vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw Error('full');});
+ render(<InspectionViewer {...p}/>);await screen.findByTestId('spectrum');
+ fireEvent.click(screen.getByRole('button',{name:'锁定查看方式'}));
+ expect(screen.getByRole('alert')).toHaveTextContent('查看方式未保存到本机');
+ fireEvent.change(screen.getByLabelText('查看范围'),{target:{value:'audio'}});
+ expect(JSON.parse(screen.getByTestId('spectrum').textContent!).view.startSeconds).toBe(0);
 });

@@ -1,5 +1,6 @@
 pub mod analysis;
 pub mod collaboration;
+pub mod drag_drop;
 pub mod exchange;
 pub mod folders;
 pub mod media;

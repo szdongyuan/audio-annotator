@@ -348,6 +348,7 @@ pub async fn save_project(
     runtime_nonce: Option<String>,
     project_id: String,
     expected_revision: u64,
+    defer_sync: Option<bool>,
 ) -> Result<u64> {
     let collaboration = state.6.clone();
     let saved = state
@@ -360,7 +361,11 @@ pub async fn save_project(
             active(s)?.save(&project_id, expected_revision)
         })
         .await?;
-    super::collaboration::schedule(state.inner().clone());
+    // Exchange resumes the normal collaboration poll after its saved snapshot
+    // has been exported. Starting it here would contend with the export itself.
+    if !defer_sync.unwrap_or(false) {
+        super::collaboration::schedule(state.inner().clone());
+    }
     Ok(saved)
 }
 #[tauri::command]

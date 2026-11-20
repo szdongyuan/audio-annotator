@@ -23,8 +23,13 @@ impl SharedSourceAuthority {
     }
     pub fn lock(&self) -> Result<std::fs::File> {
         use crate::collaboration::atomic;
-        use sha2::{Digest, Sha256};
         let guard = atomic::short_lock(&self.root.join("catalog/.commit.lock"))?;
+        self.verify()?;
+        Ok(guard)
+    }
+    pub fn verify(&self) -> Result<()> {
+        use crate::collaboration::atomic;
+        use sha2::{Digest, Sha256};
         let bytes = atomic::read(
             &self.root.join("collaboration.json"),
             crate::collaboration::MAX_LAYER_BYTES,
@@ -35,7 +40,7 @@ impl SharedSourceAuthority {
                 "Source retirement authority changed; refresh and retry",
             ));
         }
-        Ok(guard)
+        Ok(())
     }
 }
 

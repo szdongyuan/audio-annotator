@@ -156,8 +156,9 @@ export function parseSourceMediaEvent(v: unknown): MediaEvent {
     shape(v, { ...common, path: text, phase: oneOf('extract', 'hashing', 'decoding', 'copyMedia'), completed: integer() });
   return v as MediaEvent;
 }
+export interface SourceScanOptions { expectedLayoutRevision: number; runtimeNonce: string }
 export interface SourceCommands {
-  start(projectId: string, config: SourceConfig, receive: (event: SourceEvent) => void): Promise<SourceToken>;
+  start(projectId: string, config: SourceConfig, receive: (event: SourceEvent) => void, options?: SourceScanOptions): Promise<SourceToken>;
   page(token: SourceToken, offset: number, limit?: number): Promise<SourcePage>;
   cancel(token: SourceToken): Promise<void>;
   release(token: SourceToken): Promise<void>;
@@ -170,19 +171,22 @@ export function createSourceClient(runtimeNonce?: string): SourceCommands {
     check(!runtimeNonce || token.runtimeNonce === runtimeNonce);
   };
   return {
-    start: async (projectId, config, receive) => {
+    start: async (projectId, config, receive, options) => {
       uuid(projectId);
+      if (options) { uuid(options.runtimeNonce); integer()(options.expectedLayoutRevision); check(!runtimeNonce || runtimeNonce === options.runtimeNonce); }
       shape(config, { kind: oneOf('folder', 'zip'), paths: array(text, 32), rules: parseSourceRules, organization: x=>parseSourceOrganization(x,config.rules.mode) });
       check(config.paths.length > 0 && (config.kind !== 'folder' || config.paths.length === 1));
       const onEvent = new Channel<unknown>();
       onEvent.onmessage = v => {
         const e = parseSourceEvent(v);
         owned(e.token);
+        if (options) check(e.token.runtimeNonce === options.runtimeNonce);
         check(e.token.projectId === projectId);
         receive(e);
       };
-      const token = parseSourceToken(await invoke('scan_import_sources', { projectId, config, onEvent }));
+      const token = parseSourceToken(await invoke('scan_import_sources', { projectId, config, onEvent, ...(options ? options : {}) }));
       owned(token);
+      if (options) check(token.runtimeNonce === options.runtimeNonce);
       check(token.projectId === projectId);
       return token;
     },

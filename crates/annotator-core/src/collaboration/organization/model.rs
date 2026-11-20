@@ -62,6 +62,15 @@ pub enum OrganizationOperation {
         )]
         folder_id: Option<String>,
     },
+    MoveMediaBatch {
+        #[serde(rename = "mediaIds")]
+        media_ids: Vec<String>,
+        #[serde(
+            rename = "folderId",
+            deserialize_with = "crate::model::required_nullable"
+        )]
+        folder_id: Option<String>,
+    },
 }
 /// Native-only validated placement authority, bound to one project and layout capture.
 /// Not serializable and has no public field/DTO constructor.

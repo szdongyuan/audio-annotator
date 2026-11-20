@@ -140,9 +140,12 @@ pub(super) fn load(
     let dir = metadata_root.join("catalog");
     atomic::safe_existing(&dir)?;
     let mut entries = Vec::new();
-    for (index, entry) in fs::read_dir(&dir).map_err(atomic::io)?.enumerate() {
+    for (index, entry) in fs::read_dir(&dir)
+        .map_err(|e| atomic::io_at(&dir, "enumerate catalog", e))?
+        .enumerate()
+    {
         limit(index < MAX_CATALOG_ENTRIES)?;
-        let entry = entry.map_err(atomic::io)?;
+        let entry = entry.map_err(|e| atomic::io_at(&dir, "read catalog entry", e))?;
         after_entry(&entry.path())?;
         entries.push(entry);
     }
@@ -168,7 +171,10 @@ pub(super) fn load(
         }
         atomic::safe_existing(&entry.path())?;
         require(
-            entry.file_type().map_err(atomic::io)?.is_file(),
+            entry
+                .file_type()
+                .map_err(|e| atomic::io_at(&entry.path(), "read entry type", e))?
+                .is_file(),
             "Expected regular catalog entry",
         )?;
         if name == ".commit.lock" {
@@ -188,7 +194,8 @@ pub(super) fn load(
         require(record.media.id == id, "Catalog filename identity mismatch")?;
         let path = root.join(&record.media.source_ref);
         atomic::safe_existing(&path)?;
-        let metadata = fs::metadata(&path).map_err(atomic::io)?;
+        let metadata =
+            fs::metadata(&path).map_err(|e| atomic::io_at(&path, "inspect audio metadata", e))?;
         require(
             metadata.is_file() && metadata.len() == record.media.byte_length,
             "Missing or changed catalog media",

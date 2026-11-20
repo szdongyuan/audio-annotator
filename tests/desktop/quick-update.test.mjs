@@ -50,7 +50,7 @@ try {
     assert.deepEqual(document.annotations, old.document.annotations); assert.equal(document.categories.filter(c => c.name === '批量导入期间类别').length, 1);
     assert.equal(document.edits.filter(e => e.operation.type === 'mask').length, 1); assert.equal(document.edits.filter(e => e.operation.type === 'gain' && e.operation.gainDb === -6).length, 1);
     check('completed uninterrupted optimized import has 920 exact original audio hashes and 923 unique media, preserving old annotation and private DSP', { media: document.media.length, imported: batchIds.size });
-    await h.selectMedia('gamma.wav'); await h.clickText('双文件对比'); await h.select('对比面板音频', 'beta.wav'); h.nativeRect({ width: 1000, height: 680 });
+    await h.selectMedia('gamma.wav'); await h.clickText('双文件对比'); await h.menu('双文件对比', '视图'); await h.label('beta.wav'); h.nativeRect({ width: 1000, height: 680 });
     await h.drag('.media-panel-resize', [.5, .5], [100, .5]); await h.until('document.querySelector(".analysis-workspace").getBoundingClientRect().width>=560');
     const geometry = await h.evaluate('const w=document.querySelector(".analysis-workspace").getBoundingClientRect(),bar=document.querySelector(".transport-main");return {viewport:innerWidth,page:document.documentElement.scrollWidth,workspace:w.width,left:document.querySelector(".media-panel").getBoundingClientRect().width,barWidth:bar.getBoundingClientRect().width,barScroll:bar.scrollWidth}');
     assert.ok(geometry.page <= geometry.viewport && geometry.workspace >= 560 && geometry.barScroll <= geometry.barWidth + 1, JSON.stringify(geometry)); await h.screenshot('final-compact-resized-compare'); h.nativeRect({ width: 1440, height: 900 }); await h.screenshot('final-large-resized-compare');
@@ -82,7 +82,7 @@ try {
     for (const m of batchMedia) assert.equal(hash(await fs.readFile(sourcePath(old.project, m.sourceRef))), hash(tiny));
     assert.equal(imported.categories.filter(c => c.name === '批量导入期间类别').length, 1); await saved(h); await h.screenshot('bulk-920-complete');
     check('all 920 imported audio originals are present exactly once with 923 unique total media and exact hashes', { previousPrefix: retained.media.length - 3, remaining: missing.length, finalMedia: imported.media.length });
-    await h.clickText('关闭结果'); await h.selectMedia('gamma.wav'); await h.clickText('双文件对比'); await h.select('对比面板音频', 'beta.wav'); h.nativeRect({ width: 1000, height: 680 });
+    await h.clickText('关闭结果'); await h.selectMedia('gamma.wav'); await h.clickText('双文件对比'); await h.menu('双文件对比', '视图'); await h.label('beta.wav'); h.nativeRect({ width: 1000, height: 680 });
     await h.drag('.media-panel-resize', [.5, .5], [100, .5]);
     await h.until('document.querySelector(".analysis-workspace").getBoundingClientRect().width>=560');
     const geometry = await h.evaluate('const w=document.querySelector(".analysis-workspace").getBoundingClientRect(),b=document.querySelector(".transport-main").getBoundingClientRect();return {viewport:innerWidth,page:document.documentElement.scrollWidth,workspace:w.width,barWidth:b.width,barScroll:document.querySelector(".transport-main").scrollWidth,left:document.querySelector(".media-panel").getBoundingClientRect().width}');
@@ -122,7 +122,7 @@ try {
     await h.drag('.media-panel-resize', [.5, .5], [16, .5]);
     const widthAfter = await h.evaluate('return document.querySelector(".media-panel").getBoundingClientRect().width'); assert.ok(widthAfter > widthBefore + 60, JSON.stringify({ widthBefore, widthAfter }));
     await h.label('收起音频列表'); await h.label('展开音频列表'); assert.equal(await h.evaluate('return document.querySelector(".media-panel").getBoundingClientRect().width'), widthAfter);
-    await h.selectMedia('alpha.wav'); await h.clickText('双文件对比'); await h.select('对比面板音频', 'beta.wav');
+    await h.selectMedia('alpha.wav'); await h.clickText('双文件对比'); await h.menu('双文件对比', '视图'); await h.label('beta.wav');
     await h.click('.file-heading h2'); const order = (await snapshot(h)).media.filter(m=>m.displayName!=='beta.wav').map(m=>m.displayName); await h.driver.actions().sendKeys(order.indexOf('gamma.wav')<order.indexOf('alpha.wav')?Key.ARROW_UP:Key.ARROW_DOWN).perform();
     await h.until('document.querySelector("[data-pane=primary] .file-heading h2")?.textContent==="gamma.wav"'); assert.equal(await h.evaluate('return document.querySelector("[data-pane=compare] .file-heading h2").textContent'), 'beta.wav');
     h.nativeRect({ width: 1000, height: 680 }); await h.drag('.media-panel-resize', [.5, .5], [100, .5]);

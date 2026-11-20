@@ -1,12 +1,14 @@
 import { suspendRefresh } from '../collaboration/admission';
 import { normalizeError } from '../../bridge/client';
-import { parseSourceOrganization, parseSourceRules, sameSourceToken, type SourceCommands, type SourceConfig, type SourceCounts, type SourceEvent, type SourcePage, type SourceRules, type SourceToken } from '../../bridge/sourceImport';
+import { parseSourceOrganization, parseSourceRules, sameSourceToken, type SourceCommands, type SourceConfig, type SourceCounts, type SourceEvent, type SourcePage, type SourceRules, type SourceScanOptions, type SourceToken } from '../../bridge/sourceImport';
+import { parseDropPreflight, type DropPreflight } from '../../bridge/dragDrop';
 import type { AppError } from '../../bridge/types';
 import type { ActiveProject } from '../project/useProjectLifecycle';
 import { MediaImportController, type ImportItem } from './imports';
 import { ImportPlanStore } from './importPlans';
 import { splitPatterns } from './importRules';
 export type SourceState = 'idle' | 'choosing' | 'scanning' | 'preview' | 'importing' | 'paused' | 'finished' | 'cancelled' | 'failed';
+export interface DroppedLayoutReview { projectId: string; runtimeNonce: string; targetFolderId: string | null; layoutRevision: number }
 const emptyCounts = (): SourceCounts => ({ checked: 0, candidates: 0, skipped: 0, duplicateSkipped: 0, issues: 0, selectedBytes: 0 });
 /** One preview owns the media reservation until its native capability is released. */
 export class SourceImportController {
@@ -22,6 +24,9 @@ export class SourceImportController {
   error: AppError | null = null;
   picking = false;
   loadingPage = false;
+  /** A dropped initial scan conflicted; Task 3 must verify and review the current target. */
+  get droppedLayoutConflict() { return this.dropLayoutConflict; }
+  get droppedReviewToken() { return this.workflow; }
   readonly plans = new ImportPlanStore();
   presetId = '';
   returnFocus:HTMLElement|null=null;
@@ -31,6 +36,14 @@ export class SourceImportController {
   private token: SourceToken | null = null;
   private acknowledged = false;
   private generation = 0;
+  private workflow = 0;
+  private layoutEpoch = 0;
+  private scanEpoch = 0;
+  private dropWorkflow = false;
+  private staleDropPlacement = false;
+  private dropLayoutConflict = false;
+  private constrainedLayout: SourceScanOptions | null = null;
+  private scanLayout: SourceScanOptions | null = null;
   private pageGeneration = 0;
   private disposed = false;
   private releasing: Promise<boolean> | null = null;
@@ -38,6 +51,7 @@ export class SourceImportController {
   private retiredTokens = new Map<string, SourceToken>();
   private reserved = false;
   private running = false;
+  private startsPending = 0;
   private offset = 0;
   private ownedBatch: ImportItem[] | null = null;
   private batchCompletion = Promise.resolve();
@@ -72,16 +86,46 @@ export class SourceImportController {
     this.listeners.forEach(f => f());
   }
   get busy() {
-    return ['choosing', 'scanning', 'preview', 'importing', 'paused'].includes(this.state) || this.releasePending;
+    return ['choosing', 'scanning', 'preview', 'importing', 'paused'].includes(this.state) || this.releasePending || this.startsPending > 0;
   }
   get releasePending() {
     return this.releaseFailed || !!this.releasing || this.retiredTokens.size > 0;
+  }
+  get scanStartPending() { return this.startsPending > 0; }
+  /**
+   * Call only after a successful, non-superseded organization refresh for this
+   * project and session, and explicit user review of the selected target.
+   * Pass the reviewed identity, target, and layout revision; a changed owner or
+   * target cannot be acknowledged, and the next scan checks that exact revision.
+   */
+  acknowledgeDroppedLayoutReview(review: DroppedLayoutReview): boolean {
+    if (this.disposed || this.owner.store.editingDisabled || this.owner.lifecycle?.admissionClosed || !this.open || !this.droppedLayoutConflict || this.staleDroppedPublication ||
+        review.projectId !== this.owner.store.snapshot.document.projectId || review.runtimeNonce !== this.owner.collaboration?.runtimeNonce ||
+        review.targetFolderId !== this.config.organization.targetFolderId || !Number.isSafeInteger(review.layoutRevision) || review.layoutRevision < 0) return false;
+    this.constrainedLayout = { runtimeNonce: review.runtimeNonce, expectedLayoutRevision: review.layoutRevision };
+    this.staleDropPlacement = false;
+    this.layoutEpoch++;
+    this.dropLayoutConflict = false;
+    this.notify();
+    return true;
   }
   get ownsCurrentBatch() {
     return !!this.ownedBatch && this.imports.items === this.ownedBatch;
   }
   get failures() {
-    return this.imports.failures(this.items);
+    const failures = this.imports.failures(this.items);
+    if (this.dropWorkflow && failures.some(item => item.state === 'failed' && item.error?.code === 'RevisionConflict' && item.error.message === 'Organization layout changed' && (item.error.details as {catalogCommitted?: unknown} | undefined)?.catalogCommitted !== true)) this.staleDropPlacement = true;
+    return failures;
+  }
+  private isStaleDroppedPublication(item: ImportItem) {
+    const details = item.error?.details as {catalogCommitted?: unknown} | undefined;
+    return this.dropWorkflow && this.staleDropPlacement && item.state === 'failed' && item.failureId !== undefined && details?.catalogCommitted !== true;
+  }
+  get staleDroppedPublication() { return this.failures.some(item => this.isStaleDroppedPublication(item)); }
+  get canRetry() {
+    const failures = this.failures;
+    return this.pendingAcknowledgements.length > 0 || failures.some(item => !this.isStaleDroppedPublication(item)) ||
+      (this.state === 'paused' && failures.length === 0);
   }
   get pendingAcknowledgements() {
     return this.imports.pendingAcknowledgements;
@@ -97,7 +141,7 @@ export class SourceImportController {
     return this.items.filter(i => ['success', 'accepted'].includes(i.state)).length;
   }
   get canImport() {
-    return this.state === 'preview' && this.acknowledged && !this.loadingPage && this.counts.candidates > 0 && !this.releasePending;
+    return this.state === 'preview' && this.acknowledged && !this.loadingPage && !this.droppedLayoutConflict && this.counts.candidates > 0 && !this.releasePending;
   }
   private valid(g: number) {
     return !this.disposed && g === this.generation && !this.owner.store.editingDisabled && !this.owner.lifecycle?.admissionClosed;
@@ -118,11 +162,18 @@ export class SourceImportController {
     }
   }
   begin(kind: SourceConfig['kind'], targetFolderId:string|null=null,returnFocus?:HTMLElement|null) {
+    return this.beginWithLayout(kind, targetFolderId, returnFocus);
+  }
+  private beginWithLayout(kind: SourceConfig['kind'], targetFolderId:string|null,returnFocus?:HTMLElement|null, layout?: SourceScanOptions, paths: string[] = []) {
     if (this.disposed || this.busy || this.failures.length || this.pendingAcknowledgements.length || this.owner.collaboration?.canImportMedia === false || !this.reserve())
       return false;
     this.returnFocus=returnFocus??(document.activeElement instanceof HTMLElement?document.activeElement:null);
     this.generation++;
-    this.config = { kind, paths: [], rules: structuredClone(this.plans.last.rules), organization: {...structuredClone(this.plans.last.organization),targetFolderId} };
+    this.workflow++;
+    this.layoutEpoch++;
+    this.dropWorkflow = !!layout;
+    this.staleDropPlacement = false;
+    this.config = { kind, paths: [...paths], rules: structuredClone(this.plans.last.rules), organization: {...structuredClone(this.plans.last.organization),targetFolderId} };
     this.presetId='';
     this.syncForm();
     this.state = 'choosing';
@@ -132,7 +183,23 @@ export class SourceImportController {
     this.items = [];
     this.offset = 0;
     this.error = null;
+    this.dropLayoutConflict = false;
+    this.constrainedLayout = layout ?? null;
+    this.scanLayout = null;
     this.notify();
+    return true;
+  }
+  /** Bind every scan in this workflow to the frozen or explicitly reviewed layout. */
+  beginDropped(value: DropPreflight, returnFocus?: HTMLElement | null): boolean {
+    const drop = parseDropPreflight(value);
+    if (drop.kind === 'audio' || drop.session.projectId !== this.owner.store.snapshot.document.projectId ||
+        drop.session.runtimeNonce !== this.owner.collaboration?.runtimeNonce)
+      throw new Error('项目或拖放来源已变化，请重新拖入');
+    const generation = this.generation + 1;
+    const layout = { runtimeNonce: drop.session.runtimeNonce, expectedLayoutRevision: drop.target.layoutRevision };
+    if (!this.beginWithLayout(drop.kind, drop.target.folderId, returnFocus, layout, drop.paths)) return false;
+    if (!this.valid(generation)) { if (this.owner.store.editingDisabled || this.owner.lifecycle?.admissionClosed) void this.cancel(); return true; }
+    if (this.valid(generation)) void this.scanWith(layout);
     return true;
   }
   async choose(picker: () => Promise<string | string[] | null>) {
@@ -163,6 +230,7 @@ export class SourceImportController {
     const next={...this.config,...structuredClone(patch)};
     // Generic discovery cannot carry dormant manifest tokens. Change both fields together.
     if(patch.rules?.mode==='generic'&&this.config.rules.mode!=='generic'&&!patch.organization)next.organization={...next.organization,template:'{source}/{relativeDir}'};
+    if(this.constrainedLayout && next.organization.targetFolderId !== this.config.organization.targetFolderId){this.constrainedLayout=null;this.dropLayoutConflict=true;this.layoutEpoch++;}
     this.config=next;this.presetId='';this.syncForm();await this.invalidate();
   }
   private async invalidate() {
@@ -211,8 +279,14 @@ export class SourceImportController {
     this.notify();
   }
   async scan() {
-    if (this.disposed || this.picking || this.failures.length || this.pendingAcknowledgements.length || ['importing', 'paused', 'scanning'].includes(this.state))
+    if (this.droppedLayoutConflict) return;
+    return this.scanWith(this.constrainedLayout ?? undefined);
+  }
+  private async scanWith(options?: SourceScanOptions) {
+    if (this.disposed || this.picking || this.startsPending > 0 || this.failures.length || this.pendingAcknowledgements.length || ['importing', 'paused', 'scanning'].includes(this.state))
       return;
+    const workflow = this.workflow, projectId = this.owner.store.snapshot.document.projectId;
+    let epoch = this.layoutEpoch;
     let g = this.generation;
     try {
       parseSourceRules(this.config.rules);
@@ -225,6 +299,7 @@ export class SourceImportController {
         return;
       if (!this.valid(g))
         return;
+      epoch = this.layoutEpoch;
       g = ++this.generation;
       this.acknowledged = false;
       this.error = null;
@@ -232,25 +307,49 @@ export class SourceImportController {
       this.offset = 0;
       this.items = [];
       this.counts = emptyCounts();
+      this.scanLayout = options ?? null;
+      this.scanEpoch = epoch;
       this.state = 'scanning';
       this.plans.remember(this.config);
       this.notify();
-      const token = await this.api.start(this.owner.store.snapshot.document.projectId, structuredClone(this.config), e => this.receive(g, e));
-      if (!this.valid(g) || !['scanning', 'preview'].includes(this.state)) {
-        await this.releaseRetired(token);
-        return;
+      if (!this.valid(g)) return;
+      if (options) this.startsPending++;
+      try {
+        const token = await this.api.start(projectId, structuredClone(this.config), e => this.receive(g, e, options, workflow, epoch, projectId), options);
+        if (!this.valid(g) || !['scanning', 'preview'].includes(this.state)) {
+          await this.releaseRetired(token);
+          return;
+        }
+        if (this.token && !sameSourceToken(this.token, token)) {
+          await this.releaseRetired(token);
+          throw new Error('扫描令牌不匹配');
+        }
+        this.token = token;
+        this.acknowledged = true;
+        this.completeConstrainedScan();
+        this.notify();
       }
-      if (this.token && !sameSourceToken(this.token, token))
-        throw new Error('扫描令牌不匹配');
-      this.token = token;
-      this.acknowledged = true;
-      this.notify();
+      finally {
+        if (options) this.startsPending--;
+        this.unreserve();
+        this.notify();
+      }
     }
     catch (e) {
+      const error = normalizeError(e);
+      if (options && !this.valid(g) && this.isDroppedLayoutConflict(error) && this.isCurrentDroppedWorkflow(workflow, epoch, projectId, options)) {
+        this.failDroppedLayout(error);
+        return;
+      }
       if (this.valid(g)) {
-        this.error = normalizeError(e);
+        this.error = error;
+        if (options && this.isDroppedLayoutConflict(this.error)) {
+          this.dropLayoutConflict = true;
+          this.constrainedLayout = null;
+        }
         this.state = 'failed';
         await this.release();
+        this.unreserve();
         this.notify();
       }
     }
@@ -280,9 +379,42 @@ export class SourceImportController {
     }
     return true;
   }
-  private receive(g: number, event: SourceEvent) {
-    if (!this.valid(g) || !['scanning', 'preview'].includes(this.state) || event.token.projectId !== this.owner.store.snapshot.document.projectId || (this.owner.collaboration && event.token.runtimeNonce !== this.owner.collaboration.runtimeNonce))
+  private isDroppedLayoutConflict(error: AppError) {
+    return (error.details as {droppedLayoutConflict?: unknown} | undefined)?.droppedLayoutConflict === true;
+  }
+  private completeConstrainedScan() {
+    // A successful newer preview supersedes old asynchronous scan failures, but
+    // retains its layout constraint for every later rescan in this workflow.
+    if (this.scanLayout && this.scanLayout === this.constrainedLayout && this.scanEpoch === this.layoutEpoch && this.state === 'preview' && this.acknowledged && this.page && !this.loadingPage) this.layoutEpoch++;
+  }
+  private isCurrentDroppedWorkflow(workflow: number, epoch: number, projectId: string, options: SourceScanOptions) {
+    return !this.disposed && this.open && this.workflow === workflow && this.layoutEpoch === epoch && !this.owner.store.editingDisabled && !this.owner.lifecycle?.admissionClosed &&
+      this.owner.store.snapshot.document.projectId === projectId && this.owner.collaboration?.runtimeNonce === options.runtimeNonce;
+  }
+  private failDroppedLayout(error: AppError) {
+    // A stale initial result can arrive after a configuration edit. Retire any
+    // current preview too; only a verified review may release this gate.
+    this.generation++;
+    this.pageGeneration++;
+    this.acknowledged = false;
+    this.loadingPage = false;
+    this.page = null;
+    this.counts = emptyCounts();
+    this.error = error;
+    this.dropLayoutConflict = true;
+    this.constrainedLayout = null;
+    this.state = 'failed';
+    void this.release().then(() => { this.unreserve(); this.notify(); });
+    this.notify();
+  }
+  private receive(g: number, event: SourceEvent, options: SourceScanOptions | undefined, workflow: number, epoch: number, projectId: string) {
+    if (event.token.projectId !== this.owner.store.snapshot.document.projectId || (this.owner.collaboration && event.token.runtimeNonce !== this.owner.collaboration.runtimeNonce))
       return;
+    if (options && !this.valid(g) && event.type === 'failed' && this.isDroppedLayoutConflict(event.error) && this.isCurrentDroppedWorkflow(workflow, epoch, projectId, options)) {
+      this.failDroppedLayout(event.error);
+      return;
+    }
+    if (!this.valid(g) || !['scanning', 'preview'].includes(this.state)) return;
     if (this.state === 'preview' && event.type === 'progress')
       return;
     if (this.token && !sameSourceToken(this.token, event.token))
@@ -290,6 +422,7 @@ export class SourceImportController {
     this.token ??= event.token;
     if (event.type === 'failed') {
       this.error = event.error;
+      if (options && this.isDroppedLayoutConflict(event.error)) { this.dropLayoutConflict = true; this.constrainedLayout = null; }
       this.state = event.error.code === 'Cancelled' ? 'cancelled' : 'failed';
       void this.release().then(() => {
         this.unreserve();
@@ -319,13 +452,16 @@ export class SourceImportController {
     }
     catch (e) {
       if (this.valid(g) && p === this.pageGeneration) {
-        this.error = normalizeError(e);
+        const error = normalizeError(e);
+        if (this.isDroppedLayoutConflict(error)) { this.failDroppedLayout(error); return; }
+        this.error = error;
         this.state = 'failed';
       }
     }
     finally {
       if (p === this.pageGeneration) {
         this.loadingPage = false;
+        this.completeConstrainedScan();
         this.notify();
       }
     }
@@ -399,6 +535,7 @@ export class SourceImportController {
     catch (e) {
       if (this.valid(g)) {
         this.error = normalizeError(e);
+        if (this.isDroppedLayoutConflict(this.error)) { this.dropLayoutConflict = true; this.constrainedLayout = null; }
         this.state = 'failed';
         await this.release();
         this.unreserve();
@@ -414,7 +551,10 @@ export class SourceImportController {
     if (this.disposed || this.owner.store.editingDisabled)
       return;
     try {
-      await this.imports.retry(this.items);
+      // One stale placement proves every uncommitted prepared item from this
+      // scan carries the same obsolete layout; committed adoptions remain retryable.
+      const retryable = this.failures.filter(item => !this.isStaleDroppedPublication(item));
+      await this.imports.retry(retryable);
       this.error = null;
       if (this.state === 'paused' && !this.owner.queue.unresolvedFailures.length && !this.pendingAcknowledgements.length) {
         this.state = 'importing';
@@ -432,10 +572,15 @@ export class SourceImportController {
     if (this.state === 'idle' || this.state === 'cancelled')
       return;
     this.generation++;
+    this.workflow++;
+    this.layoutEpoch++;
     this.pageGeneration++;
     this.loadingPage = false;
     this.state = 'cancelled';
     this.open = false;
+    this.dropLayoutConflict = false;
+    this.constrainedLayout = null;
+    this.scanLayout = null;
     this.imports.cancel();
     this.notify();
     await this.release();
@@ -445,10 +590,17 @@ export class SourceImportController {
   async end() {
     await this.cancel();
     try {
+      await this.batchCompletion;
+      const reviewRequired = this.staleDroppedPublication;
       await this.imports.discard(this.items, this.batchCompletion);
       this.error = null;
       await this.release();
       this.unreserve();
+      if (reviewRequired) {
+        this.dropLayoutConflict = true;
+        this.state = 'failed';
+        this.error = { code: 'RevisionConflict', message: '已导入的音频保留，请刷新目录并核对目标后重新扫描', retryable: false };
+      }
     }
     catch (e) {
       this.error = normalizeError(e);

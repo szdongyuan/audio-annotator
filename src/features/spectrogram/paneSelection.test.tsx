@@ -70,22 +70,46 @@ it('selects each pane independently and rejects both duplicate directions withou
   expect(active.store.snapshot.canUndo).toBe(false);
   hook.unmount(); active.lifecycle.dispose();
 });
-it('routes real sidebar/title/menu controls through the guard and preserves source on duplicate title clicks', () => {
+it('routes sidebar and arrows to the highlighted pane and walks each history independently', () => {
   const active = setup(), [a, b, c] = active.store.snapshot.document.media;
-  [a, b, c].forEach((m, i) => { m.displayName = `${'ABC'[i]}.wav`; });
+  const d = { ...c, id: '44444444-4444-4444-8444-444444444444' };
+  active.store.snapshot.document.media.push(d);
+  [a, b, c, d].forEach((m, i) => { m.displayName = `${'ABCD'[i]}.wav`; });
   const project = { active, busy: false } as unknown as ProjectLifecycleUI;
-  const mediaUI = { selected: a, selectedId: a.id, statuses: [a, b, c].map(m => ({ mediaId: m.id, status: 'missing' })), disabled: false, setSelectedId: vi.fn() } as unknown as MediaUI;
+  const mediaUI = { selected: a, selectedId: a.id, statuses: [a, b, c, d].map(m => ({ mediaId: m.id, status: 'missing' })), disabled: false, setSelectedId: vi.fn() } as unknown as MediaUI;
   const { container, unmount } = render(<AppShell project={project} mediaUI={mediaUI} />);
-  const pair = () => [screen.getByRole('combobox', { name: '主面板音频' }), screen.getByRole('combobox', { name: '对比面板音频' })];
-  const select = pair()[1]; fireEvent.pointerDown(select); fireEvent.focus(select); fireEvent.change(select, { target: { value: a.id } });
-  expect(pair()[0]).toHaveValue(a.id); expect(pair()[1]).toHaveValue(b.id);
-  expect(container.querySelector('[data-pane="primary"]')).toHaveClass('is-duplicate-target', 'is-playback-source');
+  const pane = (side: string) => container.querySelector(`[data-pane="${side}"]`)!;
+  const pair = () => ['primary', 'compare'].map(side => pane(side).getAttribute('data-media-id'));
+  const open = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
+  const back = (name: string) => screen.getByRole('button', { name: `${name}返回上一条音频` });
+
+  fireEvent.click(pane('compare').querySelector('h2')!);
+  expect(pane('compare')).toHaveClass('is-current-pane');
+  open('A.wav');
+  expect(pair()).toEqual([a.id, b.id]);
+  expect(pane('primary')).toHaveClass('is-duplicate-target');
+  expect(back('对比面板')).toBeDisabled();
   expect(active.store.drafts.size).toBe(0);
-  fireEvent.click(container.querySelectorAll('.media-select')[2]); expect(pair()[0]).toHaveValue(c.id); expect(pair()[1]).toHaveValue(b.id);
-  fireEvent.change(pair()[1], { target: { value: a.id } }); expect(pair()[0]).toHaveValue(c.id); expect(pair()[1]).toHaveValue(a.id);
-  fireEvent.click(screen.getByRole('menuitem', { name: '视图' })); fireEvent.click(screen.getByRole('menuitem', { name: '双文件对比' }));
-  fireEvent.click(screen.getByRole('menuitem', { name: 'C.wav' }));
-  expect(pair()[0]).toHaveValue(c.id); expect(pair()[1]).toHaveValue(a.id);
+
+  open('C.wav');
+  expect(pair()).toEqual([a.id, c.id]);
+  fireEvent.keyDown(screen.getByRole('button', { name: 'C.wav' }), { key: 'ArrowDown' });
+  expect(pair()).toEqual([a.id, d.id]);
+  expect(back('对比面板')).toHaveAttribute('title', '返回 C.wav');
+  fireEvent.click(back('对比面板'));
+  expect(pair()).toEqual([a.id, c.id]);
+
+  fireEvent.click(pane('primary').querySelector('h2')!);
+  expect(pane('primary')).toHaveClass('is-current-pane');
+  open('D.wav');
+  expect(pair()).toEqual([d.id, c.id]);
+  fireEvent.click(back('主面板'));
+  expect(pair()).toEqual([a.id, c.id]);
+  fireEvent.click(back('对比面板'));
+  expect(pair()).toEqual([a.id, b.id]);
+  expect(pane('compare')).toHaveClass('is-current-pane');
+  expect(back('对比面板')).toBeDisabled();
+  expect(back('主面板')).toBeDisabled();
   expect(mediaUI.setSelectedId).not.toHaveBeenCalled();
   unmount(); active.lifecycle.dispose();
 });
@@ -169,11 +193,11 @@ it('reset masks uses one current-media change, preserves gain and other media, a
  fireEvent.click(screen.getByRole('tab',{name:'处理'}));fireEvent.click(screen.getByRole('button',{name:'定位增益 -6.0 dB 1'}));await act(async()=>{});expect(screen.queryByRole('toolbar',{name:'选区操作'})).toBeNull();expect(document.querySelector('[data-edit-id]')).toBeNull();ui.unmount();active.lifecycle.dispose();
 });
 import { emptyPlayback, type PlaybackRequest } from '../../bridge/playback';
-it('actual pane interaction switches operation source and stops the old stream without autoplay; selectors and settings preserve it',async()=>{
+it('actual pane interaction switches operation source and stops the old stream without autoplay; comparison menu and settings preserve it',async()=>{
  const active=setup(),[a,b,c]=active.store.snapshot.document.media;[a,b,c].forEach((m,i)=>{m.displayName=`${'ABC'[i]}.wav`;});let generation=0;
  const playback={available:()=>true,devices:async()=>[],listen:async()=>()=>{},control:vi.fn(async()=>({...emptyPlayback,generation:++generation})),configure:vi.fn(async(q:PlaybackRequest)=>({...emptyPlayback,generation:++generation,projectId:q.projectId,mediaId:q.mediaId,state:'playing' as const}))};Object.assign(active,{commands:{playback}});
  const props={project:{active,busy:false} as unknown as ProjectLifecycleUI,mediaUI:{selected:a,selectedId:a.id,statuses:[a,b,c].map(m=>({mediaId:m.id,status:'missing'})),disabled:false} as unknown as MediaUI};const ui=render(<AppShell {...props}/>);
  fireEvent.click(screen.getByRole('button',{name:'播放 · 空格'}));await act(async()=>{});expect(playback.configure).toHaveBeenCalledOnce();const controls=playback.control.mock.calls.length;
- fireEvent.pointerDown(screen.getByRole('combobox',{name:'对比面板音频'}),{button:0});fireEvent.change(screen.getByRole('combobox',{name:'对比面板音频'}),{target:{value:c.id}});fireEvent.click(screen.getByRole('button',{name:'C.wav 分析设置'}));expect(playback.control).toHaveBeenCalledTimes(controls);expect(ui.container.querySelector('[data-pane="primary"]')).toHaveClass('is-playback-source');fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});
+ fireEvent.click(screen.getByRole('menuitem',{name:'视图'}));fireEvent.click(screen.getByRole('menuitem',{name:'双文件对比'}));fireEvent.click(screen.getByRole('menuitem',{name:'C.wav'}));fireEvent.click(screen.getByRole('button',{name:'C.wav 分析设置'}));expect(playback.control).toHaveBeenCalledTimes(controls);expect(ui.container.querySelector('[data-pane="primary"]')).toHaveClass('is-playback-source');fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});
  fireEvent(ui.container.querySelector('[data-pane="compare"]')!,new MouseEvent('pointerdown',{bubbles:true,button:0}));await act(async()=>{});expect(playback.control).toHaveBeenLastCalledWith('reset');expect(playback.configure).toHaveBeenCalledOnce();expect(ui.container.querySelector('[data-pane="compare"]')).toHaveClass('is-playback-source');expect(screen.getByRole('button',{name:'播放 · 空格'})).toBeInTheDocument();ui.unmount();active.lifecycle.dispose();
 });

@@ -23,6 +23,31 @@ function setup() {
 }
 afterEach(() => vi.useRealTimers());
 
+it('exports a clean snapshot without saving again, but drains and saves pending drafts before export', async () => {
+  const {store,queue,lifecycle,persistence}=setup();
+  const action=vi.fn(async()=>{expect(store.editingDisabled).toBe(true);expect(store.isDirty).toBe(false);return store.snapshot.document.revision;});
+  expect(await lifecycle.transitionForExport(action)).toBe(fixture.revision);
+  expect(persistence.save).not.toHaveBeenCalled();
+  store.setDraft('note','unsaved annotation');
+  lifecycle.registerDraft('note',()=>queue.enqueue({type:'updateMediaNote',mediaId:fixture.media[0].id,note:store.drafts.get('note')!,mergeKey:null},{draftKey:'note'}));
+  expect(await lifecycle.transitionForExport(action)).toBe(fixture.revision+1);
+  expect(persistence.save).toHaveBeenCalledOnce();
+  expect(persistence.save).toHaveBeenCalledWith(fixture.projectId,fixture.revision+1,{deferSync:true});
+  expect(store.drafts.size).toBe(0);expect(store.editingDisabled).toBe(false);
+  lifecycle.dispose();
+});
+
+it('a failed export save retains edits, blocks export and retries before the next export', async () => {
+  const {store,lifecycle,persistence,edit}=setup(),action=vi.fn(async()=>{});
+  await edit();
+  vi.mocked(persistence.save).mockRejectedValueOnce({code:'SaveFailed',message:'disk full',retryable:true});
+  await expect(lifecycle.transitionForExport(action)).rejects.toMatchObject({code:'SaveFailed'});
+  expect(store.isDirty).toBe(true);expect(store.editingDisabled).toBe(false);expect(action).not.toHaveBeenCalled();
+  await lifecycle.transitionForExport(action);
+  expect(action).toHaveBeenCalledOnce();expect(store.isDirty).toBe(false);expect(lifecycle.error).toBeNull();
+  lifecycle.dispose();
+});
+
 it('persists an admitted action after drafts without self-wait or a playback-resetting transition',async()=>{
  const {store,queue,lifecycle,persistence}=setup(),order:string[]=[];
  store.setDraft('note','draft');lifecycle.registerDraft('note',async()=>{order.push('draft');await queue.enqueue({type:'updateMediaNote',mediaId:fixture.media[0].id,note:'accepted',mergeKey:null},{draftKey:'note'});});

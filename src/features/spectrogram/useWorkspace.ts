@@ -30,6 +30,7 @@ export function useWorkspace(active: ActiveProject | null,hidden:readonly string
   };
   const [duplicatePane, setDuplicatePane] = useState<PanePosition | null>(null);
   const duplicateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const history = useRef<Record<PanePosition, string[]>>({ primary: [], compare: [] });
   const draftKey = 'spectrogram-view';
   const submit = async () => {
     if (!active || !active.store.drafts.has(draftKey)) return;
@@ -41,6 +42,7 @@ export function useWorkspace(active: ActiveProject | null,hidden:readonly string
   useEffect(() => {
     binding.current = active;hiddenRef.current=hidden;
     reconciledSource.current = null;
+    history.current = { primary: [], compare: [] };
     setDuplicatePane(null);
     current.current = active?.store.snapshot.document.viewState ?? blank(); setState(current.current);
     const unregister = active?.lifecycle.registerDraft(draftKey, submit);
@@ -63,7 +65,7 @@ export function useWorkspace(active: ActiveProject | null,hidden:readonly string
     active.store.setDraft(draftKey, JSON.stringify(next));
     clearTimeout(timer.current); timer.current = setTimeout(() => { void submit().catch(() => {}); }, 180);
   };
-  const selectPane = (pane: PanePosition, id: string | null) => {
+  const changePane = (pane: PanePosition, id: string | null, remember: boolean) => {
     if (!active || binding.current !== active || active.store.editingDisabled) return false;
     const media = active.store.snapshot.document.media;
     if (id === null && pane === 'primary' || id !== null && (!media.some(m => m.id === id)||hiddenRef.current.includes(id))) return false;
@@ -78,14 +80,35 @@ export function useWorkspace(active: ActiveProject | null,hidden:readonly string
     }
     const key = pane === 'primary' ? 'activeMediaId' : 'compareMediaId';
     if (latest[key] === id){current.current=latest;setState(latest);return true;}
+    const previous = latest[key];
+    if (remember && previous && id) history.current[pane] = [...history.current[pane].slice(-99), previous];
+    if (id === null) history.current[pane] = [];
     let next = { ...latest, [key]: id };
     if (!next.compareMediaId) next = toggleLinked(next, media, false);
     else if (next.linkedTime) next = toggleLinked(next, media, true);
     update(next); return true;
   };
+  const selectPane = (pane: PanePosition, id: string | null) => changePane(pane, id, true);
   const media = active?.store.snapshot.document.media ?? [];
   const hiddenForView=hiddenRef.current;
   const visibleMedia=useMemo(()=>{const excluded=new Set(hiddenForView);return media.filter(m=>!excluded.has(m.id));},[media,hiddenForView]);
+  const visibleById = useMemo(() => new Map(visibleMedia.map(item => [item.id, item])), [visibleMedia]);
+  const previousIndex = (pane: PanePosition) => {
+    const id = pane === 'primary' ? current.current.activeMediaId : current.current.compareMediaId;
+    const entries = history.current[pane];
+    for (let i = entries.length - 1; i >= 0; i--) {
+      if (entries[i] !== id && visibleById.has(entries[i])) return i;
+    }
+    return -1;
+  };
+  const previousMedia = (pane: PanePosition) => visibleById.get(history.current[pane][previousIndex(pane)]);
+  const back = (pane: PanePosition) => {
+    const index = previousIndex(pane);
+    const id = history.current[pane][index];
+    if (!id || !changePane(pane, id, false)) return null;
+    history.current[pane].splice(index);
+    return id;
+  };
   const projectId = active?.store.snapshot.document.projectId ?? '';
   const view = (id: string) => ({ ...(state.media[id] ?? defaultView(media.find(m => m.id === id)!)), ...local?.value.display, ...local?.override(projectId,id).display });
   const analysis = (id: string) => local?.override(projectId,id).analysis ?? local?.value.analysis ?? active?.store.snapshot.document.analysis[id] ?? defaultSettings;
@@ -106,7 +129,7 @@ export function useWorkspace(active: ActiveProject | null,hidden:readonly string
     }
   },[active,analysisIntent,snapshot,active?.store.editingDisabled,local,submittedAnalysis]);
   return {
-    state, view, analysis, renderAnalysis, selectPane, duplicatePane,visibleMedia,
+    state, view, analysis, renderAnalysis, selectPane, previousMedia, back, duplicatePane,visibleMedia,
     hasGlobalSettings: !!local && (!!local.value.analysis || Object.keys(local.value.display).length > 0),
     followGlobal: (id: string) => { if (active && binding.current === active && !active.store.editingDisabled) local?.follow(projectId,id,['display','analysis']); },
     revealMedia:async(id:string)=>{if(!active||binding.current!==active)return false;if(hiddenRef.current.includes(id)){if(!reveal)return false;try{await reveal(id);}catch{return false;}if(binding.current!==active)return false;hiddenRef.current=hiddenRef.current.filter(hidden=>hidden!==id);}return true;},

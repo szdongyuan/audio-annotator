@@ -14,3 +14,10 @@ it('preserves full-project status calls and captures the runtime for scoped call
     ['media_status', {projectId: 'project', mediaIds: [], runtimeNonce: 'runtime-a'}],
   ]);
 });
+it('supplies the captured session for ordinary direct imports without a target', async () => {
+  const nonce='22222222-2222-4222-8222-222222222222';
+  await createMediaClient().start('project',['D:/a.wav'],()=>{},undefined,undefined,nonce);
+  expect(invoke).toHaveBeenCalledWith('import_media',expect.objectContaining({projectId:'project',paths:['D:/a.wav'],runtimeNonce:nonce}));
+  expect(invoke.mock.calls[0][1]).not.toHaveProperty('target');
+  await expect(createMediaClient('11111111-1111-4111-8111-111111111111').start('project',['D:/a.wav'],()=>{},undefined,undefined,nonce)).rejects.toThrow();
+});

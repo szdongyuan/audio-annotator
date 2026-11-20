@@ -48,7 +48,7 @@ fn required_nullable<'de, D: serde::Deserializer<'de>>(
 ) -> std::result::Result<Option<String>, D::Error> {
     Option::<String>::deserialize(d)
 }
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DirectTarget {
     #[serde(deserialize_with = "required_nullable")]

@@ -25,8 +25,16 @@ pub struct PortableMedia {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PortableAuthor {
+    pub identity: crate::collaboration::AuthorIdentity,
+    pub payload: crate::collaboration::LayerPayload,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Manifest {
     pub format_version: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<PortableAuthor>,
     pub project_id: String,
     pub name: String,
     pub revision: u64,
@@ -56,6 +64,7 @@ impl Manifest {
         plan.validate_document(doc)?;
         Ok(Self {
             format_version: 4,
+            authors: vec![],
             organization: plan.organization.clone(),
             preserve_folders: plan.preserve_folders,
             project_id: doc.project_id.clone(),
@@ -95,7 +104,7 @@ impl Manifest {
         let v: serde_json::Value =
             serde_json::from_slice(bytes).map_err(|_| super::invalid("无效的 UTF-8 JSON 清单"))?;
         match v.get("formatVersion").and_then(|v| v.as_u64()) {
-            Some(4) => (),
+            Some(4 | 5) => (),
             Some(_) => {
                 return Err(AppError::new(
                     ErrorCode::UnsupportedVersion,
@@ -127,10 +136,83 @@ impl Manifest {
             }
         }
         m.document(false)?.validate()?;
+        m.validate_authors()?;
         Ok(m)
     }
+    pub fn validate_authors(&self) -> Result<()> {
+        use crate::collaboration::{profiles::Profile, CollaborationManifest, MANIFEST_KIND};
+        if self.authors.len() > 128 || (self.format_version == 4 && !self.authors.is_empty()) {
+            return Err(super::invalid("Invalid portable authors"));
+        }
+        if self.authors.is_empty() {
+            return if self.format_version == 4 {
+                Ok(())
+            } else {
+                Err(super::invalid("Portable package is missing authors"))
+            };
+        }
+        let document = self.document(false)?;
+        if self.format_version == 5
+            && (!document.categories.is_empty()
+                || !document.annotations.is_empty()
+                || !document.edits.is_empty()
+                || document.analysis.values().any(|a| *a != Default::default())
+                || document
+                    .playback_mix
+                    .values()
+                    .any(|a| *a != Default::default())
+                || document.view_state != Default::default()
+                || document.media.iter().any(|m| {
+                    !m.note.is_empty()
+                        || m.channel_notes.iter().any(|n| !n.is_empty())
+                        || !m.category_ids.is_empty()
+                        || m.channel_category_ids.iter().any(|c| !c.is_empty())
+                }))
+        {
+            return Err(super::invalid(
+                "Portable author package must not contain unattributed or private state",
+            ));
+        }
+        let manifest = CollaborationManifest {
+            kind: MANIFEST_KIND.into(),
+            format_version: 5,
+            project_id: self.project_id.clone(),
+            name: self.name.clone(),
+            created_at: self.created_at.clone(),
+            media: document
+                .media
+                .iter()
+                .map(|m| crate::collaboration::PublicMedia {
+                    id: m.id.clone(),
+                    display_name: m.display_name.clone(),
+                    source_ref: format!("media/{}.wav", m.id),
+                    sha256: m.sha256.clone(),
+                    byte_length: m.byte_length,
+                    sample_rate: m.sample_rate,
+                    frame_count: m.frame_count,
+                    channel_count: m.channel_count,
+                    channel_layout: m.channel_layout.clone(),
+                })
+                .collect(),
+        };
+        let mut ids = std::collections::HashSet::new();
+        for author in &self.authors {
+            Profile {
+                author_id: author.identity.author_id.clone(),
+                display_name: author.identity.display_name.clone(),
+                created_at: author.identity.created_at.clone(),
+            }
+            .validate()?;
+            if !ids.insert(&author.identity.author_id) {
+                return Err(super::invalid("Duplicate portable author"));
+            }
+            author.payload.hash()?;
+            author.payload.project(&manifest)?;
+        }
+        Ok(())
+    }
     pub fn document(&self, independent: bool) -> Result<ProjectDocument> {
-        if self.format_version != 4 {
+        if !matches!(self.format_version, 4 | 5) {
             return Err(AppError::new(
                 ErrorCode::UnsupportedVersion,
                 "Unsupported exchange format version",

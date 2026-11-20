@@ -22,6 +22,7 @@ use tauri::{ipc::Channel, State};
 pub struct ExchangeTasks {
     current: Option<(String, Arc<AtomicBool>)>,
     preview: Option<(String, Arc<ExportCapture>)>,
+    preview_epoch: u64,
 }
 impl ExchangeTasks {
     #[cfg(test)]
@@ -132,7 +133,16 @@ fn finish(
     };
     let _ = channel.send(event);
 }
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExportSelection {
+    media_ids: Vec<String>,
+    author_ids: Vec<String>,
+    audio_only: bool,
+}
 struct ExportCapture {
+    authors: Vec<exchange::PortableAuthor>,
+    audio_only: bool,
     expected: ExpectedProject,
     runtime_nonce: String,
     document: annotator_core::model::ProjectDocument,
@@ -154,13 +164,15 @@ impl ExportCapture {
         // only at publication so ordinary shared work can continue during I/O.
         let before_publish = || self.authority.as_ref().map(|a| a.lock()).transpose();
         if self.plan.bundle {
-            exchange::export_bundle_controlled(
+            exchange::export_selected_controlled(
                 &self.document,
                 &self.plan,
                 &self.root,
                 target,
                 cancel,
                 Limits::default(),
+                &self.authors,
+                self.audio_only,
                 progress,
                 before_publish,
             )
@@ -213,12 +225,30 @@ fn check_capture(state: &AppState, expected: &ExpectedProject, nonce: &str) -> R
     }
     Ok(())
 }
+#[cfg(test)]
 pub(crate) async fn preview(
     state: &AppState,
     expected: ExpectedProject,
     bundle: bool,
     preserve_folders: bool,
 ) -> Result<ExportPreview> {
+    preview_selected(state, expected, bundle, preserve_folders, None).await
+}
+async fn preview_selected(
+    state: &AppState,
+    expected: ExpectedProject,
+    bundle: bool,
+    preserve_folders: bool,
+    selection: Option<ExportSelection>,
+) -> Result<ExportPreview> {
+    let epoch = {
+        let mut tasks = state
+            .4
+            .lock()
+            .map_err(|_| AppError::invalid("交换服务不可用"))?;
+        tasks.preview_epoch = tasks.preview_epoch.wrapping_add(1);
+        tasks.preview_epoch
+    };
     let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let binding = {
@@ -248,10 +278,20 @@ pub(crate) async fn preview(
                 })
         };
         if let Some(binding) = binding {
-            super::collaboration::operations::converge_retirement(&state, &binding)?;
+            let repo = state
+                .6
+                .current
+                .lock()
+                .map_err(|_| super::collaboration::runtime::unavailable())?
+                .repo
+                .clone()
+                .ok_or_else(super::collaboration::runtime::stale)?;
+            if !repo.entry_is_current()? {
+                super::collaboration::operations::converge_retirement(&state, &binding)?;
+            }
         }
         // Capture immutable native context only; all head I/O and planning is outside state.0.
-        let (private, root, manifest, repo, nonce) = {
+        let (private, root, manifest, repo, nonce, actor_id) = {
             let current = state
                 .0
                 .lock()
@@ -276,9 +316,16 @@ pub(crate) async fn preview(
                 p.workspace().ok().map(|w| w.manifest().clone()),
                 runtime.repo.clone(),
                 runtime.nonce.clone(),
+                p.workspace()
+                    .ok()
+                    .and_then(|w| w.actor())
+                    .map(|a| a.author_id.clone()),
             )
         };
-        let mut document = if let Some(mut manifest) = manifest {
+        let audio_only_request = selection.as_ref().is_some_and(|s| s.audio_only);
+        let mut document = if audio_only_request {
+            private.clone()
+        } else if let Some(mut manifest) = manifest {
             let ids: std::collections::HashSet<_> =
                 private.media.iter().map(|m| m.id.as_str()).collect();
             manifest.media.retain(|m| ids.contains(m.id.as_str()));
@@ -299,7 +346,7 @@ pub(crate) async fn preview(
         }
         #[cfg(test)]
         state.6.run_hook();
-        let organization = if let Some(repo) = &repo {
+        let mut organization = if let Some(repo) = &repo {
             repo.read_organization()?
         } else {
             exchange::root_organization(&document)?
@@ -310,12 +357,73 @@ pub(crate) async fn preview(
             recycle.filter_export(&mut document);
         }
         let organization_revision = repo.as_ref().map(|_| organization.revision);
+        let mut authors = vec![];
+        let mut audio_only = false;
+        if let Some(selection) = selection {
+            if !bundle {
+                return Err(AppError::invalid("部分导出需要使用 ZIP"));
+            }
+            document = exchange::select_document(&document, &selection.media_ids)?;
+            organization = exchange::select_organization(&document, &organization)?;
+            let ids = document.media.iter().map(|m| m.id.clone()).collect();
+            audio_only = selection.audio_only;
+            let requested: std::collections::HashSet<_> = selection.author_ids.iter().collect();
+            if requested.len() != selection.author_ids.len() || requested.len() > 128 {
+                return Err(AppError::invalid("无效的作者选择"));
+            }
+            if !audio_only {
+                let repo = repo
+                    .as_ref()
+                    .ok_or_else(|| AppError::invalid("请先将项目保存为共享项目"))?;
+                let snapshot = repo.snapshot_authors(&selection.author_ids)?;
+                if requested.iter().any(|id| {
+                    !snapshot
+                        .authors
+                        .iter()
+                        .any(|a| &a.identity.author_id == *id)
+                }) {
+                    return Err(AppError::invalid("作者已变化，请重新选择"));
+                }
+                for author in snapshot.authors {
+                    if !requested.contains(&author.identity.author_id) {
+                        continue;
+                    }
+                    if let Some(error) = author.error {
+                        return Err(error);
+                    }
+                    let payload = if actor_id.as_deref() == Some(&author.identity.author_id) {
+                        annotator_core::collaboration::LayerPayload::from_document(&private)?
+                    } else {
+                        author.layer.map(|l| l.payload).unwrap_or_default()
+                    };
+                    authors.push(exchange::PortableAuthor {
+                        identity: author.identity,
+                        payload: exchange::select_payload(&payload, &ids),
+                    });
+                }
+                if authors.is_empty() {
+                    return Err(AppError::invalid("请至少选择一个作者"));
+                }
+            }
+            // Labels live exclusively in attributed layers for the new package format.
+            document.categories.clear();
+            document.annotations.clear();
+            for media in &mut document.media {
+                media.note.clear();
+                media.channel_notes.iter_mut().for_each(String::clear);
+                media.category_ids.clear();
+                media.channel_category_ids.iter_mut().for_each(Vec::clear);
+            }
+        }
+
         let plan =
             exchange::ExportPathPlan::build(&document, &organization, bundle, preserve_folders)?;
         let authority = repo
             .as_ref()
             .map(|r| exchange::SharedSourceAuthority::capture(r));
-        let _source_guard = authority.as_ref().map(|a| a.lock()).transpose()?;
+        if let Some(authority) = &authority {
+            authority.verify()?;
+        }
         check_capture(&state, &expected, &nonce)?;
         let token = uuid::Uuid::new_v4().to_string();
         let result = ExportPreview {
@@ -331,6 +439,8 @@ pub(crate) async fn preview(
             changes: plan.changes.clone(),
         };
         let capture = Arc::new(ExportCapture {
+            authors,
+            audio_only,
             expected,
             runtime_nonce: nonce,
             document,
@@ -351,6 +461,12 @@ pub(crate) async fn preview(
                 "请等待交换任务结束",
             ));
         }
+        if tasks.preview_epoch != epoch {
+            return Err(AppError::new(
+                ErrorCode::Cancelled,
+                "目录预览已被新的请求替代",
+            ));
+        }
         tasks.preview = Some((token, capture));
         Ok(result)
     })
@@ -363,8 +479,9 @@ pub async fn export_path_preview(
     expected: ExpectedProject,
     bundle: bool,
     preserve_folders: bool,
+    selection: Option<ExportSelection>,
 ) -> Result<ExportPreview> {
-    preview(&state, expected, bundle, preserve_folders).await
+    preview_selected(&state, expected, bundle, preserve_folders, selection).await
 }
 fn accepted(
     state: &AppState,
@@ -471,7 +588,8 @@ pub fn import_exchange(
     state: State<'_, AppState>,
     expected: Option<ExpectedProject>,
     source: String,
-    parent: String,
+    parent: Option<String>,
+    merge: Option<bool>,
     bindings: Option<super::collaboration::exchange_default::SourceBindings>,
     on_event: Channel<ExchangeEvent>,
 ) -> Result<String> {
@@ -509,6 +627,133 @@ pub fn import_exchange(
             };
             check_cancel(&cancel)?;
             let mut last = Instant::now() - Duration::from_secs(1);
+            if merge.unwrap_or(false) {
+                let expected = expected
+                    .as_ref()
+                    .ok_or_else(|| AppError::invalid("请先打开目标项目"))?;
+                let (repo, actor) = {
+                    let current = state
+                        .0
+                        .lock()
+                        .map_err(|_| super::collaboration::runtime::unavailable())?;
+                    let p = current
+                        .as_ref()
+                        .ok_or_else(super::collaboration::runtime::stale)?;
+                    if !super::collaboration::catalog::can_import(p) {
+                        return Err(AppError::invalid("当前项目不能导入音频"));
+                    }
+                    let workspace = p.workspace()?;
+                    (
+                        state
+                            .6
+                            .current
+                            .lock()
+                            .map_err(|_| super::collaboration::runtime::unavailable())?
+                            .repo
+                            .clone()
+                            .ok_or_else(super::collaboration::runtime::stale)?,
+                        workspace
+                            .author_session()
+                            .ok_or_else(super::collaboration::runtime::stale)?,
+                    )
+                };
+                let local = state.6.local()?;
+                let staging = local.join(format!("package-merge-{}", uuid::Uuid::new_v4()));
+                let mut owned = super::collaboration::Owned::new();
+                owned.dir(&staging)?;
+                let imported = exchange::import_exchange(
+                    Path::new(&source),
+                    &staging,
+                    &cancel,
+                    Limits::default(),
+                    |phase, completed| {
+                        if last.elapsed() >= Duration::from_millis(100) {
+                            last = Instant::now();
+                            let _ = on_event.send(ExchangeEvent::Progress {
+                                task_id: worker_id.clone(),
+                                phase: phase.into(),
+                                completed,
+                            });
+                        }
+                    },
+                );
+                owned.inventory(&staging)?;
+                let imported = imported?;
+                if imported.authors.is_empty() {
+                    return Err(AppError::invalid(
+                        "合并导入需要新版音频标注包；旧分享文件请作为独立项目导入",
+                    ));
+                }
+                check_capture(&state, expected, &nonce)?;
+                let repo = Arc::new(exchange::merge_package(
+                    &repo,
+                    &actor,
+                    &imported,
+                    &local.join("exchange-pcm"),
+                    &cancel,
+                    |phase, completed| {
+                        if last.elapsed() >= Duration::from_millis(100) {
+                            last = Instant::now();
+                            if on_event
+                                .send(ExchangeEvent::Progress {
+                                    task_id: worker_id.clone(),
+                                    phase: phase.into(),
+                                    completed,
+                                })
+                                .is_err()
+                            {
+                                cancel.store(true, Ordering::Relaxed);
+                            }
+                        }
+                    },
+                )?);
+                let catalog_source = {
+                    let current = state
+                        .0
+                        .lock()
+                        .map_err(|_| super::collaboration::runtime::unavailable())?;
+                    current
+                        .as_ref()
+                        .ok_or_else(super::collaboration::runtime::stale)?
+                        .workspace()?
+                        .catalog_source()
+                };
+                let catalog = catalog_source.prepare(repo.clone())?;
+                let remote = repo.snapshot()?;
+                let mut current = state
+                    .0
+                    .lock()
+                    .map_err(|_| super::collaboration::runtime::unavailable())?;
+                check_current(&current, &Some(expected.clone()), true)?;
+                let p = current
+                    .as_mut()
+                    .ok_or_else(super::collaboration::runtime::stale)?;
+                let mut runtime = state
+                    .6
+                    .current
+                    .lock()
+                    .map_err(|_| super::collaboration::runtime::unavailable())?;
+                let mut layers = runtime
+                    .layers
+                    .clone()
+                    .ok_or_else(super::collaboration::runtime::stale)?;
+                layers.adopt_prepared_catalog(&catalog)?;
+                p.adopt_prepared_catalog(
+                    &expected.project_id,
+                    expected.expected_revision,
+                    catalog,
+                )?;
+                layers.update(remote)?;
+                runtime.layers = Some(layers);
+                runtime.repo = Some(repo.clone());
+                drop(runtime);
+                let path = repo.root().to_string_lossy().into_owned();
+                let opened = info_shared(p, &state.6)?;
+                return Ok(Some((path, Some(opened))));
+            }
+            let parent = parent
+                .as_ref()
+                .ok_or_else(|| AppError::invalid("请选择新项目存放位置"))?;
             let imported = super::collaboration::exchange_default::prepare(
                 Path::new(&source),
                 Path::new(&parent),
@@ -609,6 +854,189 @@ mod tests {
             project_id: e.project_id,
             expected_revision: e.expected_revision,
         }
+    }
+    #[test]
+    fn partial_preview_limits_media_and_authors_then_imports_an_independent_snapshot() {
+        use annotator_core::collaboration::{profiles::Profile, LayerPayload};
+        let f = Fixture::new();
+        let bob = Profile::new("Bob").unwrap();
+        let session = f.repo.adopt(&bob).unwrap();
+        f.repo
+            .publish(
+                &session,
+                None,
+                &LayerPayload::from_document(&f.document).unwrap(),
+            )
+            .unwrap();
+        let e = expected(&f);
+        let selected = f.document.media[0].id.clone();
+        let preview = tauri::async_runtime::block_on(preview_selected(
+            &f.state,
+            e.clone(),
+            true,
+            false,
+            Some(ExportSelection {
+                media_ids: vec![selected.clone()],
+                author_ids: vec![bob.author_id.clone()],
+                audio_only: false,
+            }),
+        ))
+        .unwrap();
+        assert_eq!(preview.media_paths.len(), 1);
+        let capture = accepted(&f.state, &e, &preview.token, true).unwrap();
+        assert_eq!(capture.authors.len(), 1);
+        assert_eq!(capture.authors[0].identity.author_id, bob.author_id);
+        assert!(capture.authors[0]
+            .payload
+            .annotations
+            .iter()
+            .all(|a| a.region.media_id == selected));
+        let target = f.root.join("partial.zip");
+        capture
+            .write(&target, &AtomicBool::new(false), |_, _| {})
+            .unwrap();
+        std::fs::create_dir(f.root.join("imports")).unwrap();
+        std::fs::create_dir(f.root.join("receiver-local")).unwrap();
+        let prepared = super::super::collaboration::exchange_default::prepare(
+            &target,
+            &f.root.join("imports"),
+            &f.root.join("receiver-local"),
+            &Profile::new("Receiver").unwrap(),
+            None,
+            &AtomicBool::new(false),
+            |_, _| {},
+        )
+        .unwrap();
+        let super::super::collaboration::exchange_default::PreparedImport::Ready(prepared) =
+            prepared
+        else {
+            panic!("bundle must be self contained")
+        };
+        assert_eq!(prepared.repo.manifest().media.len(), 1);
+        let authors = prepared.repo.snapshot().unwrap().authors;
+        assert!(authors
+            .iter()
+            .any(|a| a.identity.display_name == "Bob（导入）"));
+        assert!(authors.iter().all(|a| a.layer.as_ref().is_none_or(|l| l
+            .payload
+            .annotations
+            .iter()
+            .all(|a| a.region.media_id == selected))));
+    }
+    #[test]
+    fn preview_uses_loaded_catalog_and_reads_only_selected_authors() {
+        use annotator_core::collaboration::{profiles::Profile, LayerPayload};
+        let f = Fixture::new();
+        let e = expected(&f);
+        let other = Profile::new("Not exported").unwrap();
+        let actor = f.repo.adopt(&other).unwrap();
+        f.repo
+            .publish(
+                &actor,
+                None,
+                &LayerPayload::from_document(&f.document).unwrap(),
+            )
+            .unwrap();
+        let record = f
+            .root
+            .join("source/catalog")
+            .join(format!("{}.json", f.document.media[1].id));
+        let before = std::fs::read(&record).unwrap();
+        std::fs::write(
+            &record,
+            b"unrelated record must not be read for partial export",
+        )
+        .unwrap();
+        let layer = f
+            .root
+            .join("source/annotations")
+            .join(&other.author_id)
+            .join("00000000000000000001.json");
+        std::fs::write(&layer, b"unrelated author layer must not be read").unwrap();
+        let selection = ExportSelection {
+            media_ids: vec![f.document.media[0].id.clone()],
+            author_ids: vec![f.actor.identity().author_id.clone()],
+            audio_only: false,
+        };
+        let result = tauri::async_runtime::block_on(preview_selected(
+            &f.state,
+            e,
+            true,
+            true,
+            Some(selection),
+        ));
+        std::fs::write(record, before).unwrap();
+        assert!(result.is_ok(), "{:#?}", result.err());
+    }
+    #[test]
+    fn late_preview_cannot_replace_a_newer_native_acceptance_token() {
+        use std::sync::mpsc;
+        let f = Fixture::new();
+        let e = expected(&f);
+        let (ready, seen) = mpsc::channel();
+        let (resume, wait) = mpsc::channel();
+        *f.state.6.hook.lock().unwrap() = Some(Box::new(move || {
+            ready.send(()).unwrap();
+            wait.recv_timeout(Duration::from_secs(5)).unwrap();
+        }));
+        let state = f.state.clone();
+        let first = e.clone();
+        let worker = std::thread::spawn(move || {
+            tauri::async_runtime::block_on(preview_selected(&state, first, true, true, None))
+        });
+        seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        let newer = tauri::async_runtime::block_on(preview_selected(
+            &f.state,
+            e.clone(),
+            true,
+            false,
+            None,
+        ))
+        .unwrap();
+        resume.send(()).unwrap();
+        assert_eq!(
+            worker.join().unwrap().err().unwrap().code,
+            ErrorCode::Cancelled
+        );
+        assert!(accepted(&f.state, &e, &newer.token, true).is_ok());
+    }
+    #[test]
+    fn partial_preview_refuses_stale_selection_and_audio_zip_needs_no_authors() {
+        let f = Fixture::new();
+        let e = expected(&f);
+        let selection = ExportSelection {
+            media_ids: vec![uuid::Uuid::new_v4().to_string()],
+            author_ids: vec![],
+            audio_only: true,
+        };
+        assert!(tauri::async_runtime::block_on(preview_selected(
+            &f.state,
+            e.clone(),
+            true,
+            true,
+            Some(selection)
+        ))
+        .is_err());
+        let selection = ExportSelection {
+            media_ids: vec![f.document.media[0].id.clone()],
+            author_ids: vec![],
+            audio_only: true,
+        };
+        let preview = tauri::async_runtime::block_on(preview_selected(
+            &f.state,
+            e.clone(),
+            true,
+            true,
+            Some(selection),
+        ))
+        .unwrap();
+        let capture = accepted(&f.state, &e, &preview.token, true).unwrap();
+        let target = f.root.join("audio-only.zip");
+        capture
+            .write(&target, &AtomicBool::new(false), |_, _| {})
+            .unwrap();
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(target).unwrap()).unwrap();
+        assert!(zip.by_name("manifest.json").is_err());
     }
     #[test]
     fn export_converges_retirement_and_exports_only_survivors_from_pending_cleanup() {

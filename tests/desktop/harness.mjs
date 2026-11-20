@@ -98,7 +98,12 @@ export async function start(paths, output, executable, options = {}) {
     evaluate: (script, ...args) => driver.executeScript(script, ...args),
     async until(script, label = script, timeout = 60000) { await driver.wait(async () => !!await driver.executeScript(`return (${script})`), timeout, label, 50); },
     element: selector => driver.findElement(By.css(selector)),
-    async selectMedia(name) { await revealMedia(h,name); await h.until(`document.querySelector('.file-pane h2')?.textContent===${JSON.stringify(name)}&&!document.querySelector('.tile-status')`); },
+    async selectMedia(name) {
+      if (await h.evaluate("return !!document.querySelector('[data-pane=compare].is-current-pane')"))
+        await h.click('.file-pane[data-pane=primary] button[title="设为播放源"]');
+      await revealMedia(h, name);
+      await h.until(`document.querySelector('.file-pane h2')?.textContent===${JSON.stringify(name)}&&!document.querySelector('.tile-status')`);
+    },
     async bindSources(names) { await h.until(`document.querySelector('[aria-label="关联原始音频"]')`); for(const name of names) await driver.findElement(By.xpath(`//div[@aria-label='关联原始音频']/div[span[normalize-space(.)='${name}']]/button`)).click(); await h.clickText('校验并导入'); },
     async clickText(text) { const button=await driver.wait(async()=>{ const elements = await driver.findElements(By.xpath(`//button[normalize-space(.)='${text}']`)); for (const e of elements) if (await e.isDisplayed() && await e.isEnabled()) return e; return false; },10000,`visible enabled button: ${text}`,50);await button.click(); },
     async click(selector) { await (await h.element(selector)).click(); },

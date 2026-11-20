@@ -18,7 +18,7 @@ export function useOrganization(owner: ActiveProject | null) {
     let mediaCount = owner.store.snapshot.document.media.length;
     const unsubscribe = owner.store.subscribe(() => {
         const count = owner.store.snapshot.document.media.length;
-        if (count !== mediaCount) { mediaCount = count; void next.refresh(true); }
+        if (count !== mediaCount) { mediaCount = count; void next.refreshAfterVerified(); }
     });
     window.addEventListener('focus', refresh); return () => { unsubscribe(); clearInterval(timer); window.removeEventListener('focus', refresh); next.dispose(); }; }, [owner, nonce]);
     return controller;

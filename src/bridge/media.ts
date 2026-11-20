@@ -14,7 +14,7 @@ export const mediaDialogs = {
   choose: (multiple: boolean) => open({ multiple, directory: false, filters: [{ name: '音频', extensions: ['wav', 'flac', 'mp3'] }] }),
 };
 export interface MediaCommands {
-  start(projectId: string, paths: string[], event: (event: MediaEvent) => void, relinkId?: string, target?: {folderId:string|null;layoutRevision:number}): Promise<string>;
+  start(projectId: string, paths: string[], event: (event: MediaEvent) => void, relinkId?: string, target?: {folderId:string|null;layoutRevision:number}, runtimeNonce?: string): Promise<string>;
   cancel(taskId: string): Promise<void>;
   release(taskId: string, mediaId: string): Promise<void>;
   status(projectId: string, mediaIds?: string[]): Promise<MediaStatus[]>;
@@ -22,7 +22,8 @@ export interface MediaCommands {
 export function createMediaClient(runtimeNonce?: string): MediaCommands {
  const invoke = runtimeInvoke(runtimeNonce);
 return {
-  start: async (projectId, paths, receive, relinkId, target) => {
+  start: async (projectId, paths, receive, relinkId, target, dropNonce) => {
+    if (dropNonce) { organizationUuid(dropNonce); if (runtimeNonce && runtimeNonce !== dropNonce) throw new Error('项目会话已变化，请重新拖入'); }
     if(target){if(target.folderId!==null)organizationUuid(target.folderId);if(!Number.isSafeInteger(target.layoutRevision)||target.layoutRevision<0)throw new Error('无效目录版本');if(relinkId)throw new Error('关联音频不能改变目录');}
     const onEvent = new Channel<MediaEvent>();
     onEvent.onmessage = event => {
@@ -32,8 +33,8 @@ return {
       receive(event);
     };
     return relinkId
-      ? invoke('relink_media', { projectId, mediaId: relinkId, path: paths[0], onEvent })
-      : invoke('import_media', { projectId, paths, onEvent, ...(target?{target}:{}) });
+      ? invoke('relink_media', { projectId, mediaId: relinkId, path: paths[0], onEvent, ...(dropNonce ? {runtimeNonce: dropNonce} : {}) })
+      : invoke('import_media', { projectId, paths, onEvent, ...(target?{target}:{}), ...(dropNonce ? {runtimeNonce: dropNonce} : {}) });
   },
   cancel: taskId => invoke('cancel_media_import', { taskId }),
   release: (taskId, mediaId) => invoke('release_media_import', { taskId, mediaId }),

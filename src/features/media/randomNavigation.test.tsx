@@ -146,7 +146,7 @@ it('intersects search, selected folder, whole-project search and tag filters', (
   press(); expect(ui.select).not.toHaveBeenCalled(); expect(screen.getByRole('status')).toHaveTextContent('当前范围内没有未分类音频');
 });
 
-it('keeps random candidates in flat scope while arrows reveal the next project-wide file', () => {
+it('keeps both random candidates and arrows within flat scope', () => {
   const media = files(), { controller, child } = organization(media), ui = setup(media, { organization: controller, selectedId: media[1].id });
   fireEvent.click(screen.getByTitle('父目录'));
   fireEvent.change(screen.getByLabelText('音频显示方式'), { target: { value: 'flat' } });
@@ -155,11 +155,11 @@ it('keeps random candidates in flat scope while arrows reveal the next project-w
   expect(ui.select).not.toHaveBeenCalled();
   expect(screen.getByRole('status')).toHaveTextContent('没有其他未分类音频');
   press('ArrowDown'); flush();
-  expect(ui.select).toHaveBeenLastCalledWith(media[0].id);
-  expect(screen.getByLabelText('平铺显示范围')).toHaveValue('');
-  expect(screen.getByRole('button', { name: media[0].displayName })).toHaveFocus();
+  expect(ui.select).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('平铺显示范围')).toHaveValue(child);
   expect(controller.selectedFolderId).not.toBeNull();
-  ui.select.mockClear(); vi.mocked(Math.random).mockReturnValue(0.999);
+  fireEvent.change(screen.getByLabelText('平铺显示范围'), { target: { value: '' } });
+  vi.mocked(Math.random).mockReturnValue(0);
   press('r');
   expect(ui.select).toHaveBeenLastCalledWith(media[2].id, 'random');
 });

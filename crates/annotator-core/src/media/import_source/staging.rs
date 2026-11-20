@@ -61,7 +61,7 @@ impl Drop for StagedAudio {
         }
     }
 }
-pub(super) fn safe_ancestors(path: &Path) -> Result<()> {
+pub fn safe_ancestors(path: &Path) -> Result<()> {
     for ancestor in path.ancestors() {
         if ancestor.as_os_str().is_empty() {
             continue;

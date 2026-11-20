@@ -69,7 +69,7 @@ fn rejects_unknown_versions_fields_dangling_references_and_bounds() {
     for (pointer, value, expected) in [
         (
             "/formatVersion",
-            serde_json::json!(5),
+            serde_json::json!(6),
             ErrorCode::UnsupportedVersion,
         ),
         (
@@ -548,7 +548,7 @@ fn portable_v1_and_future_versions_are_explicitly_unsupported() {
     }
     let r = root();
     let cancel = AtomicBool::new(false);
-    for version in [1, 2, 3, 5] {
+    for version in [1, 2, 3, 6] {
         value["formatVersion"] = serde_json::json!(version);
         let bytes = serde_json::to_vec(&value).unwrap();
         assert_eq!(

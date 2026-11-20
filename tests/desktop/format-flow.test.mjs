@@ -34,7 +34,7 @@ try {
   assert.equal(saved.formatVersion, 3); assert.deepEqual(saved.media[0].categoryIds, []); assert.deepEqual(saved.media[0].channelCategoryIds, [[], []]);
   assert.equal(saved.viewState.compareLayout, 'horizontal'); assert.equal(saved.viewState.compareSplit, .5);
   report.checks.push('native save writes complete format 2');
-  await h.menu('导出我的标注 / 项目包'); await h.label('我的标注（不含音频）'); await h.clickText('预览导出路径'); await h.until("document.querySelector('[aria-label=导出路径预览]')"); await h.clickText('选择保存位置…'); await h.until(`document.querySelector('.exchange-result')`); await h.clickText('关闭');
+  await h.menu('导出我的标注 / 项目包'); await h.label('我的标注（不含音频）'); await h.click('.exchange-dialog .button-accent'); await h.until(`document.querySelector('.exchange-result')`); await h.clickText('关闭');
   const portable = JSON.parse(await fs.readFile(json, 'utf8')); assert.equal(portable.formatVersion, 4);
   for (const source of sources) {
     await fs.writeFile(source.local, JSON.stringify({ ...saved, formatVersion: source.version }));

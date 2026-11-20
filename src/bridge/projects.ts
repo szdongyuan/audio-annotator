@@ -66,7 +66,7 @@ return {
     const onProgress=new Channel<CopyProgress>();onProgress.onmessage=value=>{const p=parseCopyProgress(value);if(p.operationId===controls.operationId)controls.onProgress(p);};
     return call('save_project_as_controlled', {path,projectId,expectedRevision,operationId:controls.operationId,onProgress},parseOpened);
   },
-  save: (projectId, expectedRevision) => call('save_project', { projectId, expectedRevision }, value => { if (typeof value !== 'number' || !Number.isSafeInteger(value)) throw new Error('Invalid saved revision'); return value; }),
+  save: (projectId, expectedRevision, options) => call('save_project', { projectId, expectedRevision, ...(options?.deferSync ? { deferSync: true } : {}) }, value => { if (typeof value !== 'number' || !Number.isSafeInteger(value)) throw new Error('Invalid saved revision'); return value; }),
   close: (projectId, expectedRevision, discard) => call('close_project', { projectId, expectedRevision, discard }, () => undefined),
   cancelRecovery: () => call('close_project', { projectId: null, expectedRevision: null, discard: false }, () => undefined),
   onCloseRequested: callback => listen('project-close-requested', callback),

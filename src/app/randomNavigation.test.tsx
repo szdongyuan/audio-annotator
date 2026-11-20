@@ -90,13 +90,13 @@ function mount(layer?: 'file' | 'channel' | 'region') {
   const context = setup(layer);
   return { ...context, ui: render(<AppShell {...context.props} />) };
 }
-const primary = () => screen.getByRole('combobox', { name: '主面板音频' });
+const primary = () => document.querySelector('[data-pane="primary"]');
 const row = (id: string) => document.querySelector<HTMLButtonElement>(`.media-select[data-media-id="${id}"]`)!;
 function randomFrom(id: string) { row(id).focus(); fireEvent.keyDown(row(id), { key: 'r' }); }
 async function settle(active: ActiveProject) { await act(async () => { await active.lifecycle.save(); }); }
 function expectTarget(id: string, compareId: string, name: string) {
-  expect(primary()).toHaveValue(id);
-  expect(screen.getByRole('combobox', { name: '对比面板音频' })).toHaveValue(compareId);
+  expect(primary()).toHaveAttribute('data-media-id', id);
+  expect(document.querySelector('[data-pane="compare"]')).toHaveAttribute('data-media-id', compareId);
   expect(document.querySelector('[data-pane="primary"]')).toHaveClass('is-playback-source');
   expect(screen.getByLabelText('播放控制')).toHaveAttribute('title', `播放源：${name}`);
   expect(row(id)).toHaveAttribute('aria-pressed', 'true');
@@ -128,7 +128,7 @@ it('R stops an independently playing target before the next Space starts it agai
   fireEvent.click(screen.getByRole('button', { name: '更多播放操作' }));
   fireEvent.click(screen.getByRole('menuitem', { name: '播放源' }));
   fireEvent.click(screen.getByRole('menuitem', { name: b.displayName }));
-  expect(primary()).toHaveValue(a.id);
+  expect(primary()).toHaveAttribute('data-media-id', a.id);
   expect(screen.getByLabelText('播放控制')).toHaveAttribute('title', `播放源：${b.displayName}`);
   expect(document.querySelector('.is-temporary.is-selected, .annotation-overlay .is-selected')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '播放 · 空格' }));
@@ -199,8 +199,8 @@ it.each(['file', 'channel', 'region'] as const)('recomputes %s eligibility after
   };
   const checkEligible = (eligible: boolean) => {
     fireEvent.click(row(a.id)); randomFrom(a.id);
-    expect(primary()).toHaveValue(eligible ? b.id : a.id);
-    expect(screen.getByRole('combobox', { name: '对比面板音频' })).toHaveValue(c.id);
+    expect(primary()).toHaveAttribute('data-media-id', eligible ? b.id : a.id);
+    expect(document.querySelector('[data-pane="compare"]')).toHaveAttribute('data-media-id', c.id);
     if (!eligible) expect(screen.getByText('没有其他未分类音频')).toBeInTheDocument();
   };
   checkEligible(false);
@@ -251,7 +251,7 @@ it.each(['runtime', 'identity'] as const)('clears the old notice and rejects lat
   fireEvent.keyDown(screen.getAllByRole('menu').at(-1)!, { key: 'Escape' });
   await settle(active);
   fireEvent.click(row(a.id)); randomFrom(a.id);
-  expect(primary()).toHaveValue(b.id); expect(frames.length).toBeGreaterThan(0);
+  expect(primary()).toHaveAttribute('data-media-id', b.id); expect(frames.length).toBeGreaterThan(0);
   const delayed = frames.at(-1)!;
   replaceScope();
   const search = screen.getByRole('textbox', { name: '搜索音频' }); search.focus();

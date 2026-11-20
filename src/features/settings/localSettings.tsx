@@ -1,9 +1,19 @@
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import type { AnalysisSettings, MediaView } from '../../bridge/types';
-import { analysisError } from '../spectrogram/workspace';
+import { analysisError, defaultSettings } from '../spectrogram/workspace';
 
 export type DisplayPreferences = Pick<MediaView, 'spectrumKind' | 'frequencyMix' | 'gainDb' | 'dynamicRangeDb' | 'palette'>;
 export type GlobalPlayback = { monitorGainDb: number; volume: number; looping: boolean; source: 'original' | 'processed' };
+export const defaultDisplayPreferences: DisplayPreferences = { spectrumKind: 'stft', frequencyMix: .65, gainDb: 0, dynamicRangeDb: 100, palette: 'ember' };
+export const defaultGlobalPlayback: GlobalPlayback = { monitorGainDb: 0, volume: .75, looping: false, source: 'processed' };
+/** Global defaults never inherit a project's saved viewport or per-media exceptions. */
+export function globalPreferences(value?: LocalPreferences) {
+  return {
+    display: { ...defaultDisplayPreferences, ...value?.display },
+    playback: { ...defaultGlobalPlayback, ...value?.playback },
+    analysis: { ...(value?.analysis ?? defaultSettings) },
+  };
+}
 type Override = { display?: Partial<DisplayPreferences>; analysis?: AnalysisSettings; monitorGainDb?: number };
 export interface LocalPreferences { version: 1; display: Partial<DisplayPreferences>; analysis: AnalysisSettings | null; playback: Partial<GlobalPlayback>; overrides: Record<string, Override> }
 export const localSettingsKey = 'audio-annotator.global-settings.v1';

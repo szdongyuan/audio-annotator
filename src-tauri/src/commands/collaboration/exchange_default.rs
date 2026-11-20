@@ -158,6 +158,23 @@ pub(crate) fn prepare(
         cancel,
         &mut progress,
     )?;
+    if !imported.authors.is_empty() {
+        let media_map = imported
+            .document
+            .media
+            .iter()
+            .map(|m| (m.id.clone(), m.id.clone()))
+            .collect();
+        let result = exchange::import_authors(
+            &prepared.repo,
+            &imported.source_project_id,
+            &imported.authors,
+            &media_map,
+            cancel,
+        );
+        prepared.owned.inventory(prepared.repo.root())?;
+        result?;
+    }
     prepared.owned.own_parent(target);
     target_owner.keep();
     Ok(PreparedImport::Ready(Box::new(prepared)))

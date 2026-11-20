@@ -116,6 +116,16 @@ pub(crate) async fn start(
     config: Config,
     on_event: Channel<ScanEvent>,
 ) -> Result<Token> {
+    start_with_layout(state, runtime_nonce, project_id, config, None, on_event).await
+}
+pub(crate) async fn start_with_layout(
+    state: &AppState,
+    runtime_nonce: String,
+    project_id: String,
+    config: Config,
+    expected_layout_revision: Option<u64>,
+    on_event: Channel<ScanEvent>,
+) -> Result<Token> {
     config.validate()?;
     let token = Token {
         runtime_nonce,
@@ -182,13 +192,44 @@ pub(crate) async fn start(
                 let current = repo.reload_catalog()?;
                 let active = dedup::ActiveImportPaths::read(&current)?;
                 (
-                    current.capture_loaded_media_placement(target.clone())?,
+                    current
+                        .capture_loaded_media_placement(target.clone())
+                        .map_err(|error| {
+                            if expected_layout_revision.is_some() {
+                                super::drag_drop::target_error(error)
+                            } else {
+                                error
+                            }
+                        })?,
                     Some(active),
                 )
             } else {
-                (repo.capture_media_placement(target.clone())?, None)
+                (
+                    repo.capture_media_placement(target.clone())
+                        .map_err(|error| {
+                            if expected_layout_revision.is_some() {
+                                super::drag_drop::target_error(error)
+                            } else {
+                                error
+                            }
+                        })?,
+                    None,
+                )
             };
-            let layout = CapturedLayout::from_capture(&capture, target);
+            if expected_layout_revision
+                .is_some_and(|expected| capture.layout_revision() != expected)
+            {
+                return Err(super::drag_drop::layout_conflict());
+            }
+            let layout =
+                CapturedLayout::from_capture(&capture, target, expected_layout_revision.is_some());
+            #[cfg(test)]
+            {
+                let hook = s.6.after_io.lock().unwrap().take();
+                if let Some(hook) = hook {
+                    hook();
+                }
+            }
             let existing = active
                 .as_ref()
                 .map(|a| &a.source_paths)
@@ -225,6 +266,9 @@ pub(crate) async fn start(
                 result.bind_target_path(&layout.target_path)?;
                 if let Some(active) = &active {
                     result.exclude_duplicate_paths(&active.keys)?;
+                }
+                if expected_layout_revision.is_some() {
+                    layout.check(&repo)?;
                 }
                 Ok((result, layout))
             })
@@ -324,9 +368,22 @@ pub async fn scan_import_sources(
     runtime_nonce: String,
     project_id: String,
     config: Config,
+    expected_layout_revision: Option<u64>,
     on_event: Channel<ScanEvent>,
 ) -> Result<Token> {
-    start(&state, runtime_nonce, project_id, config, on_event).await
+    if let Some(expected) = expected_layout_revision {
+        start_with_layout(
+            &state,
+            runtime_nonce,
+            project_id,
+            config,
+            Some(expected),
+            on_event,
+        )
+        .await
+    } else {
+        start(&state, runtime_nonce, project_id, config, on_event).await
+    }
 }
 #[tauri::command]
 pub async fn import_source_page(

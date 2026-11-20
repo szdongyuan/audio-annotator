@@ -19,9 +19,11 @@ import { InspectionSession } from './session';
 import { inspectionProject } from './adapter';
 import type { InspectionTarget } from './targets';
 import { Menu } from '../../components/menu/Menu';
-import { Play, Pause, Square, RotateCcw, ScanLine, Maximize2, Minimize2, X, ArrowUpRight, Settings2 } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, ScanLine, Maximize2, Minimize2, X, ArrowUpRight, Settings2, LockKeyhole, UnlockKeyhole } from 'lucide-react';
 import { coordinates } from '../spectrogram/coordinates';
 import { isResetViewShortcut } from '../spectrogram/viewShortcut';
+import { globalPreferences, useLocalSettings } from '../settings/localSettings';
+import { readInspectionViewPreference, saveInspectionViewPreference, type InspectionViewMode } from './viewPreference';
 import './inspection.css';
 
 function regionView(r: Region, media: MediaDescriptor) {
@@ -33,6 +35,8 @@ export function InspectionViewer({ target, value, binding, playback, onJump, onC
  target: InspectionTarget; value: RemoteValue | null; binding: InspectionBinding | null; playback: PlaybackUI;
  onJump: () => Promise<boolean>; onClose: () => void; onJumpComplete?: () => void;
 }) {
+ const local = useLocalSettings();
+ const globals = globalPreferences(local?.value);
  const [session] = useState(() => binding ? new InspectionSession(binding) : null);
  useSyncExternalStore(session?.subscribe ?? (() => () => {}), session?.getVersion ?? (() => 0));
  const latest = useRef({ playback, onJump, onClose, onJumpComplete, value }); latest.current = { playback, onJump, onClose, onJumpComplete, value };
@@ -41,20 +45,33 @@ export function InspectionViewer({ target, value, binding, playback, onJump, onC
  const dialog = useRef<HTMLDivElement>(null);
  const initial = useRef(value);
  const media = value?.media ?? initial.current?.media;
- const [view, setView] = useState<MediaView>(() => media ? { ...defaultView(media), ...target.owner.store.snapshot.document.viewState.media[media.id], ...(value?.annotation ? regionView(value.annotation.region, media) : {}) } : {} as MediaView);
+ const [preference, setPreference] = useState(readInspectionViewPreference);
+ const [preferenceError, setPreferenceError] = useState<string | null>(null);
+ const [viewMode, setViewMode] = useState<InspectionViewMode>(() => value?.annotation && (!preference.locked || preference.mode === 'annotation') ? 'annotation' : 'audio');
+ const [view, setView] = useState<MediaView>(() => media ? { ...defaultView(media), ...globals.display, endSeconds: duration(media), ...(viewMode === 'annotation' && value?.annotation ? regionView(value.annotation.region, media) : {}) } : {} as MediaView);
  const [channel, setChannel] = useState(value?.channelIndex ?? 0);
- const [draft, setDraft] = useState<AnalysisSettings>(() => media ? { ...(target.owner.store.snapshot.document.analysis[media.id] ?? defaultSettings) } : defaultSettings);
+ const [draft, setDraft] = useState<AnalysisSettings>(globals.analysis);
  const appliedAnalysis = useRef(draft);
  const committedAnalysis = session?.result?.snapshot.document.analysis[media?.id ?? ''];
  if (committedAnalysis) appliedAnalysis.current = committedAnalysis;
- const [volume] = useState(playback.options.volume), [gain, setGain] = useState(playback.monitor.mediaMonitorGainDb?.[media?.id ?? ''] ?? playback.monitor.monitorGainDb);
+ const [volume, setVolume] = useState(globals.playback.volume), [gain, setGain] = useState(globals.playback.monitorGainDb);
+ const [looping, setLooping] = useState(globals.playback.looping);
  const [gainDraft, setGainDraft] = useState(String(gain));
  const mode = 'original' as const;
  const [maximized, setMaximized] = useState(false), [settingsOpen, setSettingsOpen] = useState(false);
  const [cue, setCue] = useState<number | null>(null);
  const [menu, setMenu] = useState<{ x: number; y: number; seconds: number; trigger: HTMLElement } | null>(null);
- const resetView = () => media && setView(v => ({ ...v, startSeconds: 0, endSeconds: duration(media), lowHz: 0, highHz: media.sampleRate / 2 }));
- const locateRegion = () => { const region = latest.current.value?.annotation?.region; if (region && media) { setChannel(region.channelIndex); setView(v => ({ ...v, ...regionView(region, media) })); } };
+ const remember = (next: typeof preference) => { setPreference(next); setPreferenceError(saveInspectionViewPreference(next)); };
+ const chooseView = (mode: InspectionViewMode) => {
+  if (!media) return;
+  const region = latest.current.value?.annotation?.region;
+  if (mode === 'annotation' && !region) return;
+  setViewMode(mode); if (preference.locked) remember({ ...preference, mode });
+  if (mode === 'annotation' && region) { setChannel(region.channelIndex); setView(v => ({ ...v, ...regionView(region, media) })); }
+  else setView(v => ({ ...v, startSeconds: 0, endSeconds: duration(media), lowHz: 0, highHz: media.sampleRate / 2 }));
+ };
+ const resetView = () => chooseView('audio');
+ const locateRegion = () => chooseView('annotation');
  useEffect(() => { if (!settingsOpen) return; const close = (e: PointerEvent) => { if (!(e.target instanceof Element && e.target.closest('.inspection-settings'))) setSettingsOpen(false); }; document.addEventListener('pointerdown', close); return () => document.removeEventListener('pointerdown', close); }, [settingsOpen]);
  const auditionRegion = useRef(false);
  // Native SourceSeed also binds descriptor metadata, edits and mix. Reopen when that
@@ -91,7 +108,15 @@ export function InspectionViewer({ target, value, binding, playback, onJump, onC
   finally { jumpingRef.current = false; if (alive.current) setJumping(false); }
  };
  const result = session?.result;
- const settings = () => ({ monitorGainDb: gain, volume, deviceId: latest.current.playback.options.deviceId, looping: latest.current.playback.options.looping });
+ const settings = () => ({ monitorGainDb: gain, volume, deviceId: latest.current.playback.options.deviceId, looping });
+ const followGlobal = () => {
+  setView(v => ({ ...v, ...globals.display }));
+  setGain(globals.playback.monitorGainDb); setGainDraft(String(globals.playback.monitorGainDb));
+  setVolume(globals.playback.volume); setLooping(globals.playback.looping);
+  setDraft(globals.analysis);
+  void session?.stop();
+  if (JSON.stringify(appliedAnalysis.current) !== JSON.stringify(globals.analysis)) void session?.analysis(globals.analysis);
+ };
  const play = (region = false, seconds: number | null = region ? null : cue) => {
   const current = latest.current.value;
   if (!session || !current) return;
@@ -111,20 +136,24 @@ export function InspectionViewer({ target, value, binding, playback, onJump, onC
   }}>
    <header><h2 title={media?.displayName}>{(value?.media.displayName ?? media?.displayName ?? '音频查看').split(/[\\/]/).at(-1)}</h2><span className="inspection-author" title={value?.author.identity.displayName}>{value?.author.identity.displayName} · 只读</span><button className="icon-button" title="跳转到音频" aria-label="跳转到音频" onClick={() => void jump()} disabled={!value || jumping || target.owner.store.editingDisabled}><ArrowUpRight size={16}/></button><button className="icon-button" aria-label={maximized ? '还原查看窗口' : '最大化查看窗口'} onClick={() => setMaximized(v => !v)}>{maximized ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}</button><button className="icon-button" aria-label="关闭查看" onClick={onClose}><X size={16}/></button></header>
    {!value && <p role="status">此内容已不存在或不可用。</p>}
+   {preferenceError && <p role="alert">{preferenceError}</p>}
    {session?.loading && <p role="status">正在打开音频…</p>}
    {(session?.error || jumpError || !binding) && <p role="alert">{jumpError ?? session?.error ?? '查看会话不可用'}{session?.error && value && <button className="button" onClick={() => void session.open(value.media.id, appliedAnalysis.current, () => latest.current.playback.stopAndWait())}>重试打开</button>}</p>}
    {media && <><div className="inspection-tools"><label>通道<select aria-label="查看通道" value={channel} onChange={e => setChannel(+e.target.value)}>{Array.from({ length: media.channelCount }, (_, i) => <option key={i} value={i}>通道 {i + 1}</option>)}</select></label><select aria-label="查看频谱类型" value={view.spectrumKind} onChange={e => setView(v => ({ ...v, spectrumKind: e.target.value as MediaView['spectrumKind'] }))}><option value="stft">STFT</option><option value="mel">Mel</option></select>
-    <button className="icon-button" title="定位标注" aria-label="定位标注" disabled={!value?.annotation} onClick={locateRegion}><ScanLine size={16}/></button><button className="icon-button" title="重置视图 · Ctrl+0" aria-label="重置视图" onClick={resetView}><RotateCcw size={16}/></button>
+    <select aria-label="查看范围" value={viewMode} onChange={e => chooseView(e.target.value as InspectionViewMode)}><option value="audio">完整音频</option><option value="annotation" disabled={!value?.annotation}>聚焦标注框</option></select>
+    <button className="icon-button" aria-label="锁定查看方式" aria-pressed={preference.locked} title={preference.locked ? '已锁定：下次打开沿用此查看方式，仍可缩放' : '锁定后，下次打开沿用此查看方式'} onClick={() => remember({ mode: viewMode, locked: !preference.locked })}>{preference.locked ? <LockKeyhole size={15}/> : <UnlockKeyhole size={15}/>}</button>
+    <button className="icon-button inspection-locate" title="定位标注" aria-label="定位标注" disabled={!value?.annotation} onClick={locateRegion}><ScanLine size={16}/></button><button className="icon-button" title="重置视图 · Ctrl+0" aria-label="重置视图" onClick={resetView}><RotateCcw size={16}/></button>
     {value && <div className="inspection-metadata" title={`${value.categoryText} · ${value.note || '无备注'} · ${value.media.displayName}`}><span>{value.categoryText}</span>{value.annotation && <span>{value.annotation.region.startSeconds.toFixed(3)}–{value.annotation.region.endSeconds.toFixed(3)} s · {value.annotation.region.lowHz.toFixed(0)}–{value.annotation.region.highHz.toFixed(0)} Hz</span>}<span className="inspection-note">{value.note}</span>{value.author.error && <span>读取异常</span>}</div>}
-   <details className="inspection-settings" open={settingsOpen}><summary aria-label="分析与显示设置" onClick={e => { e.preventDefault(); setSettingsOpen(v => !v); }}><Settings2 size={16}/></summary><div>
+   <details className="inspection-settings" open={settingsOpen}><summary aria-label="分析与显示设置" title="本条播放与显示设置（初始跟随全局）" onClick={e => { e.preventDefault(); setSettingsOpen(v => !v); }}><Settings2 size={16}/></summary><div>
     <label>窗函数<select aria-label="查看窗函数" value={draft.window} onChange={e => setDraft(s => ({ ...s, window: e.target.value as AnalysisSettings['window'] }))}>{['hann', 'hamming', 'blackman', 'rectangular'].map(w => <option key={w}>{w}</option>)}</select></label>
     {([['windowSize', '窗长'], ['hopSize', '步长'], ['fftSize', 'FFT 长度'], ['melBands', '梅尔频带']] as const).map(([key, label]) => <label key={key}>{label}<input aria-label={`查看${label}`} type="number" value={Number.isNaN(draft[key]) ? '' : draft[key]} onChange={e => setDraft(s => ({ ...s, [key]: e.target.valueAsNumber }))}/></label>)}
     <button className="button" disabled={!result || session?.analyzing || !!analysisError(draft)} onClick={() => void session?.analysis(draft)}>应用分析参数</button>{analysisError(draft) && <span role="alert">{analysisError(draft)}</span>}
+    <button className="button inspection-follow-global" disabled={session?.analyzing} title="恢复本机全局的播放、显示与分析参数；仅改变本次查看" onClick={followGlobal}>恢复全局设置</button>
     <label>线性 / 对数<input aria-label="查看线性对数混合" type="range" min="0" max="1" step=".01" disabled={view.spectrumKind === 'mel'} value={view.frequencyMix} onChange={e => setView(v => ({ ...v, frequencyMix: +e.target.value }))}/></label>
     <label>色表<select aria-label="查看色表" value={view.palette} onChange={e => setView(v => ({ ...v, palette: e.target.value }))}>{['ember', 'ocean', 'gray'].map(p => <option key={p}>{p}</option>)}</select></label>
     {([['gainDb', '显示增益', -60, 60], ['dynamicRangeDb', '动态范围', 20, 160]] as const).map(([key, label, min, max]) => <label key={key}>{label}<input aria-label={`查看${label}`} type="range" min={min} max={max} value={view[key]} onChange={e => setView(v => ({ ...v, [key]: +e.target.value }))}/></label>)}
    </div></details></div></>}
-   {result && binding && session && !session.analyzing && <InspectionSpectrum result={result} binding={binding} view={view} onView={patch => setView(v => ({ ...v, ...patch }))} channel={channel} session={session} looping={playback.options.looping} analysisSource={mode} region={value?.annotation?.region} cue={cue} onCue={setCue} onMenu={(seconds, x, y, trigger) => { setCue(seconds); setMenu({ seconds, x, y, trigger }); }}/>}
+   {result && binding && session && !session.analyzing && <InspectionSpectrum result={result} binding={binding} view={view} onView={patch => setView(v => ({ ...v, ...patch }))} channel={channel} session={session} looping={looping} analysisSource={mode} region={value?.annotation?.region} cue={cue} onCue={setCue} onMenu={(seconds, x, y, trigger) => { setCue(seconds); setMenu({ seconds, x, y, trigger }); }}/>}
    {menu && <Menu anchor={menu} returnFocus={menu.trigger} onClose={() => setMenu(null)} items={[
     { id: 'play', label: '从此处播放', action: () => play(false, menu.seconds) },
     { id: 'region', label: '播放区域', disabled: !value?.annotation, action: () => play(true) },
@@ -134,7 +163,7 @@ export function InspectionViewer({ target, value, binding, playback, onJump, onC
    {session?.analyzing && <p role="status">正在更新分析…</p>}
    <footer className="inspection-transport" role="toolbar" aria-label="查看播放控制">
     <button className="icon-button" aria-label={session?.wantsPlayback ? '暂停' : '播放音频'} disabled={!result || session?.analyzing || !value} onClick={toggle}>{session?.wantsPlayback ? <Pause size={18}/> : <Play size={18}/>}</button><button className="icon-button" aria-label="停止" disabled={!result} onClick={() => void session?.stop()}><Square size={15}/></button><button className="button" disabled={!result || !value?.annotation || session?.analyzing} onClick={() => play(true)}>播放区域</button>
-    <label>监听增益<input aria-label="查看监听增益" type="number" min="-60" max="24" step=".1" value={gainDraft} onBlur={() => setGainDraft(String(gain))} onChange={e => { setGainDraft(e.target.value); const next = e.target.value.trim() === '' ? NaN : e.target.valueAsNumber; if (Number.isFinite(next) && next >= -60 && next <= 24) { setGain(next); void session?.gain(next); } }}/>dB</label>
+    <label title="仅本次查看">监听增益<input aria-label="查看监听增益" type="number" min="-60" max="24" step=".1" value={gainDraft} onBlur={() => setGainDraft(String(gain))} onChange={e => { setGainDraft(e.target.value); const next = e.target.value.trim() === '' ? NaN : e.target.valueAsNumber; if (Number.isFinite(next) && next >= -60 && next <= 24) { setGain(next); void session?.gain(next); } }}/>dB</label>
     {session && media && <InspectionPosition session={session} limit={duration(media)} seek={seconds => void session.play(settings(), auditionRegion.current && value?.annotation ? { mode: 'selection', region: value.annotation.region, selectionSource: mode } : { mode }, seconds, session.wantsPlayback)}/>}
    </footer>
   </div>

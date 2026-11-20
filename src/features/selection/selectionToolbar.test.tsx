@@ -52,7 +52,7 @@ function setup(kind: 'temporary' | 'annotation' | 'mask' = 'temporary', actualPa
   function App() {
     ui = useSelection(active, media.id);
     return <CollaborationContext.Provider value={collaboration}><SelectionContext.Provider value={ui}><PlaybackContext.Provider value={{ playSelection, selectSource, setCue: vi.fn(), cues: {}, options: {} } as unknown as PlaybackUI}>
-      {actualPane ? <FilePane active={active} media={media} settings={doc.analysis[media.id]} view={view} status={status} timeLimit={2} onView={() => {}} onSettings={() => {}} onRelink={() => {}} pane="primary" choices={[media]} duplicate={false} onSelect={() => {}} /> : <div onPointerDownCapture={e => { if (!(e.target as Element).closest('[data-pane-control]')) selectSource(); }}>
+      {actualPane ? <FilePane active={active} media={media} settings={doc.analysis[media.id]} view={view} status={status} timeLimit={2} onView={() => {}} onSettings={() => {}} onRelink={() => {}} pane="primary" duplicate={false} /> : <div onPointerDownCapture={e => { if (!(e.target as Element).closest('[data-pane-control]')) selectSource(); }}>
         <div className="channel-scroll" onPointerDown={penetrate}><SpectrogramCanvas active={active} media={media} channel={1} view={view} status={status} settings={doc.analysis[media.id]} timeLimit={2} onView={patch => { view = { ...view, ...patch }; rerender(); }}>
           <AnnotationOverlay media={media} channel={1} view={view} />
           <SelectionToolbar media={media} channel={1} view={view} status={status} />

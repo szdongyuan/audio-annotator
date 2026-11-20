@@ -5,6 +5,7 @@ import { normalizeError } from '../../bridge/client';
 import type { MediaCommands, MediaEvent } from '../../bridge/media';
 import type { AppError, MediaDescriptor } from '../../bridge/types';
 import type { ProjectLifecycle } from '../project/lifecycle';
+import { parseDropPreflight, type DropPreflight } from '../../bridge/dragDrop';
 
 export interface ImportItem {
   path: string; state: 'waiting' | 'extracting' | 'hashing' | 'decoding' | 'publishing' | 'accepted' | 'success' | 'failed' | 'cancelled'; completed: number;
@@ -24,6 +25,7 @@ export class MediaImportController {
   error: AppError | null = null;
   private disposed = false;
   private retained=new Set<ImportItem>();
+  private droppedItems = new WeakSet<ImportItem>();
   private run: Run | null = null;
   private reservation: object | null = null;
   private tail: Promise<void> = Promise.resolve();
@@ -50,11 +52,33 @@ export class MediaImportController {
     this.reservation = owner; this.notify(); return true;
   }
   unreserve(owner: object) { if (this.reservation === owner) { this.reservation = null; this.notify(); } }
+  /** Start only the classified audio group, retaining the drop's native session and target. */
+  async startDropped(value: DropPreflight): Promise<boolean> {
+    const drop = parseDropPreflight(value);
+    if (drop.kind !== 'audio' || drop.session.projectId !== this.store.snapshot.document.projectId)
+      throw new Error('项目或拖放来源已变化，请重新拖入');
+    if (this.disposed || this.occupied || this.store.editingDisabled || this.lifecycle?.admissionClosed) return false;
+    const paths = [...drop.paths], session = { ...drop.session }, target = drop.target ? { ...drop.target } : undefined;
+    await this.startInternal(paths, undefined, undefined, async receive => {
+      try { return await this.api.start(session.projectId, paths, receive, undefined, target, session.runtimeNonce); }
+      catch (error) {
+        const normalized = normalizeError(error);
+        if (normalized.code === 'RevisionConflict') throw { ...normalized, message: '项目或目录已变化，请核对目标后重新拖入' };
+        if (normalized.code === 'InvalidInput' && normalized.message === 'Target folder no longer exists') throw { ...normalized, message: '目标文件夹已不存在，请核对目标后重新拖入' };
+        throw error;
+      }
+    }, true);
+    return true;
+  }
   async start(paths: string[], relinkId?: string, reservation?: object, startRun?: (receive: (event: MediaEvent) => void) => Promise<string>) {
+    return this.startInternal(paths, relinkId, reservation, startRun, false);
+  }
+  private async startInternal(paths: string[], relinkId: string | undefined, reservation: object | undefined, startRun: ((receive: (event: MediaEvent) => void) => Promise<string>) | undefined, dropped: boolean) {
     this.store.assertEditable();
     if (this.disposed || this.busy || (this.reservation && reservation !== this.reservation) || paths.length === 0) return;
     let resolve!: () => void;
     const run: Run = { items: paths.map(path => ({ path, state: 'waiting', completed: 0 })), taskId: null, ack: false, terminal: false, stopped: false, pending: 0, done: new Promise<void>(r => { resolve = r; }), resolve: () => resolve() };
+    if (dropped) run.items.forEach(item => this.droppedItems.add(item));
     this.run = run; this.items = run.items; this.busy = true; this.cancelling = false; this.error = null; this.notify();
     try {
       const taskId = await retryAdmission(()=>startRun ? startRun(event => this.receive(run, event)) : this.api.start(this.store.snapshot.document.projectId, paths, event => this.receive(run, event, relinkId), relinkId),{valid:()=>!this.disposed&&!run.stopped&&!this.store.editingDisabled});
@@ -68,6 +92,12 @@ export class MediaImportController {
     this.check(run);
   }
   private report(e: unknown) { this.error = normalizeError(e); this.notify(); }
+  private publicationError(item: ImportItem, value: unknown): AppError {
+    const error = normalizeError(value);
+    if (this.droppedItems.has(item) && error.code === 'RevisionConflict' && error.message === 'Organization layout changed')
+      return { ...error, message: '目录布局已变化，请结束此导入并核对目标后重新拖入' };
+    return error;
+  }
   private check(run: Run) {
     if (run.pending === 0 && (run.stopped || (run.ack && run.terminal))) run.resolve();
     if (run === this.run) { this.busy = !(run.ack && run.terminal && run.pending === 0); this.notify(); }
@@ -103,7 +133,7 @@ export class MediaImportController {
     const publish = () => this.queue.enqueue({ type: relinkId ? 'relinkMedia' : 'importMedia', media: event.media }, { owner });
     const work = this.lifecycle ? this.lifecycle.enqueueEdit(publish) : publish();
     this.track(run, work.then(async () => { item.state = 'success'; await this.acknowledge(item); }, async e => {
-      item.error = normalizeError(e);item.state=this.committed(item.error,item.mediaId)?'accepted':'failed';
+      item.error = this.publicationError(item,e);item.state=this.committed(item.error,item.mediaId)?'accepted':'failed';
       item.failureId = this.queue.unresolvedFailures.find(f => f.owner === owner)?.id;
       // Rejection before queue admission has no retryable prepared-media owner.
       if (item.failureId === undefined) { item.releaseOnly = true; await this.acknowledge(item); }
@@ -126,7 +156,7 @@ export class MediaImportController {
       },async e=>{
         const failureId=this.queue.unresolvedFailures.find(f=>f.owner===owner)?.id;
         for(const member of group.items){
-          member.error=normalizeError(e);member.state=this.committed(member.error,member.mediaId)?'accepted':'failed';member.failureId=failureId;
+          member.error=this.publicationError(member,e);member.state=this.committed(member.error,member.mediaId)?'accepted':'failed';member.failureId=failureId;
           if(failureId===undefined){member.releaseOnly=true;await this.acknowledge(member);}
         }
       }));
@@ -174,7 +204,7 @@ export class MediaImportController {
       for (const failureId of new Set(this.failures(items).map(i=>i.failureId!))) {
         const group=[...this.retained].filter(i=>i.failureId===failureId);
         try { await this.queue.retry(failureId); for(const item of group){item.state='success';item.error=undefined;item.failureId=undefined;}await Promise.all(group.map(item=>this.acknowledge(item))); }
-        catch (e) { for(const item of group){item.error=normalizeError(e);if(this.committed(item.error,item.mediaId))item.state='accepted';}throw e; }
+        catch (e) { for(const item of group){item.error=this.publicationError(item,e);if(this.committed(item.error,item.mediaId))item.state='accepted';}throw e; }
       }
     };
     try { if (this.lifecycle) await this.lifecycle.enqueueEdit(retry); else await retry(); }

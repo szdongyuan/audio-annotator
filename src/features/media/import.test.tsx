@@ -30,6 +30,57 @@ function setup(batch = false) {
 }
 const candidate = { ...fixture.media[0], id: '00000000-0000-4000-8000-000000000077' };
 
+it('starts ordinary and shared dropped audio with the frozen session and target', async () => {
+  const nonce='22222222-2222-4222-8222-222222222222';
+  for (const shared of [false,true]) {
+    const s=setup();
+    const target=shared?{folderId:null,layoutRevision:7}:null;
+    const drop={kind:'audio' as const,session:{projectId:fixture.projectId,runtimeNonce:nonce,shared},paths:['D:/a.wav'],target};
+    expect(await s.controller.startDropped(drop)).toBe(true);
+    expect(s.api.start).toHaveBeenCalledWith(fixture.projectId,['D:/a.wav'],expect.any(Function),undefined,target??undefined,nonce);
+    expect(await s.controller.startDropped(drop)).toBe(false);
+    s.emit({type:'finished',taskId:'task',cancelled:false});await s.controller.completed();
+    await expect(s.controller.startDropped({...drop,session:{...drop.session,projectId:nonce}})).rejects.toThrow();
+    s.controller.dispose();
+  }
+});
+it('reports a stale drop admission with an actionable message', async () => {
+  const s=setup(),nonce='22222222-2222-4222-8222-222222222222';
+  vi.mocked(s.api.start).mockRejectedValueOnce({code:'RevisionConflict',message:'Project or collaboration identity changed',retryable:false});
+  await s.controller.startDropped({kind:'audio',session:{projectId:fixture.projectId,runtimeNonce:nonce,shared:false},paths:['D:/a.wav'],target:null});
+  expect(s.controller.error?.message).toContain('重新拖入');s.controller.dispose();
+});
+it('explains a removed target for dropped admission while retaining menu errors',async()=>{
+ const missing={code:'InvalidInput' as const,message:'Target folder no longer exists',retryable:false};
+ const nonce='22222222-2222-4222-8222-222222222222',folderId='33333333-3333-4333-8333-333333333333';
+ const drop=setup();vi.mocked(drop.api.start).mockRejectedValueOnce(missing);
+ await drop.controller.startDropped({kind:'audio',session:{projectId:fixture.projectId,runtimeNonce:nonce,shared:true},paths:['D:/a.wav'],target:{folderId,layoutRevision:1}});
+ expect(drop.controller.error?.message).toContain('目标文件夹已不存在');expect(drop.controller.error?.message).toContain('重新拖入');
+ const menu=setup();vi.mocked(menu.api.start).mockRejectedValueOnce(missing);await menu.controller.start(['D:/a.wav']);
+ expect(menu.controller.error).toEqual(missing);drop.controller.dispose();menu.controller.dispose();
+});
+it('explains dropped publication layout conflicts and preserves retained retry and discard',async()=>{
+ const conflict={code:'RevisionConflict' as const,message:'Organization layout changed',retryable:false};
+ const nonce='22222222-2222-4222-8222-222222222222';
+ for(const batch of [false,true]){
+  const s=setup(batch),items=batch?[candidate,{...candidate,id:'00000000-0000-4000-8000-000000000078'}]:[candidate];
+  vi.mocked(s.commands.getSnapshot).mockImplementation(async()=>structuredClone(s.store.snapshot));
+  vi.mocked(s.commands.applyChange).mockRejectedValueOnce(conflict).mockRejectedValueOnce(conflict);
+  await s.controller.startDropped({kind:'audio',session:{projectId:fixture.projectId,runtimeNonce:nonce,shared:true},paths:items.map((_,i)=>`D:/${i}.wav`),target:{folderId:null,layoutRevision:1}});
+  items.forEach((media,index)=>s.emit({type:'ready',taskId:'task',index,media}));s.emit({type:'finished',taskId:'task',cancelled:false});await s.controller.settled();
+  expect(s.controller.failures()).toHaveLength(items.length);expect(s.api.release).not.toHaveBeenCalled();
+  expect(s.controller.items.every(item=>item.error?.message.includes('重新拖入'))).toBe(true);
+  await expect(s.controller.retry()).rejects.toEqual(conflict);
+  expect(s.controller.items.every(item=>item.error?.message.includes('结束此导入'))).toBe(true);
+  expect(s.api.release).not.toHaveBeenCalled();await s.controller.discard();
+  expect(s.queue.unresolvedFailures).toHaveLength(0);expect(s.api.release).toHaveBeenCalledTimes(items.length);s.controller.dispose();
+ }
+ const menu=setup();vi.mocked(menu.commands.getSnapshot).mockImplementation(async()=>structuredClone(menu.store.snapshot));
+ vi.mocked(menu.commands.applyChange).mockRejectedValueOnce(conflict);
+ await menu.controller.start(['D:/a.wav']);menu.emit({type:'ready',taskId:'task',index:0,media:candidate});menu.emit({type:'finished',taskId:'task',cancelled:false});await menu.controller.settled();
+ expect(menu.controller.items[0].error).toEqual(conflict);await menu.controller.discard();menu.controller.dispose();
+});
+
 it('commits decoded results through the queue at the latest revision and retains per-file failure', async () => {
   const s = setup(); await s.controller.start(['good.wav', 'bad.wav']);
   await s.queue.enqueue({ type: 'updateMediaNote', mediaId: fixture.media[0].id, note: 'latest', mergeKey: null });

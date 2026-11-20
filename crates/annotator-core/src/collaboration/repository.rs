@@ -143,7 +143,9 @@ impl CollaborationRepository {
         mut after_entry: impl FnMut(&Path) -> Result<()>,
     ) -> Result<Self> {
         atomic::safe_existing(root)?;
-        let root = root.canonicalize().map_err(atomic::io)?;
+        let root = root
+            .canonicalize()
+            .map_err(|e| atomic::io_at(root, "resolve project path", e))?;
         let bytes = atomic::read(&root.join("collaboration.json"), MAX_LAYER_BYTES)?;
         let loaded = super::catalog::load(&root, &bytes, &mut after_entry)?;
         let manifest = loaded.manifest;
@@ -178,6 +180,11 @@ impl CollaborationRepository {
     }
     pub fn manifest(&self) -> &CollaborationManifest {
         &self.manifest
+    }
+    /// Check the small project entry without reopening thousands of catalog records.
+    pub fn entry_is_current(&self) -> Result<bool> {
+        let bytes = atomic::read(&self.root.join("collaboration.json"), MAX_LAYER_BYTES)?;
+        Ok(hash(&bytes) == self.manifest_hash)
     }
     pub(super) fn authority(&self) -> Result<()> {
         let bytes = atomic::read(&self.root.join("collaboration.json"), MAX_LAYER_BYTES)?;
@@ -634,6 +641,29 @@ impl CollaborationRepository {
             .map_err(atomic::io)?;
         }
         Ok(())
+    }
+    /// Export only requested authors against the already verified loaded catalog.
+    /// A layer referencing unadopted media fails validation rather than being truncated.
+    pub fn snapshot_authors(&self, ids: &[String]) -> Result<CollaborationSnapshot> {
+        self.authority()?;
+        limit(ids.len() <= MAX_AUTHORS)?;
+        let mut seen = HashSet::new();
+        let mut budget = ReadBudget::new(MAX_TOTAL_LAYER_BYTES);
+        let mut authors = vec![];
+        for id in ids {
+            require(seen.insert(id), "Duplicate requested author")?;
+            let identity = self.author(id)?.identity;
+            let layer = self.head(id, &mut budget)?;
+            authors.push(AuthorSnapshot {
+                identity,
+                layer,
+                error: None,
+            });
+        }
+        Ok(CollaborationSnapshot {
+            project_id: self.manifest.project_id.clone(),
+            authors,
+        })
     }
     pub fn snapshot(&self) -> Result<CollaborationSnapshot> {
         if crate::collaboration::consts::supported_catalog_format(self.manifest.format_version) {

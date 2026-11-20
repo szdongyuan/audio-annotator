@@ -4,7 +4,7 @@ import { normalizeError } from '../../bridge/client';
 import type { AppError } from '../../bridge/types';
 
 export interface PersistenceCommands {
-  save(projectId: string, revision: number): Promise<number>;
+  save(projectId: string, revision: number, options?: { deferSync?: boolean }): Promise<number>;
   close(projectId: string, revision: number, discard: boolean): Promise<void>;
 }
 export type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'failed';
@@ -128,10 +128,10 @@ export class ProjectLifecycle {
     })();
     return this.saving;
   }
-  private async persistSnapshot() {
+  private async persistSnapshot(options?: { deferSync?: boolean }) {
     this.status = 'saving'; this.saveError = null; this.notify();
     const { projectId, revision } = this.store.snapshot.document;
-    const persisted = await this.api.save(projectId, revision);
+    const persisted = options ? await this.api.save(projectId, revision, options) : await this.api.save(projectId, revision);
     if (persisted !== revision) throw { code: 'SaveFailed', message: '保存版本与请求不一致', retryable: true } satisfies AppError;
     this.store.markPersisted(projectId, persisted);
     this.savedAt = new Date();
@@ -204,6 +204,13 @@ export class ProjectLifecycle {
       return action();
     };
     return eligible ? this.transition(saved, false, eligible) : this.transition(saved);
+  }
+  /** Export needs a saved snapshot, but does not require a new NAS sync to start first. */
+  transitionForExport<T>(action: () => Promise<T>): Promise<T> {
+    return this.transition(async () => {
+      if (this.store.isDirty || this.saveError) await this.persistSnapshot({ deferSync: true });
+      return action();
+    });
   }
   close(discard = false): Promise<void> {
     if (this.closing) return this.closing;

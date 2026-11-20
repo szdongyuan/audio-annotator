@@ -1,9 +1,10 @@
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { sourceDialogs, type SourceOrganization, type SourceRules } from '../../bridge/sourceImport';
 import type { SourceImportController } from './sourceImport';
-import type { OrganizationController } from './organization';
+import type { OrganizationController, VerifiedOrganization } from './organization';
 import { organizationIndex } from './organization';
 import { MediaDialog } from './MediaDialog';
+const noop = () => () => {}, zero = () => 0;
 function ResultTree({ summary }: {
     summary: NonNullable<SourceImportController['page']>['folderSummary'];
 }) {
@@ -35,7 +36,48 @@ export function SourceImportDialog({ controller: c, picker, organization }: {
     organization?: OrganizationController | null;
 }) {
     useSyncExternalStore(c.subscribe, c.getVersion);
+    useSyncExternalStore(organization?.subscribe ?? noop, organization?.getVersion ?? zero);
     const [name, setName] = useState(''), [localError, setLocalError] = useState('');
+    const [review, setReview] = useState<{ source: SourceImportController; owner: OrganizationController; read: VerifiedOrganization; workflow: number } | null>(null);
+    const [reviewing, setReviewing] = useState(false);
+    const current = useRef({ c, organization }); current.current = { c, organization };
+    const reviewRequest = useRef(0);
+    const pendingRead = useRef<{ source: SourceImportController; owner: OrganizationController; workflow: number; read: Promise<VerifiedOrganization> } | null>(null);
+    const retireRead = () => { const pending = pendingRead.current; if (pending) { pendingRead.current = null; pending.owner.retireVerified(pending.read); } };
+    useEffect(() => {
+        const workflow = c.droppedReviewToken;
+        setReview(null); setReviewing(false); reviewRequest.current++;
+        return () => {
+            reviewRequest.current++;
+            const pending = pendingRead.current;
+            if (pending?.source === c && pending.owner === organization && pending.workflow === workflow) retireRead();
+        };
+    }, [c, organization, c.droppedReviewToken]);
+    const cancel = () => { reviewRequest.current++; retireRead(); void c.cancel(); };
+    const refreshReview = async () => {
+        if (!organization || reviewing) return;
+        const request = ++reviewRequest.current, workflow = c.droppedReviewToken;
+        setReview(null); setReviewing(true); setLocalError('');
+        const pending = { source: c, owner: organization, workflow, read: organization.readVerified() };
+        pendingRead.current = pending;
+        try {
+            const read = await pending.read;
+            if (request !== reviewRequest.current || current.current.c !== c || current.current.organization !== organization || c.droppedReviewToken !== workflow || !c.open || !c.droppedLayoutConflict) return;
+            if (!organization.isVerifiedCurrent(read)) { setLocalError('目录读取已变化，请重新刷新。'); return; }
+            setReview({ source: c, owner: organization, read, workflow });
+        } catch { if (request === reviewRequest.current) setLocalError('无法确认最新目录，请刷新后重试。'); }
+        finally { if (pendingRead.current === pending) pendingRead.current = null; if (request === reviewRequest.current) setReviewing(false); }
+    };
+    const confirmReview = () => {
+        const targetFolderId = c.config.organization.targetFolderId;
+        if (!review || review.source !== c || current.current.organization !== review.owner || c.droppedReviewToken !== review.workflow || !review.owner.isVerifiedCurrent(review.read) || (targetFolderId !== null && !review.read.snapshot.folders.some(folder => folder.id === targetFolderId))) {
+            setReview(null); setLocalError('目录或目标已变化，请重新刷新并核对。'); return;
+        }
+        if (!c.acknowledgeDroppedLayoutReview({ projectId: review.owner.projectId, runtimeNonce: review.owner.runtimeNonce, targetFolderId, layoutRevision: review.read.snapshot.layoutRevision })) {
+            setReview(null); setLocalError('当前导入或项目已变化，请重新核对。'); return;
+        }
+        setReview(null); setLocalError('');
+    };
     const index = useMemo(() => organizationIndex(organization?.snapshot ?? null, new Set()), [organization?.snapshot]);
     if (!c.open)
         return null;
@@ -43,8 +85,8 @@ export function SourceImportDialog({ controller: c, picker, organization }: {
     const update = (patch: Partial<SourceRules>) => { setLocalError(''); void c.configurePlan({ rules: { ...rules, ...patch } }); };
     const layout = (patch: Partial<SourceOrganization>) => { setLocalError(''); void c.configurePlan({ organization: { ...org, ...patch } }); };
     const tokens = rules.mode === 'generic' ? ['source', 'relativeDir'] : ['source', 'relativeDir', 'record', 'date', 'result', 'faultType', 'model', 'route'];
-    return <MediaDialog returnFocus={c.returnFocus} title={c.config.kind === 'zip' ? '导入 ZIP 音频' : '导入文件夹'} onClose={() => void c.cancel()}>
-  <header><h2>{c.config.kind === 'zip' ? '导入 ZIP 音频' : '导入文件夹'}</h2><button className="button button-quiet" aria-label="关闭音频导入" onClick={() => void c.cancel()}>关闭</button></header>
+    return <MediaDialog returnFocus={c.returnFocus} title={c.config.kind === 'zip' ? '导入 ZIP 音频' : '导入文件夹'} onClose={cancel}>
+  <header><h2>{c.config.kind === 'zip' ? '导入 ZIP 音频' : '导入文件夹'}</h2><button className="button button-quiet" aria-label="关闭音频导入" onClick={cancel}>关闭</button></header>
   <div className="source-import-body">
    <div className="source-import-row"><button className="button" disabled={!editable || c.state === 'scanning'} onClick={() => void c.choose(picker ?? (() => sourceDialogs.choose(c.config.kind)))}>{c.config.kind === 'zip' ? '选择 ZIP…' : '选择文件夹…'}</button><span className="source-path-summary" title={c.config.paths.join('\n')}>{c.config.paths.length ? c.config.paths.map(p => p.split(/[\\/]/).pop()).join('、') : '尚未选择来源'}</span></div>
    <div className="source-import-row"><label>导入方案<select aria-label="导入方案" value={c.presetId} disabled={!editable} onChange={e => void c.applyPreset(e.target.value)}><option value="">当前方案</option>{c.plans.presets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>目标文件夹<select aria-label="目标文件夹" value={org.targetFolderId ?? ''} disabled={!editable} onChange={e => layout({ targetFolderId: e.target.value || null })}><option value="">全部音频</option>{[...index.paths].map(([id, path]) => <option key={id} value={id}>{path}</option>)}{org.targetFolderId && !index.paths.has(org.targetFolderId) && <option value={org.targetFolderId}>当前目标</option>}</select></label><label>目录布局<select aria-label="目录布局" value={org.mode} disabled={!editable} onChange={e => layout({ mode: e.target.value as SourceOrganization['mode'] })}><option value="sourcePath">保留来源目录</option><option value="flat">平铺</option><option value="template">模板分类</option></select></label></div>
@@ -67,8 +109,9 @@ export function SourceImportDialog({ controller: c, picker, organization }: {
    {c.state === 'scanning' && <p role="status">正在扫描 · 已检查 {c.counts.checked} · 候选 {c.counts.candidates}</p>}
    {c.state === 'preview' && <section className="source-preview" aria-label="音频预览"><div className="source-import-row"><strong>{c.counts.candidates} 个音频</strong><span>跳过 {c.counts.skipped}（其中重复 {c.counts.duplicateSkipped}） · 问题 {c.counts.issues} · {(c.counts.selectedBytes / 1048576).toFixed(1)} MiB</span></div>{c.counts.candidates === 0 && c.counts.duplicateSkipped > 0 && c.counts.issues === 0 && <p role="status">所选音频均已存在，无需重复导入</p>}{c.page && <ResultTree summary={c.page.folderSummary}/>}<ul>{c.page?.candidates.slice(0, 50).map(item => <li key={item.index} title={item.displayName}><span>{[...item.resultingFolderPath, item.originalFilename].join('/')}</span><details><summary>原始来源 · {item.relativePath}</summary><small>{item.displayName}{item.logicalPosition !== null ? ` · 第 ${item.logicalPosition} 路` : ''}</small></details></li>)}</ul><div className="source-import-row source-pagination"><button className="button button-quiet" disabled={c.loadingPage || c.pageOffset === 0} onClick={() => void c.loadPage(Math.max(0, c.pageOffset - 50))}>上一页</button><span>{Math.floor(c.pageOffset / 50) + 1} / {Math.max(1, Math.ceil(c.counts.candidates / 50))}</span><button className="button button-quiet" disabled={c.loadingPage || c.pageOffset + 50 >= c.counts.candidates} onClick={() => void c.loadPage(c.pageOffset + 50)}>下一页</button></div>{!!c.page?.issues.length && <details><summary>扫描问题 / 缺失字段（{c.counts.issues}，保留前 {c.page.issues.length} 项）</summary><ul>{c.page.issues.map((issue, i) => <li key={i}><span>{issue.relativePath}</span><small>{issue.message}</small></li>)}</ul></details>}</section>}
    {(localError || c.error || c.plans.error) && <p role="alert">{localError || c.error?.message || c.plans.error}</p>}
+   {c.droppedLayoutConflict && <div role="status"><p>目录已变化，请刷新目录并核对目标后再重新扫描</p><button className="button" disabled={!organization || reviewing || c.staleDroppedPublication} onClick={() => void refreshReview()}>{reviewing ? '正在刷新目录…' : '刷新并核对目标'}</button>{review && <button className="button" onClick={confirmReview}>确认目标并允许重新扫描</button>}</div>}
    {c.releasePending && <button className="button" onClick={() => void c.retryRelease()}>重试释放预览</button>}
   </div>
-  <footer className="dialog-actions"><button className="button" onClick={() => void c.cancel()}>取消</button><button className="button" disabled={c.picking || c.state === 'scanning' || !c.config.paths.length} onClick={() => void c.scan()}>{c.state === 'preview' ? '重新扫描' : '扫描预览'}</button><button className="button button-accent" disabled={!c.canImport} onClick={() => void c.importAll()}>导入 {c.counts.candidates} 个音频</button></footer>
+  <footer className="dialog-actions"><button className="button" onClick={cancel}>取消</button><button className="button" disabled={c.picking || c.state === 'scanning' || c.scanStartPending || c.droppedLayoutConflict || !c.config.paths.length} onClick={() => void c.scan()}>{c.scanStartPending && c.state !== 'scanning' ? '正在结束上次扫描…' : c.state === 'preview' ? '重新扫描' : '扫描预览'}</button><button className="button button-accent" disabled={!c.canImport} onClick={() => void c.importAll()}>导入 {c.counts.candidates} 个音频</button></footer>
  </MediaDialog>;
 }

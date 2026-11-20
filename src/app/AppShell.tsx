@@ -73,7 +73,7 @@ function IconButton({ icon: Icon, label, className = '', ...props }: IconButtonP
   </button>;
 }
 
-export function AppShell({ project, mediaUI, exchange, collaboration, identity }: { identity?:IdentityController; collaboration?: CollaborationUI; project?: ProjectLifecycleUI; mediaUI?: MediaUI; exchange?: ExchangeUI }) {
+export function AppShell({ project, mediaUI, exchange, collaboration, identity, externalDropTarget }: { identity?:IdentityController; collaboration?: CollaborationUI; project?: ProjectLifecycleUI; mediaUI?: MediaUI; exchange?: ExchangeUI; externalDropTarget?: import('../features/media/dropTarget').FolderHit | null }) {
   const localSettings = useLocalSettings();
   const [globalSettingsOpen,setGlobalSettingsOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(true);
@@ -128,6 +128,27 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
   const selectedAnnotation = doc?.annotations.find(a => a.id === annotations.selectedId);
   const masks = useMasks(project?.active ?? null, selection);
   const playback = usePlayback(project?.active ?? null, selected?.id ?? null, selection.selection?.region);
+  const currentPane = workspace.state.compareMediaId && playback.sourceId === workspace.state.compareMediaId ? 'compare' : 'primary';
+  const currentPaneMediaId = currentPane === 'compare' ? workspace.state.compareMediaId : workspace.state.activeMediaId;
+  const otherPaneMediaId = currentPane === 'compare' ? workspace.state.activeMediaId : workspace.state.compareMediaId;
+  const focusBrowsedAudio = (id: string, replacedId: string | null) => {
+    if (id !== replacedId && selection.state.getContext()?.mediaId === replacedId) {
+      selection.state.interact({ mediaId: id, channelIndex: workspace.view(id).visibleChannels[0] ?? null });
+    }
+    playback.selectSource(id);
+  };
+  const backInPane = (pane: Parameters<typeof projectWorkspace.back>[0]) => {
+    listNavigation.cancel();
+    const replacedId = pane === 'compare' ? workspace.state.compareMediaId : workspace.state.activeMediaId;
+    const id = projectWorkspace.back(pane);
+    if (id) focusBrowsedAudio(id, replacedId);
+  };
+  const selectFromMediaList = (id: string, intent?: 'random') => {
+    if (!workspace.selectPane(currentPane, id)) return false;
+    if (intent === 'random' && id === playback.sourceId) playback.stop();
+    focusBrowsedAudio(id, currentPaneMediaId);
+    return true;
+  };
   useEffect(()=>{if(playback.sourceId && excludedMediaIds.includes(playback.sourceId)){playback.stop();playback.selectSource(workspace.state.activeMediaId ?? workspace.state.compareMediaId ?? null);}},[excludedMediaIds.join('|'),playback.sourceId,workspace.state.activeMediaId,workspace.state.compareMediaId]);
   const remote = useRemoteInspection(collaboration, workspace, playback);
   const [ownInspection, setOwnInspection] = useState<{ target: OwnInspectionTarget; result: ClassificationResult } | null>(null);
@@ -247,7 +268,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
 
     <div className="workspace" ref={workspaceHost}>
       <aside id="media-panel" className="media-panel panel" aria-label="音频列表" style={{ maxWidth: mediaPanel.maximum, ...(mediaPanel.width === null ? {} : { width: mediaPanel.width }), ...(!mediaOpen ? { display: 'none' } : {}) }}>
-        <MediaList navigationScope={mediaNavigationScope} projectId={doc?.projectId} actorId={project?.active?.collaboration?.actor?.authorId ?? null} navigationDisabled={project?.active?.store.editingDisabled ?? true} recycle={recycle} authors={collaboration?.controller?.status?.snapshot?.authors ?? []} onHideBatch={collaboration ? (ids,hidden)=>collaboration.hideMediaBatch(ids,hidden) : undefined} organization={mediaUI?.organization} hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} navigationExcludedId={workspace.state.compareMediaId} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={workspace.state.activeMediaId} disabled={mediaUI?.disabled ?? true} onSelect={(id, intent) => { const accepted = workspace.selectPane('primary', id); if (accepted) { if (intent === 'random' && id === playback.sourceId) playback.stop(); playback.selectSource(id); } return accepted; }} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
+        <MediaList onExport={exchange?.showSelected} navigationScope={mediaNavigationScope} projectId={doc?.projectId} actorId={project?.active?.collaboration?.actor?.authorId ?? null} navigationDisabled={project?.active?.store.editingDisabled ?? true} recycle={recycle} lifecycle={project?.active?.lifecycle} authors={collaboration?.controller?.status?.snapshot?.authors ?? []} onHideBatch={collaboration ? (ids,hidden)=>collaboration.hideMediaBatch(ids,hidden) : undefined} organization={mediaUI?.organization} externalDropTarget={externalDropTarget} hiddenMediaIds={hiddenMediaIds} onHide={project?.active?.collaboration?.projectFlavor==='default'?id=>void collaboration?.hideMedia(id,true).catch(()=>{}):undefined} onRestore={id=>void collaboration?.hideMedia(id,false).catch(()=>{})} catalogLocked={project?.active?.collaboration?.canImportMedia===false} navigationExcludedId={otherPaneMediaId} categories={doc?.categories ?? []} media={project?.active?.store.snapshot.document.media ?? []} annotations={project?.active?.store.snapshot.document.annotations ?? []} statuses={mediaUI?.statuses ?? []} selectedId={currentPaneMediaId} disabled={mediaUI?.disabled ?? true} onSelect={selectFromMediaList} onImport={() => mediaUI?.choose()} onRelink={media => mediaUI?.setRelink(media)} />
       </aside>
       {mediaOpen && <MediaPanelResize width={mediaPanel.width} maximum={mediaPanel.maximum} onPreview={mediaPanel.preview} onCommit={mediaPanel.commit} />}
 
@@ -263,7 +284,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
           {mediaUI && <MediaAssociation active={project?.active ?? null} media={mediaUI} />}
           <AnnotationFailure ui={annotations} />
         </div>
-        {selected && project?.active && mediaUI ? <CompareWorkspace active={project.active} mediaUI={mediaUI} workspace={workspace} settingsId={settingsId} setSettingsId={setSettingsId} /> : <div className="empty-workspace">
+        {selected && project?.active && mediaUI ? <CompareWorkspace active={project.active} mediaUI={mediaUI} workspace={workspace} currentPane={currentPane} onBack={backInPane} settingsId={settingsId} setSettingsId={setSettingsId} /> : <div className="empty-workspace">
           <div className="empty-content">
             <div className="audio-emblem" aria-hidden="true"><AudioLines size={46} strokeWidth={1.25} /><span /></div>
             <h2>{project?.active ? '导入音频开始标注' : '音频标注'}</h2>
@@ -303,7 +324,7 @@ export function AppShell({ project, mediaUI, exchange, collaboration, identity }
 
     <RegionGainDialog ui={selection} />
     {deviceDialog&&<DeviceDialog ui={playback} returnFocus={deviceDialog.trigger} onClose={()=>setDeviceDialog(null)}/>}
-    {globalSettingsOpen && localSettings && <GlobalSettings store={localSettings} initialDisplay={selected?workspace.view(selected.id):undefined} initialAnalysis={selected?workspace.analysis(selected.id):undefined} initialPlayback={{monitorGainDb:playback.monitor.monitorGainDb,volume:playback.options.volume,looping:playback.options.looping,source:playback.workspaceSource}} onClose={()=>setGlobalSettingsOpen(false)} />}
+    {globalSettingsOpen && localSettings && <GlobalSettings store={localSettings} onClose={()=>setGlobalSettingsOpen(false)} />}
     {mediaUI?.folder?.state === 'choosing' && <FolderImportDialog controller={mediaUI.folder} />}
     {mediaUI?.source?.open && <SourceImportDialog controller={mediaUI.source} organization={mediaUI.organization} />}
     {helpTopic && <HelpDialog topic={helpTopic} onClose={() => setHelpTopic(null)} />}

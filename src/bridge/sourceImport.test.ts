@@ -24,6 +24,35 @@ it('binds scan and token operations to the captured runtime, and delivers events
  expect(parseSourceMediaEvent({type:'progress',taskId:token.taskId,index:0,path:'a.zip/r/CH2.wav',phase:'extract',completed:1})).toMatchObject({phase:'extract'});
  expect(()=>parseSourceMediaEvent({type:'progress',taskId:token.taskId,index:256,path:'x',phase:'extract',completed:1})).toThrow();
 });
+it('passes a frozen layout only for the requested initial scan',async()=>{
+ const rules={mode:'generic' as const,recursive:true,extensions:['wav'],include:['**/*'],exclude:[],includeSecond:true,skipDuplicates:true};
+ const config={kind:'zip' as const,paths:['D:/a.zip'],rules,organization:defaultSourceOrganization()};
+ invoked.mockReset().mockResolvedValue(token);
+ const client=createSourceClient(token.runtimeNonce);
+ await client.start(token.projectId,config,()=>{},{runtimeNonce:token.runtimeNonce,expectedLayoutRevision:9});
+ expect(invoked.mock.calls[0][1]).toMatchObject({runtimeNonce:token.runtimeNonce,expectedLayoutRevision:9});
+ await client.start(token.projectId,config,()=>{});
+ expect(invoked.mock.calls[1][1]).not.toHaveProperty('expectedLayoutRevision');
+ await expect(client.start(token.projectId,config,()=>{},{runtimeNonce:token.taskId,expectedLayoutRevision:9})).rejects.toThrow();
+});
+it('preserves the native dropped-layout conflict marker in scan events',async()=>{
+ const rules={mode:'generic' as const,recursive:true,extensions:['wav'],include:['**/*'],exclude:[],includeSecond:true,skipDuplicates:true};
+ const config={kind:'folder' as const,paths:['D:/folder'],rules,organization:defaultSourceOrganization()};
+ const error={code:'RevisionConflict',message:'目录布局已变化',retryable:false,details:{droppedLayoutConflict:true}};
+ const events:unknown[]=[];invoked.mockReset().mockImplementation(async(_command,args)=>{args.onEvent.onmessage({type:'failed',token,error});return token;});
+ await createSourceClient(token.runtimeNonce).start(token.projectId,config,e=>events.push(e),{runtimeNonce:token.runtimeNonce,expectedLayoutRevision:9});
+ expect(events).toEqual([{type:'failed',token,error}]);
+});
+it('accepts at most 16384 UTF-16 units in each source path',async()=>{
+ const rules={mode:'generic' as const,recursive:true,extensions:['wav'],include:['**/*'],exclude:[],includeSecond:true,skipDuplicates:true};
+ const config={kind:'zip' as const,paths:['a'.repeat(16384)],rules,organization:defaultSourceOrganization()};
+ invoked.mockReset().mockResolvedValue(token);
+ const client=createSourceClient(token.runtimeNonce);
+ await client.start(token.projectId,config,()=>{});
+ await expect(client.start(token.projectId,{...config,paths:['a'.repeat(16385)]},()=>{})).rejects.toThrow();
+ await client.start(token.projectId,{...config,paths:['😀'.repeat(8192)]},()=>{});
+ await expect(client.start(token.projectId,{...config,paths:['😀'.repeat(8193)]},()=>{})).rejects.toThrow();
+});
 it('accepts shorthand rules and rejects unsupported or excessive rules', () => {
  const rules = { mode: 'generic', recursive: true, extensions: ['wav'], include: ['*/CH1','*/CH2'], exclude: [], includeSecond: true, skipDuplicates: true };
  expect(parseSourceRules(rules)).toEqual(rules);
