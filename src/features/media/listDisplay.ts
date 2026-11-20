@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 
 export const listDisplayKey = 'audio-annotator.list-display.v1';
-export interface ListDisplay { mode: 'tree' | 'flat'; scope: string | null; expanded: string[]; flattenedFolders?: string[]; folderSort?: 'asc' | 'desc' }
+export interface ListDisplay {
+  mode: 'tree' | 'flat';
+  scope: string | null;
+  expanded: string[];
+  flattenedFolders?: string[];
+  sortBy?: 'path' | 'filename';
+  folderSort?: 'asc' | 'desc';
+}
 type LocalStorage = Pick<Storage, 'getItem' | 'setItem'>;
 interface Entry extends ListDisplay { projectId: string; actorId: string | null }
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(v);
@@ -9,10 +16,11 @@ const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v ===
 function storage(): LocalStorage | undefined { try { return window.localStorage; } catch { return undefined; } }
 function sanitize(v: unknown): ListDisplay | null {
   if (!object(v) || v.mode !== 'tree' && v.mode !== 'flat' || v.scope !== null && !uuid(v.scope) || !Array.isArray(v.expanded)) return null;
-  const folderSort = v.folderSort;
+  const { folderSort, sortBy } = v;
   const flattenedFolders = Array.isArray(v.flattenedFolders) ? [...new Set(v.flattenedFolders.slice(0, 512).filter(uuid))] : [];
   return { mode: v.mode, scope: v.scope as string | null, expanded: [...new Set(v.expanded.slice(0, 512).filter(uuid))],
     ...(flattenedFolders.length ? { flattenedFolders } : {}),
+    ...(sortBy === 'path' || sortBy === 'filename' ? { sortBy } : {}),
     ...(folderSort === 'asc' || folderSort === 'desc' ? { folderSort } : {}) };
 }
 function entries(target: LocalStorage | undefined): Entry[] {

@@ -21,6 +21,10 @@ const props = { media: files, annotations: [], statuses: [], selectedId: null, d
 const mode = (value: string) => fireEvent.change(screen.getByLabelText('音频显示方式'), { target: { value } });
 const scope = (value: string) => fireEvent.change(screen.getByLabelText('平铺显示范围'), { target: { value } });
 const rows = () => [...document.querySelectorAll('.media-select')].map(row => row.getAttribute('data-media-id'));
+const sort = (label: string) => {
+  fireEvent.click(screen.getByLabelText('列表排序'));
+  fireEvent.click(screen.getByRole('menuitem', { name: label }));
+};
 afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 it('sorts root and nested folders by natural name order and keeps arrow navigation in that order', () => {
@@ -46,8 +50,7 @@ it('sorts root and nested folders by natural name order and keeps arrow navigati
   fireEvent.click(screen.getByLabelText('展开文件夹 · 片段2'));
   fireEvent.click(screen.getByLabelText('展开文件夹 · 片段10'));
   expect(rows()).toEqual([files[2].id, files[0].id, files[1].id]);
-  fireEvent.click(screen.getByLabelText('列表排序'));
-  fireEvent.click(screen.getByRole('menuitem', { name: '名称降序' }));
+  sort('按路径降序');
   expect(folderPaths()).toEqual(['B', 'A', 'A/片段10', 'A/片段2']);
   expect(rows()).toEqual([files[1].id, files[0].id, files[2].id]);
   fireEvent.keyDown(document.body, { key: 'ArrowDown' });
@@ -57,13 +60,47 @@ it('sorts root and nested folders by natural name order and keeps arrow navigati
   ui.unmount();
   render(view);
   expect(folderPaths()).toEqual(['B', 'A', 'A/片段10', 'A/片段2']);
-  expect(screen.getByLabelText('列表排序')).toHaveAttribute('title', '列表排序 · 名称降序');
+  expect(screen.getByLabelText('列表排序')).toHaveAttribute('title', '列表排序 · 按路径降序');
   mode('flat');
   expect(rows()).toEqual([files[1].id, files[0].id, files[2].id]);
   fireEvent.click(screen.getByLabelText('多选音频'));
   fireEvent.click(screen.getByLabelText(`选择音频 · ${audio[0].displayName}`));
   fireEvent.click(screen.getByLabelText(`选择音频 · ${audio[1].displayName}`), { shiftKey: true });
   expect(screen.getByText('已选 2')).toBeVisible();
+});
+
+it('sorts a flat list by filenames across folders and uses that order for arrows and range selection', () => {
+  const c = controller(), select = vi.fn();
+  const audio = files.map((m, i) => ({
+    ...m, displayName: ['source-a/CH10.wav', 'source-a/CH2.wav', 'source-b/CH1.wav', 'source-b/CH2.wav', 'source-b/CH20.wav'][i],
+  }));
+  const originalOrganization = JSON.stringify(c.snapshot);
+  const view = <MediaList {...props} media={audio} organization={c} actorId={actor} selectedId={files[2].id} onSelect={select} />;
+  const ui = render(view);
+  mode('flat');
+  expect(rows()).toEqual(files.map(m => m.id));
+
+  sort('按文件名升序');
+  expect(rows()).toEqual([2, 1, 3, 0, 4].map(i => files[i].id));
+  fireEvent.keyDown(document.body, { key: 'ArrowDown' });
+  expect(select).toHaveBeenLastCalledWith(files[1].id);
+  fireEvent.click(screen.getByLabelText('多选音频'));
+  fireEvent.click(screen.getByLabelText(`选择音频 · ${audio[2].displayName}`));
+  fireEvent.click(screen.getByLabelText(`选择音频 · ${audio[3].displayName}`), { shiftKey: true });
+  expect(screen.getByText('已选 3')).toBeVisible();
+  fireEvent.change(screen.getByLabelText('搜索音频'), { target: { value: 'CH2' } });
+  expect(rows()).toEqual([1, 3, 4].map(i => files[i].id));
+  fireEvent.change(screen.getByLabelText('搜索音频'), { target: { value: '' } });
+
+  sort('按文件名降序');
+  expect(rows()).toEqual([4, 0, 3, 1, 2].map(i => files[i].id));
+  ui.unmount();
+  render(view);
+  expect(screen.getByLabelText('列表排序')).toHaveAttribute('title', '列表排序 · 按文件名降序');
+  expect(rows()).toEqual([4, 0, 3, 1, 2].map(i => files[i].id));
+  sort('按路径升序');
+  expect(rows()).toEqual(files.map(m => m.id));
+  expect(JSON.stringify(c.snapshot)).toBe(originalOrganization);
 });
 
 it('flattens selected directory descendants and all audio without changing organization, sources or import selection', () => {
@@ -138,15 +175,24 @@ it('distinguishes identical audio filenames with their project-relative folder p
   expect(rows()).toEqual([files[1].id]);expect(screen.getByTitle('A')).toBeVisible();
 });
 
-it('sorts each flattened folder by the filename actually displayed', () => {
-  const c=controller();c.snapshot!.media[3].originalFilename='z.wav';c.snapshot!.media[4].originalFilename='a.wav';
-  render(<MediaList {...props} organization={c} actorId={actor}/>);
-  fireEvent.click(screen.getByLabelText('文件夹操作 · B'));
-  fireEvent.click(screen.getByRole('menuitem',{name:'平铺此文件夹（含子文件夹）'}));
-  expect(rows()).toEqual([files[4].id,files[2].id,files[3].id]);
-  fireEvent.click(screen.getByLabelText('列表排序'));
-  fireEvent.click(screen.getByRole('menuitem',{name:'名称降序'}));
-  expect(rows()).toEqual([files[3].id,files[2].id,files[4].id]);
+it('sorts a locally flattened branch by displayed filenames across descendants', () => {
+  const c = controller();
+  c.snapshot!.media[0].originalFilename = 'CH10.wav';
+  c.snapshot!.media[1].originalFilename = 'CH2.wav';
+  c.snapshot!.media[2].folderId = child;
+  c.snapshot!.media[2].originalFilename = 'CH1.wav';
+  render(<MediaList {...props} organization={c} actorId={actor} />);
+  fireEvent.click(screen.getByLabelText('文件夹操作 · A'));
+  fireEvent.click(screen.getByRole('menuitem', { name: '平铺此文件夹（含子文件夹）' }));
+  expect(rows()).toEqual([0, 2, 1].map(i => files[i].id));
+  sort('按文件名升序');
+  expect(rows()).toEqual([2, 1, 0].map(i => files[i].id));
+  sort('按文件名降序');
+  expect(rows()).toEqual([0, 1, 2].map(i => files[i].id));
+  expect(screen.getByTitle('B')).toBeVisible();
+  expect(screen.getByLabelText('音频显示方式')).toHaveValue('tree');
+  sort('按路径降序');
+  expect(rows()).toEqual([1, 2, 0].map(i => files[i].id));
 });
 
 it('offers folder flattening in readonly projects and flattens all audio from the root menu', () => {

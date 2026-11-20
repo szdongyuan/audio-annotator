@@ -237,6 +237,17 @@ try {
   const flatGeometry = await h.evaluate("return [...document.querySelectorAll('.media-select')].map(e=>({name:e.getAttribute('aria-label'),left:e.getBoundingClientRect().left,height:e.getBoundingClientRect().height,scroll:e.scrollWidth,width:e.clientWidth}));");
   assert.equal(flatGeometry.length, 3);
   assert.ok(flatGeometry.every(r => Math.abs(r.left-flatGeometry[0].left) <= 1 && Math.abs(r.height-28) <= 1 && r.scroll <= r.width+1));
+  const flatNames = () => h.evaluate("return [...document.querySelectorAll('.media-select')].map(e=>e.getAttribute('aria-label'));");
+  await h.label('列表排序'); await h.label('按文件名升序');
+  assert.deepEqual(await flatNames(), ['depth-one.wav', 'depth-three-with-a-long-name.wav', 'second.wav']);
+  await h.click(row('depth-three-with-a-long-name.wav'));
+  await key(Key.ARROW_DOWN);
+  await selected('second.wav');
+  await h.label('列表排序'); await h.label('按文件名降序');
+  assert.deepEqual(await flatNames(), ['second.wav', 'depth-three-with-a-long-name.wav', 'depth-one.wav']);
+  await h.label('列表排序'); await h.label('按路径升序');
+  assert.deepEqual(await flatNames(), flatGeometry.map(r => r.name));
+  check('Filename sorting crosses directories, controls arrow order, and switches back to path sorting');
   await h.select('平铺显示范围', 'B/B leaf/B deep（含子目录）');
   await h.label('多选音频'); await h.label('全选筛选结果');
   assert.match(await h.evaluate("return document.querySelector('.media-batch-actions').textContent"), /已选 1/);

@@ -34,6 +34,8 @@ function canFocusDestination(element: HTMLElement) {
     return true;
 }
 const listNames = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' });
+const sortKeys = { path: '路径', filename: '文件名' } as const;
+const sortDirections = { asc: '升序', desc: '降序' } as const;
 export function MoveReviewItems({ ids, media }: { ids: string[]; media: Map<string, MediaDescriptor> }) {
     const [open, setOpen] = useState(false), [page, setPage] = useState(0);
     useEffect(() => setPage(0), [ids]);
@@ -121,7 +123,8 @@ function MediaListBody({ projectId, actorId = null, recycle, lifecycle, authors 
     const [search, setSearch] = useState('');
     const [display, setDisplay] = useListDisplay(projectId ?? c?.projectId, actorId, c?.selectedFolderId ?? null);
     const folderSort = display.folderSort ?? 'asc';
-    const sortLabel = folderSort === 'asc' ? '名称升序' : '名称降序';
+    const sortBy = display.sortBy ?? 'path';
+    const sortLabel = `按${sortKeys[sortBy]}${sortDirections[folderSort]}`;
     const flat = display.mode === 'flat', expanded = new Set(display.expanded);
     const flattenedFolders = new Set(display.flattenedFolders ?? []);
     const setExpanded = (action: (old: Set<string>) => Set<string>) => setDisplay(old => ({ ...old, expanded: [...action(new Set(old.expanded))] }));
@@ -153,17 +156,30 @@ function MediaListBody({ projectId, actorId = null, recycle, lifecycle, authors 
         return tree;
     }, [c?.snapshot, media, folderSort]);
     const originalNames = useMemo(() => new Map(c?.snapshot?.media.map(item => [item.mediaId, item.originalFilename]) ?? []), [c?.snapshot]);
-    const orderedMedia = useMemo(() => {
+    const { orderedMedia, compareFlattened } = useMemo(() => {
         const direction = folderSort === 'desc' ? -1 : 1;
         const entries = media.map(item => ({
             item,
             name: item.displayName.split(/[\\/]/).at(-1) || item.displayName,
             path: index.paths.get(index.mediaFolder.get(item.id) ?? '')?.split('/') ?? [],
         }));
-        return entries.sort((a, b) => direction * (comparePaths(a.path, b.path) || listNames.compare(a.name, b.name))
-            || listNames.compare(a.item.displayName, b.item.displayName)
-            || a.item.id.localeCompare(b.item.id)).map(({ item }) => item);
-    }, [media, index, folderSort]);
+        const compare = (a: typeof entries[number], b: typeof entries[number], local: boolean) => {
+            // Local flattening displays the original filename below its logical project path.
+            const aName = local ? originalNames.get(a.item.id) ?? a.name : a.name;
+            const bName = local ? originalNames.get(b.item.id) ?? b.name : b.name;
+            const order = sortBy === 'filename'
+                ? listNames.compare(aName, bName) || comparePaths(a.path, b.path)
+                : comparePaths(a.path, b.path) || listNames.compare(aName, bName);
+            return direction * order
+                || listNames.compare(a.item.displayName, b.item.displayName)
+                || a.item.id.localeCompare(b.item.id);
+        };
+        const byId = new Map(entries.map(entry => [entry.item.id, entry]));
+        return {
+            orderedMedia: entries.sort((a, b) => compare(a, b, false)).map(({ item }) => item),
+            compareFlattened: (a: MediaDescriptor, b: MediaDescriptor) => compare(byId.get(a.id)!, byId.get(b.id)!, true),
+        };
+    }, [media, index, originalNames, folderSort, sortBy]);
     const displayScope = display.scope && c?.snapshot && !index.folders.has(display.scope) ? null : display.scope;
     useEffect(() => {
         if (displayScope !== display.scope) setDisplay(old => ({ ...old, scope: displayScope }));
@@ -245,21 +261,20 @@ function MediaListBody({ projectId, actorId = null, recycle, lifecycle, authors 
                     ancestor = index.folders.get(ancestor)?.parentId ?? null;
                 }
             }
-    // The source maps were filled in path/name order. Accumulate each matching
-    // file once per flattened ancestor, without changing its actual membership.
+    // Gather a flattened branch before sorting so path and filename can each be
+    // the primary key across all its descendants.
     const flattenGroups = (grouped: Map<string | null, MediaDescriptor[]>) => {
         const result = new Map<string, MediaDescriptor[]>();
         if (flat || !flattenedFolders.size) return result;
-        const direction = folderSort === 'desc' ? -1 : 1;
         for (const [folder, items] of grouped) {
-            let sorted: MediaDescriptor[] | undefined;
             for (let ancestor = folder; ancestor; ancestor = index.folders.get(ancestor)?.parentId ?? null) {
                 if (!flattenedFolders.has(ancestor)) continue;
-                sorted ??= items.length < 2 ? items : [...items].sort((a,b) => direction * listNames.compare(originalNames.get(a.id) ?? a.displayName, originalNames.get(b.id) ?? b.displayName) || listNames.compare(a.displayName,b.displayName) || a.id.localeCompare(b.id));
                 const collected = result.get(ancestor) ?? [];
-                collected.push(...sorted); result.set(ancestor, collected);
+                collected.push(...items);
+                result.set(ancestor, collected);
             }
         }
+        for (const items of result.values()) items.sort(compareFlattened);
         return result;
     };
     const scopedFlatGroups = flattenGroups(mediaByFolder), navigationFlatGroups = flattenGroups(navigationByFolder);
@@ -443,12 +458,14 @@ function MediaListBody({ projectId, actorId = null, recycle, lifecycle, authors 
         if (!valid) { retireMenu(); return; }
         setEdit({ owner: c, draft: c.beginEdit(operation), trigger: trigger?.isConnected ? trigger : rootMenu.current });
     };
-    const items: MenuItem[] = menu?.sort ? (['asc', 'desc'] as const).map(order => ({
-        id: order,
-        label: order === 'asc' ? '名称升序' : '名称降序',
-        checked: folderSort === order,
-        action: () => setDisplay(old => ({ ...old, folderSort: order })),
-    })) : menu?.media ? [
+    const items: MenuItem[] = menu?.sort ? (['path', 'filename'] as const).flatMap(key =>
+        (['asc', 'desc'] as const).map(order => ({
+            id: `${key}-${order}`,
+            label: `按${sortKeys[key]}${sortDirections[order]}`,
+            checked: sortBy === key && folderSort === order,
+            action: () => setDisplay(old => ({ ...old, sortBy: key, folderSort: order })),
+        }))
+    ) : menu?.media ? [
         { id: 'copy-name', label: '复制文件名', disabled: !menuTargetExists, action: () => { const target = currentMedia(); if (!target) return; const filename = c?.snapshot?.media.find(m => m.mediaId === target.id)?.originalFilename ?? target.displayName.split(/[\\/]/).at(-1) ?? target.displayName; void Promise.resolve().then(() => navigator.clipboard.writeText(filename)).then(() => { if (latestMedia.current.media.some(m => m.id === target.id)) setCopyMessage({ text: `已复制：${filename}`, failed: false }); }).catch(() => { if (latestMedia.current.media.some(m => m.id === target.id)) setCopyMessage({ text: `复制失败，请手动复制：${filename}`, failed: true }); }); } },
         { id: 'move-media', label: '移动到文件夹…', disabled: !canEdit || !menuTargetExists, action: trigger => { const target = currentMedia(); if (target) begin({ type: 'moveMedia', mediaId: target.id, folderId: c?.snapshot?.media.find(m => m.mediaId === target.id)?.folderId ?? null }, trigger); } },
         ...(onHide && listView === 'normal' ? [{ id: 'hide', label: '从我的列表隐藏', disabled: disabled || !menuTargetExists, action: () => { const target = currentMedia(); if (target) onHide(target.id); } }] : []),
