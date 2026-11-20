@@ -218,6 +218,7 @@ impl CatalogSource {
                 let bytes = atomic::read(&self.workspace.join(name), MAX_CACHE_BYTES)?;
                 local_snapshots.push((name, hash(&bytes)));
                 let mut candidate: PrivateEnvelope = decode(&bytes, MAX_CACHE_BYTES, CACHE_KIND)?;
+                candidate.document.snap_view_end_times();
                 let proof = Retirement::read(
                     repo,
                     &candidate.manifest_hash,
@@ -431,6 +432,7 @@ impl PrivateWorkspace {
                 let result = atomic::read(&path, MAX_CACHE_BYTES)
                     .and_then(|b| decode::<PrivateEnvelope>(&b, MAX_CACHE_BYTES, CACHE_KIND))
                     .and_then(|mut candidate| {
+                        candidate.document.snap_view_end_times();
                         let mut rebased = false;
                         if crate::collaboration::consts::supported_catalog_format(
                             repo.manifest().format_version,

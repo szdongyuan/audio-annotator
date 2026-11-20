@@ -57,9 +57,11 @@ export function frequencyWindow(media: MediaDescriptor, settings: AnalysisSettin
 export function tilePlan(media: MediaDescriptor, settings: AnalysisSettings, view: Pick<MediaView, 'startSeconds' | 'endSeconds' | 'spectrumKind' | 'lowHz' | 'highHz'>, width: number, channelIndex: number, configHash: string, identity: AnalysisIdentity = originalAnalysis): TileInput[] {
   const end = Math.min(duration(media), view.endSeconds);
   if (view.startSeconds >= end) return [];
-  const first = Math.floor(view.startSeconds * media.sampleRate / settings.hopSize), last = Math.ceil(end * media.sampleRate / settings.hopSize);
-  let timeLod = Math.min(16, Math.max(0, Math.ceil(Math.log2((last - first) / Math.max(1, width)))));
   const total = Math.ceil(media.frameCount / settings.hopSize);
+  // Converting seconds back to frames can round past an exact hop boundary.
+  const first = Math.min(total - 1, Math.floor(view.startSeconds * media.sampleRate / settings.hopSize));
+  const last = Math.max(first + 1, Math.min(total, Math.ceil(end * media.sampleRate / settings.hopSize)));
+  let timeLod = Math.min(16, Math.max(0, Math.ceil(Math.log2((last - first) / Math.max(1, width)))));
   const initialFrequency = frequencyWindow(media, settings, view);
   const frequencyLod = Math.max(0, Math.ceil(Math.log2((initialFrequency.endBin - initialFrequency.lowBin) / 1025)));
   const { bins, lowBin, endBin } = frequencyWindow(media, settings, view, frequencyLod);

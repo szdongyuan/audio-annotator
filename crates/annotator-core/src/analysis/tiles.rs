@@ -151,6 +151,14 @@ pub struct Tile {
     #[serde(skip)]
     pub values: Vec<f32>,
 }
+fn tile_seconds(request: &TileRequest, sample_rate: u32, samples: u64, frames: u64) -> (f64, f64) {
+    let hop = u64::from(request.settings.hop_size);
+    let rate = f64::from(sample_rate);
+    let start = request.start_frame * hop;
+    let end = ((request.start_frame + frames) * hop).min(samples);
+    (start as f64 / rate, end as f64 / rate)
+}
+
 pub fn compute_tile(
     request: &TileRequest,
     sample_rate: u32,
@@ -221,17 +229,15 @@ pub fn compute_tile(
         values.extend(sums.into_iter().map(|sum| power_db(sum / count as f64)));
     }
     check_cancel(cancel)?;
+    let (start_seconds, end_seconds) = tile_seconds(request, sample_rate, samples, frames);
     Ok(Tile {
         rows,
         columns,
         source_frames: frames,
         sample_rate,
         total_samples: samples,
-        start_seconds: request.start_frame as f64 * f64::from(request.settings.hop_size)
-            / f64::from(sample_rate),
-        end_seconds: ((request.start_frame + frames) * u64::from(request.settings.hop_size))
-            .min(samples) as f64
-            / f64::from(sample_rate),
+        start_seconds,
+        end_seconds,
         frame_step_samples: stride * u64::from(request.settings.hop_size),
         mel_points_hz: points,
         values,
@@ -286,7 +292,12 @@ pub fn encode_cached(tile: &Tile) -> Result<Vec<u8>> {
         &tile.values,
     )
 }
-pub fn decode_cached(bytes: &[u8]) -> Option<Tile> {
+pub fn decode_cached(
+    bytes: &[u8],
+    request: &TileRequest,
+    sample_rate: u32,
+    samples: u64,
+) -> Option<Tile> {
     if bytes.len() < 8 || bytes.len() > MAX_RESPONSE_BYTES || &bytes[..4] != b"AT01" {
         return None;
     }
@@ -297,13 +308,32 @@ pub fn decode_cached(bytes: &[u8]) -> Option<Tile> {
         return None;
     }
     let mut tile: Tile = serde_json::from_slice(&bytes[8..end]).ok()?;
+    if tile.sample_rate != sample_rate
+        || tile.total_samples != samples
+        || sample_rate == 0
+        || samples == 0
+        || samples > 9_007_199_254_740_991
+        || request.settings.hop_size == 0
+        || request.time_lod > 16
+    {
+        return None;
+    }
+    let stride = 1_u64 << request.time_lod;
+    let frames = frame_count(samples, request.settings.hop_size)
+        .checked_sub(request.start_frame)?
+        .min(u64::from(request.frame_count) * stride);
     if tile.rows == 0
         || tile.rows > 256
         || tile.columns == 0
+        || frames == 0
+        || tile.source_frames != frames
         || u64::from(tile.rows) * u64::from(tile.columns) * 4 != (bytes.len() - offset) as u64
     {
         return None;
     }
+    // Cache JSON may round a time past the physical file end. Restore the
+    // exact times from the request's frame range and verified source metadata.
+    (tile.start_seconds, tile.end_seconds) = tile_seconds(request, sample_rate, samples, frames);
     tile.values = bytes[offset..]
         .as_chunks::<4>()
         .0

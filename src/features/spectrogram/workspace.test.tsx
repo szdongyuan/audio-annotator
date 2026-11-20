@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/react';
 import fixture from '../../../tests/fixtures/document-v3.json';
 import type { MediaDescriptor, ViewState } from '../../bridge/types';
-import { defaultView, changeView, toggleLinked, analysisError, tilePlan, analysisKey } from './workspace';
+import { defaultSettings, defaultView, changeView, toggleLinked, analysisError, tilePlan, analysisKey } from './workspace';
 import { TileCache } from './tileCache';
 import { AnalysisSettings } from './AnalysisSettings';
 const media = { ...fixture.media[0], channelCount: 6, channelNotes: Array(6).fill(''), channelCategoryIds: Array(6).fill(null), channelLayout: null } as MediaDescriptor;
@@ -62,6 +62,16 @@ describe('workspace semantics', () => {
     expect(requests.filter(r => r.visible).every(r => r.startFrame * 512 / 48000 < 110)).toBe(true);
     expect(tilePlan(short, s, { ...defaultView(short), startSeconds: 1.2, endSeconds: 2 }, 800, 0, 'hash')).toEqual([]);
     expect(analysisKey(s)).toBe(analysisKey({ ...s }));
+  });
+  it('does not request an extra tile beyond a long recording ending at a tile boundary', () => {
+    const long = { ...media, sampleRate: 44100, frameCount: 3407872 };
+    const settings = defaultSettings;
+    const total = long.frameCount / settings.hopSize;
+    const endSeconds = long.frameCount / long.sampleRate;
+    const startSeconds = (total - 3) * settings.hopSize / long.sampleRate;
+    const requests = tilePlan(long, settings, { ...defaultView(long), startSeconds, endSeconds }, 800, 0, 'hash');
+    expect(requests.some(r => r.visible)).toBe(true);
+    expect(requests.every(r => r.startFrame < total && r.frameCount > 0)).toBe(true);
   });
   it('evicts least recently used entries under one byte budget', () => {
     const cache = new TileCache<number>(10);

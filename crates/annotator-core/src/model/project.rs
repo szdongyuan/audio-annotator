@@ -121,10 +121,36 @@ impl ProjectDocument {
                 "Unsupported DSP or edit processing version",
             ));
         }
-        let doc: Self = serde_json::from_str(json)
+        let mut doc: Self = serde_json::from_str(json)
             .map_err(|_| AppError::invalid("Invalid project structure"))?;
+        doc.snap_view_end_times();
         doc.validate()?;
         Ok(doc)
+    }
+    /// A file-end time can round to a neighboring float in JSON. Restore the
+    /// sample-derived boundary without accepting an out-of-range viewport.
+    pub(crate) fn snap_view_end_times(&mut self) {
+        if self.view_state.media.is_empty() {
+            return;
+        }
+        let linked_end = self.view_state.linked_time.then(|| {
+            self.media
+                .iter()
+                .map(MediaDescriptor::duration)
+                .fold(0.0, f64::max)
+        });
+        for media in &self.media {
+            let Some(view) = self.view_state.media.get_mut(&media.id) else {
+                continue;
+            };
+            let end = linked_end.unwrap_or_else(|| media.duration());
+            if end.is_finite()
+                && view.start_seconds < end
+                && (view.end_seconds - end).abs() <= end * (2.0 * f64::EPSILON)
+            {
+                view.end_seconds = end;
+            }
+        }
     }
     pub fn validate(&self) -> Result<()> {
         validation::validate_document(self)

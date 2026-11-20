@@ -2,7 +2,10 @@ use annotator_core::{
     analysis::{
         cache::TileCache,
         scheduler::Scheduler,
-        tiles::{compute_tile, config_hash, encode_tile, TileRequest, MAX_RESPONSE_BYTES},
+        tiles::{
+            compute_tile, config_hash, decode_cached, encode_cached, encode_tile, TileRequest,
+            MAX_RESPONSE_BYTES,
+        },
     },
     error::{ErrorCode, Result},
     model::{AnalysisSettings, SpectrumKind},
@@ -43,6 +46,26 @@ fn request() -> TileRequest {
         visible: true,
     }
 }
+#[test]
+fn cached_spectrum_preserves_the_exact_end_of_a_long_recording() {
+    let samples = 86_400_002;
+    let mut req = request();
+    req.start_frame = samples / u64::from(req.settings.hop_size);
+    let tile = compute_tile(
+        &req,
+        48_000,
+        samples,
+        &AtomicBool::new(false),
+        |_, count| Ok(vec![0.; count]),
+        |_, _| {},
+    )
+    .unwrap();
+    let cached = decode_cached(&encode_cached(&tile).unwrap(), &req, 48_000, samples).unwrap();
+    assert_eq!(cached.start_seconds, tile.start_seconds);
+    assert_eq!(cached.end_seconds, samples as f64 / 48_000.);
+    assert_eq!(cached.values, tile.values);
+}
+
 #[test]
 fn tile_averages_linear_power_and_clips_physical_tail() {
     let req = request();

@@ -248,7 +248,14 @@ pub(crate) fn enqueue_owned(
                 cache
                     .as_mut()
                     .and_then(|c| c.get(&key).ok().flatten())
-                    .and_then(|bytes| decode_cached(&bytes))
+                    .and_then(|bytes| {
+                        decode_cached(
+                            &bytes,
+                            &request,
+                            descriptor.sample_rate,
+                            descriptor.frame_count,
+                        )
+                    })
             };
             let tile = match cached {
                 Some(tile) => {

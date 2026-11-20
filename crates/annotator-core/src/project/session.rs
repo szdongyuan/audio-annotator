@@ -355,7 +355,10 @@ fn apply(doc: &mut ProjectDocument, change: &Change) -> Result<()> {
             mix.muted_channels.dedup();
             doc.playback_mix.insert(media_id.clone(), mix);
         }
-        Change::UpdateViewState { view_state } => doc.view_state = view_state.clone(),
+        Change::UpdateViewState { view_state } => {
+            doc.view_state = view_state.clone();
+            doc.snap_view_end_times();
+        }
     }
     Ok(())
 }

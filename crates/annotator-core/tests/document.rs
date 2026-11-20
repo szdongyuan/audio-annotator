@@ -5,6 +5,44 @@ fn fixture() -> ProjectDocument {
 }
 
 #[test]
+fn a_long_recording_can_save_and_reopen_a_view_ending_at_the_last_sample() {
+    let mut doc = fixture();
+    doc.media[0].frame_count = 86_400_002;
+    let media = &doc.media[0];
+    let media_id = media.id.clone();
+    let duration = media.duration();
+    let mut view_state = doc.view_state.clone();
+    view_state.media.insert(
+        media_id.clone(),
+        MediaView {
+            visible_channels: vec![0],
+            start_seconds: 0.0,
+            end_seconds: duration,
+            low_hz: 0.0,
+            high_hz: media.nyquist(),
+            frequency_mix: 0.65,
+            spectrum_kind: SpectrumKind::Stft,
+            gain_db: 0.0,
+            dynamic_range_db: 100.0,
+            palette: "ember".into(),
+        },
+    );
+
+    let json = serde_json::to_string(&Change::UpdateViewState { view_state }).unwrap();
+    let command = serde_json::from_str(&json).unwrap();
+    let project_id = doc.project_id.clone();
+    let revision = doc.revision;
+    let saved = ProjectSession::new(doc)
+        .unwrap()
+        .apply_change(&project_id, revision, command)
+        .unwrap()
+        .document;
+    assert_eq!(saved.view_state.media[&media_id].end_seconds, duration);
+    let reopened = ProjectDocument::from_json(&serde_json::to_string(&saved).unwrap()).unwrap();
+    assert_eq!(reopened.view_state.media[&media_id].end_seconds, duration);
+}
+
+#[test]
 fn shared_fixture_round_trips_and_rejects_invalid_documents() {
     let doc = fixture();
     assert_eq!(
